@@ -907,7 +907,7 @@ DbErr RowInsert::check_foreign_constraint(
   Trx *trx = thr_get_trx(thr);
   MemHeap *heap = nullptr;
   std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
-  RecOffs offsets(offsets_.data());
+  auto offsets = rec_offs_from_array(offsets_);
   BtreePcursor pcur{};
 
 run_again:
@@ -1242,7 +1242,7 @@ DbErr RowInsert::scan_sec_index_for_duplicate(const Index *index, DTuple *entry,
   Mtr mtr;
   MemHeap *heap = nullptr;
   std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
-  RecOffs offsets(offsets_.data());
+  auto offsets = rec_offs_from_array(offsets_);
   const auto n_unique = index->get_n_unique();
 
   /* If the secondary index is unique, but one of the fields in the
@@ -1345,7 +1345,7 @@ DbErr RowInsert::duplicate_error_in_clust(BtreeCursor *btr_cur, DTuple *entry, Q
   Trx *trx = thr_get_trx(thr);
   MemHeap *heap = nullptr;
   std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
-  RecOffs offsets(offsets_.data());
+  auto offsets = rec_offs_from_array(offsets_);
 
   UT_NOT_USED(mtr);
 

@@ -44,6 +44,11 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 
 #include <getopt.h> /* For getopt_long() */
 
+#include <chrono>
+#include <functional>
+#include <thread>
+#include <vector>
+
 #include "test0aux.h"
 
 #ifdef UNIV_DEBUG_VALGRIND
@@ -59,17 +64,17 @@ static uint32_t n_threads = 2;
 static pthread_barrier_t barrier;
 
 /** Create an InnoDB database (sub-directory). */
-static DbErr create_database(const char *name) {
+static DbErr create_database(System &sys, const char *name) {
   bool err;
 
-  err = ib_database_create(name);
+  err = api::database_create(sys, name);
   assert(err == true);
 
   return (DB_SUCCESS);
 }
 
 /** CREATE TABLE T (c1 INT, c2 INT, PRIMARY KEY(c1)); */
-static DbErr create_table(const char *dbname, /*!< in: database name */
+static DbErr create_table(System &sys, const char *dbname, /*!< in: database name */
                              const char *name)   /*!< in: table name */
 {
   Trx * ib_trx;
@@ -83,48 +88,48 @@ static DbErr create_table(const char *dbname, /*!< in: database name */
   snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
 
   /* Pass a table page size of 0, ie., use default page size. */
-  err = ib_table_schema_create(table_name, &ib_tbl_sch, tbl_fmt, 0);
+  err = TableSchema::create(table_name, &ib_tbl_sch, tbl_fmt, 0);
 
   assert(err == DB_SUCCESS);
 
-  err = ib_table_schema_add_col(ib_tbl_sch, "c1", IB_INT, IB_COL_UNSIGNED, 0,
+  err = ib_tbl_sch->add_col("c1", IB_INT, IB_COL_UNSIGNED, 0,
                                 sizeof(uint32_t));
   assert(err == DB_SUCCESS);
 
-  err = ib_table_schema_add_col(ib_tbl_sch, "c2", IB_INT, IB_COL_UNSIGNED, 0,
+  err = ib_tbl_sch->add_col("c2", IB_INT, IB_COL_UNSIGNED, 0,
                                 sizeof(uint32_t));
   assert(err == DB_SUCCESS);
 
-  err = ib_table_schema_add_index(ib_tbl_sch, "PRIMARY", &ib_idx_sch);
+  err = ib_tbl_sch->add_index("PRIMARY", &ib_idx_sch);
   assert(err == DB_SUCCESS);
 
   /* Set prefix length to 0. */
-  err = ib_index_schema_add_col(ib_idx_sch, "c1", 0);
+  err = ib_idx_sch->add_col("c1", 0);
   assert(err == DB_SUCCESS);
 
-  err = ib_index_schema_set_clustered(ib_idx_sch);
+  err = ib_idx_sch->set_clustered();
   assert(err == DB_SUCCESS);
 
   /* create table */
-  ib_trx = ib_trx_begin(IB_TRX_REPEATABLE_READ);
-  err = ib_schema_lock_exclusive(ib_trx);
+  ib_trx = api::trx_begin(sys, IB_TRX_REPEATABLE_READ);
+  err = api::schema_lock_exclusive(sys, ib_trx);
   assert(err == DB_SUCCESS);
 
-  err = ib_table_create(ib_trx, ib_tbl_sch, &table_id);
+  err = api::table_create(sys, ib_trx, ib_tbl_sch, &table_id);
   assert(err == DB_SUCCESS);
 
-  err = ib_trx_commit(ib_trx);
+  err = api::trx_commit(sys, ib_trx);
   assert(err == DB_SUCCESS);
 
   if (ib_tbl_sch != nullptr) {
-    ib_table_schema_delete(ib_tbl_sch);
+    TableSchema::destroy(sys, ib_tbl_sch);
   }
 
   return (err);
 }
 
 /** Open a table and return a cursor for the table. */
-static DbErr open_table(const char *dbname, /*!< in: database name */
+static DbErr open_table(System &sys, const char *dbname, /*!< in: database name */
                            const char *name,   /*!< in: table name */
                            Trx * ib_trx,    /*!< in: transaction */
                            Cursor **crsr)    /*!< out: innodb cursor */
@@ -133,7 +138,7 @@ static DbErr open_table(const char *dbname, /*!< in: database name */
   char table_name[IB_MAX_TABLE_NAME_LEN];
 
   snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
-  err = ib_cursor_open_table(table_name, ib_trx, crsr);
+  err = api::cursor_open_table(sys, table_name, ib_trx, crsr);
   assert(err == DB_SUCCESS);
 
   return (err);
@@ -141,7 +146,7 @@ static DbErr open_table(const char *dbname, /*!< in: database name */
 
 /** INSERT INTO T VALUE(i, i); */
 static DbErr
-insert_rows(Cursor * crsr,    /*!< in, out: cursor to use for write */
+insert_rows(System &sys, Cursor * crsr,    /*!< in, out: cursor to use for write */
             uint32_t start,    /*!< in: start of column value */
             uint32_t n_values, /*!< in: no. of values to insert */
             int thread_id)     /*!< in: id of thread doing insert */
@@ -150,17 +155,17 @@ insert_rows(Cursor * crsr,    /*!< in, out: cursor to use for write */
   Tuple * tpl;
   DbErr err = DB_SUCCESS;
 
-  tpl = ib_clust_read_tuple_create(crsr);
+  tpl = crsr->clust_read_tuple_create();
   assert(tpl != nullptr);
 
   for (i = start; i < start + n_values; ++i) {
-    err = ib_tuple_write_u32(tpl, 0, i);
+    err = tpl->write_u32(0, i);
     assert(err == DB_SUCCESS);
 
-    err = ib_tuple_write_u32(tpl, 1, (uint32_t)thread_id);
+    err = tpl->write_u32(1, (uint32_t)thread_id);
     assert(err == DB_SUCCESS);
 
-    err = ib_cursor_insert_row(crsr, tpl);
+    err = crsr->insert_row(sys, tpl);
 
     if (err != DB_SUCCESS) {
       break;
@@ -170,27 +175,24 @@ insert_rows(Cursor * crsr,    /*!< in, out: cursor to use for write */
     there is no need to reset the tuple. */
   }
 
-  ib_tuple_delete(tpl);
+  Tuple::destroy(tpl);
 
   return (err);
 }
 
 /** Run the test. */
-static void *worker_thread(void *arg) {
+static void *worker_thread(System &sys, int thread_id) {
   int ret;
   DbErr err;
   Trx * ib_trx;
   Cursor * crsr1 = nullptr;
   Cursor * crsr2 = nullptr;
   bool deadlock = false;
-  int thread_id = *(int *)arg;
 
-  free(arg);
-
-  err = open_table(DATABASE, "T1", nullptr, &crsr1);
+  err = open_table(sys, DATABASE, "T1", nullptr, &crsr1);
   assert(err == DB_SUCCESS);
 
-  err = open_table(DATABASE, "T2", nullptr, &crsr2);
+  err = open_table(sys, DATABASE, "T2", nullptr, &crsr2);
   assert(err == DB_SUCCESS);
 
   ret = pthread_barrier_wait(&barrier);
@@ -199,27 +201,27 @@ static void *worker_thread(void *arg) {
     printf("Start insert...\n");
   }
 
-  ib_trx = ib_trx_begin(IB_TRX_REPEATABLE_READ);
+  ib_trx = api::trx_begin(sys, IB_TRX_REPEATABLE_READ);
   assert(ib_trx != nullptr);
 
-  ib_cursor_attach_trx(crsr1, ib_trx);
-  ib_cursor_attach_trx(crsr2, ib_trx);
+  crsr1->attach_trx(sys, ib_trx);
+  crsr2->attach_trx(sys, ib_trx);
 
   if (!(thread_id % 2)) {
-    err = ib_cursor_lock(crsr1, IB_LOCK_IX);
+    err = crsr1->lock(sys, IB_LOCK_IX);
     assert(err == DB_SUCCESS);
 
-    err = ib_cursor_lock(crsr2, IB_LOCK_IX);
+    err = crsr2->lock(sys, IB_LOCK_IX);
     assert(err == DB_SUCCESS);
 
-    err = insert_rows(crsr1, 0, n_rows, thread_id);
+    err = insert_rows(sys, crsr1, 0, n_rows, thread_id);
     assert(err == DB_SUCCESS || err == DB_DEADLOCK ||
            err == DB_LOCK_WAIT_TIMEOUT);
 
     if (err == DB_SUCCESS) {
       sleep(3);
 
-      err = insert_rows(crsr2, 0, n_rows, thread_id);
+      err = insert_rows(sys, crsr2, 0, n_rows, thread_id);
       assert(err == DB_SUCCESS || err == DB_DEADLOCK ||
              err == DB_LOCK_WAIT_TIMEOUT);
 
@@ -228,20 +230,20 @@ static void *worker_thread(void *arg) {
       }
     }
   } else {
-    err = ib_cursor_lock(crsr2, IB_LOCK_IX);
+    err = crsr2->lock(sys, IB_LOCK_IX);
     assert(err == DB_SUCCESS);
 
-    err = ib_cursor_lock(crsr1, IB_LOCK_IX);
+    err = crsr1->lock(sys, IB_LOCK_IX);
     assert(err == DB_SUCCESS);
 
-    err = insert_rows(crsr2, 0, n_rows, thread_id);
+    err = insert_rows(sys, crsr2, 0, n_rows, thread_id);
     assert(err == DB_SUCCESS || err == DB_DEADLOCK ||
            err == DB_LOCK_WAIT_TIMEOUT);
 
     if (err == DB_SUCCESS) {
       sleep(3);
 
-      err = insert_rows(crsr1, 0, n_rows, thread_id);
+      err = insert_rows(sys, crsr1, 0, n_rows, thread_id);
       assert(err == DB_SUCCESS || err == DB_DEADLOCK ||
              err == DB_LOCK_WAIT_TIMEOUT);
 
@@ -255,37 +257,37 @@ static void *worker_thread(void *arg) {
     deadlock = true;
   }
 
-  err = ib_cursor_reset(crsr1);
+  err = crsr1->reset(sys);
   assert(err == DB_SUCCESS);
 
-  err = ib_cursor_reset(crsr2);
+  err = crsr2->reset(sys);
   assert(err == DB_SUCCESS);
 
   if (!deadlock) {
     /* If all went well then the transaction should still
     be active, we need to commit it. */
-    assert(ib_trx_state(ib_trx) == IB_TRX_ACTIVE);
-    err = ib_trx_commit(ib_trx);
+    assert(api::trx_state(ib_trx) == IB_TRX_ACTIVE);
+    err = api::trx_commit(sys, ib_trx);
     assert(err == DB_SUCCESS);
     printf("Thread#%d - trx committed.\n", thread_id);
   } else {
     /* The transaction should have been rolled back
     by InnoDB, we can only release the handle now. */
-    assert(ib_trx_state(ib_trx) != IB_TRX_ACTIVE);
-    err = ib_trx_release(ib_trx);
+    assert(api::trx_state(ib_trx) != IB_TRX_ACTIVE);
+    err = api::trx_release(sys, ib_trx);
     assert(err == DB_SUCCESS);
 
     printf("Thread#%d - deadlock, trx rolled back.\n", thread_id);
   }
 
   if (crsr1) {
-    err = ib_cursor_close(crsr1);
+    err = Cursor::close(sys, crsr1);
     assert(err == DB_SUCCESS);
     crsr1 = nullptr;
   }
 
   if (crsr2) {
-    err = ib_cursor_close(crsr2);
+    err = Cursor::close(sys, crsr2);
     assert(err == DB_SUCCESS);
     crsr2 = nullptr;
   }
@@ -294,7 +296,7 @@ static void *worker_thread(void *arg) {
 }
 
 /** Set the runtime global options. */
-static void set_options(int argc, char *argv[]) {
+static void set_options(Config &config, int argc, char *argv[]) {
   int opt;
   int optind;
   int size = 0;
@@ -347,7 +349,7 @@ static void set_options(int argc, char *argv[]) {
     default:
       /* If it's an InnoDB parameter, then we let the
       auxillary function handle it. */
-      if (set_global_option(opt, optarg) != DB_SUCCESS) {
+      if (set_global_option(config, opt, optarg) != DB_SUCCESS) {
         print_usage(argv[0]);
         exit(EXIT_FAILURE);
       }
@@ -360,13 +362,13 @@ static void set_options(int argc, char *argv[]) {
 
 /** Create the tables required for the test
 @return DB_SUCCESS if all went well.*/
-static DbErr create_tables(void) {
+static DbErr create_tables(System &sys) {
   DbErr err;
 
-  err = create_table(DATABASE, "T1");
+  err = create_table(sys, DATABASE, "T1");
   assert(err == DB_SUCCESS);
 
-  err = create_table(DATABASE, "T2");
+  err = create_table(sys, DATABASE, "T2");
   assert(err == DB_SUCCESS);
 
   return (err);
@@ -374,13 +376,13 @@ static DbErr create_tables(void) {
 
 /** Drop the tables required for the test
 @return DB_SUCCESS if all went well.*/
-static DbErr drop_tables(void) {
+static DbErr drop_tables(System &sys) {
   DbErr err;
 
-  err = drop_table(DATABASE, "T1");
+  err = drop_table(sys, DATABASE, "T1");
   assert(err == DB_SUCCESS);
 
-  err = drop_table(DATABASE, "T2");
+  err = drop_table(sys, DATABASE, "T2");
   assert(err == DB_SUCCESS);
 
   return (err);
@@ -389,76 +391,54 @@ static DbErr drop_tables(void) {
 int main(int argc, char *argv[]) {
   int ret;
   DbErr err;
-  pthread_t *pthreads;
+  std::vector<std::thread> threads;
 
-  err = ib_init();
-  assert(err == DB_SUCCESS);
+  Config config;
 
-  test_configure();
+  test_configure(config);
 
-  set_options(argc, argv);
+  set_options(config, argc, argv);
 
-  err = ib_cfg_set_int("open_files", 8192);
-  assert(err == DB_SUCCESS);
+  config.m_fil.m_max_n_open_files = 8192;
 
   /* Reduce the timeout to trigger lock timeout quickly. */
-  err = ib_cfg_set_int("lock_wait_timeout", 3);
+  config.m_lock.m_wait_timeout = std::chrono::seconds(3);
+
+  System sys;
+
+  test_startup(sys, config);
+
+  err = create_database(sys, DATABASE);
   assert(err == DB_SUCCESS);
 
-  err = ib_startup("default");
-  assert(err == DB_SUCCESS);
-
-  err = create_database(DATABASE);
-  assert(err == DB_SUCCESS);
-
-  err = create_tables();
+  err = create_tables(sys);
   assert(err == DB_SUCCESS);
 
   ret = pthread_barrier_init(&barrier, nullptr, n_threads);
   assert(ret == 0);
 
-  pthreads = (pthread_t *)malloc(sizeof(*pthreads) * n_threads);
-  memset(pthreads, 0, sizeof(*pthreads) * n_threads);
 
   printf("About to spawn %d threads ", n_threads);
 
   for (uint32_t i = 0; i < n_threads; ++i) {
-    int retval;
-    int *ptr = (int *)malloc(sizeof(int));
-
-    assert(ptr != nullptr);
-    *ptr = i;
-
-    /* worker_thread owns the argument and is responsible for
-    freeing it. */
-    retval = pthread_create(&pthreads[i], nullptr, worker_thread, ptr);
-
-    if (retval != 0) {
-      fprintf(stderr,
-              "Error spawning thread %d, "
-              "pthread_create() returned %d\n",
-              i, retval);
-      exit(EXIT_FAILURE);
-    }
+    threads.emplace_back(worker_thread, std::ref(sys), int(i));
     printf(".");
   }
 
   printf("\nWaiting for threads to finish ...\n");
 
-  for (uint32_t i = 0; i < n_threads; ++i) {
-    pthread_join(pthreads[i], nullptr);
+  for (auto &thread : threads) {
+    thread.join();
   }
 
-  free(pthreads);
-  pthreads = nullptr;
 
   ret = pthread_barrier_destroy(&barrier);
   assert(ret == 0);
 
-  err = drop_tables();
+  err = drop_tables(sys);
   assert(err == DB_SUCCESS);
 
-  err = ib_shutdown(IB_SHUTDOWN_NORMAL);
+  err = sys.shutdown(IB_SHUTDOWN_NORMAL);
   assert(err == DB_SUCCESS);
 
 #ifdef UNIV_DEBUG_VALGRIND

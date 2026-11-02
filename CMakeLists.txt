@@ -298,8 +298,7 @@ IF(UNIT_TESTING)
 
   # Add test directories
   ADD_SUBDIRECTORY(unit-tests)
-  # tests/ is being ported from the removed C API to the System C++ API.
-  # ADD_SUBDIRECTORY(tests)
+  ADD_SUBDIRECTORY(tests)
 ELSE(UNIT_TESTING)
   MESSAGE(STATUS "UNIT_TESTING is disabled")
 ENDIF(UNIT_TESTING)

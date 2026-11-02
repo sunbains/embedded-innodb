@@ -1591,8 +1591,7 @@ building an index.  The data dictionary must have been locked
 exclusively by the caller, because the transaction will not be
 committed. */
 
-void row_merge_drop_indexes(
-  Trx *trx,      /*!< in: transaction */
+void row_merge_drop_indexes(System &sys, Trx *trx,      /*!< in: transaction */
   Table *table,  /*!< in: table containing the indexes */
   Index **index, /*!< in: indexes to drop */
   ulint num_created
@@ -1601,7 +1600,7 @@ void row_merge_drop_indexes(
   ulint key_num;
 
   for (key_num = 0; key_num < num_created; key_num++) {
-    row_merge_drop_index(index[key_num], table, trx);
+    row_merge_drop_index(sys, index[key_num], table, trx);
   }
 }
 

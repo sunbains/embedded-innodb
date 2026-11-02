@@ -629,7 +629,7 @@ std::string Lock::rec_to_string(System &sys) const noexcept {
 
   if (block != nullptr) {
     std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
-    RecOffs offsets(offsets_.data());
+    auto offsets = rec_offs_from_array(offsets_);
 
     for (ulint i{}; i < rec_get_n_bits(); ++i) {
 
@@ -2989,7 +2989,7 @@ DbErr LockSys::rec_insert_check_and_lock(
   {
     MemHeap *heap{};
     std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
-    RecOffs offsets(offsets_.data());
+    auto offsets = rec_offs_from_array(offsets_);
 
     {
       PhyRec record{index, next_rec};
@@ -3093,7 +3093,7 @@ DbErr LockSys::sec_rec_modify_check_and_lock(
   {
     MemHeap *heap{};
     std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
-    RecOffs offsets(offsets_.data());
+    auto offsets = rec_offs_from_array(offsets_);
 
     {
       PhyRec record{index, rec};

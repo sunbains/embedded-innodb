@@ -4,7 +4,7 @@ Copyright (c) 2025 Sunny Bains. All rights reserved.
 Logger symbol definitions for tests
 *****************************************************************************/
 
-#include "innodb.h"
+#include "ut0logger.h"
 
 // Logger symbol definitions for tests
 namespace logger {

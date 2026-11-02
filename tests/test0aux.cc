@@ -30,8 +30,11 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <sys/types.h>
 #include <getopt.h>
 
+#include <chrono>
+#include <string_view>
+#include <utility>
+
 #include "test0aux.h"
-#include "buf0types.h"
 
 #define COMMENT '#'
 
@@ -53,7 +56,7 @@ static void create_directory(const char *path) {
 /** Read a value from an integer column in an InnoDB tuple.
 @return	column value */
 
-uint64_t read_int_from_tuple(Tuple * tpl, const ColMeta *col_meta,
+uint64_t read_int_from_tuple(const Tuple *tpl, const ColMeta *col_meta,
                              int i) {
   uint64_t ival = 0;
 
@@ -61,7 +64,7 @@ uint64_t read_int_from_tuple(Tuple * tpl, const ColMeta *col_meta,
   case 1: {
     uint8_t v;
 
-    auto err = ib_col_copy_value(tpl, i, &v, sizeof(v));
+    auto err = tpl->copy_value(i, &v, sizeof(v));
     assert(err != IB_SQL_NULL);
 
     ival = (col_meta->attr & IB_COL_UNSIGNED) ? v : (int8_t)v;
@@ -70,7 +73,7 @@ uint64_t read_int_from_tuple(Tuple * tpl, const ColMeta *col_meta,
   case 2: {
     uint16_t v;
 
-    auto err = ib_col_copy_value(tpl, i, &v, sizeof(v));
+    auto err = tpl->copy_value(i, &v, sizeof(v));
     assert(err != IB_SQL_NULL);
     ival = (col_meta->attr & IB_COL_UNSIGNED) ? v : (int16_t)v;
     break;
@@ -78,13 +81,13 @@ uint64_t read_int_from_tuple(Tuple * tpl, const ColMeta *col_meta,
   case 4: {
     uint32_t v;
 
-    auto err = ib_col_copy_value(tpl, i, &v, sizeof(v));
+    auto err = tpl->copy_value(i, &v, sizeof(v));
     assert(err != IB_SQL_NULL);
     ival = (col_meta->attr & IB_COL_UNSIGNED) ? v : (int32_t)v;
     break;
   }
   case 8: {
-    auto err = ib_col_copy_value(tpl, i, &ival, sizeof(ival));
+    auto err = tpl->copy_value(i, &ival, sizeof(ival));
     assert(err != IB_SQL_NULL);
     break;
   }
@@ -106,12 +109,12 @@ void print_int_col(FILE *stream, const Tuple * tpl, int i,
     if (col_meta->attr & IB_COL_UNSIGNED) {
       uint8_t u8;
 
-      err = ib_tuple_read_u8(tpl, i, &u8);
+      err = tpl->read_u8(i, &u8);
       fprintf(stream, "%u", u8);
     } else {
       int8_t i8;
 
-      err = ib_tuple_read_i8(tpl, i, &i8);
+      err = tpl->read_i8(i, &i8);
       fprintf(stream, "%d", i8);
     }
     break;
@@ -120,12 +123,12 @@ void print_int_col(FILE *stream, const Tuple * tpl, int i,
     if (col_meta->attr & IB_COL_UNSIGNED) {
       uint16_t u16;
 
-      err = ib_tuple_read_u16(tpl, i, &u16);
+      err = tpl->read_u16(i, &u16);
       fprintf(stream, "%u", u16);
     } else {
       int16_t i16;
 
-      err = ib_tuple_read_i16(tpl, i, &i16);
+      err = tpl->read_i16(i, &i16);
       fprintf(stream, "%d", i16);
     }
     break;
@@ -134,12 +137,12 @@ void print_int_col(FILE *stream, const Tuple * tpl, int i,
     if (col_meta->attr & IB_COL_UNSIGNED) {
       uint32_t u32;
 
-      err = ib_tuple_read_u32(tpl, i, &u32);
+      err = tpl->read_u32(i, &u32);
       fprintf(stream, "%u", u32);
     } else {
       int32_t i32;
 
-      err = ib_tuple_read_i32(tpl, i, &i32);
+      err = tpl->read_i32(i, &i32);
       fprintf(stream, "%d", i32);
     }
     break;
@@ -148,12 +151,12 @@ void print_int_col(FILE *stream, const Tuple * tpl, int i,
     if (col_meta->attr & IB_COL_UNSIGNED) {
       uint64_t u64;
 
-      err = ib_tuple_read_u64(tpl, i, &u64);
+      err = tpl->read_u64(i, &u64);
       fprintf(stream, "%llu", (unsigned long long)u64);
     } else {
       int64_t i64;
 
-      err = ib_tuple_read_i64(tpl, i, &i64);
+      err = tpl->read_i64(i, &i64);
       fprintf(stream, "%lld", (long long)i64);
     }
     break;
@@ -176,13 +179,13 @@ void print_char_array(FILE *stream, const char *array, int len) {
 
 /** Print all columns in a tuple. */
 void print_tuple(FILE *stream, const Tuple * tpl) {
-  int n_cols = ib_tuple_get_n_cols(tpl);
+  int n_cols = tpl->get_n_cols();
 
   for (int i = 0; i < n_cols; ++i) {
     ulint data_len;
     ColMeta col_meta;
 
-    data_len = ib_col_get_meta(tpl, i, &col_meta);
+    data_len = tpl->get_meta(i, &col_meta);
 
     /* Skip system columns. */
     if (col_meta.type == IB_SYS) {
@@ -201,7 +204,7 @@ void print_tuple(FILE *stream, const Tuple * tpl) {
         float v;
         DbErr err;
 
-        err = ib_tuple_read_float(tpl, i, &v);
+        err = tpl->read_float(i, &v);
         assert(err == DB_SUCCESS);
         fprintf(stream, "%f", v);
         break;
@@ -210,7 +213,7 @@ void print_tuple(FILE *stream, const Tuple * tpl) {
         double v;
         DbErr err;
 
-        err = ib_tuple_read_double(tpl, i, &v);
+        err = tpl->read_double(i, &v);
         assert(err == DB_SUCCESS);
         fprintf(stream, "%lf", v);
         break;
@@ -223,7 +226,7 @@ void print_tuple(FILE *stream, const Tuple * tpl) {
       case IB_CHAR_ANYCHARSET: {
         const char *ptr;
 
-        ptr = static_cast<const char *>(ib_col_get_value(tpl, i));
+        ptr = static_cast<const char *>(tpl->get_value(i));
         fprintf(stream, "%d:", (int)data_len);
         print_char_array(stream, ptr, (int)data_len);
         break;
@@ -238,64 +241,36 @@ void print_tuple(FILE *stream, const Tuple * tpl) {
   fprintf(stream, "\n");
 }
 
-/** Setup the InnoDB configuration parameters. */
-void test_configure() {
-  DbErr err;
+void test_configure(Config &config) {
+  using namespace std::chrono_literals;
 
   create_directory(log_group_home_dir);
 
-  err = ib_cfg_set_text("flush_method", "O_DIRECT");
-  assert(err == DB_SUCCESS);
+  config.m_fil.m_flush_method = SRV_UNIX_O_DIRECT;
+  config.m_fil.m_max_n_open_files = 300;
+  config.m_fil.m_file_per_table = true;
+  config.m_fil.m_data_home = "./";
 
-  err = ib_cfg_set_int("log_files_in_group", 2);
-  assert(err == DB_SUCCESS);
+  config.m_log.m_n_files = 2;
+  config.m_log.m_file_size = 32 * 1024 * 1024;
+  config.m_log.m_buffer_size = 24 * 16384;
+  config.m_log.m_flush_at_trx_commit = 1;
+  config.m_log.m_group_home_dir = log_group_home_dir;
 
-  err = ib_cfg_set_int("log_file_size", 32 * 1024 * 1024);
-  assert(err == DB_SUCCESS);
+  config.m_buf_pool.m_size = 8 * 1024 * 1024;
+  config.m_buf_pool.m_use_checksums = true;
 
-  err = ib_cfg_set_int("log_buffer_size", 24 * 16384);
-  assert(err == DB_SUCCESS);
+  config.m_dblwr.m_enabled = true;
 
-  err = ib_cfg_set_int("buffer_pool_size", 5 * 1024 * 1024);
-  assert(err == DB_SUCCESS);
+  config.m_lock.m_wait_timeout = 60s;
+  config.m_lock.m_rollback_on_timeout = true;
 
-  err = ib_cfg_set_int("additional_mem_pool_size", 4 * 1024 * 1024);
-  assert(err == DB_SUCCESS);
+  config.m_srv.m_verbose_log = true;
+}
 
-  err = ib_cfg_set_int("flush_log_at_trx_commit", 1);
-  assert(err == DB_SUCCESS);
-
-  err = ib_cfg_set_int("lock_wait_timeout", 60);
-  assert(err == DB_SUCCESS);
-
-  err = ib_cfg_set_int("open_files", 300);
-  assert(err == DB_SUCCESS);
-
-  err = ib_cfg_set_bool_on("doublewrite");
-  assert(err == DB_SUCCESS);
-
-  err = ib_cfg_set_bool_on("checksums");
-  assert(err == DB_SUCCESS);
-
-  err = ib_cfg_set_bool_on("rollback_on_timeout");
-  assert(err == DB_SUCCESS);
-
-  err = ib_cfg_set_bool_on("print_verbose_log");
-  assert(err == DB_SUCCESS);
-
-  err = ib_cfg_set_bool_on("file_per_table");
-  assert(err == DB_SUCCESS);
-
-  err = ib_cfg_set_text("data_home_dir", "./");
-  assert(err == DB_SUCCESS);
-
-  err = ib_cfg_set_text("log_group_home_dir", log_group_home_dir);
-
-  if (err != DB_SUCCESS) {
-    fprintf(stderr, "syntax error in log_group_home_dir, or a "
-                    "wrong number of mirrored log groups\n");
-    exit(1);
-  }
+void test_startup(System &sys, const Config &config) {
+  OK(sys.init(config));
+  OK(sys.startup());
 }
 
 int gen_rand_text(char *ptr, int max_size) {
@@ -316,26 +291,47 @@ int gen_rand_text(char *ptr, int max_size) {
   return (len);
 }
 
-struct option ib_longopts[] = {
-    {"ib-buffer-pool-size", required_argument, nullptr, 1},
-    {"ib-log-file-size", required_argument, nullptr, 2},
-    {"ib-io-capacity", required_argument, nullptr, 3},
-    {"ib-use-sys-malloc", required_argument, nullptr, 4},
-    {"ib-lru-old-ratio", required_argument, nullptr, 5},
-    {"ib-lru-access-threshold", required_argument, nullptr, 6},
-    {"ib-force-recovery", required_argument, nullptr, 7},
-    {"ib-log-dir", required_argument, nullptr, 8},
-    {"ib-data-dir", required_argument, nullptr, 9},
-    {"ib-disble-dblwr", no_argument, nullptr, 11},
-    {"ib-disble-checksum", no_argument, nullptr, 12},
-    {"ib-disble-file-per-table", no_argument, nullptr, 13},
-    {"ib-flush-log-at-trx-commit", required_argument, nullptr, 14},
-    {"ib-flush-method", required_argument, nullptr, 15},
-    {"ib-read-threads", required_argument, nullptr, 16},
-    {"ib-write-threads", required_argument, nullptr, 17},
-    {"ib-max-open-files", required_argument, nullptr, 18},
-    {"ib-lock-wait-timeout", required_argument, nullptr, 19},
-    {nullptr, 0, nullptr, 0}};
+/** The ids of the common command line options. */
+enum Option : int {
+  OPT_BUFFER_POOL_SIZE = 1,
+  OPT_LOG_FILE_SIZE,
+  OPT_IO_CAPACITY,
+  OPT_LRU_OLD_RATIO,
+  OPT_LRU_ACCESS_THRESHOLD,
+  OPT_FORCE_RECOVERY,
+  OPT_LOG_DIR,
+  OPT_DATA_DIR,
+  OPT_DISABLE_DBLWR,
+  OPT_DISABLE_CHECKSUM,
+  OPT_DISABLE_FILE_PER_TABLE,
+  OPT_FLUSH_LOG_AT_TRX_COMMIT,
+  OPT_FLUSH_METHOD,
+  OPT_READ_THREADS,
+  OPT_WRITE_THREADS,
+  OPT_MAX_OPEN_FILES,
+  OPT_LOCK_WAIT_TIMEOUT
+};
+
+const struct option ib_longopts[] = {
+  {"ib-buffer-pool-size", required_argument, nullptr, OPT_BUFFER_POOL_SIZE},
+  {"ib-log-file-size", required_argument, nullptr, OPT_LOG_FILE_SIZE},
+  {"ib-io-capacity", required_argument, nullptr, OPT_IO_CAPACITY},
+  {"ib-lru-old-ratio", required_argument, nullptr, OPT_LRU_OLD_RATIO},
+  {"ib-lru-access-threshold", required_argument, nullptr, OPT_LRU_ACCESS_THRESHOLD},
+  {"ib-force-recovery", required_argument, nullptr, OPT_FORCE_RECOVERY},
+  {"ib-log-dir", required_argument, nullptr, OPT_LOG_DIR},
+  {"ib-data-dir", required_argument, nullptr, OPT_DATA_DIR},
+  {"ib-disable-dblwr", no_argument, nullptr, OPT_DISABLE_DBLWR},
+  {"ib-disable-checksum", no_argument, nullptr, OPT_DISABLE_CHECKSUM},
+  {"ib-disable-file-per-table", no_argument, nullptr, OPT_DISABLE_FILE_PER_TABLE},
+  {"ib-flush-log-at-trx-commit", required_argument, nullptr, OPT_FLUSH_LOG_AT_TRX_COMMIT},
+  {"ib-flush-method", required_argument, nullptr, OPT_FLUSH_METHOD},
+  {"ib-read-threads", required_argument, nullptr, OPT_READ_THREADS},
+  {"ib-write-threads", required_argument, nullptr, OPT_WRITE_THREADS},
+  {"ib-max-open-files", required_argument, nullptr, OPT_MAX_OPEN_FILES},
+  {"ib-lock-wait-timeout", required_argument, nullptr, OPT_LOCK_WAIT_TIMEOUT},
+  {nullptr, 0, nullptr, 0}
+};
 
 /** Print usage. */
 void print_usage(const char *progname) {
@@ -344,15 +340,14 @@ void print_usage(const char *progname) {
           "[--ib-buffer-pool-size size in mb]\n"
           "[--ib-log-file-size size in mb]\n"
           "[--ib-io-capacity number of records]\n"
-          "[--ib-use-sys-malloc]\n"
-          "[--ib-lru-old-ratio as %% e.g. 38]\n"
+                    "[--ib-lru-old-ratio as %% e.g. 38]\n"
           "[--ib-lru-access-threshold in ms]\n"
           "[--ib-force-recovery 1-6]\n"
           "[--ib-log-dir path]\n"
           "[--ib-data-dir path]\n"
-          "[--ib-disble-dblwr]\n"
-          "[--ib-disble-checksum]\n"
-          "[--ib-disble-file-per-table]\n"
+          "[--ib-disable-dblwr]\n"
+          "[--ib-disable-checksum]\n"
+          "[--ib-disable-file-per-table]\n"
           "[--ib-flush-log-at-trx-commit 1-3]\n"
           "[--ib-flush-method method]\n"
           "[--ib-read-threads count]\n"
@@ -362,386 +357,143 @@ void print_usage(const char *progname) {
           progname);
 }
 
-/** Set the runtime global options. */
-DbErr set_global_option(int opt, const char *arg) {
-  DbErr err = DB_ERROR;
+/**
+ * @param[in] name              Name of a flush method.
+ * @param[out] method           The flush method.
+ *
+ * @return true if name is a flush method.
+ */
+static bool flush_method_from_name(std::string_view name, FlushMethod &method) {
+  static constexpr std::pair<std::string_view, FlushMethod> methods[] = {
+    {"fsync", SRV_UNIX_FSYNC},
+    {"O_DSYNC", SRV_UNIX_O_DSYNC},
+    {"littlesync", SRV_UNIX_LITTLESYNC},
+    {"nosync", SRV_UNIX_NOSYNC},
+    {"O_DIRECT", SRV_UNIX_O_DIRECT}
+  };
 
-  /* FIXME: Change numbers to enums or #defines */
+  for (const auto &[n, m] : methods) {
+    if (n == name) {
+      method = m;
+      return true;
+    }
+  }
+
+  return false;
+}
+
+DbErr set_global_option(Config &config, int opt, const char *arg) {
+  using namespace std::chrono_literals;
+
+  const auto number = [arg]() { return ulint(strtoul(arg, nullptr, 10)); };
+
   switch (opt) {
-  case 1: {
-    ulint size;
-
-    size = strtoul(arg, nullptr, 10);
-    size *= 1024UL * 1024UL;
-    err = ib_cfg_set_int("buffer_pool_size", size);
-    assert(err == DB_SUCCESS);
-    break;
-  }
-  case 2: {
-    ulint size;
-
-    size = strtoul(arg, nullptr, 10);
-    size *= 1024UL * 1024UL;
-    err = ib_cfg_set_int("log_file_size", size);
-    assert(err == DB_SUCCESS);
-    break;
-  }
-  case 3: {
-    ulint size;
-
-    size = strtoul(arg, nullptr, 10);
-    err = ib_cfg_set_int("io_capacity", size);
-    assert(err == DB_SUCCESS);
-    break;
-  }
-  case 4:
-    err = ib_cfg_set_bool_on("use_sys_malloc");
-    assert(err == DB_SUCCESS);
-    break;
-
-  case 5: {
-    ulint pct;
-
-    pct = strtoul(arg, nullptr, 10);
-    err = ib_cfg_set_int("lru_old_blocks_pct", pct);
-    assert(err == DB_SUCCESS);
-    break;
-  }
-
-  case 6: {
-    ulint pct;
-
-    pct = strtoul(arg, nullptr, 10);
-    err = ib_cfg_set_int("lru_block_access_recency", pct);
-    assert(err == DB_SUCCESS);
-    break;
-  }
-
-  case 7: {
-    ulint level;
-
-    level = strtoul(arg, nullptr, 10);
-    err = ib_cfg_set_int("force_recovery", level);
-    assert(err == DB_SUCCESS);
-    break;
-  }
-
-  case 8: {
-    err = ib_cfg_set_text("log_group_home_dir", arg);
-    assert(err == DB_SUCCESS);
-    break;
+    case OPT_BUFFER_POOL_SIZE:
+      config.m_buf_pool.m_size = number() * 1024UL * 1024UL;
+      break;
+    case OPT_LOG_FILE_SIZE:
+      config.m_log.m_file_size = number() * 1024UL * 1024UL;
+      break;
+    case OPT_IO_CAPACITY:
+      config.m_buf_pool.m_io_capacity = number();
+      break;
+    case OPT_LRU_OLD_RATIO:
+      config.m_buf_pool.m_lru_old_blocks_pct = number();
+      break;
+    case OPT_LRU_ACCESS_THRESHOLD:
+      config.m_buf_pool.m_lru_block_access_recency = number();
+      break;
+    case OPT_FORCE_RECOVERY:
+      config.m_recv.m_force_recovery = IbRecovery(number());
+      break;
+    case OPT_LOG_DIR:
+      config.m_log.m_group_home_dir = arg;
+      break;
+    case OPT_DATA_DIR:
+      config.m_fil.m_data_home = arg;
+      break;
+    case OPT_DISABLE_DBLWR:
+      config.m_dblwr.m_enabled = false;
+      break;
+    case OPT_DISABLE_CHECKSUM:
+      config.m_buf_pool.m_use_checksums = false;
+      break;
+    case OPT_DISABLE_FILE_PER_TABLE:
+      config.m_fil.m_file_per_table = false;
+      break;
+    case OPT_FLUSH_LOG_AT_TRX_COMMIT:
+      config.m_log.m_flush_at_trx_commit = number();
+      break;
+    case OPT_FLUSH_METHOD:
+      if (!flush_method_from_name(arg, config.m_fil.m_flush_method)) {
+        return DB_INVALID_INPUT;
+      }
+      break;
+    case OPT_READ_THREADS:
+      config.m_aio.m_n_read_threads = number();
+      break;
+    case OPT_WRITE_THREADS:
+      config.m_aio.m_n_write_threads = number();
+      break;
+    case OPT_MAX_OPEN_FILES:
+      config.m_fil.m_max_n_open_files = number();
+      break;
+    case OPT_LOCK_WAIT_TIMEOUT:
+      config.m_lock.m_wait_timeout = std::chrono::seconds(number());
+      break;
+    default:
+      return DB_ERROR;
   }
 
-  case 9: {
-    err = ib_cfg_set_text("data_home_dir", arg);
-    assert(err == DB_SUCCESS);
-    break;
-  }
-
-  case 10: {
-    err = ib_cfg_set_bool_off("doublewrite");
-    assert(err == DB_SUCCESS);
-    break;
-  }
-
-  case 11: {
-    err = ib_cfg_set_bool_off("checksum");
-    assert(err == DB_SUCCESS);
-    break;
-  }
-
-  case 12: {
-    err = ib_cfg_set_bool_off("file_per_table");
-    assert(err == DB_SUCCESS);
-    break;
-  }
-
-  case 13: {
-    ulint level;
-
-    level = strtoul(arg, nullptr, 10);
-    err = ib_cfg_set_int("flush_log_at_trx_commit", level);
-    assert(err == DB_SUCCESS);
-    break;
-  }
-
-  case 14: {
-    err = ib_cfg_set_int("flush_method", arg);
-    assert(err == DB_SUCCESS);
-    break;
-  }
-
-  case 15: {
-    ulint threads;
-
-    threads = strtoul(arg, nullptr, 10);
-    err = ib_cfg_set_int("read_io_threads", threads);
-    assert(err == DB_SUCCESS);
-    break;
-  }
-
-  case 16: {
-    ulint threads;
-
-    threads = strtoul(arg, nullptr, 10);
-    err = ib_cfg_set_int("write_io_threads", threads);
-    assert(err == DB_SUCCESS);
-    break;
-  }
-
-  case 17: {
-    ulint n;
-
-    n = strtoul(arg, nullptr, 10);
-    err = ib_cfg_set_int("open_files", n);
-    assert(err == DB_SUCCESS);
-    break;
-  }
-
-  case 18: {
-    ulint secs;
-
-    secs = strtoul(arg, nullptr, 10);
-    err = ib_cfg_set_int("lock_wait_timeout", secs);
-    assert(err == DB_SUCCESS);
-    break;
-  }
-
-  default:
-    err = DB_ERROR;
-    break;
-  }
-
-  return err;
+  return DB_SUCCESS;
 }
 
 /** Print API version to stdout. */
 
 void print_version(void) {
-  auto version = ib_api_version();
+  auto version = api::api_version();
 
   printf("API: %d.%d.%d\n", (int)(version >> 32), /* Current version */
          (int)((version >> 16)) & 0xffff,         /* Revisiion */
          (int)(version & 0xffff));                /* Age */
 }
 
-/** Skip line. */
-static int config_skip_line(FILE *fp) {
-  int ch;
-
-  while ((ch = getc(fp)) != -1 && ch != '\n')
-    ;
-
-  return (ch);
-}
-
-/** Add an element to the config. */
-static void config_add_elem(TestConfig *config, const TestString *key,
-                            const TestString *val) {
-  TestVar *var;
-
-  if (config->n_count == 0) {
-    int size;
-
-    config->n_count = 4;
-
-    size = config->n_count * sizeof(TestVar);
-    config->elems = (TestVar *)malloc(size);
-  } else if (config->n_elems == config->n_count - 1) {
-    int size;
-
-    config->n_count *= 2;
-    size = config->n_count * sizeof(TestVar);
-    config->elems = (TestVar *)realloc(config->elems, size);
-  }
-
-  assert(config->n_elems < config->n_count);
-
-  var = &config->elems[config->n_elems];
-
-  assert(key->len > 0);
-  assert(key->ptr != nullptr);
-
-  var->name.len = key->len;
-  var->name.ptr = (byte *)malloc(var->name.len);
-  memcpy(var->name.ptr, key->ptr, var->name.len);
-
-  /* Value can be NULL for boolean variables */
-  if (val->len > 0) {
-    var->value.len = val->len;
-    var->value.ptr = (byte *)malloc(var->value.len);
-    memcpy(var->value.ptr, val->ptr, var->value.len);
-  }
-
-  ++config->n_elems;
-}
-
-/** Parse an InnoDB config file, the file has a very simply format:
-Lines beginning with '#' are ignored. Characters after '#' (inclusive)
-are also ignored.  Empty lines are also ignored. Variable syntax is:
-  \s*var_name\s*=\s*value\s*\n */
-
-int config_parse_file(const char *filename, TestConfig *config) {
-  int ch;
-  FILE *fp;
-  TestString key;
-  TestString val;
-  TestString *str;
-  byte name[BUFSIZ];
-  byte value[BUFSIZ];
-
-  fp = fopen(filename, "r");
-
-  if (fp == nullptr) {
-    return (-1);
-  }
-
-  memset(&key, 0x0, sizeof(key));
-  memset(&val, 0x0, sizeof(val));
-
-  key.ptr = name;
-  val.ptr = value;
-  str = &key;
-
-  while ((ch = getc(fp)) != -1) {
-
-    /* Skip comments. */
-    if (ch == COMMENT) {
-      if (config_skip_line(fp) == -1) {
-        break;
-      }
-      continue;
-    }
-
-    /* Skip white space. */
-    while (ch != '\n' && isspace(ch)) {
-      if ((ch = getc(fp)) == -1) {
-        break;
-      }
-    }
-
-    /* Skip comments. */
-    if (ch == COMMENT) {
-      if (config_skip_line(fp) == -1) {
-        break;
-      }
-      continue;
-    }
-
-    if (ch == -1) {
-      break;
-    }
-
-    switch (ch) {
-    case '\r':
-      break;
-    case '\n':
-      key.ptr = name;
-      val.ptr = value;
-
-      if (key.len > 0) {
-        config_add_elem(config, &key, &val);
-      }
-
-      memset(&key, 0x0, sizeof(key));
-      memset(&val, 0x0, sizeof(val));
-
-      /* Anything by default is a variable name */
-      str = &key;
-      str->ptr = name;
-      break;
-    case '=':
-      /* Anything that follows an '=' is a value. */
-      str = &val;
-      str->ptr = value;
-      break;
-    default:
-      ++str->len;
-      *str->ptr++ = ch;
-    }
-
-    assert(str->len < (int)sizeof(name));
-  }
-
-  if (str->len > 0) {
-    key.ptr = name;
-    val.ptr = value;
-
-    config_add_elem(config, &key, &val);
-  }
-
-  fclose(fp);
-
-  return (0);
-}
-
-/** Print the elements. */
-
-void config_print(const TestConfig *config) {
-  ulint i;
-
-  for (i = 0; i < config->n_elems; ++i) {
-    if (config->elems[i].value.ptr != nullptr) {
-      printf("%.*s=%.*s\n", config->elems[i].name.len,
-             config->elems[i].name.ptr, config->elems[i].value.len,
-             config->elems[i].value.ptr);
-    } else {
-      printf("%.*s\n", config->elems[i].name.len, config->elems[i].name.ptr);
-    }
-  }
-}
-
-/** Free the the elements. */
-void config_free(TestConfig *config) {
-  ulint i;
-
-  for (i = 0; i < config->n_elems; ++i) {
-    free(config->elems[i].name.ptr);
-    free(config->elems[i].value.ptr);
-  }
-  free(config->elems);
-
-  memset(config, 0x0, sizeof(*config));
-}
-
 /** Drop the table. */
-DbErr drop_table(const char *dbname, const char *name) {
+DbErr drop_table(System &sys, const char *dbname, const char *name) {
   DbErr err;
   Trx * ib_trx;
   char table_name[IB_MAX_TABLE_NAME_LEN];
 
   snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
 
-  ib_trx = ib_trx_begin(IB_TRX_REPEATABLE_READ);
+  ib_trx = api::trx_begin(sys, IB_TRX_REPEATABLE_READ);
   assert(ib_trx != nullptr);
 
-  err = ib_schema_lock_exclusive(ib_trx);
+  err = api::schema_lock_exclusive(sys, ib_trx);
   assert(err == DB_SUCCESS);
 
-  err = ib_table_drop(ib_trx, table_name);
+  err = api::table_drop(sys, ib_trx, table_name);
   assert(err == DB_SUCCESS);
 
-  err = ib_trx_commit(ib_trx);
+  err = api::trx_commit(sys, ib_trx);
   assert(err == DB_SUCCESS);
 
   return (err);
 }
 
 /** Truncate the table. */
-DbErr truncate_table(const char *dbname, const char *name) {
+DbErr truncate_table(System &sys, const char *dbname, const char *name) {
   DbErr err;
   char table_name[IB_MAX_TABLE_NAME_LEN];
 
   snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
 
   uint64_t table_id;
-  err = ib_table_get_id(table_name, &table_id);
+  err = api::table_get_id(sys, table_name, &table_id);
   assert(err == DB_SUCCESS);
 
-  err = ib_table_truncate(table_name, &table_id);
+  err = api::table_truncate(sys, table_name, &table_id);
   assert(err == DB_SUCCESS);
-
-  assert(srv_buf_pool != nullptr);
 
   return (err);
 }

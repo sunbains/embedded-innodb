@@ -51,7 +51,7 @@ register_test_table() in mt_drv.c
 #endif
 
 /** Open a table and return a cursor for the table. */
-DbErr open_table(const char *dbname, /*!< in: database name */
+DbErr open_table(System &sys, const char *dbname, /*!< in: database name */
                     const char *name,   /*!< in: table name */
                     Trx * ib_trx,    /*!< in: transaction */
                     Cursor **crsr)    /*!< out: innodb cursor */
@@ -60,7 +60,7 @@ DbErr open_table(const char *dbname, /*!< in: database name */
   char table_name[IB_MAX_TABLE_NAME_LEN];
 
   snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
-  err = ib_cursor_open_table(table_name, ib_trx, crsr);
+  err = api::cursor_open_table(sys, table_name, ib_trx, crsr);
 
   return (err);
 }
@@ -69,7 +69,7 @@ DbErr open_table(const char *dbname, /*!< in: database name */
 /** SELECT * from t */
 static
 DbErr
-select_base(
+select_base(System &sys, 
 	void*	arg)	/*!< in: arguments for callback */
 {
 	DbErr	err;
@@ -80,29 +80,29 @@ select_base(
 	tbl_class_t*	tbl = cb_arg->tbl;
 
 	//fprintf(stderr, "base: SELECT\n");
-	err = open_table(tbl->db_name, tbl->name, cb_arg->trx, &crsr);
+	err = open_table(sys, tbl->db_name, tbl->name, cb_arg->trx, &crsr);
 	if (err != DB_SUCCESS) {
 		goto err_exit;
 	}
 
-	err = ib_cursor_lock(crsr, IB_LOCK_IS);
+	err = crsr->lock(sys, IB_LOCK_IS);
 	if (err != DB_SUCCESS) {
 		goto err_exit;
 	}
 
-	tpl = ib_clust_read_tuple_create(crsr);
+	tpl = crsr->clust_read_tuple_create();
 	if (tpl == NULL) {
 		err = DB_OUT_OF_MEMORY;
 		goto err_exit;
 	}
 
-	err = ib_cursor_first(crsr);
+	err = crsr->first(sys);
 	if (err != DB_SUCCESS) {
 		goto err_exit;
 	}
 
 	while (1) {
-		err = ib_cursor_read_row(crsr, tpl);
+		err = crsr->read_row(sys, tpl);
 		if (err != DB_SUCCESS) {
 			goto err_exit;
 		}
@@ -112,11 +112,11 @@ select_base(
 			print_tuple(stderr, tpl);
 		}
 
-		err = ib_cursor_next(crsr);
+		err = crsr->next(sys);
 		if (err != DB_SUCCESS) {
 			goto err_exit;
 		}
-		tpl = ib_tuple_clear(tpl);
+		tpl = tpl->clear();
 		if (tpl == NULL) {
 			err = DB_OUT_OF_MEMORY;
 			goto err_exit;
@@ -127,11 +127,11 @@ err_exit:
 	update_err_stats(cb_arg->err_st, err);
 
 	if (tpl != NULL) {
-		ib_tuple_delete(tpl);
+		Tuple::destroy(tpl);
 	}
 
 	if (crsr != NULL) {
-		err2 = ib_cursor_close(crsr);
+		err2 = Cursor::close(sys, crsr);
 		assert(err2 == DB_SUCCESS);
 		crsr = NULL;
 	}
@@ -141,14 +141,14 @@ err_exit:
 #endif
 
 /** stub for SELECT * from t */
-DbErr select_stub(void *arg) /*!< in: arguments for callback */
+DbErr select_stub(System &sys, void *arg) /*!< in: arguments for callback */
 {
   (void)arg;
   // usleep(100000);
   return (DB_SUCCESS);
 }
 /** DROP TABLE t */
-static DbErr drop_base(void *arg) /*!< in: arguments for callback */
+static DbErr drop_base(System &sys, void *arg) /*!< in: arguments for callback */
 {
   DbErr err;
   Trx * ib_trx;
@@ -160,19 +160,19 @@ static DbErr drop_base(void *arg) /*!< in: arguments for callback */
   snprintf(table_name, sizeof(table_name), "%s/%s", tbl->m_db_name.c_str(),
            tbl->m_name.c_str());
 
-  ib_trx = ib_trx_begin(IB_TRX_REPEATABLE_READ);
+  ib_trx = api::trx_begin(sys, IB_TRX_REPEATABLE_READ);
   assert(ib_trx != nullptr);
 
-  err = ib_schema_lock_exclusive(ib_trx);
+  err = api::schema_lock_exclusive(sys, ib_trx);
   assert(err == DB_SUCCESS);
 
-  err = ib_table_drop(ib_trx, table_name);
+  err = api::table_drop(sys, ib_trx, table_name);
   /* We can get the DB_TABLESPACE_DELETED if the table is already
   on the background delete queue. */
   assert(err == DB_SUCCESS || err == DB_TABLE_NOT_FOUND ||
          err == DB_TABLESPACE_DELETED);
 
-  err = ib_trx_commit(ib_trx);
+  err = api::trx_commit(sys, ib_trx);
   assert(err == DB_SUCCESS);
 
   update_err_stats(cb_arg->err_st, err);
@@ -180,7 +180,7 @@ static DbErr drop_base(void *arg) /*!< in: arguments for callback */
 }
 
 /** TRUNCATE TABLE t */
-static DbErr truncate_base(void *arg) /*!< in: arguments for callback */
+static DbErr truncate_base(System &sys, void *arg) /*!< in: arguments for callback */
 {
   DbErr err;
   uint64_t table_id;
@@ -192,14 +192,14 @@ static DbErr truncate_base(void *arg) /*!< in: arguments for callback */
   snprintf(table_name, sizeof(table_name), "%s/%s", tbl->m_db_name.c_str(),
            tbl->m_name.c_str());
 
-  err = ib_table_truncate(table_name, &table_id);
+  err = api::table_truncate(sys, table_name, &table_id);
   update_err_stats(cb_arg->err_st, err);
 
   return (err);
 }
 
 /** Function stub */
-static DbErr update_base(void *arg) /*!< in: arguments for callback */
+static DbErr update_base(System &sys, void *arg) /*!< in: arguments for callback */
 {
   (void)arg;
   // fprintf(stderr, "base: UPDATE\n");
@@ -208,7 +208,7 @@ static DbErr update_base(void *arg) /*!< in: arguments for callback */
 }
 
 /** Function stub */
-static DbErr insert_base(void *arg) /*!< in: arguments for callback */
+static DbErr insert_base(System &sys, void *arg) /*!< in: arguments for callback */
 {
   (void)arg;
   // fprintf(stderr, "base: INSERT\n");
@@ -217,7 +217,7 @@ static DbErr insert_base(void *arg) /*!< in: arguments for callback */
 }
 
 /** Function stub */
-static DbErr delete_base(void *arg) /*!< in: arguments for callback */
+static DbErr delete_base(System &sys, void *arg) /*!< in: arguments for callback */
 {
   (void)arg;
   // fprintf(stderr, "base: DELETE\n");
@@ -226,7 +226,7 @@ static DbErr delete_base(void *arg) /*!< in: arguments for callback */
 }
 
 /** Function stub */
-static DbErr create_base(void *arg) /*!< in: arguments for callback */
+static DbErr create_base(System &sys, void *arg) /*!< in: arguments for callback */
 {
   (void)arg;
   // fprintf(stderr, "base: CREATE\n");
@@ -235,7 +235,7 @@ static DbErr create_base(void *arg) /*!< in: arguments for callback */
 }
 
 /** Function stub */
-static DbErr alter_base(void *arg) /*!< in: arguments for callback */
+static DbErr alter_base(System &sys, void *arg) /*!< in: arguments for callback */
 {
   (void)arg;
   // fprintf(stderr, "base: ALTER\n");

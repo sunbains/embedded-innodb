@@ -601,7 +601,7 @@ DbErr trx_undo_report_row_operation(System &sys,
   DbErr err = DB_SUCCESS;
   MemHeap *heap = nullptr;
   std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
-  RecOffs offsets(offsets_.data());
+  auto offsets = rec_offs_from_array(offsets_);
 
   ut_a(index->is_clustered());
 

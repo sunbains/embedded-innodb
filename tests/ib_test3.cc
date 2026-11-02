@@ -51,10 +51,10 @@ TODO: Test limits, SQL_NULL and data mismatch handling.
 #define TABLE "t"
 
 /** Create an InnoDB database (sub-directory). */
-static DbErr create_database(const char *name) {
+static DbErr create_database(System &sys, const char *name) {
   bool err;
 
-  err = ib_database_create(name);
+  err = api::database_create(sys, name);
   assert(err == true);
 
   return (DB_SUCCESS);
@@ -65,7 +65,7 @@ static DbErr create_database(const char *name) {
         blob	VARCHAR(n),
         count	INT,
         PRIMARY KEY(vchar); */
-static DbErr create_table(const char *dbname, /*!< in: database name */
+static DbErr create_table(System &sys, const char *dbname, /*!< in: database name */
                              const char *name,   /*!< in: table name */
                              int size)           /*!< in: int size in bits */
 {
@@ -80,40 +80,40 @@ static DbErr create_table(const char *dbname, /*!< in: database name */
   snprintf(table_name, sizeof(table_name), "%s/%s%d", dbname, name, size);
 
   /* Pass a table page size of 0, ie., use default page size. */
-  err = ib_table_schema_create(table_name, &ib_tbl_sch, IB_TBL_V1, 0);
+  err = TableSchema::create(table_name, &ib_tbl_sch, IB_TBL_V1, 0);
 
   assert(err == DB_SUCCESS);
 
-  err = ib_table_schema_add_col(ib_tbl_sch, "c1", IB_INT, IB_COL_NONE, 0,
+  err = ib_tbl_sch->add_col("c1", IB_INT, IB_COL_NONE, 0,
                                 size / 8);
 
   assert(err == DB_SUCCESS);
 
-  err = ib_table_schema_add_col(ib_tbl_sch, "c2", IB_INT, IB_COL_UNSIGNED, 0,
+  err = ib_tbl_sch->add_col("c2", IB_INT, IB_COL_UNSIGNED, 0,
                                 size / 8);
 
   assert(err == DB_SUCCESS);
 
   /* create table */
-  ib_trx = ib_trx_begin(IB_TRX_REPEATABLE_READ);
-  err = ib_schema_lock_exclusive(ib_trx);
+  ib_trx = api::trx_begin(sys, IB_TRX_REPEATABLE_READ);
+  err = api::schema_lock_exclusive(sys, ib_trx);
   assert(err == DB_SUCCESS);
 
-  err = ib_table_create(ib_trx, ib_tbl_sch, &table_id);
+  err = api::table_create(sys, ib_trx, ib_tbl_sch, &table_id);
   assert(err == DB_SUCCESS);
 
-  err = ib_trx_commit(ib_trx);
+  err = api::trx_commit(sys, ib_trx);
   assert(err == DB_SUCCESS);
 
   if (ib_tbl_sch != nullptr) {
-    ib_table_schema_delete(ib_tbl_sch);
+    TableSchema::destroy(sys, ib_tbl_sch);
   }
 
   return (err);
 }
 
 /** Open a table and return a cursor for the table. */
-static DbErr open_table(const char *dbname, /*!< in: database name */
+static DbErr open_table(System &sys, const char *dbname, /*!< in: database name */
                            const char *name,   /*!< in: table name */
                            int size,           /*!< in: int size in bits */
                            Trx * ib_trx,    /*!< in: transaction */
@@ -126,7 +126,7 @@ static DbErr open_table(const char *dbname, /*!< in: database name */
 
   snprintf(table_name, sizeof(table_name), "%s/%s%d", dbname, name, size);
 
-  err = ib_cursor_open_table(table_name, ib_trx, crsr);
+  err = api::cursor_open_table(sys, table_name, ib_trx, crsr);
   assert(err == DB_SUCCESS);
 
   return (err);
@@ -134,7 +134,7 @@ static DbErr open_table(const char *dbname, /*!< in: database name */
 
 /** INSERT INTO Tn VALUE(1, -1);
 INSERT INTO Tn VALUE(100, -100); */
-static DbErr insert(Cursor * crsr, /*!< in, out: cursor to use for write */
+static DbErr insert(System &sys, Cursor * crsr, /*!< in, out: cursor to use for write */
                        int size)       /*!< in: int size in bits */
 {
   int i;
@@ -143,7 +143,7 @@ static DbErr insert(Cursor * crsr, /*!< in, out: cursor to use for write */
 
   assert(size == 8 || size == 16 || size == 32 || size == 64);
 
-  tpl = ib_clust_read_tuple_create(crsr);
+  tpl = crsr->clust_read_tuple_create();
   assert(tpl != nullptr);
 
   for (i = 0; i < 100; ++i) {
@@ -152,10 +152,10 @@ static DbErr insert(Cursor * crsr, /*!< in, out: cursor to use for write */
       uint8_t u8 = (i + 1);
       int8_t i8 = (i + 1) * -1;
 
-      err = ib_tuple_write_i8(tpl, 0, i8);
+      err = tpl->write_i8(0, i8);
       assert(err == DB_SUCCESS);
 
-      err = ib_tuple_write_u8(tpl, 1, u8);
+      err = tpl->write_u8(1, u8);
       assert(err == DB_SUCCESS);
       break;
     }
@@ -163,10 +163,10 @@ static DbErr insert(Cursor * crsr, /*!< in, out: cursor to use for write */
       uint16_t u16 = (i + 1);
       int16_t i16 = (i + 1) * -1;
 
-      err = ib_tuple_write_i16(tpl, 0, i16);
+      err = tpl->write_i16(0, i16);
       assert(err == DB_SUCCESS);
 
-      err = ib_tuple_write_u16(tpl, 1, u16);
+      err = tpl->write_u16(1, u16);
       assert(err == DB_SUCCESS);
       break;
     }
@@ -174,10 +174,10 @@ static DbErr insert(Cursor * crsr, /*!< in, out: cursor to use for write */
       uint32_t u32 = (i + 1);
       int32_t i32 = (i + 1) * -1;
 
-      err = ib_tuple_write_i32(tpl, 0, i32);
+      err = tpl->write_i32(0, i32);
       assert(err == DB_SUCCESS);
 
-      err = ib_tuple_write_u32(tpl, 1, u32);
+      err = tpl->write_u32(1, u32);
       assert(err == DB_SUCCESS);
       break;
     }
@@ -185,10 +185,10 @@ static DbErr insert(Cursor * crsr, /*!< in, out: cursor to use for write */
       uint64_t u64 = (i + 1);
       int64_t i64 = (i + 1) * -1;
 
-      err = ib_tuple_write_i64(tpl, 0, i64);
+      err = tpl->write_i64(0, i64);
       assert(err == DB_SUCCESS);
 
-      err = ib_tuple_write_u64(tpl, 1, u64);
+      err = tpl->write_u64(1, u64);
       assert(err == DB_SUCCESS);
       break;
     }
@@ -196,15 +196,15 @@ static DbErr insert(Cursor * crsr, /*!< in, out: cursor to use for write */
       assert(0);
     }
 
-    err = ib_cursor_insert_row(crsr, tpl);
+    err = crsr->insert_row(sys, tpl);
     assert(err == DB_SUCCESS);
 
-    tpl = ib_tuple_clear(tpl);
+    tpl = tpl->clear();
     assert(tpl != nullptr);
   }
 
   if (tpl != nullptr) {
-    ib_tuple_delete(tpl);
+    Tuple::destroy(tpl);
   }
 
   return (err);
@@ -220,12 +220,12 @@ static void read_col(const Tuple * tpl, int i, ColMeta *col_meta,
     if (col_meta->attr & IB_COL_UNSIGNED) {
       uint8_t u8;
 
-      err = ib_tuple_read_u8(tpl, i, &u8);
+      err = tpl->read_u8(i, &u8);
       *c += u8;
     } else {
       int8_t i8;
 
-      err = ib_tuple_read_i8(tpl, i, &i8);
+      err = tpl->read_i8(i, &i8);
       *c -= i8;
     }
     break;
@@ -234,12 +234,12 @@ static void read_col(const Tuple * tpl, int i, ColMeta *col_meta,
     if (col_meta->attr & IB_COL_UNSIGNED) {
       uint16_t u16;
 
-      err = ib_tuple_read_u16(tpl, i, &u16);
+      err = tpl->read_u16(i, &u16);
       *c += u16;
     } else {
       int16_t i16;
 
-      err = ib_tuple_read_i16(tpl, i, &i16);
+      err = tpl->read_i16(i, &i16);
       *c -= i16;
     }
     break;
@@ -248,12 +248,12 @@ static void read_col(const Tuple * tpl, int i, ColMeta *col_meta,
     if (col_meta->attr & IB_COL_UNSIGNED) {
       uint32_t u32;
 
-      err = ib_tuple_read_u32(tpl, i, &u32);
+      err = tpl->read_u32(i, &u32);
       *c += u32;
     } else {
       int32_t i32;
 
-      err = ib_tuple_read_i32(tpl, i, &i32);
+      err = tpl->read_i32(i, &i32);
       *c -= i32;
     }
     break;
@@ -262,12 +262,12 @@ static void read_col(const Tuple * tpl, int i, ColMeta *col_meta,
     if (col_meta->attr & IB_COL_UNSIGNED) {
       uint64_t u64;
 
-      err = ib_tuple_read_u64(tpl, i, &u64);
+      err = tpl->read_u64(i, &u64);
       *c += u64;
     } else {
       int64_t i64;
 
-      err = ib_tuple_read_i64(tpl, i, &i64);
+      err = tpl->read_i64(i, &i64);
       *c -= i64;
     }
     break;
@@ -283,13 +283,13 @@ static void read_col(const Tuple * tpl, int i, ColMeta *col_meta,
 static void check_row(Tuple * tpl, int *c1, int *c2) {
   ColMeta col_meta;
 
-  ib_col_get_meta(tpl, 0, &col_meta);
+  tpl->get_meta(0, &col_meta);
   assert(col_meta.type == IB_INT);
   assert(!(col_meta.attr & IB_COL_UNSIGNED));
 
   read_col(tpl, 0, &col_meta, c1);
 
-  ib_col_get_meta(tpl, 1, &col_meta);
+  tpl->get_meta(1, &col_meta);
   assert(col_meta.type == IB_INT);
   assert(col_meta.attr & IB_COL_UNSIGNED);
 
@@ -297,20 +297,20 @@ static void check_row(Tuple * tpl, int *c1, int *c2) {
 }
 
 /** SELECT * FROM T; */
-static DbErr read_rows(Cursor * crsr) {
+static DbErr read_rows(System &sys, Cursor * crsr) {
   Tuple * tpl;
   DbErr err;
   int c1 = 0;
   int c2 = 0;
 
-  tpl = ib_clust_read_tuple_create(crsr);
+  tpl = crsr->clust_read_tuple_create();
   assert(tpl != nullptr);
 
-  err = ib_cursor_first(crsr);
+  err = crsr->first(sys);
   assert(err == DB_SUCCESS);
 
   while (err == DB_SUCCESS) {
-    err = ib_cursor_read_row(crsr, tpl);
+    err = crsr->read_row(sys, tpl);
 
     assert(err == DB_SUCCESS || err == DB_END_OF_INDEX ||
            err == DB_RECORD_NOT_FOUND);
@@ -323,14 +323,14 @@ static DbErr read_rows(Cursor * crsr) {
 
     print_tuple(stdout, tpl);
 
-    err = ib_cursor_next(crsr);
+    err = crsr->next(sys);
 
     assert(err == DB_SUCCESS || err == DB_END_OF_INDEX ||
            err == DB_RECORD_NOT_FOUND);
   }
 
   if (tpl != nullptr) {
-    ib_tuple_delete(tpl);
+    Tuple::destroy(tpl);
   }
 
   if (err == DB_RECORD_NOT_FOUND || err == DB_END_OF_INDEX) {
@@ -343,7 +343,7 @@ static DbErr read_rows(Cursor * crsr) {
 }
 
 /** Drop the table. */
-static DbErr drop_table_n(const char *dbname, /*!< in: database name */
+static DbErr drop_table_n(System &sys, const char *dbname, /*!< in: database name */
                              const char *name,   /*!< in: table to drop */
                              int size)           /*!< in: int size in bits */
 {
@@ -352,16 +352,16 @@ static DbErr drop_table_n(const char *dbname, /*!< in: database name */
   char table_name[IB_MAX_TABLE_NAME_LEN];
 
   snprintf(table_name, sizeof(table_name), "%s/%s%d", dbname, name, size);
-  ib_trx = ib_trx_begin(IB_TRX_REPEATABLE_READ);
+  ib_trx = api::trx_begin(sys, IB_TRX_REPEATABLE_READ);
   assert(ib_trx != nullptr);
 
-  err = ib_schema_lock_exclusive(ib_trx);
+  err = api::schema_lock_exclusive(sys, ib_trx);
   assert(err == DB_SUCCESS);
 
-  err = ib_table_drop(ib_trx, table_name);
+  err = api::table_drop(sys, ib_trx, table_name);
   assert(err == DB_SUCCESS);
 
-  err = ib_trx_commit(ib_trx);
+  err = api::trx_commit(sys, ib_trx);
   assert(err == DB_SUCCESS);
 
   return (err);
@@ -379,51 +379,51 @@ int main(int argc, char *argv[]) {
 
   srandom(time(nullptr));
 
-  err = ib_init();
-  assert(err == DB_SUCCESS);
+  Config config;
 
-  test_configure();
+  test_configure(config);
 
-  err = ib_startup("default");
-  assert(err == DB_SUCCESS);
+  System sys;
 
-  err = create_database(DATABASE);
+  test_startup(sys, config);
+
+  err = create_database(sys, DATABASE);
   assert(err == DB_SUCCESS);
 
   for (i = 0; i < 4; ++i, size <<= 1) {
 
     printf("Create table %d\n", size);
-    err = create_table(DATABASE, TABLE, size);
+    err = create_table(sys, DATABASE, TABLE, size);
     assert(err == DB_SUCCESS);
 
     printf("Begin transaction\n");
-    ib_trx = ib_trx_begin(IB_TRX_REPEATABLE_READ);
+    ib_trx = api::trx_begin(sys, IB_TRX_REPEATABLE_READ);
     assert(ib_trx != nullptr);
 
-    err = open_table(DATABASE, TABLE, size, ib_trx, &crsr);
+    err = open_table(sys, DATABASE, TABLE, size, ib_trx, &crsr);
     assert(err == DB_SUCCESS);
 
-    err = ib_cursor_lock(crsr, IB_LOCK_IX);
+    err = crsr->lock(sys, IB_LOCK_IX);
     assert(err == DB_SUCCESS);
 
-    insert(crsr, size);
-    read_rows(crsr);
+    insert(sys, crsr, size);
+    read_rows(sys, crsr);
 
     printf("Close cursor\n");
-    err = ib_cursor_close(crsr);
+    err = Cursor::close(sys, crsr);
     assert(err == DB_SUCCESS);
     crsr = nullptr;
 
     printf("Commit transaction\n");
-    err = ib_trx_commit(ib_trx);
+    err = api::trx_commit(sys, ib_trx);
     assert(err == DB_SUCCESS);
 
     printf("Drop table\n");
-    err = drop_table_n(DATABASE, TABLE, size);
+    err = drop_table_n(sys, DATABASE, TABLE, size);
     assert(err == DB_SUCCESS);
   }
 
-  err = ib_shutdown(IB_SHUTDOWN_NORMAL);
+  err = sys.shutdown(IB_SHUTDOWN_NORMAL);
   assert(err == DB_SUCCESS);
 
 #ifdef UNIV_DEBUG_VALGRIND

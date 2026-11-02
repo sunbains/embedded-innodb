@@ -34,7 +34,6 @@ Run elect SELECT COUNT((*) FROM T1;
 #include "test0aux.h"
 #include "../include/ut0logger.h"
 
-#define ut_a(e) assert(e)
 using lint = long int;
 
 /** Test parameters. For now hard coded. */
@@ -92,19 +91,19 @@ static void gen_random_data(int n) {
   }
 }
 
-static DbErr create_database(const char *name) {
-  auto err = ib_database_create(name);
+static DbErr create_database(System &sys, const char *name) {
+  auto err = api::database_create(sys, name);
 
   ut_a(err);
 
   return DB_SUCCESS;
 }
 
-static DbErr drop_database(const char *dbname) {
-  return ib_database_drop(dbname);
+static DbErr drop_database(System &sys, const char *dbname) {
+  return api::database_drop(sys, dbname);
 }
 
-static DbErr create_table(const char *dbname, const char *name) {
+static DbErr create_table(System &sys, const char *dbname, const char *name) {
   uint64_t table_id = 0;
   char table_name[IB_MAX_TABLE_NAME_LEN];
 
@@ -113,104 +112,104 @@ static DbErr create_table(const char *dbname, const char *name) {
   /* Pass a table page size of 0, ie., use default page size. */
   TableSchema * ib_tbl_sch = nullptr;
   TableFormat tbl_fmt = IB_TBL_V1;
-  auto err = ib_table_schema_create(table_name, &ib_tbl_sch, tbl_fmt, 0);
+  auto err = TableSchema::create(table_name, &ib_tbl_sch, tbl_fmt, 0);
 
   ut_a(err == DB_SUCCESS);
 
   /* Define the table columns */
-  err = ib_tbl_sch_add_u32_col(ib_tbl_sch, "C1");
+  err = ib_tbl_sch->add_col("C1", IB_INT, IB_COL_UNSIGNED, 0, 4);
   ut_a(err == DB_SUCCESS);
 
-  err = ib_tbl_sch_add_text_col(ib_tbl_sch, "C2");
+  err = ib_tbl_sch->add_col("C2", IB_VARCHAR, IB_COL_NONE, 0, MAX_TEXT_LEN);
   ut_a(err == DB_SUCCESS);
 
   /* Add primary key */
   IndexSchema * idx_sch = nullptr;
-  err = ib_table_schema_add_index(ib_tbl_sch, "PRIMARY", &idx_sch);
+  err = ib_tbl_sch->add_index("PRIMARY", &idx_sch);
   ut_a(err == DB_SUCCESS);
 
-  err = ib_index_schema_add_col(idx_sch, "C1", 0);
+  err = idx_sch->add_col("C1", 0);
   ut_a(err == DB_SUCCESS);
 
-  err = ib_index_schema_set_clustered(idx_sch);
+  err = idx_sch->set_clustered();
   ut_a(err == DB_SUCCESS);
 
-  err = ib_index_schema_set_unique(idx_sch);
+  err = idx_sch->set_unique();
   ut_a(err == DB_SUCCESS);
 
   /* Add secondary indexes */
-  err = ib_table_schema_add_index(ib_tbl_sch, "C2", &idx_sch);
+  err = ib_tbl_sch->add_index("C2", &idx_sch);
   ut_a(err == DB_SUCCESS);
 
-  err = ib_index_schema_add_col(idx_sch, "C2", 16);
+  err = idx_sch->add_col("C2", 16);
   ut_a(err == DB_SUCCESS);
 
   /* Create table */
-  auto ib_trx = ib_trx_begin(IB_TRX_REPEATABLE_READ);
-  err = ib_schema_lock_exclusive(ib_trx);
+  auto ib_trx = api::trx_begin(sys, IB_TRX_REPEATABLE_READ);
+  err = api::schema_lock_exclusive(sys, ib_trx);
   ut_a(err == DB_SUCCESS);
 
-  err = ib_table_create(ib_trx, ib_tbl_sch, &table_id);
+  err = api::table_create(sys, ib_trx, ib_tbl_sch, &table_id);
 
   /* We assume it's the same table. */
   ut_a(err == DB_SUCCESS || err == DB_TABLE_EXISTS);
 
-  err = ib_trx_commit(ib_trx);
+  err = api::trx_commit(sys, ib_trx);
   ut_a(err == DB_SUCCESS);
 
   if (ib_tbl_sch != nullptr) {
-    ib_table_schema_delete(ib_tbl_sch);
+    TableSchema::destroy(sys, ib_tbl_sch);
   }
 
   return err;
 }
 
-static DbErr open_table(const char *dbname, const char *name,
+static DbErr open_table(System &sys, const char *dbname, const char *name,
                            Trx * ib_trx, Cursor **crsr) {
   char table_name[IB_MAX_TABLE_NAME_LEN];
 
   snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
-  auto err = ib_cursor_open_table(table_name, ib_trx, crsr);
+  auto err = api::cursor_open_table(sys, table_name, ib_trx, crsr);
   ut_a(err == DB_SUCCESS);
 
   return err;
 }
 
-static void commit(Trx * trx) {
-  ut_a(ib_trx_state(trx) != IB_TRX_NOT_STARTED);
+static void commit(System &sys, Trx * trx) {
+  ut_a(api::trx_state(trx) != IB_TRX_NOT_STARTED);
   log_info("Commit transaction");
-  auto err = ib_trx_commit(trx);
+  auto err = api::trx_commit(sys, trx);
   ut_a(err == DB_SUCCESS);
 }
 
 /** Inserts one row into the table.
 @return	error from insert row */
-static DbErr insert_one_row(Cursor * crsr, Tuple * tpl, Generator g) {
+static DbErr insert_one_row(System &sys, Cursor * crsr, Tuple * tpl, Generator g) {
 
-  auto err = ib_tuple_write_u32(tpl, 0, g());
+  auto err = tpl->write_u32(0, g());
   ut_a(err == DB_SUCCESS);
 
   auto i = random() % random_strings.size();
-  err = ib_col_set_value(tpl, 1, random_strings[i].m_ptr,
+  err = tpl->set_value(1, random_strings[i].m_ptr,
                          random_strings[i].m_len);
   ut_a(err == DB_SUCCESS);
 
-  return ib_cursor_insert_row(crsr, tpl);
+  return crsr->insert_row(sys, tpl);
 }
 
 /** Insert one batch of rows which constitute one transactions.
 @return	an error code or success. */
-static DbErr insert_row_batch(Cursor * crsr, int n_rows, Generator g) {
+static DbErr insert_row_batch(System &sys, Cursor * crsr, int n_rows, Generator g) {
   ut_a(n_rows <= NUMBER_OF_ROWS);
 
-  auto tpl = ib_clust_read_tuple_create(crsr);
+  auto tpl = crsr->clust_read_tuple_create();
   auto err = tpl == nullptr ? DB_OUT_OF_MEMORY : DB_SUCCESS;
 
   for (int i = 0; i < n_rows && tpl != nullptr; ++i) {
-    err = insert_one_row(crsr, tpl, g);
+    err = insert_one_row(sys, crsr, tpl, g);
     ut_a(err == DB_SUCCESS);
 
-    tpl = ib_tuple_clear(tpl);
+    tpl = tpl->clear();
 
     if (tpl == nullptr) {
       break;
@@ -218,7 +217,7 @@ static DbErr insert_row_batch(Cursor * crsr, int n_rows, Generator g) {
   }
 
   if (tpl != nullptr) {
-    ib_tuple_delete(tpl);
+    Tuple::destroy(tpl);
   } else {
     err = DB_OUT_OF_MEMORY;
   }
@@ -228,7 +227,7 @@ static DbErr insert_row_batch(Cursor * crsr, int n_rows, Generator g) {
   return err;
 }
 
-static void insert_rows(int n_rows, int batch_size, Generator g) {
+static void insert_rows(System &sys, int n_rows, int batch_size, Generator g) {
   ut_a(n_rows > 0);
   ut_a(batch_size > 0);
 
@@ -239,39 +238,39 @@ static void insert_rows(int n_rows, int batch_size, Generator g) {
   for (int i = 0; i < n_rows; i += batch_size) {
     Cursor * crsr;
 
-    trx = ib_trx_begin(TrxLevel(ISOLATION_LEVEL));
+    trx = api::trx_begin(sys, TrxLevel(ISOLATION_LEVEL));
     ut_a(trx != nullptr);
 
-    auto err = open_table(DATABASE, TABLE, trx, &crsr);
+    auto err = open_table(sys, DATABASE, TABLE, trx, &crsr);
     ut_a(err == DB_SUCCESS);
 
-    if (ib_cursor_lock(crsr, IB_LOCK_IX) == DB_SUCCESS) {
-      auto err = insert_row_batch(crsr, batch_size, g);
+    if (crsr->lock(sys, IB_LOCK_IX) == DB_SUCCESS) {
+      auto err = insert_row_batch(sys, crsr, batch_size, g);
       ut_a(err == DB_SUCCESS);
     }
 
-    err = ib_cursor_close(crsr);
+    err = Cursor::close(sys, crsr);
     ut_a(err == DB_SUCCESS);
 
     crsr = nullptr;
 
-    commit(trx);
+    commit(sys, trx);
   }
 
   log_info("Total : ", n_rows, " inserted");
 }
 
-static lint do_query(Cursor * crsr) {
-  auto tpl = ib_clust_read_tuple_create(crsr);
+static lint do_query(System &sys, Cursor * crsr) {
+  auto tpl = crsr->clust_read_tuple_create();
   ut_a(tpl != nullptr);
 
-  auto err = ib_cursor_first(crsr);
+  auto err = crsr->first(sys);
   ut_a(err == DB_SUCCESS || err == DB_END_OF_INDEX);
 
   lint n{};
 
   while (err == DB_SUCCESS) {
-    err = ib_cursor_read_row(crsr, tpl);
+    err = crsr->read_row(sys, tpl);
 
     if (err == DB_END_OF_INDEX) {
       break;
@@ -279,18 +278,18 @@ static lint do_query(Cursor * crsr) {
       ut_a(err == DB_SUCCESS);
     }
 
-    err = ib_cursor_next(crsr);
+    err = crsr->next(sys);
 
     ut_a(err == DB_SUCCESS || err == DB_END_OF_INDEX);
 
-    tpl = ib_tuple_clear(tpl);
+    tpl = tpl->clear();
     ut_a(tpl != nullptr);
 
     ++n;
   }
 
   if (tpl != nullptr) {
-    ib_tuple_delete(tpl);
+    Tuple::destroy(tpl);
   }
 
   if (err == DB_END_OF_INDEX) {
@@ -300,42 +299,42 @@ static lint do_query(Cursor * crsr) {
   return n;
 }
 
-static void select_all_rows() {
+static void select_all_rows(System &sys) {
   log_info("SELECT * FROM ", std::format("{}.{}", DATABASE, TABLE));
 
-  auto trx = ib_trx_begin(TrxLevel(ISOLATION_LEVEL));
+  auto trx = api::trx_begin(sys, TrxLevel(ISOLATION_LEVEL));
   ut_a(trx != nullptr);
 
   Cursor * crsr;
-  auto err = open_table(DATABASE, TABLE, trx, &crsr);
+  auto err = open_table(sys, DATABASE, TABLE, trx, &crsr);
   ut_a(err == DB_SUCCESS);
 
-  const auto n = do_query(crsr);
+  const auto n = do_query(sys, crsr);
 
-  err = ib_cursor_close(crsr);
+  err = Cursor::close(sys, crsr);
   ut_a(err == DB_SUCCESS);
 
   crsr = nullptr;
 
-  if (ib_trx_state(trx) == IB_TRX_NOT_STARTED) {
-    err = ib_trx_release(trx);
+  if (api::trx_state(trx) == IB_TRX_NOT_STARTED) {
+    err = api::trx_release(sys, trx);
     ut_a(err == DB_SUCCESS);
   } else {
-    err = ib_trx_commit(trx);
+    err = api::trx_commit(sys, trx);
     ut_a(err == DB_SUCCESS);
   }
 
   log_info("Read ", n, " rows");
 }
 
-static void select_count_star() {
+static void select_count_star(System &sys) {
   log_info("SELECT COUNT(*) FROM ", std::format("{}.{}", DATABASE, TABLE));
 
-  auto trx = ib_trx_begin(TrxLevel(ISOLATION_LEVEL));
+  auto trx = api::trx_begin(sys, TrxLevel(ISOLATION_LEVEL));
   ut_a(trx != nullptr);
 
   Cursor * crsr;
-  auto err = open_table(DATABASE, TABLE, trx, &crsr);
+  auto err = open_table(sys, DATABASE, TABLE, trx, &crsr);
   ut_a(err == DB_SUCCESS);
 
   std::vector<Cursor *> crsrs;
@@ -344,19 +343,19 @@ static void select_count_star() {
 
   uint64_t n{};
 
-  err = ib_parallel_select_count_star(trx, crsrs, 4, n);
+  err = api::parallel_select_count_star(sys, trx, crsrs, 4, n);
   ut_a(err == DB_SUCCESS);
 
-  err = ib_cursor_close(crsr);
+  err = Cursor::close(sys, crsr);
   ut_a(err == DB_SUCCESS);
 
   crsr = nullptr;
 
-  if (ib_trx_state(trx) == IB_TRX_NOT_STARTED) {
-    err = ib_trx_release(trx);
+  if (api::trx_state(trx) == IB_TRX_NOT_STARTED) {
+    err = api::trx_release(sys, trx);
     ut_a(err == DB_SUCCESS);
   } else {
-    err = ib_trx_commit(trx);
+    err = api::trx_commit(sys, trx);
     ut_a(err == DB_SUCCESS);
   }
 
@@ -364,7 +363,7 @@ static void select_count_star() {
 }
 
 /** Set the runtime global options. */
-static void set_options(int argc, char *argv[]) {
+static void set_options(Config &config, int argc, char *argv[]) {
   int opt;
   int count{};
 
@@ -408,7 +407,7 @@ static void set_options(int argc, char *argv[]) {
     default:
       /* If it's an InnoDB parameter, then we let the auxillary function handle
        * it. */
-      if (set_global_option(opt, optarg) != DB_SUCCESS) {
+      if (set_global_option(config, opt, optarg) != DB_SUCCESS) {
         print_usage(argv[0]);
         exit(EXIT_FAILURE);
       }
@@ -418,30 +417,27 @@ static void set_options(int argc, char *argv[]) {
   free(longopts);
 }
 
-static void startup(int argc, char *argv[], const std::string &db,
-                    const std::string &table) {
+static void startup(System &sys, int argc, char *argv[], const std::string &db, const std::string &table) {
   srandom(time(nullptr));
 
-  auto err = ib_init();
-  ut_a(err == DB_SUCCESS);
+  Config config;
 
-  test_configure();
+  test_configure(config);
 
-  set_options(argc, argv);
+  set_options(config, argc, argv);
 
   gen_random_data(NUMBER_OF_UNIQUE_VARCHARS);
 
-  err = ib_startup("default");
-  ut_a(err == DB_SUCCESS);
+  test_startup(sys, config);
 
   log_info("Creating database ", db);
 
-  err = create_database(db.c_str());
+  auto err = create_database(sys, db.c_str());
   ut_a(err == DB_SUCCESS);
 
   log_info("Creating table ", table);
 
-  err = create_table(db.c_str(), table.c_str());
+  err = create_table(sys, db.c_str(), table.c_str());
 
   if (err == DB_TABLE_EXISTS) {
     log_info("Table ", table, " exists");
@@ -450,35 +446,37 @@ static void startup(int argc, char *argv[], const std::string &db,
   assert(err == DB_SUCCESS || err == DB_TABLE_EXISTS);
 }
 
-static void shutdown(const std::string &db, const std::string &table) {
+static void shutdown(System &sys, const std::string &db, const std::string &table) {
   if (drop) {
     log_info("Dropping table ", table);
-    auto err = drop_table(db.c_str(), table.c_str());
+    auto err = drop_table(sys, db.c_str(), table.c_str());
     ut_a(err == DB_SUCCESS);
 
     log_info("Dropping database ", db);
-    err = drop_database(db.c_str());
+    err = drop_database(sys, db.c_str());
     ut_a(err == DB_SUCCESS);
   }
 
-  auto err = ib_shutdown(IB_SHUTDOWN_NORMAL);
+  auto err = sys.shutdown(IB_SHUTDOWN_NORMAL);
   ut_a(err == DB_SUCCESS);
 }
 
 int main(int argc, char *argv[]) {
-  startup(argc, argv, DATABASE, TABLE);
+  System sys;
+
+  startup(sys, argc, argv, DATABASE, TABLE);
 
   if (prepare) {
     int c1{};
     auto g = [&c1] -> int { return c1++; };
 
-    insert_rows(NUMBER_OF_ROWS, BATCH_SIZE, g);
+    insert_rows(sys, NUMBER_OF_ROWS, BATCH_SIZE, g);
   }
 
-  select_all_rows();
-  select_count_star();
+  select_all_rows(sys);
+  select_count_star(sys);
 
-  shutdown(DATABASE, TABLE);
+  shutdown(sys, DATABASE, TABLE);
 
 #ifdef UNIV_DEBUG_VALGRIND
   VALGRIND_DO_LEAK_CHECK;

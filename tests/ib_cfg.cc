@@ -69,7 +69,7 @@ static void get_all() {
 }
 
 /** Function to test our simple config file parser. */
-static void test_config_parser() {
+static void test_config_parser(Config &config) {
   TestConfig config;
   const char *filename = "test.conf";
 
@@ -108,10 +108,11 @@ int main(int argc, char **argv) {
   ulint val;
   unsigned int i;
 
-  test_config_parser();
+  test_config_parser(config);
 
-  auto err = ib_init();
-  assert(err == DB_SUCCESS);
+  Config config;
+
+  DbErr err;
 
   test_ib_cfg_get_all();
 
@@ -157,7 +158,7 @@ int main(int argc, char **argv) {
 
   get_all();
 
-  err = ib_shutdown(IB_SHUTDOWN_NORMAL);
+  err = sys.shutdown(IB_SHUTDOWN_NORMAL);
   assert(err == DB_SUCCESS);
 
   return (0);

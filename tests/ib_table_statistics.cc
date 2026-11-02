@@ -39,10 +39,10 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #define TABLE "ib_table_statistics"
 
 /** Create an InnoDB database (sub-directory). */
-static DbErr create_database(const char *name) {
+static DbErr create_database(System &sys, const char *name) {
   bool err;
 
-  err = ib_database_create(name);
+  err = api::database_create(sys, name);
   assert(err == true);
 
   return (DB_SUCCESS);
@@ -56,7 +56,7 @@ static DbErr create_database(const char *name) {
         INDEX (a),
         INDEX (b),
 ; */
-static DbErr create_table_t2(const char *dbname, /*!< in: database name */
+static DbErr create_table_t2(System &sys, const char *dbname, /*!< in: database name */
                                 const char *name)   /*!< in: table name */
 {
   Trx * ib_trx;
@@ -71,71 +71,71 @@ static DbErr create_table_t2(const char *dbname, /*!< in: database name */
 
   snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
 
-  err = ib_table_schema_create(table_name, &ib_tbl_sch, tbl_fmt, 0);
+  err = TableSchema::create(table_name, &ib_tbl_sch, tbl_fmt, 0);
 
   assert(err == DB_SUCCESS);
 
-  err = ib_table_schema_add_col(ib_tbl_sch, "pk", IB_INT, IB_COL_NONE, 0, 4);
+  err = ib_tbl_sch->add_col("pk", IB_INT, IB_COL_NONE, 0, 4);
   assert(err == DB_SUCCESS);
 
-  err = ib_table_schema_add_col(ib_tbl_sch, "a", IB_INT, IB_COL_NONE, 0, 4);
+  err = ib_tbl_sch->add_col("a", IB_INT, IB_COL_NONE, 0, 4);
   assert(err == DB_SUCCESS);
 
-  err = ib_table_schema_add_col(ib_tbl_sch, "b", IB_INT, IB_COL_NONE, 0, 4);
+  err = ib_tbl_sch->add_col("b", IB_INT, IB_COL_NONE, 0, 4);
   assert(err == DB_SUCCESS);
 
   assert(err == DB_SUCCESS);
 
-  err = ib_table_schema_add_index(ib_tbl_sch, "PRIMARY", &ib_idx_sch);
-  assert(err == DB_SUCCESS);
-
-  /* Set prefix length to 0. */
-  err = ib_index_schema_add_col(ib_idx_sch, "pk", 0);
-  assert(err == DB_SUCCESS);
-
-  err = ib_index_schema_set_clustered(ib_idx_sch);
-  assert(err == DB_SUCCESS);
-
-  err = ib_index_schema_set_unique(ib_idx_sch);
-  assert(err == DB_SUCCESS);
-
-  err = ib_table_schema_add_index(ib_tbl_sch, "a", &ib_idx_sch_a);
+  err = ib_tbl_sch->add_index("PRIMARY", &ib_idx_sch);
   assert(err == DB_SUCCESS);
 
   /* Set prefix length to 0. */
-  err = ib_index_schema_add_col(ib_idx_sch_a, "a", 0);
+  err = ib_idx_sch->add_col("pk", 0);
   assert(err == DB_SUCCESS);
 
-  err = ib_table_schema_add_index(ib_tbl_sch, "b", &ib_idx_sch_b);
+  err = ib_idx_sch->set_clustered();
+  assert(err == DB_SUCCESS);
+
+  err = ib_idx_sch->set_unique();
+  assert(err == DB_SUCCESS);
+
+  err = ib_tbl_sch->add_index("a", &ib_idx_sch_a);
   assert(err == DB_SUCCESS);
 
   /* Set prefix length to 0. */
-  err = ib_index_schema_add_col(ib_idx_sch_b, "b", 0);
+  err = ib_idx_sch_a->add_col("a", 0);
+  assert(err == DB_SUCCESS);
+
+  err = ib_tbl_sch->add_index("b", &ib_idx_sch_b);
+  assert(err == DB_SUCCESS);
+
+  /* Set prefix length to 0. */
+  err = ib_idx_sch_b->add_col("b", 0);
   assert(err == DB_SUCCESS);
 
   /* create table */
-  ib_trx = ib_trx_begin(IB_TRX_REPEATABLE_READ);
-  err = ib_schema_lock_exclusive(ib_trx);
+  ib_trx = api::trx_begin(sys, IB_TRX_REPEATABLE_READ);
+  err = api::schema_lock_exclusive(sys, ib_trx);
   assert(err == DB_SUCCESS);
 
-  err = ib_table_create(ib_trx, ib_tbl_sch, &table_id);
+  err = api::table_create(sys, ib_trx, ib_tbl_sch, &table_id);
   if (err != DB_SUCCESS) {
-    fprintf(stderr, "Warning: table create failed: %s\n", ib_strerror(err));
-    err = ib_trx_rollback(ib_trx);
+    fprintf(stderr, "Warning: table create failed: %s\n", db_strerror(err));
+    err = api::trx_rollback(sys, ib_trx);
   } else {
-    err = ib_trx_commit(ib_trx);
+    err = api::trx_commit(sys, ib_trx);
   }
   assert(err == DB_SUCCESS);
 
   if (ib_tbl_sch != nullptr) {
-    ib_table_schema_delete(ib_tbl_sch);
+    TableSchema::destroy(sys, ib_tbl_sch);
   }
 
   return (err);
 }
 
 /** Open a table and return a cursor for the table. */
-static DbErr open_table(const char *dbname, /*!< in: database name */
+static DbErr open_table(System &sys, const char *dbname, /*!< in: database name */
                            const char *name,   /*!< in: table name */
                            Trx * ib_trx,    /*!< in: transaction */
                            Cursor **crsr)    /*!< out: innodb cursor */
@@ -144,42 +144,42 @@ static DbErr open_table(const char *dbname, /*!< in: database name */
   char table_name[IB_MAX_TABLE_NAME_LEN];
 
   snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
-  err = ib_cursor_open_table(table_name, ib_trx, crsr);
+  err = api::cursor_open_table(sys, table_name, ib_trx, crsr);
   assert(err == DB_SUCCESS);
 
   return (err);
 }
 
 /** INSERT INTO T VALUE(int); */
-static DbErr insert_rows(Cursor * crsr, int start, int count) {
+static DbErr insert_rows(System &sys, Cursor * crsr, int start, int count) {
   int i;
   DbErr err;
   Tuple * tpl = nullptr;
   char *ptr = reinterpret_cast<char *>(malloc(8192));
 
-  tpl = ib_clust_read_tuple_create(crsr);
+  tpl = crsr->clust_read_tuple_create();
   assert(tpl != nullptr);
 
   for (i = start; i < start + count; ++i) {
 
-    err = ib_tuple_write_u32(tpl, 0, i);
+    err = tpl->write_u32(0, i);
     assert(err == DB_SUCCESS);
 
-    err = ib_tuple_write_u32(tpl, 1, i % 10);
+    err = tpl->write_u32(1, i % 10);
     assert(err == DB_SUCCESS);
 
-    err = ib_tuple_write_u32(tpl, 1, rand());
+    err = tpl->write_u32(1, rand());
     assert(err == DB_SUCCESS);
 
-    err = ib_cursor_insert_row(crsr, tpl);
+    err = crsr->insert_row(sys, tpl);
     assert(err == DB_SUCCESS);
 
-    tpl = ib_tuple_clear(tpl);
+    tpl = tpl->clear();
     assert(tpl != nullptr);
   }
 
   if (tpl != nullptr) {
-    ib_tuple_delete(tpl);
+    Tuple::destroy(tpl);
   }
 
   free(ptr);
@@ -187,20 +187,20 @@ static DbErr insert_rows(Cursor * crsr, int start, int count) {
   return (err);
 }
 
-static void display_table_stats(Cursor * crsr) {
+static void display_table_stats(System &sys, Cursor * crsr) {
   DbErr err;
   TableStats tstats;
-  err = ib_get_table_statistics(crsr, &tstats, sizeof(tstats));
+  err = crsr->get_table_statistics(sys, &tstats);
   assert(err == DB_SUCCESS);
 
   printf("Table Statistics\n");
   printf("----------------\n");
-  printf("Rows:\t%" PRIi64 "\n", tstats.stat_n_rows);
+  printf("Rows:\t%" PRIi64 "\n", tstats.m_stat_n_rows);
   printf("Clustered Index Size:\t%" PRIu64 "\n",
-         tstats.stat_clustered_index_size);
+         tstats.m_stat_clustered_index_size);
   printf("Other Index Size:\t%" PRIu64 "\n",
-         tstats.stat_sum_of_other_index_sizes);
-  printf("Modified Counter:\t%" PRIu64 "\n", tstats.stat_modified_counter);
+         tstats.m_stat_sum_of_other_index_sizes);
+  printf("Modified Counter:\t%" PRIu64 "\n", tstats.m_stat_modified_counter);
   printf("\n");
 
   printf("\n\nINSERT 10,000 ROWS\n\n");
@@ -213,21 +213,21 @@ static void display_table_stats(Cursor * crsr) {
   int64_t *n_diff;
   unsigned int col;
   printf("PRIMARY:\t");
-  err = ib_get_index_stat_n_diff_key_vals(crsr, "PRIMARY", &ncols, &n_diff);
+  err = crsr->get_index_stat_n_diff_key_vals(sys, "PRIMARY", &ncols, &n_diff);
   for (col = 0; col < ncols; col++)
     printf("%" PRIi64 "\t", n_diff[col]);
   printf("\n\n");
   free(n_diff);
 
   printf("a:\t");
-  err = ib_get_index_stat_n_diff_key_vals(crsr, "a", &ncols, &n_diff);
+  err = crsr->get_index_stat_n_diff_key_vals(sys, "a", &ncols, &n_diff);
   for (col = 0; col < ncols; col++)
     printf("%" PRIi64 "\t", n_diff[col]);
   printf("\n\n");
   free(n_diff);
 
   printf("b:\t");
-  err = ib_get_index_stat_n_diff_key_vals(crsr, "b", &ncols, &n_diff);
+  err = crsr->get_index_stat_n_diff_key_vals(sys, "b", &ncols, &n_diff);
   for (col = 0; col < ncols; col++)
     printf("%" PRIi64 "\t", n_diff[col]);
   printf("\n\n");
@@ -235,83 +235,86 @@ static void display_table_stats(Cursor * crsr) {
 }
 
 int main(int argc, char *argv[]) {
-  int i;
   DbErr err;
   Cursor * crsr;
   Trx * ib_trx;
 
-  err = ib_init();
-  assert(err == DB_SUCCESS);
+  Config config;
 
-  test_configure();
+  test_configure(config);
 
-  err = ib_startup("default");
-  assert(err == DB_SUCCESS);
+  System sys;
 
-  err = create_database(DATABASE);
+  test_startup(sys, config);
+
+  err = create_database(sys, DATABASE);
   assert(err == DB_SUCCESS);
 
   printf("Create table\n");
-  err = create_table_t2(DATABASE, TABLE);
+  err = create_table_t2(sys, DATABASE, TABLE);
   assert(err == DB_SUCCESS);
 
-  ib_trx = ib_trx_begin(IB_TRX_REPEATABLE_READ);
+  ib_trx = api::trx_begin(sys, IB_TRX_REPEATABLE_READ);
   assert(ib_trx != nullptr);
 
-  err = open_table(DATABASE, TABLE, ib_trx, &crsr);
+  err = open_table(sys, DATABASE, TABLE, ib_trx, &crsr);
   assert(err == DB_SUCCESS);
 
-  err = ib_cursor_lock(crsr, IB_LOCK_IX);
+  err = crsr->lock(sys, IB_LOCK_IX);
   assert(err == DB_SUCCESS);
 
-  insert_rows(crsr, 1, 100);
+  insert_rows(sys, crsr, 1, 100);
 
   TableStats tstats;
-  err = ib_get_table_statistics(crsr, &tstats, sizeof(tstats));
+  err = crsr->get_table_statistics(sys, &tstats);
   assert(err == DB_SUCCESS);
 
-  display_table_stats(crsr);
+  display_table_stats(sys, crsr);
 
   for (int i = 0; i < 5; i++) {
-    insert_rows(crsr, i * 10000 + (i + 1 + 101), 10000);
-    err = ib_cursor_close(crsr);
+    insert_rows(sys, crsr, i * 10000 + (i + 1 + 101), 10000);
+    err = Cursor::close(sys, crsr);
     assert(err == DB_SUCCESS);
     crsr = nullptr;
-    err = ib_trx_commit(ib_trx);
+    err = api::trx_commit(sys, ib_trx);
     assert(err == DB_SUCCESS);
-    ib_trx = ib_trx_begin(IB_TRX_REPEATABLE_READ);
+    ib_trx = api::trx_begin(sys, IB_TRX_REPEATABLE_READ);
     assert(ib_trx != nullptr);
 
-    err = open_table(DATABASE, TABLE, ib_trx, &crsr);
+    err = open_table(sys, DATABASE, TABLE, ib_trx, &crsr);
     assert(err == DB_SUCCESS);
 
-    display_table_stats(crsr);
+    /* Inserts need an IX lock on the table in each transaction. */
+    err = crsr->lock(sys, IB_LOCK_IX);
+    assert(err == DB_SUCCESS);
+
+    display_table_stats(sys, crsr);
   }
 
   TableStats tstats2;
-  err = ib_get_table_statistics(crsr, &tstats2, sizeof(tstats2));
+  err = crsr->get_table_statistics(sys, &tstats2);
   assert(err == DB_SUCCESS);
 
-  assert(tstats.stat_n_rows < tstats2.stat_n_rows);
-  assert(tstats.stat_clustered_index_size < tstats2.stat_clustered_index_size);
-  assert(tstats.stat_modified_counter < tstats2.stat_modified_counter);
+  assert(tstats.m_stat_n_rows < tstats2.m_stat_n_rows);
+  assert(tstats.m_stat_clustered_index_size < tstats2.m_stat_clustered_index_size);
+  assert(tstats.m_stat_modified_counter < tstats2.m_stat_modified_counter);
 
-  ib_update_table_statistics(crsr);
+  OK(crsr->update_table_statistics(sys));
 
-  display_table_stats(crsr);
+  display_table_stats(sys, crsr);
 
-  err = ib_cursor_close(crsr);
+  err = Cursor::close(sys, crsr);
   assert(err == DB_SUCCESS);
   crsr = nullptr;
 
-  err = ib_trx_commit(ib_trx);
+  err = api::trx_commit(sys, ib_trx);
   assert(err == DB_SUCCESS);
 
   printf("Drop table\n");
-  err = drop_table(DATABASE, TABLE);
+  err = drop_table(sys, DATABASE, TABLE);
   assert(err == DB_SUCCESS);
 
-  err = ib_shutdown(IB_SHUTDOWN_NORMAL);
+  err = sys.shutdown(IB_SHUTDOWN_NORMAL);
   assert(err == DB_SUCCESS);
 
 #ifdef UNIV_DEBUG_VALGRIND

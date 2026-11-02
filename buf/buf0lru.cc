@@ -903,9 +903,8 @@ bool BufLru::validate() {
       const auto prev = UT_LIST_GET_PREV(m_LRU_list, bpage);
       const auto next = UT_LIST_GET_NEXT(m_LRU_list, bpage);
 
-      ++old_len;
-
-      if (old_len >= 1) {
+      /* The first old page is where the old sublist starts. */
+      if (old_len++ == 0) {
         ut_a(m_sys.m_buf_pool->m_LRU_old == bpage);
       } else {
         ut_a(prev == nullptr || buf_page_is_old(prev));

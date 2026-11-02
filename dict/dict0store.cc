@@ -333,7 +333,8 @@ DbErr DictStore::build_table_def_step(QueThr *thr, TableNode *node) noexcept {
 
     bool is_path;
     const char *path_or_name;
-    space_id_t space_id{NULL_SPACE_ID};
+    /* SYS_TABLESPACE asks the file system to assign a new space id. */
+    space_id_t space_id{SYS_TABLESPACE};
 
     if (table->m_dir_path_of_temp_table != nullptr) {
       /* We place tables created with CREATE TEMPORARY TABLE in the configured tmp dir. */
@@ -667,8 +668,10 @@ void DictStore::drop_index_tree(Rec rec, Mtr *mtr) noexcept {
 page_no_t DictStore::truncate_index_tree(Table *table, space_id_t space_id, BtreePcursor *pcur, Mtr *mtr) noexcept {
   ut_ad(mutex_own(&m_sys.m_dict->m_mutex));
 
-  /* We never drop the system tablespace. */
-  bool drop = space_id != SYS_TABLESPACE;
+  /* A space id other than SYS_TABLESPACE is a freshly created single-table
+  tablespace and there are no old trees in it to free. Otherwise the old
+  trees are freed in the space recorded in SYS_INDEXES. */
+  bool drop = space_id == SYS_TABLESPACE;
 
   auto sys_indexes = m_sys.m_dict->table_get("SYS_INDEXES");
   auto sys_index = sys_indexes->m_indexes.front();

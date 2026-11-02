@@ -160,7 +160,7 @@ bool LockValidator::rec_validate_page(System &sys, PageId page_id) noexcept {
             }
 
             std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
-            RecOffs offsets(offsets_.data());
+            auto offsets = rec_offs_from_array(offsets_);
 
             {
               PhyRec record{index, Rec(rec_cursor)};

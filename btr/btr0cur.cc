@@ -651,7 +651,11 @@ DbErr BtreeCursor::optimistic_insert(System &sys,
   if (page_rec_needs_ext(rec_size)) {
     /* The record is so big that we have to store some fields
     externally on separate database pages */
-    big_rec_vec = *dtuple_convert_big_rec(index, entry, &n_ext);
+    {
+      /* nullptr: the record cannot be made small enough. */
+      const auto vec = dtuple_convert_big_rec(index, entry, &n_ext);
+      big_rec_vec = vec != nullptr ? *vec : BigRec{};
+    }
 
     if (unlikely(big_rec_vec.n_fields == 0)) {
 
@@ -801,13 +805,17 @@ DbErr BtreeCursor::pessimistic_insert(System &sys,
     /* The record is so big that we have to store some fields
     externally on separate database pages */
 
-    if (big_rec_vec.n_fields == 0) {
+    if (big_rec_vec.n_fields > 0) {
       /* This should never happen, but we handle the situation in a robust manner. */
       ut_ad(0);
       dtuple_convert_back_big_rec(entry, &big_rec_vec);
     }
 
-    big_rec_vec = *dtuple_convert_big_rec(index, entry, &n_ext);
+    {
+      /* nullptr: the record cannot be made small enough. */
+      const auto vec = dtuple_convert_big_rec(index, entry, &n_ext);
+      big_rec_vec = vec != nullptr ? *vec : BigRec{};
+    }
 
     if (big_rec_vec.n_fields == 0) {
 
@@ -1160,8 +1168,8 @@ DbErr BtreeCursor::optimistic_update(System &sys, ulint flags, const Upd *update
   /* The call to row_rec_to_index_entry(ROW_COPY_DATA, ...) above
   invokes rec_offs_make_valid() to point to the copied record that
   the fields of new_entry point to.  We have to undo it here. */
-  ut_ad(rec.offs_validate(index, offsets));
   ut_d(page_cursor->get_rec().offs_make_valid(index, offsets));
+  ut_ad(page_cursor->get_rec().offs_validate(index, offsets));
 
   page_cursor->delete_rec(sys, index, offsets, mtr);
 
@@ -1298,8 +1306,8 @@ DbErr BtreeCursor::pessimistic_update(System &sys,
   /* The call to row_rec_to_index_entry(ROW_COPY_DATA, ...) above
   invokes rec_offs_make_valid() to point to the copied record that
   the fields of new_entry point to.  We have to undo it here. */
-  ut_ad(rec.offs_validate(index, offsets));
   ut_d(rec.offs_make_valid(index, offsets));
+  ut_ad(rec.offs_validate(index, offsets));
 
   /* The page containing the clustered index record
   corresponding to new_entry is latched in mtr.  If the
@@ -1343,7 +1351,11 @@ DbErr BtreeCursor::pessimistic_update(System &sys,
   n_ext += blob.push_update_extern_fields(new_entry, update, *heap);
 
   if (page_rec_needs_ext(rec_get_converted_size(index, new_entry, n_ext))) {
-    big_rec_vec = *dtuple_convert_big_rec(index, new_entry, &n_ext);
+    {
+      /* nullptr: the record cannot be made small enough. */
+      const auto vec = dtuple_convert_big_rec(index, new_entry, &n_ext);
+      big_rec_vec = vec != nullptr ? *vec : BigRec{};
+    }
 
     if (unlikely(big_rec_vec.n_fields == 0)) {
 

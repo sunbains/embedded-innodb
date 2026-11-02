@@ -20,29 +20,25 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <stdio.h>
 #include <assert.h>
 
-#include "innodb.h"
 
 #include "test0aux.h"
 
-static void get_all(void) {
-  const char **var_names;
-  uint32_t num_status_var;
+static void get_all(System &sys) {
+  const auto var_names = api::status_get_all();
 
-  OK(ib_status_get_all(&var_names, &num_status_var));
+  assert(var_names.size() > 1);
 
-  assert(num_status_var > 1);
+  for (const auto name : var_names) {
+    int64_t val;
 
-  const char **ptr;
+    OK(api::status_get_i64(sys, name, &val));
+
+    printf("%s: %d\n", name, (int)val);
+  }
+
   int64_t val;
 
-  for (ptr = var_names; *ptr; ++ptr) {
-    DbErr err;
-
-    err = ib_status_get_i64(*ptr, &val);
-    assert(err == DB_SUCCESS);
-
-    printf("%s: %d\n", *ptr, (int)val);
-  }
+  assert(api::status_get_i64(sys, "no_such_status_variable", &val) == DB_NOT_FOUND);
 }
 
 int main(int argc, char **argv) {
@@ -51,17 +47,17 @@ int main(int argc, char **argv) {
   (void)argc;
   (void)argv;
 
-  err = ib_init();
-  assert(err == DB_SUCCESS);
+  Config config;
 
-  test_configure();
+  test_configure(config);
 
-  err = ib_startup("default");
-  assert(err == DB_SUCCESS);
+  System sys;
 
-  get_all();
+  test_startup(sys, config);
 
-  err = ib_shutdown(IB_SHUTDOWN_NORMAL);
+  get_all(sys);
+
+  err = sys.shutdown(IB_SHUTDOWN_NORMAL);
   assert(err == DB_SUCCESS);
 
   return (0);

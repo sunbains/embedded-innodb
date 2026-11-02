@@ -279,7 +279,7 @@ bytes. The most significant byte is at the lowest address.
 @param[in] b                    Pointer from where you want to read
 @return	64 bit integer */
 [[nodiscard]] inline uint64_t mach_read_from_7(const byte *b) {
-  const auto high = uint64_t(mach_read_from_4(b)) << 32;
+  const auto high = uint64_t(mach_read_from_3(b)) << 32;
 
   return high | mach_read_from_4(b + 3);
 }
@@ -298,7 +298,7 @@ bytes. The most significant byte is at the lowest address.
 @param[in] b                    Pointer from where you want to read
 @return	64 bit integer */
 [[nodiscard]] inline uint64_t mach_read_from_6(const byte *b) {
-  const auto high = uint64_t(mach_read_from_4(b)) << 32;
+  const auto high = uint64_t(mach_read_from_2(b)) << 32;
 
   return high | mach_read_from_4(b + 2);
 }

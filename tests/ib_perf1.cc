@@ -52,6 +52,11 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 
 #include <getopt.h> /* For getopt_long() */
 
+#include <chrono>
+#include <functional>
+#include <thread>
+#include <vector>
+
 #include "test0aux.h"
 
 #ifdef UNIV_DEBUG_VALGRIND
@@ -160,17 +165,17 @@ static void ib_stats_collect(TestOp op, time_t elapsed_time) {
 }
 
 /** Create an InnoDB database (sub-directory). */
-static DbErr create_database(const char *name) {
+static DbErr create_database(System &sys, const char *name) {
   bool err;
 
-  err = ib_database_create(name);
+  err = api::database_create(sys, name);
   assert(err == true);
 
   return (DB_SUCCESS);
 }
 
 /** CREATE TABLE T (c1 INT, c2 INT, PRIMARY KEY(c1)); */
-static DbErr create_table(const char *dbname, /*!< in: database name */
+static DbErr create_table(System &sys, const char *dbname, /*!< in: database name */
                              const char *name)   /*!< in: table name */
 {
   Trx * ib_trx;
@@ -184,53 +189,53 @@ static DbErr create_table(const char *dbname, /*!< in: database name */
   snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
 
   /* Pass a table page size of 0, ie., use default page size. */
-  err = ib_table_schema_create(table_name, &ib_tbl_sch, tbl_fmt, 0);
+  err = TableSchema::create(table_name, &ib_tbl_sch, tbl_fmt, 0);
 
   assert(err == DB_SUCCESS);
 
-  err = ib_table_schema_add_col(ib_tbl_sch, "c1", IB_INT, IB_COL_UNSIGNED, 0,
+  err = ib_tbl_sch->add_col("c1", IB_INT, IB_COL_UNSIGNED, 0,
                                 sizeof(uint32_t));
   assert(err == DB_SUCCESS);
 
-  err = ib_table_schema_add_col(ib_tbl_sch, "c2", IB_INT, IB_COL_UNSIGNED, 0,
+  err = ib_tbl_sch->add_col("c2", IB_INT, IB_COL_UNSIGNED, 0,
                                 sizeof(uint32_t));
   assert(err == DB_SUCCESS);
 
-  err = ib_table_schema_add_index(ib_tbl_sch, "PRIMARY", &ib_idx_sch);
+  err = ib_tbl_sch->add_index("PRIMARY", &ib_idx_sch);
   assert(err == DB_SUCCESS);
 
   /* Set prefix length to 0. */
-  err = ib_index_schema_add_col(ib_idx_sch, "c1", 0);
+  err = ib_idx_sch->add_col("c1", 0);
   assert(err == DB_SUCCESS);
 
-  err = ib_index_schema_set_clustered(ib_idx_sch);
+  err = ib_idx_sch->set_clustered();
   assert(err == DB_SUCCESS);
 
   /* create table */
-  ib_trx = ib_trx_begin(IB_TRX_REPEATABLE_READ);
-  err = ib_schema_lock_exclusive(ib_trx);
+  ib_trx = api::trx_begin(sys, IB_TRX_REPEATABLE_READ);
+  err = api::schema_lock_exclusive(sys, ib_trx);
   assert(err == DB_SUCCESS);
 
-  err = ib_table_create(ib_trx, ib_tbl_sch, &table_id);
+  err = api::table_create(sys, ib_trx, ib_tbl_sch, &table_id);
   assert(err == DB_SUCCESS);
 
-  err = ib_trx_commit(ib_trx);
+  err = api::trx_commit(sys, ib_trx);
   assert(err == DB_SUCCESS);
 
   if (ib_tbl_sch != nullptr) {
-    ib_table_schema_delete(ib_tbl_sch);
+    TableSchema::destroy(sys, ib_tbl_sch);
   }
 
   return (err);
 }
 
 /** Open a table and return a cursor for the table. */
-static DbErr open_table(const char *dbname, const char *name,
+static DbErr open_table(System &sys, const char *dbname, const char *name,
                            Trx * ib_trx, Cursor **crsr) {
   char table_name[IB_MAX_TABLE_NAME_LEN];
 
   snprintf(table_name, sizeof(table_name), "%.64s/%.64s", dbname, name);
-  auto err = ib_cursor_open_table(table_name, ib_trx, crsr);
+  auto err = api::cursor_open_table(sys, table_name, ib_trx, crsr);
   assert(err == DB_SUCCESS);
 
   return err;
@@ -238,7 +243,7 @@ static DbErr open_table(const char *dbname, const char *name,
 
 /** INSERT INTO T VALUE(i, i); */
 static DbErr
-insert_rows(Cursor * crsr,    /*!< in, out: cursor to use for write */
+insert_rows(System &sys, Cursor * crsr,    /*!< in, out: cursor to use for write */
             uint32_t start,    /*!< in: start of column value */
             uint32_t n_values) /*!< in: no. of values to insert */
 {
@@ -246,17 +251,17 @@ insert_rows(Cursor * crsr,    /*!< in, out: cursor to use for write */
   Tuple * tpl = nullptr;
   DbErr err = DB_SUCCESS;
 
-  tpl = ib_clust_read_tuple_create(crsr);
+  tpl = crsr->clust_read_tuple_create();
   assert(tpl != nullptr);
 
   for (i = start; i < start + n_values; ++i) {
-    err = ib_col_set_value(tpl, 0, &i, sizeof(i));
+    err = tpl->set_value(0, &i, sizeof(i));
     assert(err == DB_SUCCESS);
 
-    err = ib_col_set_value(tpl, 1, &i, sizeof(i));
+    err = tpl->set_value(1, &i, sizeof(i));
     assert(err == DB_SUCCESS);
 
-    err = ib_cursor_insert_row(crsr, tpl);
+    err = crsr->insert_row(sys, tpl);
     assert(err == DB_SUCCESS);
 
     /* Since we are writing fixed length columns (all INTs),
@@ -264,7 +269,7 @@ insert_rows(Cursor * crsr,    /*!< in, out: cursor to use for write */
   }
 
   if (tpl != nullptr) {
-    ib_tuple_delete(tpl);
+    Tuple::destroy(tpl);
   }
 
   return (err);
@@ -272,7 +277,7 @@ insert_rows(Cursor * crsr,    /*!< in, out: cursor to use for write */
 
 /** INSERT INTO T2 SELECT * FROM T2; */
 static DbErr
-copy_table(Cursor * dst_crsr, /*!< in, out: dest table */
+copy_table(System &sys, Cursor * dst_crsr, /*!< in, out: dest table */
            Cursor * src_crsr, /*!< in, out: source table */
            uint32_t n_values)  /*!< in: no. of rows to copy in a batch */
 {
@@ -281,36 +286,36 @@ copy_table(Cursor * dst_crsr, /*!< in, out: dest table */
   Tuple * dst_tpl = nullptr;
   DbErr err = DB_SUCCESS;
 
-  src_tpl = ib_clust_read_tuple_create(src_crsr);
+  src_tpl = src_crsr->clust_read_tuple_create();
   assert(src_tpl != nullptr);
 
-  dst_tpl = ib_clust_read_tuple_create(dst_crsr);
+  dst_tpl = dst_crsr->clust_read_tuple_create();
   assert(dst_tpl != nullptr);
 
   for (i = 0; i < n_values; ++i) {
     uint32_t v;
 
-    err = ib_cursor_read_row(src_crsr, src_tpl);
+    err = src_crsr->read_row(sys, src_tpl);
     assert(err == DB_SUCCESS);
 
     /* Since we know that both the tables are identical, we
     simply copy corresponding columns. */
 
     /* Get and set the c1 column value. */
-    err = ib_tuple_read_u32(src_tpl, 0, &v);
+    err = src_tpl->read_u32(0, &v);
     assert(err == DB_SUCCESS);
 
-    err = ib_tuple_write_u32(dst_tpl, 0, v);
+    err = dst_tpl->write_u32(0, v);
     assert(err == DB_SUCCESS);
 
     /* Get and set the c2 column value. */
-    err = ib_tuple_read_u32(src_tpl, 1, &v);
+    err = src_tpl->read_u32(1, &v);
     assert(err == DB_SUCCESS);
 
-    err = ib_tuple_write_u32(dst_tpl, 1, v);
+    err = dst_tpl->write_u32(1, v);
     assert(err == DB_SUCCESS);
 
-    err = ib_cursor_insert_row(dst_crsr, dst_tpl);
+    err = dst_crsr->insert_row(sys, dst_tpl);
     assert(err == DB_SUCCESS);
 
     /* Since we are writing fixed length columns (all INTs),
@@ -319,11 +324,11 @@ copy_table(Cursor * dst_crsr, /*!< in, out: dest table */
     if ((i % 100) == 0) {
       /* The source tuple makes a copy of the record
       therefore it needs to be reset. */
-      src_tpl = ib_tuple_clear(src_tpl);
+      src_tpl = src_tpl->clear();
       assert(dst_tpl != nullptr);
     }
 
-    err = ib_cursor_next(src_crsr);
+    err = src_crsr->next(sys);
 
     /* We don't expect any other kind of error. */
     if (err == DB_END_OF_INDEX) {
@@ -334,17 +339,17 @@ copy_table(Cursor * dst_crsr, /*!< in, out: dest table */
   }
 
   if (src_tpl != nullptr) {
-    ib_tuple_delete(src_tpl);
+    Tuple::destroy(src_tpl);
   }
   if (dst_tpl != nullptr) {
-    ib_tuple_delete(dst_tpl);
+    Tuple::destroy(dst_tpl);
   }
 
   return (err);
 }
 
 /** SELECT COUNT(*) FROM T1, T2 WHERE T1.c1 = T2.c1; */
-static DbErr join_on_c1(Cursor * t1_crsr, /*!< in: table */
+static DbErr join_on_c1(System &sys, Cursor * t1_crsr, /*!< in: table */
                            Cursor * t2_crsr, /*!< in: table */
                            uint32_t *count) /*!< in: no. of rows that matched */
 {
@@ -355,22 +360,22 @@ static DbErr join_on_c1(Cursor * t1_crsr, /*!< in: table */
   Tuple * t2_tpl = nullptr;
 
   // printf("Begin transaction\n");
-  ib_trx = ib_trx_begin(IB_TRX_REPEATABLE_READ);
+  ib_trx = api::trx_begin(sys, IB_TRX_REPEATABLE_READ);
   assert(ib_trx != nullptr);
 
-  ib_cursor_attach_trx(t1_crsr, ib_trx);
-  ib_cursor_attach_trx(t2_crsr, ib_trx);
+  t1_crsr->attach_trx(sys, ib_trx);
+  t2_crsr->attach_trx(sys, ib_trx);
 
-  t1_tpl = ib_clust_read_tuple_create(t1_crsr);
+  t1_tpl = t1_crsr->clust_read_tuple_create();
   assert(t1_tpl != nullptr);
 
-  t2_tpl = ib_clust_read_tuple_create(t2_crsr);
+  t2_tpl = t2_crsr->clust_read_tuple_create();
   assert(t2_tpl != nullptr);
 
-  t1_err = ib_cursor_first(t1_crsr);
+  t1_err = t1_crsr->first(sys);
   assert(t1_err == DB_SUCCESS);
 
-  t2_err = ib_cursor_first(t2_crsr);
+  t2_err = t2_crsr->first(sys);
   assert(t2_err == DB_SUCCESS);
 
   /* Since we know that both tables have the same number of rows
@@ -378,29 +383,29 @@ static DbErr join_on_c1(Cursor * t1_crsr, /*!< in: table */
   while (t1_err == DB_SUCCESS && t2_err == DB_SUCCESS) {
     uint32_t t1_c1;
 
-    t1_err = ib_cursor_read_row(t1_crsr, t1_tpl);
+    t1_err = t1_crsr->read_row(sys, t1_tpl);
     assert(t1_err == DB_SUCCESS);
 
-    t1_err = ib_tuple_read_u32(t1_tpl, 0, &t1_c1);
+    t1_err = t1_tpl->read_u32(0, &t1_c1);
     assert(t1_err == DB_SUCCESS);
 
     while (t2_err == DB_SUCCESS) {
       uint32_t t2_c1;
 
-      t2_err = ib_cursor_read_row(t2_crsr, t2_tpl);
+      t2_err = t2_crsr->read_row(sys, t2_tpl);
       assert(t2_err == DB_SUCCESS);
 
-      t2_err = ib_tuple_read_u32(t2_tpl, 0, &t2_c1);
+      t2_err = t2_tpl->read_u32(0, &t2_c1);
       assert(t2_err == DB_SUCCESS);
 
       if ((*count % 100) == 0) {
-        t2_tpl = ib_tuple_clear(t2_tpl);
+        t2_tpl = t2_tpl->clear();
         assert(t2_tpl != nullptr);
       }
 
       if (t1_c1 == t2_c1) {
         ++*count;
-        t2_err = ib_cursor_next(t2_crsr);
+        t2_err = t2_crsr->next(sys);
         /* We don't expect any other kind of error. */
         if (t2_err == DB_END_OF_INDEX) {
           break;
@@ -413,11 +418,11 @@ static DbErr join_on_c1(Cursor * t1_crsr, /*!< in: table */
     }
 
     if ((*count % 100) == 0) {
-      t1_tpl = ib_tuple_clear(t1_tpl);
+      t1_tpl = t1_tpl->clear();
       assert(t1_tpl != nullptr);
     }
 
-    t1_err = ib_cursor_next(t1_crsr);
+    t1_err = t1_crsr->next(sys);
 
     /* We don't expect any other kind of error. */
     if (t1_err == DB_END_OF_INDEX) {
@@ -430,27 +435,27 @@ static DbErr join_on_c1(Cursor * t1_crsr, /*!< in: table */
   assert(t1_err == DB_END_OF_INDEX);
 
   if (t1_tpl != nullptr) {
-    ib_tuple_delete(t1_tpl);
+    Tuple::destroy(t1_tpl);
   }
   if (t2_tpl != nullptr) {
-    ib_tuple_delete(t2_tpl);
+    Tuple::destroy(t2_tpl);
   }
 
-  t1_err = ib_cursor_reset(t1_crsr);
+  t1_err = t1_crsr->reset(sys);
   assert(t1_err == DB_SUCCESS);
 
-  t2_err = ib_cursor_reset(t2_crsr);
+  t2_err = t2_crsr->reset(sys);
   assert(t2_err == DB_SUCCESS);
 
   // printf("Commit transaction\n");
-  t1_err = ib_trx_commit(ib_trx);
+  t1_err = api::trx_commit(sys, ib_trx);
   assert(t1_err == DB_SUCCESS);
 
   return (t1_err);
 }
 
 /** Run the test. */
-static void *worker_thread(void *arg) {
+static void *worker_thread(System &sys, int thread_id) {
   int i;
   int ret;
   DbErr err;
@@ -461,23 +466,18 @@ static void *worker_thread(void *arg) {
   char table2[BUFSIZ];
   Cursor * src_crsr = nullptr;
   Cursor * dst_crsr = nullptr;
-  int *table_id = (int *)arg;
   bool positioned = false;
 
-  snprintf(table1, sizeof(table1), "T%d", *table_id);
-  snprintf(table2, sizeof(table2), "T%d", *table_id + 1);
+  snprintf(table1, sizeof(table1), "T%d", thread_id);
+  snprintf(table2, sizeof(table2), "T%d", thread_id + 1);
 
-  /* We are done with the arg. */
-  free(arg);
-  table_id = nullptr;
-
-  err = create_table(DATABASE, table1);
+  err = create_table(sys, DATABASE, table1);
   assert(err == DB_SUCCESS);
 
-  err = create_table(DATABASE, table2);
+  err = create_table(sys, DATABASE, table2);
   assert(err == DB_SUCCESS);
 
-  err = open_table(DATABASE, table1, nullptr, &src_crsr);
+  err = open_table(sys, DATABASE, table1, nullptr, &src_crsr);
   assert(err == DB_SUCCESS);
 
   ret = pthread_barrier_wait(&barrier);
@@ -490,28 +490,28 @@ static void *worker_thread(void *arg) {
   for (i = 0; i < (int)n_rows; i += BATCH_SIZE) {
     Trx * ib_trx;
 
-    ib_trx = ib_trx_begin(IB_TRX_REPEATABLE_READ);
+    ib_trx = api::trx_begin(sys, IB_TRX_REPEATABLE_READ);
     assert(ib_trx != nullptr);
 
-    ib_cursor_attach_trx(src_crsr, ib_trx);
+    src_crsr->attach_trx(sys, ib_trx);
 
-    err = ib_cursor_lock(src_crsr, IB_LOCK_IX);
+    err = src_crsr->lock(sys, IB_LOCK_IX);
     assert(err == DB_SUCCESS);
 
-    err = insert_rows(src_crsr, i, BATCH_SIZE);
+    err = insert_rows(sys, src_crsr, i, BATCH_SIZE);
     assert(err == DB_SUCCESS);
 
-    err = ib_cursor_reset(src_crsr);
+    err = src_crsr->reset(sys);
     assert(err == DB_SUCCESS);
 
-    err = ib_trx_commit(ib_trx);
+    err = api::trx_commit(sys, ib_trx);
     assert(err == DB_SUCCESS);
   }
   end = time(nullptr);
 
   ib_stats_collect(INSERT, end - start);
 
-  err = open_table(DATABASE, table2, nullptr, &dst_crsr);
+  err = open_table(sys, DATABASE, table2, nullptr, &dst_crsr);
   assert(err == DB_SUCCESS);
 
   ret = pthread_barrier_wait(&barrier);
@@ -524,34 +524,34 @@ static void *worker_thread(void *arg) {
   for (i = 0; i < (int)n_rows && err == DB_SUCCESS; i += BATCH_SIZE) {
     Trx * ib_trx;
 
-    ib_trx = ib_trx_begin(IB_TRX_REPEATABLE_READ);
+    ib_trx = api::trx_begin(sys, IB_TRX_REPEATABLE_READ);
     assert(ib_trx != nullptr);
 
-    ib_cursor_attach_trx(src_crsr, ib_trx);
-    ib_cursor_attach_trx(dst_crsr, ib_trx);
+    src_crsr->attach_trx(sys, ib_trx);
+    dst_crsr->attach_trx(sys, ib_trx);
 
-    err = ib_cursor_lock(src_crsr, IB_LOCK_IS);
+    err = src_crsr->lock(sys, IB_LOCK_IS);
     assert(err == DB_SUCCESS);
-    err = ib_cursor_lock(dst_crsr, IB_LOCK_IX);
+    err = dst_crsr->lock(sys, IB_LOCK_IX);
     assert(err == DB_SUCCESS);
 
     if (!positioned) {
-      err = ib_cursor_first(src_crsr);
+      err = src_crsr->first(sys);
       assert(err == DB_SUCCESS);
 
       positioned = true;
     }
 
-    err = copy_table(dst_crsr, src_crsr, BATCH_SIZE);
+    err = copy_table(sys, dst_crsr, src_crsr, BATCH_SIZE);
     assert(err == DB_SUCCESS || err == DB_END_OF_INDEX);
 
-    err = ib_cursor_reset(src_crsr);
+    err = src_crsr->reset(sys);
     assert(err == DB_SUCCESS);
 
-    err = ib_cursor_reset(dst_crsr);
+    err = dst_crsr->reset(sys);
     assert(err == DB_SUCCESS);
 
-    err = ib_trx_commit(ib_trx);
+    err = api::trx_commit(sys, ib_trx);
     assert(err == DB_SUCCESS);
   }
   end = time(nullptr);
@@ -565,7 +565,7 @@ static void *worker_thread(void *arg) {
   }
 
   start = time(nullptr);
-  err = join_on_c1(src_crsr, dst_crsr, &count);
+  err = join_on_c1(sys, src_crsr, dst_crsr, &count);
   assert(err == DB_SUCCESS);
   end = time(nullptr);
   assert(count == n_rows);
@@ -573,21 +573,21 @@ static void *worker_thread(void *arg) {
   ib_stats_collect(JOIN, end - start);
 
   if (src_crsr) {
-    err = ib_cursor_close(src_crsr);
+    err = Cursor::close(sys, src_crsr);
     assert(err == DB_SUCCESS);
     src_crsr = nullptr;
   }
 
   if (dst_crsr) {
-    err = ib_cursor_close(dst_crsr);
+    err = Cursor::close(sys, dst_crsr);
     assert(err == DB_SUCCESS);
     dst_crsr = nullptr;
   }
 
-  err = drop_table(DATABASE, table1);
+  err = drop_table(sys, DATABASE, table1);
   assert(err == DB_SUCCESS);
 
-  err = drop_table(DATABASE, table2);
+  err = drop_table(sys, DATABASE, table2);
   assert(err == DB_SUCCESS);
 
   pthread_exit(0);
@@ -629,7 +629,7 @@ static void print_data(TestOpTime *ib_op_time, const char *title) {
 }
 
 /** Set the runtime global options. */
-static void set_options(int argc, char *argv[]) {
+static void set_options(Config &config, int argc, char *argv[]) {
   int opt;
   int optind;
   int size = 0;
@@ -683,7 +683,7 @@ static void set_options(int argc, char *argv[]) {
     default:
       /* If it's an InnoDB parameter, then we let the
       auxillary function handle it. */
-      if (set_global_option(opt, optarg) != DB_SUCCESS) {
+      if (set_global_option(config, opt, optarg) != DB_SUCCESS) {
         print_usage(argv[0]);
         exit(EXIT_FAILURE);
       }
@@ -705,68 +705,47 @@ int main(int argc, char *argv[]) {
   int i;
   int ret;
   DbErr err;
-  pthread_t *pthreads;
+  std::vector<std::thread> threads;
 
-  err = ib_init();
-  assert(err == DB_SUCCESS);
+  Config config;
 
-  test_configure();
+  test_configure(config);
 
-  set_options(argc, argv);
+  set_options(config, argc, argv);
 
-  err = ib_cfg_set_int("open_files", 8192);
-  assert(err == DB_SUCCESS);
+  config.m_fil.m_max_n_open_files = 8192;
 
-  err = ib_startup("default");
-  assert(err == DB_SUCCESS);
+  System sys;
 
-  err = create_database(DATABASE);
+  test_startup(sys, config);
+
+  err = create_database(sys, DATABASE);
   assert(err == DB_SUCCESS);
 
   ret = pthread_barrier_init(&barrier, nullptr, n_threads);
   assert(ret == 0);
 
-  pthreads = (pthread_t *)malloc(sizeof(*pthreads) * n_threads);
-  memset(pthreads, 0, sizeof(*pthreads) * n_threads);
 
   ib_op_stats_alloc(n_threads);
 
   printf("About to spawn %d threads ", n_threads);
 
   for (i = 0; i < (int)n_threads; ++i) {
-    int retval;
-    int *ptr = (int *)malloc(sizeof(int));
-
-    assert(ptr != nullptr);
-    *ptr = i * 2;
-
-    /* worker_thread owns the argument and is responsible for
-    freeing it. */
-    retval = pthread_create(&pthreads[i], nullptr, worker_thread, ptr);
-
-    if (retval != 0) {
-      fprintf(stderr,
-              "Error spawning thread %d, "
-              "pthread_create() returned %d\n",
-              i, retval);
-      exit(EXIT_FAILURE);
-    }
+    threads.emplace_back(worker_thread, std::ref(sys), int(i * 2));
     printf(".");
   }
 
   printf("\nWaiting for threads to finish ...\n");
 
-  for (i = 0; i < (int)n_threads; ++i) {
-    pthread_join(pthreads[i], nullptr);
+  for (auto &thread : threads) {
+    thread.join();
   }
 
-  free(pthreads);
-  pthreads = nullptr;
 
   ret = pthread_barrier_destroy(&barrier);
   assert(ret == 0);
 
-  err = ib_shutdown(IB_SHUTDOWN_NORMAL);
+  err = sys.shutdown(IB_SHUTDOWN_NORMAL);
   assert(err == DB_SUCCESS);
 
   print_stats();

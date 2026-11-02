@@ -24,7 +24,6 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <stdio.h>
 #include <assert.h>
 
-#include "innodb.h"
 
 #include "test0aux.h"
 
@@ -39,17 +38,17 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #define SEC_INDEX_NAME "c2_idx"
 
 /** Create an InnoDB database (sub-directory). */
-static DbErr create_database(const char *name) {
+static DbErr create_database(System &sys, const char *name) {
   bool err;
 
-  err = ib_database_create(name);
+  err = api::database_create(sys, name);
   assert(err == true);
 
   return (DB_SUCCESS);
 }
 
 /** CREATE TABLE T(C1 INT, C2 INT, PK(C1), UNIQUE(C2)); */
-static DbErr create_table(const char *dbname, /*!< in: database name */
+static DbErr create_table(System &sys, const char *dbname, /*!< in: database name */
                              const char *name)   /*!< in: table name */
 {
   Trx * ib_trx;
@@ -62,64 +61,64 @@ static DbErr create_table(const char *dbname, /*!< in: database name */
   snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
 
   /* Pass a table page size of 0, ie., use default page size. */
-  err = ib_table_schema_create(table_name, &ib_tbl_sch, IB_TBL_V1, 0);
+  err = TableSchema::create(table_name, &ib_tbl_sch, IB_TBL_V1, 0);
 
   assert(err == DB_SUCCESS);
 
-  err = ib_table_schema_add_col(ib_tbl_sch, "c1", IB_INT, IB_COL_NONE, 0,
+  err = ib_tbl_sch->add_col("c1", IB_INT, IB_COL_NONE, 0,
                                 sizeof(int32_t));
   assert(err == DB_SUCCESS);
 
-  err = ib_table_schema_add_col(ib_tbl_sch, "c2", IB_INT, IB_COL_NONE, 0,
+  err = ib_tbl_sch->add_col("c2", IB_INT, IB_COL_NONE, 0,
                                 sizeof(int32_t));
   assert(err == DB_SUCCESS);
 
-  err = ib_table_schema_add_index(ib_tbl_sch, PRIMARY_INDEX_NAME, &ib_idx_sch);
+  err = ib_tbl_sch->add_index(PRIMARY_INDEX_NAME, &ib_idx_sch);
   assert(err == DB_SUCCESS);
 
   /* Set prefix length to 0. */
-  err = ib_index_schema_add_col(ib_idx_sch, "c1", 0);
+  err = ib_idx_sch->add_col("c1", 0);
   assert(err == DB_SUCCESS);
 
-  err = ib_index_schema_set_clustered(ib_idx_sch);
+  err = ib_idx_sch->set_clustered();
   assert(err == DB_SUCCESS);
 
-  err = ib_table_schema_add_index(ib_tbl_sch, SEC_INDEX_NAME, &ib_idx_sch);
+  err = ib_tbl_sch->add_index(SEC_INDEX_NAME, &ib_idx_sch);
   assert(err == DB_SUCCESS);
 
   /* Set prefix length to 0. */
-  err = ib_index_schema_add_col(ib_idx_sch, "c2", 0);
+  err = ib_idx_sch->add_col("c2", 0);
   assert(err == DB_SUCCESS);
 
-  err = ib_index_schema_set_unique(ib_idx_sch);
+  err = ib_idx_sch->set_unique();
   assert(err == DB_SUCCESS);
 
   /* create table */
-  ib_trx = ib_trx_begin(IB_TRX_REPEATABLE_READ);
-  err = ib_schema_lock_exclusive(ib_trx);
+  ib_trx = api::trx_begin(sys, IB_TRX_REPEATABLE_READ);
+  err = api::schema_lock_exclusive(sys, ib_trx);
   assert(err == DB_SUCCESS);
 
-  err = ib_table_create(ib_trx, ib_tbl_sch, &table_id);
+  err = api::table_create(sys, ib_trx, ib_tbl_sch, &table_id);
 
   if (err == DB_SUCCESS) {
-    err = ib_trx_commit(ib_trx);
+    err = api::trx_commit(sys, ib_trx);
   } else {
     fprintf(stderr, "Table: %s create failed: %s\n", table_name,
-            ib_strerror(err));
+            db_strerror(err));
 
-    err = ib_trx_rollback(ib_trx);
+    err = api::trx_rollback(sys, ib_trx);
   }
   assert(err == DB_SUCCESS);
 
   if (ib_tbl_sch != nullptr) {
-    ib_table_schema_delete(ib_tbl_sch);
+    TableSchema::destroy(sys, ib_tbl_sch);
   }
 
   return (err);
 }
 
 /** Open a table and return a cursor for the table. */
-static DbErr open_table(const char *dbname, /*!< in: database name */
+static DbErr open_table(System &sys, const char *dbname, /*!< in: database name */
                            const char *name,   /*!< in: table name */
                            Trx * ib_trx,    /*!< in: transaction */
                            Cursor **crsr)    /*!< out: innodb cursor */
@@ -129,91 +128,92 @@ static DbErr open_table(const char *dbname, /*!< in: database name */
 
   snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
 
-  err = ib_cursor_open_table(table_name, ib_trx, crsr);
+  err = api::cursor_open_table(sys, table_name, ib_trx, crsr);
   assert(err == DB_SUCCESS);
 
   return (err);
 }
 
 /** INSERT INTO T VALUE(0, RANDOM(TEXT), RANDOM(TEXT)); ... 100 */
-static DbErr insert_rows(Trx * trx, Cursor * crsr) {
+static DbErr insert_rows(System &sys, Trx * trx, Cursor * crsr) {
   DbErr err;
   Tuple * tpl;
 
-  tpl = ib_clust_read_tuple_create(crsr);
+  tpl = crsr->clust_read_tuple_create();
   assert(tpl != nullptr);
 
   /* INSERT (1, 1) */
 
-  err = ib_tuple_write_i32(tpl, 0, 1);
+  err = tpl->write_i32(0, 1);
   assert(err == DB_SUCCESS);
 
-  err = ib_tuple_write_i32(tpl, 1, 1);
+  err = tpl->write_i32(1, 1);
   assert(err == DB_SUCCESS);
 
-  err = ib_cursor_insert_row(crsr, tpl);
+  err = crsr->insert_row(sys, tpl);
   assert(err == DB_SUCCESS);
 
-  tpl = ib_tuple_clear(tpl);
+  tpl = tpl->clear();
   assert(tpl != nullptr);
 
   /* INSERT (2, 2) */
 
-  err = ib_tuple_write_i32(tpl, 0, 2);
+  err = tpl->write_i32(0, 2);
   assert(err == DB_SUCCESS);
 
-  err = ib_tuple_write_i32(tpl, 1, 2);
+  err = tpl->write_i32(1, 2);
   assert(err == DB_SUCCESS);
 
-  err = ib_cursor_insert_row(crsr, tpl);
+  err = crsr->insert_row(sys, tpl);
   assert(err == DB_SUCCESS);
 
-  tpl = ib_tuple_clear(tpl);
+  tpl = tpl->clear();
   assert(tpl != nullptr);
 
   /* INSERT (1,3) <- fail on pkey */
-  err = ib_tuple_write_i32(tpl, 0, 1);
+  err = tpl->write_i32(0, 1);
   assert(err == DB_SUCCESS);
 
-  err = ib_tuple_write_i32(tpl, 1, 3);
+  err = tpl->write_i32(1, 3);
   assert(err == DB_SUCCESS);
 
-  err = ib_cursor_insert_row(crsr, tpl);
+  err = crsr->insert_row(sys, tpl);
   assert(err == DB_DUPLICATE_KEY);
 
-  char *d_table, *d_index;
-  err = ib_get_duplicate_key(trx, &d_table, &d_index);
+  const char *d_table;
+  const char *d_index;
+  err = api::get_duplicate_key(trx, &d_table, &d_index);
   assert(err == DB_SUCCESS);
   printf("DB_DUPLICATE_KEY: TABLE: %s  INDEX: %s\n", d_table, d_index);
 
   assert(strcmp(d_table, TABLE_PATH) == 0);
   assert(strcmp(d_index, PRIMARY_INDEX_NAME) == 0);
 
-  tpl = ib_tuple_clear(tpl);
+  tpl = tpl->clear();
   assert(tpl != nullptr);
 
   /* insert (3,1) <- fail on secondary */
-  err = ib_tuple_write_i32(tpl, 0, 3);
+  err = tpl->write_i32(0, 3);
   assert(err == DB_SUCCESS);
 
-  err = ib_tuple_write_i32(tpl, 1, 1);
+  err = tpl->write_i32(1, 1);
   assert(err == DB_SUCCESS);
 
-  err = ib_cursor_insert_row(crsr, tpl);
+  err = crsr->insert_row(sys, tpl);
   assert(err == DB_DUPLICATE_KEY);
 
-  err = ib_get_duplicate_key(trx, &d_table, &d_index);
+  err = api::get_duplicate_key(trx, &d_table, &d_index);
   assert(err == DB_SUCCESS);
   printf("DB_DUPLICATE_KEY: TABLE: %s  INDEX: %s\n", d_table, d_index);
 
   assert(strcmp(d_table, TABLE_PATH) == 0);
   assert(strcmp(d_index, SEC_INDEX_NAME) == 0);
 
-  tpl = ib_tuple_clear(tpl);
+  tpl = tpl->clear();
   assert(tpl != nullptr);
 
   if (tpl != nullptr) {
-    ib_tuple_delete(tpl);
+    Tuple::destroy(tpl);
   }
 
   return (DB_SUCCESS);
@@ -227,37 +227,40 @@ int main(int argc, char **argv) {
   (void)argc;
   (void)argv;
 
-  err = ib_init();
+  Config config;
+
+  test_configure(config);
+
+  System sys;
+
+  test_startup(sys, config);
+
+  err = create_database(sys, DATABASE);
   assert(err == DB_SUCCESS);
 
-  test_configure();
-
-  err = ib_startup("default");
+  err = create_table(sys, DATABASE, TABLE);
   assert(err == DB_SUCCESS);
 
-  err = create_database(DATABASE);
-  assert(err == DB_SUCCESS);
-
-  err = create_table(DATABASE, TABLE);
-  assert(err == DB_SUCCESS);
-
-  ib_trx = ib_trx_begin(IB_TRX_REPEATABLE_READ);
+  ib_trx = api::trx_begin(sys, IB_TRX_REPEATABLE_READ);
   assert(ib_trx != nullptr);
 
-  err = open_table(DATABASE, TABLE, ib_trx, &crsr);
+  err = open_table(sys, DATABASE, TABLE, ib_trx, &crsr);
   assert(err == DB_SUCCESS);
 
-  err = insert_rows(ib_trx, crsr);
+  err = crsr->lock(sys, IB_LOCK_IX);
   assert(err == DB_SUCCESS);
 
-  err = ib_cursor_close(crsr);
+  err = insert_rows(sys, ib_trx, crsr);
+  assert(err == DB_SUCCESS);
+
+  err = Cursor::close(sys, crsr);
   assert(err == DB_SUCCESS);
   crsr = nullptr;
 
-  err = ib_trx_commit(ib_trx);
+  err = api::trx_commit(sys, ib_trx);
   assert(err == DB_SUCCESS);
 
-  err = ib_shutdown(IB_SHUTDOWN_NORMAL);
+  err = sys.shutdown(IB_SHUTDOWN_NORMAL);
   assert(err == DB_SUCCESS);
 
   return (0);

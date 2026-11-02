@@ -77,7 +77,7 @@ bool RowPurge::remove_clust_if_poss_low(System &sys, ulint mode) {
   DbErr err;
   MemHeap *heap{};
   std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
-  RecOffs offsets(offsets_.data());
+  auto offsets = rec_offs_from_array(offsets_);
 
   auto btr_cur = m_pcur.get_btr_cur();
   auto index = m_table->get_first_index();
@@ -212,11 +212,13 @@ bool RowPurge::remove_sec_if_poss_low(System &sys, Index *index, const DTuple *e
 
   success = reposition_pcur(sys, BTR_SEARCH_LEAF, &mtr_vers);
 
+  /* The version check is on the clustered index record of the row, the
+  purge node's cursor, not on the secondary index cursor. */
   if (success) {
-    old_has = sys.m_row_vers->old_has_index_entry(true, pcur.get_rec(), &mtr_vers, index, entry);
+    old_has = sys.m_row_vers->old_has_index_entry(true, m_pcur.get_rec(), &mtr_vers, index, entry);
   }
 
-  pcur.commit_specify_mtr(sys, &mtr_vers);
+  m_pcur.commit_specify_mtr(sys, &mtr_vers);
 
   if (!success || !old_has) {
     /* Remove the index record */

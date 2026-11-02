@@ -21,7 +21,6 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <stdio.h>
 #include <assert.h>
 
-#include "innodb.h"
 
 #include "test0aux.h"
 
@@ -51,13 +50,13 @@ int main(int argc, char **argv) {
   (void)argc;
   (void)argv;
 
-  err = ib_init();
-  assert(err == DB_SUCCESS);
+  Config config;
 
-  test_configure();
+  test_configure(config);
 
-  err = ib_startup("default");
-  assert(err == DB_SUCCESS);
+  System sys;
+
+  test_startup(sys, config);
 
   fprintf(stderr, "Set panic handler\n");
 
@@ -67,7 +66,7 @@ int main(int argc, char **argv) {
 
   ib_error_inject(1);
 
-  err = ib_shutdown(IB_SHUTDOWN_NORMAL);
+  err = sys.shutdown(IB_SHUTDOWN_NORMAL);
   assert(err == DB_CORRUPTION);
   assert(panic_called == 1);
 

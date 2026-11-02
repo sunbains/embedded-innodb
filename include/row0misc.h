@@ -36,8 +36,7 @@ bool ib_handle_errors(
 
 /** Sets a lock on a table.
 @return	error code or DB_SUCCESS */
-enum DbErr ib_trx_lock_table_with_retry(
-  Trx *trx,     /*!< in/out: transaction */
+enum DbErr ib_trx_lock_table_with_retry(System &sys, Trx *trx,     /*!< in/out: transaction */
   Table *table, /*!< in: table to lock */
   enum LockMode mode
 ); /*!< in: lock mode */

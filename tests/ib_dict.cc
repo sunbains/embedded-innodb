@@ -51,11 +51,6 @@ typedef struct visitor_arg {
   int n_index_cols;
 } visitor_arg_t;
 
-/** Read a table's schema and print it. */
-static int visit_tables(void *arg,        /*!< in: callback argument */
-                        const char *name, /*!< in: table name */
-                        int len);         /*!< in: table name length */
-
 /** Callback functions to list table nams. */
 static int visit_table_list(void *arg,            /*!< User callback arg */
                             const char *name,     /*!< Table name */
@@ -252,17 +247,17 @@ int visit_index_col(void *arg,        /*!< User callback arg */
 }
 
 /** Create an InnoDB database (sub-directory). */
-static DbErr create_database(const char *name) {
+static DbErr create_database(System &sys, const char *name) {
   bool err;
 
-  err = ib_database_create(name);
+  err = api::database_create(sys, name);
   assert(err == true);
 
   return (DB_SUCCESS);
 }
 
 /** Create a table using InnoDB's internal SQL parser. */
-static DbErr create_table(const char *dbname, /*!< in: database name */
+static DbErr create_table(System &sys, const char *dbname, /*!< in: database name */
                              const char *name,   /*!< in: table name */
                              int n)              /*!< in: table suffix */
 {
@@ -276,52 +271,52 @@ static DbErr create_table(const char *dbname, /*!< in: database name */
   snprintf(table_name, sizeof(table_name), "%s/%s%d", dbname, name, n);
 
   /* Pass a table page size of 0, ie., use default page size. */
-  err = ib_table_schema_create(table_name, &ib_tbl_sch, IB_TBL_V1, 0);
+  err = TableSchema::create(table_name, &ib_tbl_sch, IB_TBL_V1, 0);
 
   assert(err == DB_SUCCESS);
 
   err =
-      ib_table_schema_add_col(ib_tbl_sch, "C1", IB_VARCHAR, IB_COL_NONE, 0, 10);
+      ib_tbl_sch->add_col("C1", IB_VARCHAR, IB_COL_NONE, 0, 10);
 
   assert(err == DB_SUCCESS);
 
   err =
-      ib_table_schema_add_col(ib_tbl_sch, "C2", IB_VARCHAR, IB_COL_NONE, 0, 10);
+      ib_tbl_sch->add_col("C2", IB_VARCHAR, IB_COL_NONE, 0, 10);
   assert(err == DB_SUCCESS);
 
-  err = ib_table_schema_add_col(ib_tbl_sch, "C3", IB_INT, IB_COL_UNSIGNED, 0,
+  err = ib_tbl_sch->add_col("C3", IB_INT, IB_COL_UNSIGNED, 0,
                                 sizeof(uint32_t));
 
   assert(err == DB_SUCCESS);
 
-  err = ib_table_schema_add_index(ib_tbl_sch, "PRIMARY", &ib_idx_sch);
+  err = ib_tbl_sch->add_index("PRIMARY", &ib_idx_sch);
   assert(err == DB_SUCCESS);
 
   /* Set prefix length to 0. */
-  err = ib_index_schema_add_col(ib_idx_sch, "C1", 0);
+  err = ib_idx_sch->add_col("C1", 0);
   assert(err == DB_SUCCESS);
 
   /* Set prefix length to 0. */
-  err = ib_index_schema_add_col(ib_idx_sch, "C2", 0);
+  err = ib_idx_sch->add_col("C2", 0);
   assert(err == DB_SUCCESS);
 
-  err = ib_index_schema_set_clustered(ib_idx_sch);
+  err = ib_idx_sch->set_clustered();
   assert(err == DB_SUCCESS);
 
   /* create table */
-  ib_trx = ib_trx_begin(IB_TRX_REPEATABLE_READ);
+  ib_trx = api::trx_begin(sys, IB_TRX_REPEATABLE_READ);
 
-  err = ib_schema_lock_exclusive(ib_trx);
+  err = api::schema_lock_exclusive(sys, ib_trx);
   assert(err == DB_SUCCESS);
 
-  err = ib_table_create(ib_trx, ib_tbl_sch, &table_id);
+  err = api::table_create(sys, ib_trx, ib_tbl_sch, &table_id);
   assert(err == DB_SUCCESS);
 
-  err = ib_trx_commit(ib_trx);
+  err = api::trx_commit(sys, ib_trx);
   assert(err == DB_SUCCESS);
 
   if (ib_tbl_sch != nullptr) {
-    ib_table_schema_delete(ib_tbl_sch);
+    TableSchema::destroy(sys, ib_tbl_sch);
   }
 
   return (err);
@@ -333,7 +328,7 @@ static const SchemaVisitor table_visitor = {
     nullptr, nullptr, nullptr};
 
 /** Read table names only. */
-static int visit_tables_list(void *arg, const char *name, int len)
+static int visit_tables_list(System &sys, void *arg, const char *name, int len)
 /*!< out: 0 on success, nonzero on error */
 {
   DbErr err;
@@ -344,7 +339,7 @@ static int visit_tables_list(void *arg, const char *name, int len)
 
   strncpy(ptr, name, len);
 
-  err = ib_table_schema_visit(visitor_arg->ib_trx, ptr, &table_visitor, arg);
+  err = api::table_schema_visit(sys, visitor_arg->ib_trx, ptr, &table_visitor, arg);
 
   delete[] ptr;
 
@@ -356,7 +351,7 @@ static const SchemaVisitor visitor = {
     visit_index, visit_index_col};
 
 /** Read a table's schema and print it. */
-static int visit_tables(void *arg, const char *name, int len)
+static int visit_tables(System &sys, void *arg, const char *name, int len)
 /*!< out: 0 on success, nonzero on error */
 {
   DbErr err;
@@ -367,7 +362,7 @@ static int visit_tables(void *arg, const char *name, int len)
 
   strncpy(ptr, name, len);
 
-  err = ib_table_schema_visit(visitor_arg->ib_trx, ptr, &visitor, arg);
+  err = api::table_schema_visit(sys, visitor_arg->ib_trx, ptr, &visitor, arg);
 
   delete[] ptr;
 
@@ -376,34 +371,34 @@ static int visit_tables(void *arg, const char *name, int len)
 
 /** Read the system tables  schema and print it.
 @return	0 on success, nonzero on error */
-static int visit_sys_tables(void) {
+static int visit_sys_tables(System &sys) {
   DbErr err;
   visitor_arg_t arg;
   Trx * ib_trx;
 
-  ib_trx = ib_trx_begin(IB_TRX_SERIALIZABLE);
+  ib_trx = api::trx_begin(sys, IB_TRX_SERIALIZABLE);
 
   memset(&arg, 0x0, sizeof(arg));
 
   arg.fp = stdout;
   arg.ib_trx = ib_trx;
 
-  err = ib_table_schema_visit(ib_trx, "SYS_TABLES", &visitor, &arg);
+  err = api::table_schema_visit(sys, ib_trx, "SYS_TABLES", &visitor, &arg);
   assert(err == DB_SCHEMA_NOT_LOCKED);
 
-  err = ib_schema_lock_exclusive(ib_trx);
+  err = api::schema_lock_exclusive(sys, ib_trx);
   assert(err == DB_SUCCESS);
 
-  err = ib_table_schema_visit(ib_trx, "SYS_TABLES", &visitor, &arg);
+  err = api::table_schema_visit(sys, ib_trx, "SYS_TABLES", &visitor, &arg);
   assert(err == DB_SUCCESS);
-  err = ib_table_schema_visit(ib_trx, "SYS_COLUMNS", &visitor, &arg);
+  err = api::table_schema_visit(sys, ib_trx, "SYS_COLUMNS", &visitor, &arg);
   assert(err == DB_SUCCESS);
-  err = ib_table_schema_visit(ib_trx, "SYS_TABLES", &visitor, &arg);
+  err = api::table_schema_visit(sys, ib_trx, "SYS_TABLES", &visitor, &arg);
   assert(err == DB_SUCCESS);
-  err = ib_table_schema_visit(ib_trx, "SYS_INDEXES", &visitor, &arg);
+  err = api::table_schema_visit(sys, ib_trx, "SYS_INDEXES", &visitor, &arg);
   assert(err == DB_SUCCESS);
 
-  err = ib_trx_commit(ib_trx);
+  err = api::trx_commit(sys, ib_trx);
 
   return (err == DB_SUCCESS ? 0 : -1);
 }
@@ -411,24 +406,28 @@ static int visit_sys_tables(void) {
 /** Iterate over all the tables in the InnoDB data dictionary and print
 their schemas.
 @return	DB_SUCCESS or error code */
-static DbErr print_entire_schema(void) {
+static DbErr print_entire_schema(System &sys) {
   DbErr err;
   visitor_arg_t arg;
 
   memset(&arg, 0x0, sizeof(arg));
   arg.fp = stdout;
-  arg.ib_trx = ib_trx_begin(IB_TRX_SERIALIZABLE);
+  arg.ib_trx = api::trx_begin(sys, IB_TRX_SERIALIZABLE);
 
-  err = ib_schema_lock_exclusive(arg.ib_trx);
+  err = api::schema_lock_exclusive(sys, arg.ib_trx);
   assert(err == DB_SUCCESS);
 
-  err = ib_schema_tables_iterate(arg.ib_trx, visit_tables_list, &arg);
+  err = api::schema_tables_iterate(
+    sys, arg.ib_trx, [&sys](void *a, const char *name, int len) { return visit_tables_list(sys, a, name, len); }, &arg
+  );
   assert(err == DB_SUCCESS);
 
-  err = ib_schema_tables_iterate(arg.ib_trx, visit_tables, &arg);
+  err = api::schema_tables_iterate(
+    sys, arg.ib_trx, [&sys](void *a, const char *name, int len) { return visit_tables(sys, a, name, len); }, &arg
+  );
   assert(err == DB_SUCCESS);
 
-  err = ib_trx_commit(arg.ib_trx);
+  err = api::trx_commit(sys, arg.ib_trx);
   assert(err == DB_SUCCESS);
 
   return (err);
@@ -436,7 +435,7 @@ static DbErr print_entire_schema(void) {
 
 /** Drop the table.
 @return	DB_SUCCESS or error code */
-static DbErr drop_table_n(const char *dbname, /*!< in: database name */
+static DbErr drop_table_n(System &sys, const char *dbname, /*!< in: database name */
                              const char *name,   /*!< in: table to drop */
                              int n)              /*!< in: count */
 {
@@ -446,16 +445,16 @@ static DbErr drop_table_n(const char *dbname, /*!< in: database name */
 
   snprintf(table_name, sizeof(table_name), "%s/%s%d", dbname, name, n);
 
-  ib_trx = ib_trx_begin(IB_TRX_REPEATABLE_READ);
+  ib_trx = api::trx_begin(sys, IB_TRX_REPEATABLE_READ);
   assert(ib_trx != nullptr);
 
-  err = ib_schema_lock_exclusive(ib_trx);
+  err = api::schema_lock_exclusive(sys, ib_trx);
   assert(err == DB_SUCCESS);
 
-  err = ib_table_drop(ib_trx, table_name);
+  err = api::table_drop(sys, ib_trx, table_name);
   assert(err == DB_SUCCESS);
 
-  err = ib_trx_commit(ib_trx);
+  err = api::trx_commit(sys, ib_trx);
   assert(err == DB_SUCCESS);
 
   return (err);
@@ -468,33 +467,33 @@ int main(int argc, char *argv[]) {
   (void)argc;
   (void)argv;
 
-  err = ib_init();
-  assert(err == DB_SUCCESS);
+  Config config;
 
-  test_configure();
+  test_configure(config);
 
-  err = ib_startup("default");
-  assert(err == DB_SUCCESS);
+  System sys;
 
-  visit_sys_tables();
+  test_startup(sys, config);
 
-  err = create_database(DATABASE);
+  visit_sys_tables(sys);
+
+  err = create_database(sys, DATABASE);
   assert(err == DB_SUCCESS);
 
   for (i = 0; i < 10; i++) {
-    err = create_table(DATABASE, TABLE, i);
+    err = create_table(sys, DATABASE, TABLE, i);
     assert(err == DB_SUCCESS);
   }
 
-  err = print_entire_schema();
+  err = print_entire_schema(sys);
   assert(err == DB_SUCCESS);
 
   for (i = 0; i < 10; ++i) {
-    err = drop_table_n(DATABASE, TABLE, i);
+    err = drop_table_n(sys, DATABASE, TABLE, i);
     assert(err == DB_SUCCESS);
   }
 
-  err = ib_shutdown(IB_SHUTDOWN_NORMAL);
+  err = sys.shutdown(IB_SHUTDOWN_NORMAL);
   assert(err == DB_SUCCESS);
 
 #ifdef UNIV_DEBUG_VALGRIND

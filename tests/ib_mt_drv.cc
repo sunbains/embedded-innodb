@@ -159,26 +159,26 @@ void update_err_stats(op_err_t *e, DbErr err) {
 }
 
 /** Create an InnoDB database (sub-directory). */
-static DbErr create_database(const char *name) {
+static DbErr create_database(System &sys, const char *name) {
   bool err;
 
-  err = ib_database_create(name);
+  err = api::database_create(sys, name);
   assert(err == true);
 
   return (DB_SUCCESS);
 }
 
 /** Drop the database. */
-static DbErr drop_database(const char *dbname) /*!< in: db to drop */
+static DbErr drop_database(System &sys, const char *dbname) /*!< in: db to drop */
 {
   DbErr err;
-  err = ib_database_drop(dbname);
+  err = api::database_drop(sys, dbname);
 
   return (err);
 }
 
 /** Create test tables at startup */
-static void create_test_table(tbl_class_t *tbl) /*!< in: table to create */
+static void create_test_table(System &sys, tbl_class_t *tbl) /*!< in: table to create */
 {
   DbErr err;
   cb_args_t args;
@@ -189,12 +189,12 @@ static void create_test_table(tbl_class_t *tbl) /*!< in: table to create */
   args.run_number = get_cur_run_number();
   args.err_st = &ddl_op_errs[DDL_OP_TYPE_CREATE];
 
-  err = tbl->ddl_fn[DDL_OP_TYPE_CREATE](&args);
+  err = tbl->ddl_fn[DDL_OP_TYPE_CREATE](sys, &args);
   assert(err == DB_SUCCESS);
 }
 
 /** Seed test table with initial data */
-static void seed_test_table(tbl_class_t *tbl) /*!< in: table to populate */
+static void seed_test_table(System &sys, tbl_class_t *tbl) /*!< in: table to populate */
 {
   DbErr err;
   Trx * trx;
@@ -207,35 +207,35 @@ static void seed_test_table(tbl_class_t *tbl) /*!< in: table to populate */
   args.tbl = tbl;
 
   for (i = 0; i < n_rows; ++i) {
-    trx = ib_trx_begin(TrxLevel(isolation_level));
+    trx = api::trx_begin(sys, TrxLevel(isolation_level));
     assert(trx != nullptr);
 
     args.trx = trx;
     args.run_number = get_cur_run_number();
     args.err_st = &dml_op_errs[DML_OP_TYPE_INSERT];
 
-    err = tbl->dml_fn[DML_OP_TYPE_INSERT](&args);
+    err = tbl->dml_fn[DML_OP_TYPE_INSERT](sys, &args);
 
-    err = ib_trx_commit(trx);
+    err = api::trx_commit(sys, trx);
     assert(err == DB_SUCCESS);
   }
 }
 
 /** Create test tables and populate them with n_rows of data */
-static void init_test_tables(void) {
+static void init_test_tables(System &sys) {
   int i;
 
   for (i = 0; i < num_tables; ++i) {
-    create_test_table(&tbl_array[i]);
+    create_test_table(sys, &tbl_array[i]);
   }
 
   for (i = 0; i < num_tables; ++i) {
-    seed_test_table(&tbl_array[i]);
+    seed_test_table(sys, &tbl_array[i]);
   }
 }
 
 /** Drop test tables */
-static void drop_test_tables(void) {
+static void drop_test_tables(System &sys) {
   int i;
 
   for (i = 0; i < num_tables; ++i) {
@@ -247,7 +247,7 @@ static void drop_test_tables(void) {
     args.isolation_level = isolation_level;
     args.err_st = &ddl_op_errs[DDL_OP_TYPE_DROP];
 
-    DbErr err = tbl->ddl_fn[DDL_OP_TYPE_DROP](&args);
+    DbErr err = tbl->ddl_fn[DDL_OP_TYPE_DROP](sys, &args);
     assert(err == DB_SUCCESS);
   }
 }
@@ -255,7 +255,7 @@ static void drop_test_tables(void) {
 /** Depending on rollback_percent decides whether to commit or rollback a
 given transaction */
 static void
-commit_or_rollback(Trx * trx, /*!< in: trx to commit or rollback */
+commit_or_rollback(System &sys, Trx * trx, /*!< in: trx to commit or rollback */
                    int cnt,      /*!< in: trx counter */
                    DbErr err) /*!< in: err from last operation */
 {
@@ -267,19 +267,20 @@ commit_or_rollback(Trx * trx, /*!< in: trx to commit or rollback */
   } else if ((!rollback_percent || cnt % (100 / rollback_percent)) &&
              err == DB_SUCCESS) {
     // printf("Commit transaction\n");
-    err = ib_trx_commit(trx);
+    err = api::trx_commit(sys, trx);
     assert(err == DB_SUCCESS);
   } else {
     // printf("Rollback transaction\n");
-    err = ib_trx_rollback(trx);
+    err = api::trx_rollback(sys, trx);
     assert(err == DB_SUCCESS);
   }
 }
 
 /** A DML worker thread that performs a randomly chosen DML operation on a
 randomly chosen table */
-static void *dml_worker(void *dummy) /*!< in: unused */
+static void *dml_worker(void *arg) /*!< in: the instance */
 {
+  auto &sys = *static_cast<System *>(arg);
   DbErr err;
   Trx * trx;
   tbl_class_t *tbl;
@@ -287,14 +288,13 @@ static void *dml_worker(void *dummy) /*!< in: unused */
   int j;
   int cnt = 0;
 
-  (void)dummy;
 
   fprintf(stderr, "dml_worker up!\n");
 
   args.isolation_level = isolation_level;
   args.batch_size = batch_size;
   do {
-    trx = ib_trx_begin(TrxLevel(isolation_level));
+    trx = api::trx_begin(sys, TrxLevel(isolation_level));
     assert(trx != nullptr);
 
     /* choose a table randomly */
@@ -308,7 +308,7 @@ static void *dml_worker(void *dummy) /*!< in: unused */
 
     ++cnt;
     args.err_st = &dml_op_errs[j];
-    err = tbl->dml_fn[j](&args);
+    err = tbl->dml_fn[j](sys, &args);
 
     /* If it was an insert or update and the
     run_number has changed we unconditionally
@@ -317,10 +317,10 @@ static void *dml_worker(void *dummy) /*!< in: unused */
     columns */
     if (args.run_number != get_cur_run_number() &&
         (j == DML_OP_TYPE_UPDATE || j == DML_OP_TYPE_INSERT)) {
-      err = ib_trx_rollback(trx);
+      err = api::trx_rollback(sys, trx);
       assert(err == DB_SUCCESS);
     } else {
-      commit_or_rollback(trx, cnt, err);
+      commit_or_rollback(sys, trx, cnt, err);
     }
 
   } while (test_running);
@@ -331,11 +331,11 @@ static void *dml_worker(void *dummy) /*!< in: unused */
 
 /** A Ddl worker thread that performs a randomly chosen Ddl operation on a
 randomly chosen table */
-static void *ddl_worker(void *dummy) /*!< in: unused */
+static void *ddl_worker(void *arg) /*!< in: the instance */
 {
+  auto &sys = *static_cast<System *>(arg);
   cb_args_t args;
 
-  (void)dummy;
 
   fprintf(stderr, "ddl_worker up!\n");
 
@@ -362,7 +362,7 @@ static void *ddl_worker(void *dummy) /*!< in: unused */
     }
 
     args.err_st = &ddl_op_errs[j];
-    err = tbl->ddl_fn[j](&args);
+    err = tbl->ddl_fn[j](sys, &args);
 
     /* If it was a DROP TABLE or if it returned
     DB_TABLE_NOT_FOUND then we should make an attempt to
@@ -370,7 +370,7 @@ static void *ddl_worker(void *dummy) /*!< in: unused */
     if ((err == DB_SUCCESS && j == DDL_OP_TYPE_DROP) ||
         (err == DB_TABLE_NOT_FOUND)) {
       args.err_st = &ddl_op_errs[DDL_OP_TYPE_CREATE];
-      err = tbl->ddl_fn[DDL_OP_TYPE_CREATE](&args);
+      err = tbl->ddl_fn[DDL_OP_TYPE_CREATE](sys, &args);
     }
 
   } while (test_running);
@@ -380,7 +380,7 @@ static void *ddl_worker(void *dummy) /*!< in: unused */
 }
 
 /** Create worker threads */
-static void create_worker_threads(void) {
+static void create_worker_threads(System &sys) {
   int rc;
   int i;
 
@@ -388,14 +388,14 @@ static void create_worker_threads(void) {
   assert(dml_tid != nullptr);
 
   for (i = 0; i < n_dml_thr; ++i) {
-    rc = pthread_create(&dml_tid[i], nullptr, dml_worker, nullptr);
+    rc = pthread_create(&dml_tid[i], nullptr, dml_worker, &sys);
     assert(!rc);
   }
 
   ddl_tid = (pthread_t *)malloc(sizeof(pthread_t) * n_ddl_thr);
   assert(ddl_tid != nullptr);
   for (i = 0; i < n_ddl_thr; ++i) {
-    rc = pthread_create(&ddl_tid[i], nullptr, ddl_worker, nullptr);
+    rc = pthread_create(&ddl_tid[i], nullptr, ddl_worker, &sys);
     assert(!rc);
   }
 }
@@ -502,7 +502,7 @@ static void register_test_tables(void) {
 /** Whatever checks we want to run after the test after all the worker
 threads have finished. For now I just call the select function to
 print the contents of the table */
-static void check_test_tables(void) {
+static void check_test_tables(System &sys) {
   int i;
   cb_args_t args;
 
@@ -512,7 +512,7 @@ static void check_test_tables(void) {
     Trx * trx;
     DbErr err;
 
-    trx = ib_trx_begin(TrxLevel(isolation_level));
+    trx = api::trx_begin(sys, TrxLevel(isolation_level));
     assert(trx != nullptr);
 
     tbl = &tbl_array[i];
@@ -523,9 +523,9 @@ static void check_test_tables(void) {
     args.run_number = get_cur_run_number();
     args.err_st = &dml_op_errs[DML_OP_TYPE_SELECT];
 
-    tbl->dml_fn[DML_OP_TYPE_SELECT](&args);
+    tbl->dml_fn[DML_OP_TYPE_SELECT](sys, &args);
 
-    err = ib_trx_commit(trx);
+    err = api::trx_commit(sys, trx);
     assert(err == DB_SUCCESS);
   }
 }
@@ -540,25 +540,25 @@ int main(int argc, char *argv[]) {
 
   srandom(time(nullptr));
 
-  err = ib_init();
-  assert(err == DB_SUCCESS);
+  Config config;
 
-  test_configure();
+  test_configure(config);
 
   init_stat_structs();
 
-  err = ib_startup("default");
-  assert(err == DB_SUCCESS);
+  System sys;
 
-  err = create_database(DATABASE);
+  test_startup(sys, config);
+
+  err = create_database(sys, DATABASE);
   assert(err == DB_SUCCESS);
 
   register_test_tables();
-  init_test_tables();
+  init_test_tables(sys);
 
   /* start the test. */
   test_running = true;
-  create_worker_threads();
+  create_worker_threads(sys);
 
   /* sleep for test duration */
   sleep(test_time);
@@ -576,14 +576,14 @@ int main(int argc, char *argv[]) {
   /* Let innodb finish off any background drop table requests */
   sleep(1);
 
-  check_test_tables();
+  check_test_tables(sys);
 
-  drop_test_tables();
+  drop_test_tables(sys);
 
-  err = drop_database(DATABASE);
+  err = drop_database(sys, DATABASE);
   assert(err == DB_SUCCESS);
 
-  err = ib_shutdown(IB_SHUTDOWN_NORMAL);
+  err = sys.shutdown(IB_SHUTDOWN_NORMAL);
   assert(err == DB_SUCCESS);
 
   print_results();

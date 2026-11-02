@@ -804,7 +804,7 @@ Rec Btree::page_get_split_rec(BtreeCursor *btr_cur, const DTuple *tuple, ulint n
   ulint n{};
   ulint incl_data{};
   std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
-  RecOffs offsets(offsets_.data());
+  auto offsets = rec_offs_from_array(offsets_);
   MemHeap *heap{};
   auto ins_rec = btr_cur->get_rec();
   auto rec = page_get_infimum_rec(page);

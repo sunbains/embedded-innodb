@@ -45,17 +45,17 @@ int main(int argc, char *argv[]) {
   (void)argc;
   (void)argv;
 
-  err = ib_init();
-  assert(err == DB_SUCCESS);
+  Config config;
 
-  test_configure();
+  test_configure(config);
 
   ib_logger_set(null_logger, nullptr);
 
-  err = ib_startup("default");
-  assert(err == DB_SUCCESS);
+  System sys;
 
-  err = ib_shutdown(IB_SHUTDOWN_NORMAL);
+  test_startup(sys, config);
+
+  err = sys.shutdown(IB_SHUTDOWN_NORMAL);
   assert(err == DB_SUCCESS);
 
   return (EXIT_SUCCESS);

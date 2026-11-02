@@ -1,95 +1,134 @@
 /** Copyright (c) 2024 Sunny Bains. All rights reserved. */
 
+/** @file tests/test0aux.h
+Helpers shared by the test programs. */
+
 #pragma once
 
+#include <getopt.h>
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "innodb.h"
+#include "api0api.h"
+#include "db0err.h"
+#include "srv0cfg.h"
+#include "srv0sys.h"
 #include "ut0logger.h"
 
+using api::Col;
+using api::Cursor;
+using api::IndexSchema;
+using api::KeyCol;
+using api::SchemaVisitor;
+using api::TableSchema;
+using api::TableStats;
+using api::Tuple;
+
+using api::IB_MAX_COL_NAME_LEN;
+using api::IB_MAX_TABLE_NAME_LEN;
+using api::IB_N_SYS_COLS;
+using api::IB_SQL_NULL;
+using api::MAX_TEXT_LEN;
+
+/** The first option id a test program can use for its own options. */
 constexpr int USER_OPT = 1000;
 
-#define OK(expr)                                                               \
-  do {                                                                         \
-    DbErr ok_ib_err;                                                        \
-    ok_ib_err = DbErr(expr);                                                  \
-    if (ok_ib_err != DB_SUCCESS) {                                             \
-      fprintf(stderr, "%s: %s\n", #expr, ib_strerror(ok_ib_err));              \
-      exit(EXIT_FAILURE);                                                      \
-    }                                                                          \
+#define OK(expr)                                                  \
+  do {                                                            \
+    const auto ok_ib_err = DbErr(expr);                           \
+    if (ok_ib_err != DB_SUCCESS) {                                \
+      fprintf(stderr, "%s: %s\n", #expr, db_strerror(ok_ib_err)); \
+      exit(EXIT_FAILURE);                                         \
+    }                                                             \
   } while (0)
 
-#include <getopt.h>
+/** The command line options common to all the test programs, terminated by
+an all zero entry. */
+extern const struct option ib_longopts[];
 
-/* InnoDB command line parameters */
-extern struct option ib_longopts[];
+/**
+ * Read a value from an integer column in an InnoDB tuple.
+ *
+ * @param[in] tpl               InnoDB tuple.
+ * @param[in] col_meta          Column meta data.
+ * @param[in] i                 Column number.
+ *
+ * @return column value
+ */
+[[nodiscard]] uint64_t read_int_from_tuple(const Tuple *tpl, const ColMeta *col_meta, int i);
 
-/* Arbitrary string */
-typedef struct ib_string {
-  byte *ptr;
-  int len;
-} TestString;
+/**
+ * Print all columns in a tuple.
+ *
+ * @param[in] stream            Output stream.
+ * @param[in] tpl               Tuple to print.
+ */
+void print_tuple(FILE *stream, const Tuple *tpl);
 
-/* Config variable name=value pair. */
-typedef struct ib_var {
-  TestString name;
-  TestString value;
-} TestVar;
+/**
+ * Set the configuration the test programs run with.
+ *
+ * @param[out] config           The configuration to set.
+ */
+void test_configure(Config &config);
 
-/* Memory representation of the config file. */
-typedef struct ib_config {
-  TestVar *elems;
-  ulint n_elems;
-  ulint n_count;
-} TestConfig;
+/**
+ * Configure, initialize and start an instance, exits on failure.
+ *
+ * @param[in,out] sys           The instance to start.
+ * @param[in] config            The configuration to start it with.
+ */
+void test_startup(System &sys, const Config &config);
 
-/** Read a value from an integer column in an InnoDB tuple.
-@return	column value */
-uint64_t
-read_int_from_tuple(Tuple * tpl,                  /*!< in: InnoDB tuple */
-                    const ColMeta *col_meta, /*!< in: col meta data */
-                    int i);                        /*!< in: column number */
+/**
+ * Generate random text upto max size.
+ *
+ * @param[out] ptr              Output text.
+ * @param[in] max_size          Max size of ptr.
+ *
+ * @return the length of the text.
+ */
+int gen_rand_text(char *ptr, int max_size);
 
-/** Print all columns in a tuple. */
-void print_tuple(FILE *stream,        /*!< in: Output stream */
-                 const Tuple * tpl); /*!< in: Tuple to print */
+/**
+ * Set a configuration option from the command line.
+ *
+ * @param[in,out] config        The configuration to change.
+ * @param[in] opt               Option id, from ib_longopts.
+ * @param[in] arg               Option value.
+ *
+ * @return DB_SUCCESS on success.
+ */
+[[nodiscard]] DbErr set_global_option(Config &config, int opt, const char *arg);
 
-/** Setup the InnoDB configuration parameters. */
-void test_configure();
+/**
+ * Print usage.
+ *
+ * @param[in] progname          Name of the application.
+ */
+void print_usage(const char *progname);
 
-/** Generate random text upto max size. */
-int gen_rand_text(char *ptr,     /*!< in,out: output text */
-                  int max_size); /*!< in: max size of ptr */
-
-/** Set the runtime global options.
-@return DB_SUCCESS on success. */
-DbErr set_global_option(int opt,          /*!< in: option index */
-                           const char *arg); /*!< in: option value */
-
-/** Print usage. */
-void print_usage(const char *progname); /*!< in: name of application */
-
-/** Print API version to stdout. */
+/** Print the API version to stdout. */
 void print_version();
 
-/** Free the the elements. */
-void config_free(TestConfig *config); /*!< in, own: config values */
+/**
+ * Drop the table.
+ *
+ * @param[in] sys               The instance.
+ * @param[in] dbname            Database name.
+ * @param[in] name              Table to drop.
+ *
+ * @return DB_SUCCESS or error code
+ */
+DbErr drop_table(System &sys, const char *dbname, const char *name);
 
-/** Print the elements. */
-void config_print(const TestConfig *config); /*!< in: config values */
-
-/** Parse a config file, the file has a very simply format:
-Lines beginning with '#' are ignored. Characters after '#' (inclusive)
-are also ignored.  Empty lines are also ignored. Variable syntax is:
-  \s*var_name\s*=\s*value\s*\n */
-int config_parse_file(const char *filename, /*!< in: config file name */
-                      TestConfig *config); /*!< out: config values */
-
-/** Drop the table. */
-DbErr drop_table(const char *dbname, /*!< in: database name */
-                    const char *name);  /*!< in: table to drop */
-
-/** Truncate the table. */
-DbErr truncate_table(const char *dbname, /*!< in: database name */
-                        const char *name);  /*!< in: table to drop */
+/**
+ * Truncate the table.
+ *
+ * @param[in] sys               The instance.
+ * @param[in] dbname            Database name.
+ * @param[in] name              Table to truncate.
+ *
+ * @return DB_SUCCESS or error code
+ */
+DbErr truncate_table(System &sys, const char *dbname, const char *name);

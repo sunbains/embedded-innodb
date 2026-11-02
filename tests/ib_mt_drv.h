@@ -25,7 +25,7 @@ enum ddl_op_type_t {
 };
 
 /* Call back function definition for various DML and Ddl operations */
-typedef DbErr fn(void *);
+using fn = DbErr(System &sys, void *arg);
 
 /* to hold statistics of a particular type of operation */
 struct op_err_t {

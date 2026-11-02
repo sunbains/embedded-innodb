@@ -56,8 +56,8 @@ directory. */
 /**
  * Create an InnoDB database (sub-directory).
  */
-static DbErr create_database(const char *name) noexcept {
-  const auto success = ib_database_create(name);
+static DbErr create_database(System &sys, const char *name) noexcept {
+  const auto success = api::database_create(sys, name);
   assert(success);
 
   return DB_SUCCESS;
@@ -68,11 +68,11 @@ static DbErr create_database(const char *name) noexcept {
  *
  * @param[in] dbname Database name.
  */
-static DbErr drop_database(const char *dbname) noexcept {
-  return ib_database_drop(dbname);
+static DbErr drop_database(System &sys, const char *dbname) noexcept {
+  return api::database_drop(sys, dbname);
 }
 
-static DbErr create_table(const char *dbname, const char *name) {
+static DbErr create_table(System &sys, const char *dbname, const char *name) {
   uint64_t table_id{};
   IndexSchema * idx_sch{};
   TableSchema * ib_tbl_sch{};
@@ -82,116 +82,117 @@ static DbErr create_table(const char *dbname, const char *name) {
   snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
 
   /* Pass a table page size of 0, ie., use default page size. */
-  auto err = ib_table_schema_create(table_name, &ib_tbl_sch, tbl_fmt, 0);
+  auto err = TableSchema::create(table_name, &ib_tbl_sch, tbl_fmt, 0);
   assert(err == DB_SUCCESS);
 
   /* Define the table columns */
-  err = ib_tbl_sch_add_u32_col(ib_tbl_sch, "A");
+  err = ib_tbl_sch->add_col("A", IB_INT, IB_COL_UNSIGNED, 0, 4);
   assert(err == DB_SUCCESS);
 
-  err = ib_tbl_sch_add_u32_col(ib_tbl_sch, "D");
+  err = ib_tbl_sch->add_col("D", IB_INT, IB_COL_UNSIGNED, 0, 4);
   assert(err == DB_SUCCESS);
 
-  err = ib_tbl_sch_add_blob_col(ib_tbl_sch, "B");
+  err = ib_tbl_sch->add_col("B", IB_BLOB, IB_COL_NONE, 0, 0);
   assert(err == DB_SUCCESS);
 
-  // err = ib_tbl_sch_add_text_col(ib_tbl_sch, "C");
-  err = ib_tbl_sch_add_blob_col(ib_tbl_sch, "C");
+  // err = ib_tbl_sch->add_col("C", IB_VARCHAR, IB_COL_NONE, 0, MAX_TEXT_LEN);
+  err = ib_tbl_sch->add_col("C", IB_BLOB, IB_COL_NONE, 0, 0);
   assert(err == DB_SUCCESS);
 
   /* Add primary key */
-  err = ib_table_schema_add_index(ib_tbl_sch, "PRIMARY", &idx_sch);
+  err = ib_tbl_sch->add_index("PRIMARY", &idx_sch);
   assert(err == DB_SUCCESS);
 
-  err = ib_index_schema_add_col(idx_sch, "B", 10);
+  err = idx_sch->add_col("B", 10);
   assert(err == DB_SUCCESS);
 
-  err = ib_index_schema_add_col(idx_sch, "A", 0);
+  err = idx_sch->add_col("A", 0);
   assert(err == DB_SUCCESS);
 
-  err = ib_index_schema_add_col(idx_sch, "D", 0);
+  err = idx_sch->add_col("D", 0);
   assert(err == DB_SUCCESS);
 
-  err = ib_index_schema_set_clustered(idx_sch);
+  err = idx_sch->set_clustered();
   assert(err == DB_SUCCESS);
 
-  err = ib_index_schema_set_unique(idx_sch);
+  err = idx_sch->set_unique();
   assert(err == DB_SUCCESS);
 
   /* Add secondary indexes */
-  err = ib_table_schema_add_index(ib_tbl_sch, "SEC_0", &idx_sch);
+  err = ib_tbl_sch->add_index("SEC_0", &idx_sch);
   assert(err == DB_SUCCESS);
 
-  err = ib_index_schema_add_col(idx_sch, "D", 0);
+  err = idx_sch->add_col("D", 0);
   assert(err == DB_SUCCESS);
 
-  err = ib_table_schema_add_index(ib_tbl_sch, "SEC_1", &idx_sch);
+  err = ib_tbl_sch->add_index("SEC_1", &idx_sch);
   assert(err == DB_SUCCESS);
 
-  err = ib_index_schema_add_col(idx_sch, "A", 0);
+  err = idx_sch->add_col("A", 0);
   assert(err == DB_SUCCESS);
 
-  err = ib_table_schema_add_index(ib_tbl_sch, "SEC_2", &idx_sch);
+  err = ib_tbl_sch->add_index("SEC_2", &idx_sch);
   assert(err == DB_SUCCESS);
 
-  err = ib_index_schema_add_col(idx_sch, "C", 255);
+  err = idx_sch->add_col("C", 255);
   assert(err == DB_SUCCESS);
 
-  err = ib_index_schema_add_col(idx_sch, "B", 255);
+  err = idx_sch->add_col("B", 255);
   assert(err == DB_SUCCESS);
 
-  err = ib_table_schema_add_index(ib_tbl_sch, "SEC_3", &idx_sch);
+  err = ib_tbl_sch->add_index("SEC_3", &idx_sch);
   assert(err == DB_SUCCESS);
 
-  err = ib_index_schema_add_col(idx_sch, "B", 5);
+  err = idx_sch->add_col("B", 5);
   assert(err == DB_SUCCESS);
 
-  err = ib_index_schema_add_col(idx_sch, "C", 10);
+  err = idx_sch->add_col("C", 10);
   assert(err == DB_SUCCESS);
 
-  err = ib_index_schema_add_col(idx_sch, "A", 0);
+  err = idx_sch->add_col("A", 0);
   assert(err == DB_SUCCESS);
 
   /* create table */
-  auto ib_trx = ib_trx_begin(IB_TRX_REPEATABLE_READ);
-  err = ib_schema_lock_exclusive(ib_trx);
+  auto ib_trx = api::trx_begin(sys, IB_TRX_REPEATABLE_READ);
+  err = api::schema_lock_exclusive(sys, ib_trx);
   assert(err == DB_SUCCESS);
 
-  err = ib_table_create(ib_trx, ib_tbl_sch, &table_id);
+  err = api::table_create(sys, ib_trx, ib_tbl_sch, &table_id);
 
   /* We assume it's the same table. */
   assert(err == DB_SUCCESS || err == DB_TABLE_EXISTS);
 
-  err = ib_trx_commit(ib_trx);
+  err = api::trx_commit(sys, ib_trx);
   assert(err == DB_SUCCESS);
 
   if (ib_tbl_sch != nullptr) {
-    ib_table_schema_delete(ib_tbl_sch);
+    TableSchema::destroy(sys, ib_tbl_sch);
   }
 
   return (err);
 }
 
 int main(int argc, char *argv[]) {
-  auto err = ib_init();
+  Config config;
+  DbErr err;
+
+  System sys;
+
+  test_startup(sys, config);
+
+  err = create_database(sys, DATABASE);
   assert(err == DB_SUCCESS);
 
-  err = ib_startup("default");
+  err = create_table(sys, DATABASE, TABLE);
   assert(err == DB_SUCCESS);
 
-  err = create_database(DATABASE);
+  err = drop_table(sys, DATABASE, TABLE);
   assert(err == DB_SUCCESS);
 
-  err = create_table(DATABASE, TABLE);
+  err = drop_database(sys, DATABASE);
   assert(err == DB_SUCCESS);
 
-  err = drop_table(DATABASE, TABLE);
-  assert(err == DB_SUCCESS);
-
-  err = drop_database(DATABASE);
-  assert(err == DB_SUCCESS);
-
-  err = ib_shutdown(IB_SHUTDOWN_NORMAL);
+  err = sys.shutdown(IB_SHUTDOWN_NORMAL);
   assert(err == DB_SUCCESS);
 
 #ifdef UNIV_DEBUG_VALGRIND

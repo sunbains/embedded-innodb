@@ -51,10 +51,10 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #define TABLE "t"
 
 /** Create an InnoDB database (sub-directory). */
-static DbErr create_database(const char *name) {
+static DbErr create_database(System &sys, const char *name) {
   bool err;
 
-  err = ib_database_create(name);
+  err = api::database_create(sys, name);
   assert(err == true);
 
   return (DB_SUCCESS);
@@ -67,7 +67,7 @@ static DbErr create_database(const char *name) {
         C4 	DOUBLE,
         C5 	DECIMAL,
         PRIMARY KEY(C1, 4); */
-static DbErr create_table(const char *dbname, /*!< in: database name */
+static DbErr create_table(System &sys, const char *dbname, /*!< in: database name */
                              const char *name)   /*!< in: table name */
 {
   Trx * ib_trx;
@@ -81,80 +81,80 @@ static DbErr create_table(const char *dbname, /*!< in: database name */
   snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
 
   /* Pass a table page size of 0, ie., use default page size. */
-  err = ib_table_schema_create(table_name, &ib_tbl_sch, tbl_fmt, 0);
+  err = TableSchema::create(table_name, &ib_tbl_sch, tbl_fmt, 0);
 
   assert(err == DB_SUCCESS);
 
   err =
-      ib_table_schema_add_col(ib_tbl_sch, "c1", IB_VARCHAR, IB_COL_NONE, 0, 10);
+      ib_tbl_sch->add_col("c1", IB_VARCHAR, IB_COL_NONE, 0, 10);
 
   assert(err == DB_SUCCESS);
 
-  err = ib_table_schema_add_col(ib_tbl_sch, "c2", IB_INT, IB_COL_NONE, 0,
+  err = ib_tbl_sch->add_col("c2", IB_INT, IB_COL_NONE, 0,
                                 sizeof(int32_t));
 
   assert(err == DB_SUCCESS);
 
-  err = ib_table_schema_add_col(ib_tbl_sch, "c3", IB_FLOAT, IB_COL_NONE, 0,
+  err = ib_tbl_sch->add_col("c3", IB_FLOAT, IB_COL_NONE, 0,
                                 sizeof(float));
 
   assert(err == DB_SUCCESS);
 
-  err = ib_table_schema_add_col(ib_tbl_sch, "c4", IB_DOUBLE, IB_COL_NONE, 0,
+  err = ib_tbl_sch->add_col("c4", IB_DOUBLE, IB_COL_NONE, 0,
                                 sizeof(double));
 
   assert(err == DB_SUCCESS);
 
   err =
-      ib_table_schema_add_col(ib_tbl_sch, "c5", IB_DECIMAL, IB_COL_NONE, 0, 0);
+      ib_tbl_sch->add_col("c5", IB_DECIMAL, IB_COL_NONE, 0, 0);
   assert(err == DB_SUCCESS);
 
-  err = ib_table_schema_add_index(ib_tbl_sch, "c1", &ib_idx_sch);
+  err = ib_tbl_sch->add_index("c1", &ib_idx_sch);
   assert(err == DB_SUCCESS);
 
   /* Set prefix length to 4 for C1. */
-  err = ib_index_schema_add_col(ib_idx_sch, "c1", 4);
+  err = ib_idx_sch->add_col("c1", 4);
   assert(err == DB_SUCCESS);
 
   /* This should fail. */
-  err = ib_index_schema_add_col(ib_idx_sch, "c2", 2);
+  err = ib_idx_sch->add_col("c2", 2);
   assert(err == DB_SCHEMA_ERROR);
 
   /* This should fail. */
-  err = ib_index_schema_add_col(ib_idx_sch, "c3", 2);
+  err = ib_idx_sch->add_col("c3", 2);
   assert(err == DB_SCHEMA_ERROR);
 
   /* This should fail. */
-  err = ib_index_schema_add_col(ib_idx_sch, "c4", 2);
+  err = ib_idx_sch->add_col("c4", 2);
   assert(err == DB_SCHEMA_ERROR);
 
   /* This should fail. */
-  err = ib_index_schema_add_col(ib_idx_sch, "c5", 2);
+  err = ib_idx_sch->add_col("c5", 2);
   assert(err == DB_SCHEMA_ERROR);
 
-  err = ib_index_schema_set_clustered(ib_idx_sch);
+  err = ib_idx_sch->set_clustered();
   assert(err == DB_SUCCESS);
 
   /* create table */
-  ib_trx = ib_trx_begin(IB_TRX_REPEATABLE_READ);
-  err = ib_schema_lock_exclusive(ib_trx);
+  ib_trx = api::trx_begin(sys, IB_TRX_REPEATABLE_READ);
+  err = api::schema_lock_exclusive(sys, ib_trx);
   assert(err == DB_SUCCESS);
 
-  err = ib_table_create(ib_trx, ib_tbl_sch, &table_id);
+  err = api::table_create(sys, ib_trx, ib_tbl_sch, &table_id);
   assert(err == DB_SUCCESS);
 
-  err = ib_trx_commit(ib_trx);
+  err = api::trx_commit(sys, ib_trx);
   assert(err == DB_SUCCESS);
 
   if (ib_tbl_sch != nullptr) {
-    ib_table_schema_delete(ib_tbl_sch);
+    TableSchema::destroy(sys, ib_tbl_sch);
   }
 
   return (err);
 }
 
 /** Open a table and return a cursor for the table. */
-static DbErr open_table(const char *dbname, /*!< in: database name */
+static DbErr open_table(System &sys, const char *dbname, /*!< in: database name */
                            const char *name,   /*!< in: table name */
                            Trx * ib_trx,    /*!< in: transaction */
                            Cursor **crsr)    /*!< out: innodb cursor */
@@ -163,7 +163,7 @@ static DbErr open_table(const char *dbname, /*!< in: database name */
   char table_name[IB_MAX_TABLE_NAME_LEN];
 
   snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
-  err = ib_cursor_open_table(table_name, ib_trx, crsr);
+  err = api::cursor_open_table(sys, table_name, ib_trx, crsr);
   assert(err == DB_SUCCESS);
 
   return (err);
@@ -171,34 +171,34 @@ static DbErr open_table(const char *dbname, /*!< in: database name */
 
 /** INSERT INTO T VALUE('xxxxaaaa', 1);
 INSERT INTO T VALUE('xxxxbbbb', 2); */
-static void insert_rows(Cursor * crsr) /*!< in, out: cursor to use for write */
+static void insert_rows(System &sys, Cursor * crsr) /*!< in, out: cursor to use for write */
 {
   Tuple * tpl = nullptr;
   DbErr err = DB_ERROR;
 
-  tpl = ib_clust_read_tuple_create(crsr);
+  tpl = crsr->clust_read_tuple_create();
   assert(tpl != nullptr);
 
-  err = ib_col_set_value(tpl, 0, "xxxxaaaa", 8);
+  err = tpl->set_value(0, "xxxxaaaa", 8);
   assert(err == DB_SUCCESS);
 
-  err = ib_tuple_write_i32(tpl, 1, 2);
+  err = tpl->write_i32(1, 2);
   assert(err == DB_SUCCESS);
 
-  err = ib_cursor_insert_row(crsr, tpl);
+  err = crsr->insert_row(sys, tpl);
   assert(err == DB_SUCCESS);
 
   /* Insert a record with the same prefix as the one inserted above. */
-  err = ib_col_set_value(tpl, 0, "xxxxbbbb", 8);
+  err = tpl->set_value(0, "xxxxbbbb", 8);
   assert(err == DB_SUCCESS);
 
-  err = ib_tuple_write_i32(tpl, 1, 2);
+  err = tpl->write_i32(1, 2);
   assert(err == DB_SUCCESS);
 
-  err = ib_cursor_insert_row(crsr, tpl);
+  err = crsr->insert_row(sys, tpl);
   assert(err == DB_DUPLICATE_KEY);
 
-  ib_tuple_delete(tpl);
+  Tuple::destroy(tpl);
 }
 
 int main(int argc, char *argv[]) {
@@ -210,47 +210,47 @@ int main(int argc, char *argv[]) {
   (void)argc;
   (void)argv;
 
-  version = ib_api_version();
+  version = api::api_version();
   printf("API: %d.%d.%d\n", (int)(version >> 32), /* Current version */
          (int)((version >> 16)) & 0xffff,         /* Revisiion */
          (int)(version & 0xffff));                /* Age */
 
-  err = ib_init();
+  Config config;
+
+  test_configure(config);
+
+  System sys;
+
+  test_startup(sys, config);
+
+  err = create_database(sys, DATABASE);
   assert(err == DB_SUCCESS);
 
-  test_configure();
-
-  err = ib_startup("default");
+  err = create_table(sys, DATABASE, TABLE);
   assert(err == DB_SUCCESS);
 
-  err = create_database(DATABASE);
-  assert(err == DB_SUCCESS);
-
-  err = create_table(DATABASE, TABLE);
-  assert(err == DB_SUCCESS);
-
-  ib_trx = ib_trx_begin(IB_TRX_REPEATABLE_READ);
+  ib_trx = api::trx_begin(sys, IB_TRX_REPEATABLE_READ);
   assert(ib_trx != nullptr);
 
-  err = open_table(DATABASE, TABLE, ib_trx, &crsr);
+  err = open_table(sys, DATABASE, TABLE, ib_trx, &crsr);
   assert(err == DB_SUCCESS);
 
-  err = ib_cursor_lock(crsr, IB_LOCK_IX);
+  err = crsr->lock(sys, IB_LOCK_IX);
   assert(err == DB_SUCCESS);
 
-  insert_rows(crsr);
+  insert_rows(sys, crsr);
 
-  err = ib_cursor_close(crsr);
+  err = Cursor::close(sys, crsr);
   assert(err == DB_SUCCESS);
   crsr = nullptr;
 
-  err = ib_trx_commit(ib_trx);
+  err = api::trx_commit(sys, ib_trx);
   assert(err == DB_SUCCESS);
 
-  err = drop_table(DATABASE, TABLE);
+  err = drop_table(sys, DATABASE, TABLE);
   assert(err == DB_SUCCESS);
 
-  err = ib_shutdown(IB_SHUTDOWN_NORMAL);
+  err = sys.shutdown(IB_SHUTDOWN_NORMAL);
   assert(err == DB_SUCCESS);
 
 #ifdef UNIV_DEBUG_VALGRIND

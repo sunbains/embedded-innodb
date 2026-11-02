@@ -38,7 +38,7 @@ Insert <num_rows> into the table.
 Create four type of worker threads (total threads being NUM_THREADS)
 
 1) Insert worker thread that does the following:
- INSERT INTO blobt3 VALUES(
+ INSERT INTO blobt3 VALUES(sys, 
         RANDOM(INT),
         5,
         RANDOM(BLOB),
@@ -213,20 +213,20 @@ print_random_data(void)
 #endif
 
 /** Create an InnoDB database (sub-directory). */
-static DbErr create_database(const char *name) {
+static DbErr create_database(System &sys, const char *name) {
   bool err;
 
-  err = ib_database_create(name);
+  err = api::database_create(sys, name);
   assert(err == true);
 
   return (DB_SUCCESS);
 }
 
 /** Drop the database. */
-static DbErr drop_database(const char *dbname) /*!< in: db to drop */
+static DbErr drop_database(System &sys, const char *dbname) /*!< in: db to drop */
 {
   DbErr err;
-  err = ib_database_drop(dbname);
+  err = api::database_drop(sys, dbname);
 
   return (err);
 }
@@ -241,7 +241,7 @@ static DbErr drop_database(const char *dbname) /*!< in: db to drop */
         INDEX(A),
         INDEX(C(255), B(255)),
         INDEX(B(5), C(10), A)); */
-static DbErr create_table(const char *dbname, /*!< in: database name */
+static DbErr create_table(System &sys, const char *dbname, /*!< in: database name */
                              const char *name)   /*!< in: table name */
 {
   Trx * ib_trx;
@@ -255,99 +255,99 @@ static DbErr create_table(const char *dbname, /*!< in: database name */
   snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
 
   /* Pass a table page size of 0, ie., use default page size. */
-  err = ib_table_schema_create(table_name, &ib_tbl_sch, tbl_fmt, 0);
+  err = TableSchema::create(table_name, &ib_tbl_sch, tbl_fmt, 0);
 
   assert(err == DB_SUCCESS);
 
   /* Define the table columns */
-  err = ib_tbl_sch_add_u32_col(ib_tbl_sch, "A");
+  err = ib_tbl_sch->add_col("A", IB_INT, IB_COL_UNSIGNED, 0, 4);
   assert(err == DB_SUCCESS);
 
-  err = ib_tbl_sch_add_u32_col(ib_tbl_sch, "D");
+  err = ib_tbl_sch->add_col("D", IB_INT, IB_COL_UNSIGNED, 0, 4);
   assert(err == DB_SUCCESS);
 
-  err = ib_tbl_sch_add_blob_col(ib_tbl_sch, "B");
+  err = ib_tbl_sch->add_col("B", IB_BLOB, IB_COL_NONE, 0, 0);
   assert(err == DB_SUCCESS);
 
-  // err = ib_tbl_sch_add_text_col(ib_tbl_sch, "C");
-  err = ib_tbl_sch_add_blob_col(ib_tbl_sch, "C");
+  // err = ib_tbl_sch->add_col("C", IB_VARCHAR, IB_COL_NONE, 0, MAX_TEXT_LEN);
+  err = ib_tbl_sch->add_col("C", IB_BLOB, IB_COL_NONE, 0, 0);
   assert(err == DB_SUCCESS);
 
   /* Add primary key */
-  err = ib_table_schema_add_index(ib_tbl_sch, "PRIMARY", &idx_sch);
+  err = ib_tbl_sch->add_index("PRIMARY", &idx_sch);
   assert(err == DB_SUCCESS);
 
-  err = ib_index_schema_add_col(idx_sch, "B", 10);
+  err = idx_sch->add_col("B", 10);
   assert(err == DB_SUCCESS);
 
-  err = ib_index_schema_add_col(idx_sch, "A", 0);
+  err = idx_sch->add_col("A", 0);
   assert(err == DB_SUCCESS);
 
-  err = ib_index_schema_add_col(idx_sch, "D", 0);
+  err = idx_sch->add_col("D", 0);
   assert(err == DB_SUCCESS);
 
-  err = ib_index_schema_set_clustered(idx_sch);
+  err = idx_sch->set_clustered();
   assert(err == DB_SUCCESS);
 
-  err = ib_index_schema_set_unique(idx_sch);
+  err = idx_sch->set_unique();
   assert(err == DB_SUCCESS);
 
   /* Add secondary indexes */
-  err = ib_table_schema_add_index(ib_tbl_sch, "SEC_0", &idx_sch);
+  err = ib_tbl_sch->add_index("SEC_0", &idx_sch);
   assert(err == DB_SUCCESS);
 
-  err = ib_index_schema_add_col(idx_sch, "D", 0);
+  err = idx_sch->add_col("D", 0);
   assert(err == DB_SUCCESS);
 
-  err = ib_table_schema_add_index(ib_tbl_sch, "SEC_1", &idx_sch);
+  err = ib_tbl_sch->add_index("SEC_1", &idx_sch);
   assert(err == DB_SUCCESS);
 
-  err = ib_index_schema_add_col(idx_sch, "A", 0);
+  err = idx_sch->add_col("A", 0);
   assert(err == DB_SUCCESS);
 
-  err = ib_table_schema_add_index(ib_tbl_sch, "SEC_2", &idx_sch);
+  err = ib_tbl_sch->add_index("SEC_2", &idx_sch);
   assert(err == DB_SUCCESS);
 
-  err = ib_index_schema_add_col(idx_sch, "C", 255);
+  err = idx_sch->add_col("C", 255);
   assert(err == DB_SUCCESS);
 
-  err = ib_index_schema_add_col(idx_sch, "B", 255);
+  err = idx_sch->add_col("B", 255);
   assert(err == DB_SUCCESS);
 
-  err = ib_table_schema_add_index(ib_tbl_sch, "SEC_3", &idx_sch);
+  err = ib_tbl_sch->add_index("SEC_3", &idx_sch);
   assert(err == DB_SUCCESS);
 
-  err = ib_index_schema_add_col(idx_sch, "B", 5);
+  err = idx_sch->add_col("B", 5);
   assert(err == DB_SUCCESS);
 
-  err = ib_index_schema_add_col(idx_sch, "C", 10);
+  err = idx_sch->add_col("C", 10);
   assert(err == DB_SUCCESS);
 
-  err = ib_index_schema_add_col(idx_sch, "A", 0);
+  err = idx_sch->add_col("A", 0);
   assert(err == DB_SUCCESS);
 
   /* create table */
-  ib_trx = ib_trx_begin(IB_TRX_REPEATABLE_READ);
-  err = ib_schema_lock_exclusive(ib_trx);
+  ib_trx = api::trx_begin(sys, IB_TRX_REPEATABLE_READ);
+  err = api::schema_lock_exclusive(sys, ib_trx);
   assert(err == DB_SUCCESS);
 
-  err = ib_table_create(ib_trx, ib_tbl_sch, &table_id);
+  err = api::table_create(sys, ib_trx, ib_tbl_sch, &table_id);
 
   /* We assume it's the same table. */
   assert(err == DB_SUCCESS || err == DB_TABLE_EXISTS);
 
-  err = ib_trx_commit(ib_trx);
+  err = api::trx_commit(sys, ib_trx);
   assert(err == DB_SUCCESS);
 
   if (ib_tbl_sch != nullptr) {
-    ib_table_schema_delete(ib_tbl_sch);
+    TableSchema::destroy(sys, ib_tbl_sch);
   }
 
   return (err);
 }
 
 /** Open a table and return a cursor for the table. */
-static DbErr open_table(const char *dbname, /*!< in: database name */
+static DbErr open_table(System &sys, const char *dbname, /*!< in: database name */
                            const char *name,   /*!< in: table name */
                            Trx * ib_trx,    /*!< in: transaction */
                            Cursor **crsr)    /*!< out: innodb cursor */
@@ -356,7 +356,7 @@ static DbErr open_table(const char *dbname, /*!< in: database name */
   char table_name[IB_MAX_TABLE_NAME_LEN];
 
   snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
-  err = ib_cursor_open_table(table_name, ib_trx, crsr);
+  err = api::cursor_open_table(sys, table_name, ib_trx, crsr);
   assert(err == DB_SUCCESS);
 
   return (err);
@@ -365,22 +365,22 @@ static DbErr open_table(const char *dbname, /*!< in: database name */
 /** Depending on rollback_percent decides whether to commit or rollback a
 given transaction */
 static void
-commit_or_rollback(Trx * trx, /*!< in: trx to commit or rollback */
+commit_or_rollback(System &sys, Trx * trx, /*!< in: trx to commit or rollback */
                    int cnt)      /*!< in: trx counter */
 {
 
   DbErr err;
 
-  if (ib_trx_state(trx) == IB_TRX_NOT_STARTED) {
-    err = ib_trx_release(trx);
+  if (api::trx_state(trx) == IB_TRX_NOT_STARTED) {
+    err = api::trx_release(sys, trx);
     assert(err == DB_SUCCESS);
   } else if (cnt % (100 / rollback_percent)) {
     // printf("Commit transaction\n");
-    err = ib_trx_commit(trx);
+    err = api::trx_commit(sys, trx);
     assert(err == DB_SUCCESS);
   } else {
     // printf("Rollback transaction\n");
-    err = ib_trx_rollback(trx);
+    err = api::trx_rollback(sys, trx);
     assert(err == DB_SUCCESS);
   }
 }
@@ -388,34 +388,34 @@ commit_or_rollback(Trx * trx, /*!< in: trx to commit or rollback */
 /** Inserts one row into the table.
 @return	error from insert row */
 static DbErr
-insert_one_row(Cursor * crsr, /*!< in, out: cursor to use for write */
+insert_one_row(System &sys, Cursor * crsr, /*!< in, out: cursor to use for write */
                Tuple * tpl)   /*!< in: tpl to work on */
 {
   int j;
   DbErr err;
 
-  err = ib_tuple_write_u32(tpl, 0, random() % num_rows);
+  err = tpl->write_u32(0, random() % num_rows);
   assert(err == DB_SUCCESS);
 
-  err = ib_tuple_write_u32(tpl, 1, 5);
-  assert(err == DB_SUCCESS);
-
-  j = random() % num_rows;
-  err = ib_col_set_value(tpl, 2, rnd_str[j], rnd_str_len[j]);
+  err = tpl->write_u32(1, 5);
   assert(err == DB_SUCCESS);
 
   j = random() % num_rows;
-  err = ib_col_set_value(tpl, 3, rnd_str[j], rnd_str_len[j]);
+  err = tpl->set_value(2, rnd_str[j], rnd_str_len[j]);
+  assert(err == DB_SUCCESS);
+
+  j = random() % num_rows;
+  err = tpl->set_value(3, rnd_str[j], rnd_str_len[j]);
   assert(err == DB_SUCCESS);
 
   // print_tuple(stderr, tpl);
-  err = ib_cursor_insert_row(crsr, tpl);
+  err = crsr->insert_row(sys, tpl);
   return (err);
 }
 
 /** Insert one batch of rows which constitute one transactions.
 @return	number of row inserted we return on first error. */
-static int insert_row_batch(Cursor * crsr, /*!< in, out: cursor to use */
+static int insert_row_batch(System &sys, Cursor * crsr, /*!< in, out: cursor to use */
                             int n_rows,     /*!< in: num rows to insert */
                             DbErr *err)  /*!< out: error code */
 {
@@ -425,7 +425,7 @@ static int insert_row_batch(Cursor * crsr, /*!< in, out: cursor to use */
 
   assert(n_rows <= num_rows);
 
-  tpl = ib_clust_read_tuple_create(crsr);
+  tpl = crsr->clust_read_tuple_create();
   if (tpl == nullptr) {
     *err = DB_OUT_OF_MEMORY;
     return (0);
@@ -433,7 +433,7 @@ static int insert_row_batch(Cursor * crsr, /*!< in, out: cursor to use */
   *err = DB_SUCCESS;
 
   for (i = 0; i < n_rows; ++i) {
-    *err = insert_one_row(crsr, tpl);
+    *err = insert_one_row(sys, crsr, tpl);
     UPDATE_ERR_STATS(ins_stats, *err);
 
     if (*err == DB_SUCCESS) {
@@ -441,17 +441,17 @@ static int insert_row_batch(Cursor * crsr, /*!< in, out: cursor to use */
     } else if (*err == DB_DEADLOCK || *err == DB_LOCK_WAIT_TIMEOUT) {
       break;
     } else {
-      tpl = ib_tuple_clear(tpl);
+      tpl = tpl->clear();
       break;
     }
-    tpl = ib_tuple_clear(tpl);
+    tpl = tpl->clear();
     if (tpl == nullptr) {
       break;
     }
   }
 
   if (tpl != nullptr) {
-    ib_tuple_delete(tpl);
+    Tuple::destroy(tpl);
   } else {
     *err = DB_OUT_OF_MEMORY;
   }
@@ -460,16 +460,16 @@ static int insert_row_batch(Cursor * crsr, /*!< in, out: cursor to use */
 }
 
 /** Insert worker thread. Will do the following in batches:
-INSERT INTO blobt3 VALUES(
+INSERT INTO blobt3 VALUES(System &sys, 
         RANDOM(INT),
         5,
         RANDOM(BLOB),
         RANDOM(BLOB)) */
-static void *ins_worker(void *dummy) /*!< in: unused */
+static void *ins_worker(void *arg) /*!< in: the instance */
 {
+  auto &sys = *static_cast<System *>(arg);
   int cnt = 0;
 
-  (void)dummy;
 
   printf("ins_worker up\n");
   do {
@@ -481,26 +481,26 @@ static void *ins_worker(void *dummy) /*!< in: unused */
     ++cnt;
 
     // printf("Begin INSERT transaction\n");
-    trx = ib_trx_begin(TrxLevel(isolation_level));
+    trx = api::trx_begin(sys, TrxLevel(isolation_level));
     assert(trx != nullptr);
 
-    err = open_table(DATABASE, TABLE, trx, &crsr);
+    err = open_table(sys, DATABASE, TABLE, trx, &crsr);
     assert(err == DB_SUCCESS);
 
-    if (ib_cursor_lock(crsr, IB_LOCK_IX) == DB_SUCCESS) {
-      insert_row_batch(crsr, batch_size, &ins_err);
+    if (crsr->lock(sys, IB_LOCK_IX) == DB_SUCCESS) {
+      insert_row_batch(sys, crsr, batch_size, &ins_err);
     }
 
-    err = ib_cursor_close(crsr);
+    err = Cursor::close(sys, crsr);
     assert(err == DB_SUCCESS);
     crsr = nullptr;
 
     if (ins_err == DB_DEADLOCK || ins_err == DB_LOCK_WAIT_TIMEOUT) {
 
-      err = ib_trx_release(trx);
+      err = api::trx_release(sys, trx);
       assert(err == DB_SUCCESS);
     } else {
-      commit_or_rollback(trx, cnt);
+      commit_or_rollback(sys, trx, cnt);
     }
   } while (test_running);
 
@@ -508,8 +508,8 @@ static void *ins_worker(void *dummy) /*!< in: unused */
 }
 
 /** Update one row in the table.
-@return	error returned from ib_crsr_moveto() or ib_cursor_update_row() */
-static DbErr update_one_row(Cursor * crsr) /*!< in: cursor on the table
+@return	error returned from ib_crsr_moveto() or ()->update_row(sys) */
+static DbErr update_one_row(System &sys, Cursor * crsr) /*!< in: cursor on the table
                                                or the secondary index */
 {
   int j;
@@ -523,42 +523,42 @@ static DbErr update_one_row(Cursor * crsr) /*!< in: cursor on the table
   table. old_tpl is used for reading the existing row and
   new_tpl will contain the update row data. */
 
-  old_tpl = ib_clust_read_tuple_create(crsr);
+  old_tpl = crsr->clust_read_tuple_create();
   assert(old_tpl != nullptr);
 
-  new_tpl = ib_clust_read_tuple_create(crsr);
+  new_tpl = crsr->clust_read_tuple_create();
   assert(new_tpl != nullptr);
 
-  err = ib_cursor_read_row(crsr, old_tpl);
+  err = crsr->read_row(sys, old_tpl);
   assert(err == DB_SUCCESS);
 
   /* Copy the old contents to the new tuple. */
-  err = ib_tuple_copy(new_tpl, old_tpl);
+  err = new_tpl->copy(old_tpl);
 
   /* Update the B column in the new tuple. */
-  data_len = ib_col_get_meta(old_tpl, 2, &col_meta);
+  data_len = old_tpl->get_meta(2, &col_meta);
   assert(data_len != IB_SQL_NULL);
 
   j = random() % num_rows;
-  err = ib_col_set_value(new_tpl, 2, rnd_str[j], rnd_str_len[j]);
+  err = new_tpl->set_value(2, rnd_str[j], rnd_str_len[j]);
   assert(err == DB_SUCCESS);
 
-  err = ib_cursor_update_row(crsr, old_tpl, new_tpl);
+  err = crsr->update_row(sys, old_tpl, new_tpl);
 
   /* delete the old and new tuple instances. */
   if (old_tpl != nullptr) {
-    ib_tuple_delete(old_tpl);
+    Tuple::destroy(old_tpl);
   }
 
   if (new_tpl != nullptr) {
-    ib_tuple_delete(new_tpl);
+    Tuple::destroy(new_tpl);
   }
 
   return (err);
 }
 
 /** Update or delete a batch of rows that constitute one transaction. */
-static void process_row_batch(Cursor * crsr,    /*!< in, out: cursor to use
+static void process_row_batch(System &sys, Cursor * crsr,    /*!< in, out: cursor to use
                                                  for write */
                               enum op_type type, /*!< in: DML_OP_TYPE_UPDATE or
                                                  DML_OP_TYPE_DELETE */
@@ -573,38 +573,38 @@ static void process_row_batch(Cursor * crsr,    /*!< in, out: cursor to use
   assert(n_rows <= num_rows);
 
   /* Open the secondary index. */
-  err = ib_cursor_open_index_using_name(crsr, "SEC_1", &index_crsr);
+  err = crsr->open_index(sys, "SEC_1", &index_crsr);
 
   assert(err == DB_SUCCESS);
 
-  err = ib_cursor_set_lock_mode(index_crsr, IB_LOCK_X);
+  err = index_crsr->set_lock_mode(sys, IB_LOCK_X);
   assert(err == DB_SUCCESS);
 
-  ib_cursor_set_cluster_access(index_crsr);
+  index_crsr->set_cluster_access();
 
   for (i = 0; i < n_rows && err != DB_DEADLOCK && err != DB_LOCK_WAIT_TIMEOUT;
        ++i) {
     Tuple * sec_key_tpl;
 
     /* Create a tuple for searching the secondary index. */
-    sec_key_tpl = ib_sec_search_tuple_create(index_crsr);
+    sec_key_tpl = index_crsr->sec_search_tuple_create();
     assert(sec_key_tpl != nullptr);
 
     /* Set the value to look for. */
     key = random() % num_rows;
 
-    err = ib_col_set_value(sec_key_tpl, 0, &key, sizeof(key));
+    err = sec_key_tpl->set_value(0, &key, sizeof(key));
 
     assert(err == DB_SUCCESS);
 
     /* Search for the key using the secondary index "SEC_1" */
-    err = ib_cursor_moveto(index_crsr, sec_key_tpl, IB_CUR_GE, &res);
+    err = index_crsr->moveto(sys, sec_key_tpl, IB_CUR_GE, &res);
 
     assert(err == DB_SUCCESS || err == DB_DEADLOCK || err == DB_END_OF_INDEX ||
            err == DB_LOCK_WAIT_TIMEOUT || err == DB_RECORD_NOT_FOUND);
 
     if (sec_key_tpl != nullptr) {
-      ib_tuple_delete(sec_key_tpl);
+      Tuple::destroy(sec_key_tpl);
       sec_key_tpl = nullptr;
     }
 
@@ -612,19 +612,19 @@ static void process_row_batch(Cursor * crsr,    /*!< in, out: cursor to use
     if (err == DB_SUCCESS && res == 0) {
       if (type == DML_OP_TYPE_UPDATE) {
         /* update the row in the table */
-        err = update_one_row(index_crsr);
+        err = update_one_row(sys, index_crsr);
         UPDATE_ERR_STATS(upd_stats, err);
       } else {
         /* Now delete cluster the cluster index
         row using the secondary index. */
-        err = ib_cursor_delete_row(index_crsr);
+        err = index_crsr->delete_row(sys);
         assert(err == DB_SUCCESS);
         UPDATE_ERR_STATS(del_stats, err);
       }
     }
   }
 
-  err = ib_cursor_close(index_crsr);
+  err = Cursor::close(sys, index_crsr);
   assert(err == DB_SUCCESS);
 }
 
@@ -635,34 +635,34 @@ WHERE A = <random_integer>;
 
 TODO: It may be that multiple rows match the where clause. Currently we
 just update the first row that matches the where clause. */
-static void *upd_worker(void *dummy) /*!< in: unused */
+static void *upd_worker(void *arg) /*!< in: the instance */
 {
+  auto &sys = *static_cast<System *>(arg);
   Trx * trx;
   Cursor * crsr;
   DbErr err;
   int cnt = 0;
 
-  (void)dummy;
 
   printf("upd_worker up\n");
   while (1) {
     ++cnt;
     // printf("Begin UPDATE transaction\n");
-    trx = ib_trx_begin(TrxLevel(isolation_level));
+    trx = api::trx_begin(sys, TrxLevel(isolation_level));
     assert(trx != nullptr);
 
-    err = open_table(DATABASE, TABLE, trx, &crsr);
+    err = open_table(sys, DATABASE, TABLE, trx, &crsr);
     assert(err == DB_SUCCESS);
 
-    if (ib_cursor_lock(crsr, IB_LOCK_IX) == DB_SUCCESS) {
-      process_row_batch(crsr, DML_OP_TYPE_UPDATE, batch_size);
+    if (crsr->lock(sys, IB_LOCK_IX) == DB_SUCCESS) {
+      process_row_batch(sys, crsr, DML_OP_TYPE_UPDATE, batch_size);
     }
 
-    err = ib_cursor_close(crsr);
+    err = Cursor::close(sys, crsr);
     assert(err == DB_SUCCESS);
     crsr = nullptr;
 
-    commit_or_rollback(trx, cnt);
+    commit_or_rollback(sys, trx, cnt);
 
     if (test_running == false) {
       break;
@@ -677,11 +677,11 @@ WHERE A = <random_integer>;
 
 TODO: It may be that multiple rows match the where clause. Currently we
 just update the first row that matches the where clause. */
-static void *del_worker(void *dummy) /*!< in: unused */
+static void *del_worker(void *arg) /*!< in: the instance */
 {
+  auto &sys = *static_cast<System *>(arg);
   int cnt = 0;
 
-  (void)dummy;
 
   printf("del_worker up\n");
   do {
@@ -691,39 +691,39 @@ static void *del_worker(void *dummy) /*!< in: unused */
 
     ++cnt;
     // printf("Begin DELETE transaction\n");
-    trx = ib_trx_begin(TrxLevel(isolation_level));
+    trx = api::trx_begin(sys, TrxLevel(isolation_level));
     assert(trx != nullptr);
 
-    err = open_table(DATABASE, TABLE, trx, &crsr);
+    err = open_table(sys, DATABASE, TABLE, trx, &crsr);
     assert(err == DB_SUCCESS);
 
-    if (ib_cursor_lock(crsr, IB_LOCK_IX) == DB_SUCCESS) {
-      process_row_batch(crsr, DML_OP_TYPE_DELETE, batch_size);
+    if (crsr->lock(sys, IB_LOCK_IX) == DB_SUCCESS) {
+      process_row_batch(sys, crsr, DML_OP_TYPE_DELETE, batch_size);
     }
 
-    err = ib_cursor_close(crsr);
+    err = Cursor::close(sys, crsr);
     assert(err == DB_SUCCESS);
     crsr = nullptr;
 
-    commit_or_rollback(trx, cnt);
+    commit_or_rollback(sys, trx, cnt);
   } while (test_running != false);
 
   return (nullptr);
 }
 
 /** SELECT * FROM blobt3; */
-static DbErr do_query(Cursor * crsr) {
+static DbErr do_query(System &sys, Cursor * crsr) {
   DbErr err;
   Tuple * tpl;
 
-  tpl = ib_clust_read_tuple_create(crsr);
+  tpl = crsr->clust_read_tuple_create();
   assert(tpl != nullptr);
 
-  err = ib_cursor_first(crsr);
+  err = crsr->first(sys);
   assert(err == DB_SUCCESS || err == DB_END_OF_INDEX);
 
   while (err == DB_SUCCESS) {
-    err = ib_cursor_read_row(crsr, tpl);
+    err = crsr->read_row(sys, tpl);
 
     assert(err == DB_SUCCESS || err == DB_END_OF_INDEX ||
            err == DB_RECORD_NOT_FOUND);
@@ -732,18 +732,18 @@ static DbErr do_query(Cursor * crsr) {
       break;
     }
 
-    err = ib_cursor_next(crsr);
+    err = crsr->next(sys);
 
     assert(err == DB_SUCCESS || err == DB_END_OF_INDEX ||
            err == DB_RECORD_NOT_FOUND);
 
     UPDATE_ERR_STATS(sel_stats, err);
-    tpl = ib_tuple_clear(tpl);
+    tpl = tpl->clear();
     assert(tpl != nullptr);
   }
 
   if (tpl != nullptr) {
-    ib_tuple_delete(tpl);
+    Tuple::destroy(tpl);
   }
 
   if (err == DB_RECORD_NOT_FOUND || err == DB_END_OF_INDEX) {
@@ -754,12 +754,12 @@ static DbErr do_query(Cursor * crsr) {
 }
 
 /** SELECT * FROM blobt3; */
-static void *sel_worker(void *dummy) /*!< in: unused */
+static void *sel_worker(void *arg) /*!< in: the instance */
 {
+  auto &sys = *static_cast<System *>(arg);
   Cursor * crsr;
   DbErr err;
 
-  (void)dummy;
 
   printf("sel_worker up\n");
 
@@ -767,23 +767,23 @@ static void *sel_worker(void *dummy) /*!< in: unused */
     Trx * trx;
 
     // printf("Begin SELECT transaction\n");
-    trx = ib_trx_begin(TrxLevel(isolation_level));
+    trx = api::trx_begin(sys, TrxLevel(isolation_level));
     assert(trx != nullptr);
 
-    err = open_table(DATABASE, TABLE, trx, &crsr);
+    err = open_table(sys, DATABASE, TABLE, trx, &crsr);
     assert(err == DB_SUCCESS);
 
-    do_query(crsr);
+    do_query(sys, crsr);
 
-    err = ib_cursor_close(crsr);
+    err = Cursor::close(sys, crsr);
     assert(err == DB_SUCCESS);
     crsr = nullptr;
 
-    if (ib_trx_state(trx) == IB_TRX_NOT_STARTED) {
-      err = ib_trx_release(trx);
+    if (api::trx_state(trx) == IB_TRX_NOT_STARTED) {
+      err = api::trx_release(sys, trx);
       assert(err == DB_SUCCESS);
     } else {
-      err = ib_trx_commit(trx);
+      err = api::trx_commit(sys, trx);
       assert(err == DB_SUCCESS);
     }
 
@@ -811,14 +811,14 @@ void* dummy_worker(
 /** Create worker threads of one type.
 @return	number of threads created */
 static int
-create_dml_threads(int ind,             /*!< in: index in tid array */
+create_dml_threads(System &sys, int ind,             /*!< in: index in tid array */
                    void *(*fn)(void *)) /*!< in: worker thread function */
 {
   int rc;
   int count = 0;
   int i;
   for (i = 0; i < NUM_THREADS / 4; ++i) {
-    rc = pthread_create(&tid[ind + i], nullptr, fn, nullptr);
+    rc = pthread_create(&tid[ind + i], nullptr, fn, &sys);
     assert(!rc);
     ++count;
   }
@@ -826,7 +826,7 @@ create_dml_threads(int ind,             /*!< in: index in tid array */
 }
 
 /** Create worker threads. */
-static void create_worker_threads(void) {
+static void create_worker_threads(System &sys) {
   int i = 0;
 
   /* comment any of these and uncomment same number
@@ -837,15 +837,15 @@ static void create_worker_threads(void) {
   and uncomment two lines of dummy_worker.
   If you want to change the number of each type of
   threads then change NUM_THREADS. */
-  i += create_dml_threads(i, ins_worker);
-  i += create_dml_threads(i, upd_worker);
-  i += create_dml_threads(i, del_worker);
-  i += create_dml_threads(i, sel_worker);
+  i += create_dml_threads(sys, i, ins_worker);
+  i += create_dml_threads(sys, i, upd_worker);
+  i += create_dml_threads(sys, i, del_worker);
+  i += create_dml_threads(sys, i, sel_worker);
 
-  // i += create_dml_threads(i, dummy_worker);
-  // i += create_dml_threads(i, dummy_worker);
-  // i += create_dml_threads(i, dummy_worker);
-  // i += create_dml_threads(i, dummy_worker);
+  // i += create_dml_threads(sys, i, dummy_worker);
+  // i += create_dml_threads(sys, i, dummy_worker);
+  // i += create_dml_threads(sys, i, dummy_worker);
+  // i += create_dml_threads(sys, i, dummy_worker);
 
   assert(i == NUM_THREADS);
 }
@@ -918,7 +918,7 @@ static void print_results(void) {
 }
 
 /** Set the runtime global options. */
-static void set_options(int argc, char *argv[]) {
+static void set_options(Config &config, int argc, char *argv[]) {
   int opt;
   int size = 0;
   struct option *longopts;
@@ -951,7 +951,7 @@ static void set_options(int argc, char *argv[]) {
     default:
       /* If it's an InnoDB parameter, then we let the
       auxillary function handle it. */
-      if (set_global_option(opt, optarg) != DB_SUCCESS) {
+      if (set_global_option(config, opt, optarg) != DB_SUCCESS) {
         print_usage(argv[0]);
         exit(EXIT_FAILURE);
       }
@@ -975,50 +975,50 @@ int main(int argc, char *argv[]) {
 
   srandom(time(nullptr));
 
-  err = ib_init();
-  assert(err == DB_SUCCESS);
+  Config config;
 
-  test_configure();
+  test_configure(config);
 
-  set_options(argc, argv);
+  set_options(config, argc, argv);
 
   gen_random_data();
 
   init_stat_structs();
 
-  err = ib_startup("default");
+  System sys;
+
+  test_startup(sys, config);
+
+  err = create_database(sys, DATABASE);
   assert(err == DB_SUCCESS);
 
-  err = create_database(DATABASE);
-  assert(err == DB_SUCCESS);
-
-  err = create_table(DATABASE, TABLE);
+  err = create_table(sys, DATABASE, TABLE);
   assert(err == DB_SUCCESS);
 
   cnt = 0;
   for (i = 0; i < num_rows; ++i) {
     /* Insert initial rows */
     // printf("Begin transaction\n");
-    ib_trx = ib_trx_begin(TrxLevel(isolation_level));
+    ib_trx = api::trx_begin(sys, TrxLevel(isolation_level));
     assert(ib_trx != nullptr);
 
-    err = open_table(DATABASE, TABLE, ib_trx, &crsr);
+    err = open_table(sys, DATABASE, TABLE, ib_trx, &crsr);
     assert(err == DB_SUCCESS);
 
-    if (ib_cursor_lock(crsr, IB_LOCK_IX) == DB_SUCCESS) {
-      cnt += insert_row_batch(crsr, 1, &err);
+    if (crsr->lock(sys, IB_LOCK_IX) == DB_SUCCESS) {
+      cnt += insert_row_batch(sys, crsr, 1, &err);
     }
 
-    err = ib_cursor_close(crsr);
+    err = Cursor::close(sys, crsr);
     assert(err == DB_SUCCESS);
     crsr = nullptr;
 
     // printf("Commit transaction\n");
-    if (ib_trx_state(ib_trx) == IB_TRX_NOT_STARTED) {
-      err = ib_trx_release(ib_trx);
+    if (api::trx_state(ib_trx) == IB_TRX_NOT_STARTED) {
+      err = api::trx_release(sys, ib_trx);
       assert(err == DB_SUCCESS);
     } else {
-      err = ib_trx_commit(ib_trx);
+      err = api::trx_commit(sys, ib_trx);
       assert(err == DB_SUCCESS);
     }
   }
@@ -1027,7 +1027,7 @@ int main(int argc, char *argv[]) {
 
   /* start the test. */
   test_running = true;
-  create_worker_threads();
+  create_worker_threads(sys);
 
   start_time = time(nullptr);
 
@@ -1048,13 +1048,13 @@ int main(int argc, char *argv[]) {
     pthread_join(tid[i], &res);
   }
 
-  err = drop_table(DATABASE, TABLE);
+  err = drop_table(sys, DATABASE, TABLE);
   assert(err == DB_SUCCESS);
 
-  err = drop_database(DATABASE);
+  err = drop_database(sys, DATABASE);
   assert(err == DB_SUCCESS);
 
-  err = ib_shutdown(IB_SHUTDOWN_NORMAL);
+  err = sys.shutdown(IB_SHUTDOWN_NORMAL);
   assert(err == DB_SUCCESS);
 
   print_results();

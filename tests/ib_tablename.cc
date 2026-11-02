@@ -28,44 +28,44 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include "test0aux.h"
 
 /** All attempts to create the table should fail */
-static void create_table(void) {
+static void create_table(System &sys) {
   DbErr err = DB_SUCCESS;
   TableSchema * ib_tbl_sch = nullptr;
 
-  err = ib_table_schema_create("", &ib_tbl_sch, IB_TBL_V1, 0);
+  err = TableSchema::create("", &ib_tbl_sch, IB_TBL_V1, 0);
   assert(err == DB_DATA_MISMATCH);
 
-  err = ib_table_schema_create("a", &ib_tbl_sch, IB_TBL_V1, 0);
+  err = TableSchema::create("a", &ib_tbl_sch, IB_TBL_V1, 0);
   assert(err == DB_DATA_MISMATCH);
 
-  err = ib_table_schema_create("ab", &ib_tbl_sch, IB_TBL_V1, 0);
+  err = TableSchema::create("ab", &ib_tbl_sch, IB_TBL_V1, 0);
   assert(err == DB_DATA_MISMATCH);
 
-  err = ib_table_schema_create(".", &ib_tbl_sch, IB_TBL_V1, 0);
+  err = TableSchema::create(".", &ib_tbl_sch, IB_TBL_V1, 0);
   assert(err == DB_DATA_MISMATCH);
 
-  err = ib_table_schema_create("./", &ib_tbl_sch, IB_TBL_V1, 0);
+  err = TableSchema::create("./", &ib_tbl_sch, IB_TBL_V1, 0);
   assert(err == DB_DATA_MISMATCH);
 
-  err = ib_table_schema_create("../", &ib_tbl_sch, IB_TBL_V1, 0);
+  err = TableSchema::create("../", &ib_tbl_sch, IB_TBL_V1, 0);
   assert(err == DB_DATA_MISMATCH);
 
-  err = ib_table_schema_create("/", &ib_tbl_sch, IB_TBL_V1, 0);
+  err = TableSchema::create("/", &ib_tbl_sch, IB_TBL_V1, 0);
   assert(err == DB_DATA_MISMATCH);
 
-  err = ib_table_schema_create("/aaaaa", &ib_tbl_sch, IB_TBL_V1, 0);
+  err = TableSchema::create("/aaaaa", &ib_tbl_sch, IB_TBL_V1, 0);
   assert(err == DB_DATA_MISMATCH);
 
-  err = ib_table_schema_create("/a/a", &ib_tbl_sch, IB_TBL_V1, 0);
+  err = TableSchema::create("/a/a", &ib_tbl_sch, IB_TBL_V1, 0);
   assert(err == DB_DATA_MISMATCH);
 
-  err = ib_table_schema_create("abcdef/", &ib_tbl_sch, IB_TBL_V1, 0);
+  err = TableSchema::create("abcdef/", &ib_tbl_sch, IB_TBL_V1, 0);
   assert(err == DB_DATA_MISMATCH);
 
-  err = ib_table_schema_create("a/b", &ib_tbl_sch, IB_TBL_V1, 0);
+  err = TableSchema::create("a/b", &ib_tbl_sch, IB_TBL_V1, 0);
   assert(err == DB_SUCCESS);
 
-  ib_table_schema_delete(ib_tbl_sch);
+  TableSchema::destroy(sys, ib_tbl_sch);
 }
 
 int main(int argc, char *argv[]) {
@@ -74,17 +74,17 @@ int main(int argc, char *argv[]) {
   (void)argc;
   (void)argv;
 
-  err = ib_init();
-  assert(err == DB_SUCCESS);
+  Config config;
 
-  test_configure();
+  test_configure(config);
 
-  err = ib_startup("default");
-  assert(err == DB_SUCCESS);
+  System sys;
 
-  create_table();
+  test_startup(sys, config);
 
-  err = ib_shutdown(IB_SHUTDOWN_NORMAL);
+  create_table(sys);
+
+  err = sys.shutdown(IB_SHUTDOWN_NORMAL);
   assert(err == DB_SUCCESS);
 
   return (EXIT_SUCCESS);

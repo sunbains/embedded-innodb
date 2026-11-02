@@ -79,7 +79,7 @@ DbErr row_merge_lock_table(Trx *trx, Table *table, LockMode mode);
  * @param table in: table
  * @param trx   in: transaction handle
  */
-void row_merge_drop_index(Index *index, Table *table, Trx *trx);
+void row_merge_drop_index(System &sys, Index *index, Table *table, Trx *trx);
 
 /**
  * Drop those indexes which were created before an error occurred when
@@ -92,7 +92,7 @@ void row_merge_drop_index(Index *index, Table *table, Trx *trx);
  * @param index       in: indexes to drop
  * @param num_created in: number of elements in index[]
  */
-void row_merge_drop_indexes(Trx *trx, Table *table, Index **index, ulint num_created);
+void row_merge_drop_indexes(System &sys, Trx *trx, Table *table, Index **index, ulint num_created);
 
 /**
  * Drop all partially created indexes during crash recovery.

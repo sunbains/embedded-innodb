@@ -65,10 +65,10 @@ static row_t in_rows[] = {
 #define COL_LEN(n) (sizeof(((row_t *)0)->n))
 
 /** Create an InnoDB database (sub-directory). */
-static DbErr create_database(const char *name) {
+static DbErr create_database(System &sys, const char *name) {
   bool err;
 
-  err = ib_database_create(name);
+  err = api::database_create(sys, name);
   assert(err == true);
 
   return (DB_SUCCESS);
@@ -79,7 +79,7 @@ static DbErr create_database(const char *name) {
         c2	VARCHAR(n),
         c3	INT,
         PRIMARY KEY(c1, c2); */
-static DbErr create_table(const char *dbname, /*!< in: database name */
+static DbErr create_table(System &sys, const char *dbname, /*!< in: database name */
                              const char *name)   /*!< in: table name */
 {
   Trx * ib_trx;
@@ -92,58 +92,58 @@ static DbErr create_table(const char *dbname, /*!< in: database name */
   snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
 
   /* Pass a table page size of 0, ie., use default page size. */
-  err = ib_table_schema_create(table_name, &ib_tbl_sch, IB_TBL_V1, 0);
+  err = TableSchema::create(table_name, &ib_tbl_sch, IB_TBL_V1, 0);
 
   assert(err == DB_SUCCESS);
 
-  err = ib_table_schema_add_col(ib_tbl_sch, "c1", IB_VARCHAR, IB_COL_NONE, 0,
+  err = ib_tbl_sch->add_col("c1", IB_VARCHAR, IB_COL_NONE, 0,
                                 COL_LEN(c1) - 1);
 
   assert(err == DB_SUCCESS);
 
-  err = ib_table_schema_add_col(ib_tbl_sch, "c2", IB_VARCHAR, IB_COL_NONE, 0,
+  err = ib_tbl_sch->add_col("c2", IB_VARCHAR, IB_COL_NONE, 0,
                                 COL_LEN(c2) - 1);
   assert(err == DB_SUCCESS);
 
-  err = ib_table_schema_add_col(ib_tbl_sch, "c3", IB_INT, IB_COL_UNSIGNED, 0,
+  err = ib_tbl_sch->add_col("c3", IB_INT, IB_COL_UNSIGNED, 0,
                                 COL_LEN(c3));
 
   assert(err == DB_SUCCESS);
 
-  err = ib_table_schema_add_index(ib_tbl_sch, "PRIMARY_KEY", &ib_idx_sch);
+  err = ib_tbl_sch->add_index("PRIMARY_KEY", &ib_idx_sch);
   assert(err == DB_SUCCESS);
 
   /* Set prefix length to 0. */
-  err = ib_index_schema_add_col(ib_idx_sch, "c1", 0);
+  err = ib_idx_sch->add_col("c1", 0);
   assert(err == DB_SUCCESS);
 
   /* Set prefix length to 0. */
-  err = ib_index_schema_add_col(ib_idx_sch, "c2", 0);
+  err = ib_idx_sch->add_col("c2", 0);
   assert(err == DB_SUCCESS);
 
-  err = ib_index_schema_set_clustered(ib_idx_sch);
+  err = ib_idx_sch->set_clustered();
   assert(err == DB_SUCCESS);
 
   /* create table */
-  ib_trx = ib_trx_begin(IB_TRX_REPEATABLE_READ);
-  err = ib_schema_lock_exclusive(ib_trx);
+  ib_trx = api::trx_begin(sys, IB_TRX_REPEATABLE_READ);
+  err = api::schema_lock_exclusive(sys, ib_trx);
   assert(err == DB_SUCCESS);
 
-  err = ib_table_create(ib_trx, ib_tbl_sch, &table_id);
+  err = api::table_create(sys, ib_trx, ib_tbl_sch, &table_id);
   assert(err == DB_SUCCESS);
 
-  err = ib_trx_commit(ib_trx);
+  err = api::trx_commit(sys, ib_trx);
   assert(err == DB_SUCCESS);
 
   if (ib_tbl_sch != nullptr) {
-    ib_table_schema_delete(ib_tbl_sch);
+    TableSchema::destroy(sys, ib_tbl_sch);
   }
 
   return (err);
 }
 
 /** Open a table and return a cursor for the table. */
-static DbErr open_table(const char *dbname, /*!< in: database name */
+static DbErr open_table(System &sys, const char *dbname, /*!< in: database name */
                            const char *name,   /*!< in: table name */
                            Trx * ib_trx,    /*!< in: transaction */
                            Cursor **crsr)    /*!< out: innodb cursor */
@@ -153,7 +153,7 @@ static DbErr open_table(const char *dbname, /*!< in: database name */
 
   snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
 
-  err = ib_cursor_open_table(table_name, ib_trx, crsr);
+  err = api::cursor_open_table(sys, table_name, ib_trx, crsr);
   assert(err == DB_SUCCESS);
 
   return (err);
@@ -161,37 +161,37 @@ static DbErr open_table(const char *dbname, /*!< in: database name */
 
 /** INSERT INTO T VALUE('c1', 'c2', c3); */
 static DbErr
-insert_rows(Cursor * crsr) /*!< in, out: cursor to use for write */
+insert_rows(System &sys, Cursor * crsr) /*!< in, out: cursor to use for write */
 {
   row_t *row;
   Tuple * tpl = nullptr;
   DbErr err = DB_ERROR;
 
-  tpl = ib_clust_read_tuple_create(crsr);
+  tpl = crsr->clust_read_tuple_create();
   assert(tpl != nullptr);
 
   for (row = in_rows; *row->c1; ++row) {
-    err = ib_col_set_value(tpl, 0, row->c1, strlen(row->c1));
+    err = tpl->set_value(0, row->c1, strlen(row->c1));
     assert(err == DB_SUCCESS);
 
-    err = ib_col_set_value(tpl, 1, row->c2, strlen(row->c2));
+    err = tpl->set_value(1, row->c2, strlen(row->c2));
     assert(err == DB_SUCCESS);
 
-    err = ib_col_set_value(tpl, 2, &row->c3, sizeof(row->c3));
+    err = tpl->set_value(2, &row->c3, sizeof(row->c3));
     assert(err == DB_SUCCESS);
 
-    err = ib_cursor_insert_row(crsr, tpl);
+    err = crsr->insert_row(sys, tpl);
     assert(err == DB_SUCCESS);
   }
 
   assert(tpl != nullptr);
-  ib_tuple_delete(tpl);
+  Tuple::destroy(tpl);
 
   return (err);
 }
 
 /** SELECT * FROM T WHERE c1 = 'abc' AND c2 = 'def'; */
-static DbErr do_moveto1(Cursor * crsr) {
+static DbErr do_moveto1(System &sys, Cursor * crsr) {
   DbErr err;
   Tuple * key_tpl;
   int res = ~0L;
@@ -199,22 +199,22 @@ static DbErr do_moveto1(Cursor * crsr) {
   printf("SELECT * FROM T WHERE c1 = 'abc' AND c2 = 'def';\n");
 
   /* Create a tuple for searching an index. */
-  key_tpl = ib_sec_search_tuple_create(crsr);
+  key_tpl = crsr->sec_search_tuple_create();
   assert(key_tpl != nullptr);
 
   /* Set the value to move to. */
-  err = ib_col_set_value(key_tpl, 0, "abc", 3);
+  err = key_tpl->set_value(0, "abc", 3);
   assert(err == DB_SUCCESS);
-  err = ib_col_set_value(key_tpl, 1, "def", 3);
+  err = key_tpl->set_value(1, "def", 3);
   assert(err == DB_SUCCESS);
 
   /* The InnoDB search function will not cache the next N records
   when this search mode is set. We should not try and do a cursor
   next/prev after this search. */
-  ib_cursor_set_match_mode(crsr, IB_EXACT_MATCH);
+  crsr->set_match_mode(IB_EXACT_MATCH);
 
   /* Search for the key using the cluster index (PK) */
-  err = ib_cursor_moveto(crsr, key_tpl, IB_CUR_GE, &res);
+  err = crsr->moveto(sys, key_tpl, IB_CUR_GE, &res);
 
   /* Should be no errors reported. */
   assert(err == DB_SUCCESS);
@@ -234,7 +234,7 @@ static bool do_select1(Tuple * tpl) {
 }
 
 /** SELECT * FROM T WHERE c1 = 'abc'; */
-static DbErr do_moveto2(Cursor * crsr) {
+static DbErr do_moveto2(System &sys, Cursor * crsr) {
   DbErr err;
   Tuple * key_tpl;
   int res = ~0L;
@@ -242,19 +242,19 @@ static DbErr do_moveto2(Cursor * crsr) {
   printf("SELECT * FROM T WHERE c1 = 'abc';\n");
 
   /* Create a tuple for searching an index. */
-  key_tpl = ib_sec_search_tuple_create(crsr);
+  key_tpl = crsr->sec_search_tuple_create();
   assert(key_tpl != nullptr);
 
   /* Set the value to move to. */
-  err = ib_col_set_value(key_tpl, 0, "abc", 3);
+  err = key_tpl->set_value(0, "abc", 3);
   assert(err == DB_SUCCESS);
 
   /* The InnoDB search function will cache the next N records
   when this search mode is set. */
-  ib_cursor_set_match_mode(crsr, IB_CLOSEST_MATCH);
+  crsr->set_match_mode(IB_CLOSEST_MATCH);
 
   /* Search for the key using the cluster index (PK) */
-  err = ib_cursor_moveto(crsr, key_tpl, IB_CUR_GE, &res);
+  err = crsr->moveto(sys, key_tpl, IB_CUR_GE, &res);
 
   /* Should be no errors reported. */
   assert(err == DB_SUCCESS);
@@ -269,7 +269,7 @@ static DbErr do_moveto2(Cursor * crsr) {
 static bool do_select2(Tuple * tpl) {
   const char *c1;
 
-  c1 = (const char *)ib_col_get_value(tpl, 0);
+  c1 = (const char *)tpl->get_value(0);
 
   /* There are no SQL_NULL values in our test data. */
   assert(c1 != nullptr);
@@ -284,7 +284,7 @@ static bool do_select2(Tuple * tpl) {
 }
 
 /** SELECT * FROM T WHERE c1 >= 'g%'; */
-static DbErr do_moveto3(Cursor * crsr) {
+static DbErr do_moveto3(System &sys, Cursor * crsr) {
   DbErr err;
   Tuple * key_tpl;
   int res = ~0L;
@@ -292,19 +292,19 @@ static DbErr do_moveto3(Cursor * crsr) {
   printf("SELECT * FROM T WHERE c1 >= 'g%%';\n");
 
   /* Create a tuple for searching an index. */
-  key_tpl = ib_sec_search_tuple_create(crsr);
+  key_tpl = crsr->sec_search_tuple_create();
   assert(key_tpl != nullptr);
 
   /* Set the value to move to. */
-  err = ib_col_set_value(key_tpl, 0, "g", 1);
+  err = key_tpl->set_value(0, "g", 1);
   assert(err == DB_SUCCESS);
 
   /* The InnoDB search function will cache the next N records
   when this search mode is set. */
-  ib_cursor_set_match_mode(crsr, IB_CLOSEST_MATCH);
+  crsr->set_match_mode(IB_CLOSEST_MATCH);
 
   /* Search for the key using the cluster index (PK) */
-  err = ib_cursor_moveto(crsr, key_tpl, IB_CUR_GE, &res);
+  err = crsr->moveto(sys, key_tpl, IB_CUR_GE, &res);
 
   /* Should be no errors reported. */
   assert(err == DB_SUCCESS);
@@ -319,7 +319,7 @@ static DbErr do_moveto3(Cursor * crsr) {
 static bool do_select3(Tuple * tpl) {
   const char *c1;
 
-  c1 = (const char *)ib_col_get_value(tpl, 0);
+  c1 = (const char *)tpl->get_value(0);
 
   /* There are no SQL_NULL values in our test data. */
   assert(c1 != nullptr);
@@ -334,7 +334,7 @@ static bool do_select3(Tuple * tpl) {
 }
 
 /** SELECT * FROM T WHERE c1 = 'mno' AND c2 >= 'x%'; */
-static DbErr do_moveto4(Cursor * crsr) {
+static DbErr do_moveto4(System &sys, Cursor * crsr) {
   DbErr err;
   Tuple * key_tpl;
   int res = ~0L;
@@ -342,23 +342,23 @@ static DbErr do_moveto4(Cursor * crsr) {
   printf("SELECT * FROM T WHERE c1 = 'mno' AND c2 >= 'x%%';\n");
 
   /* Create a tuple for searching an index. */
-  key_tpl = ib_sec_search_tuple_create(crsr);
+  key_tpl = crsr->sec_search_tuple_create();
   assert(key_tpl != nullptr);
 
   /* Set the value to move to. */
-  err = ib_col_set_value(key_tpl, 0, "mno", 3);
+  err = key_tpl->set_value(0, "mno", 3);
   assert(err == DB_SUCCESS);
 
   /* Set the value to move to. */
-  err = ib_col_set_value(key_tpl, 1, "x", 1);
+  err = key_tpl->set_value(1, "x", 1);
   assert(err == DB_SUCCESS);
 
   /* The InnoDB search function will cache the next N records
   when this search mode is set. */
-  ib_cursor_set_match_mode(crsr, IB_EXACT_PREFIX);
+  crsr->set_match_mode(IB_EXACT_PREFIX);
 
   /* Search for the key using the cluster index (PK) */
-  err = ib_cursor_moveto(crsr, key_tpl, IB_CUR_GE, &res);
+  err = crsr->moveto(sys, key_tpl, IB_CUR_GE, &res);
 
   /* Should be no errors reported. */
   assert(err == DB_SUCCESS);
@@ -374,8 +374,8 @@ static bool do_select4(Tuple * tpl) {
   const char *c1;
   const char *c2;
 
-  c1 = (const char *)ib_col_get_value(tpl, 0);
-  c2 = (const char *)ib_col_get_value(tpl, 1);
+  c1 = (const char *)tpl->get_value(0);
+  c2 = (const char *)tpl->get_value(1);
 
   /* There are no SQL_NULL values in our test data. */
   assert(c1 != nullptr);
@@ -391,7 +391,7 @@ static bool do_select4(Tuple * tpl) {
 }
 
 /** SELECT * FROM T WHERE c1 = 'mno' AND c2 >= 'z%'; */
-static DbErr do_moveto5(Cursor * crsr) {
+static DbErr do_moveto5(System &sys, Cursor * crsr) {
   DbErr err;
   Tuple * key_tpl;
   int res = ~0L;
@@ -399,23 +399,23 @@ static DbErr do_moveto5(Cursor * crsr) {
   printf("SELECT * FROM T WHERE c1 = 'mno' AND c2 >= 'z%%';\n");
 
   /* Create a tuple for searching an index. */
-  key_tpl = ib_sec_search_tuple_create(crsr);
+  key_tpl = crsr->sec_search_tuple_create();
   assert(key_tpl != nullptr);
 
   /* Set the value to move to. */
-  err = ib_col_set_value(key_tpl, 0, "mno", 3);
+  err = key_tpl->set_value(0, "mno", 3);
   assert(err == DB_SUCCESS);
 
   /* Set the value to move to. */
-  err = ib_col_set_value(key_tpl, 1, "z", 1);
+  err = key_tpl->set_value(1, "z", 1);
   assert(err == DB_SUCCESS);
 
   /* The InnoDB search function will cache the next N records
   when this search mode is set. */
-  ib_cursor_set_match_mode(crsr, IB_EXACT_PREFIX);
+  crsr->set_match_mode(IB_EXACT_PREFIX);
 
   /* Search for the key using the cluster index (PK) */
-  err = ib_cursor_moveto(crsr, key_tpl, IB_CUR_GE, &res);
+  err = crsr->moveto(sys, key_tpl, IB_CUR_GE, &res);
 
   /* Record with given prefix doesn't exist in our test data. */
   assert(err == DB_RECORD_NOT_FOUND);
@@ -424,20 +424,20 @@ static DbErr do_moveto5(Cursor * crsr) {
 }
 
 /** SELECT * FROM T <start from moveto()>; */
-static DbErr do_query(Cursor * crsr, DbErr (*moveto)(Cursor *),
+static DbErr do_query(System &sys, Cursor * crsr, DbErr (*moveto)(System &, Cursor *),
                          bool (*select_func)(Tuple *)) {
   DbErr err;
   Tuple * tpl = nullptr;
 
-  err = moveto(crsr);
+  err = moveto(sys, crsr);
 
   if (err == DB_SUCCESS) {
-    tpl = ib_clust_read_tuple_create(crsr);
+    tpl = crsr->clust_read_tuple_create();
     assert(tpl != nullptr);
   }
 
   while (err == DB_SUCCESS) {
-    err = ib_cursor_read_row(crsr, tpl);
+    err = crsr->read_row(sys, tpl);
 
     assert(err == DB_SUCCESS || err == DB_END_OF_INDEX ||
            err == DB_RECORD_NOT_FOUND);
@@ -450,17 +450,17 @@ static DbErr do_query(Cursor * crsr, DbErr (*moveto)(Cursor *),
       break;
     }
 
-    err = ib_cursor_next(crsr);
+    err = crsr->next(sys);
 
     assert(err == DB_SUCCESS || err == DB_END_OF_INDEX ||
            err == DB_RECORD_NOT_FOUND);
 
-    tpl = ib_tuple_clear(tpl);
+    tpl = tpl->clear();
     assert(tpl != nullptr);
   }
 
   if (tpl != nullptr) {
-    ib_tuple_delete(tpl);
+    Tuple::destroy(tpl);
   }
 
   if (err == DB_RECORD_NOT_FOUND || err == DB_END_OF_INDEX) {
@@ -478,64 +478,64 @@ int main(int argc, char *argv[]) {
   (void)argc;
   (void)argv;
 
-  version = ib_api_version();
+  version = api::api_version();
   printf("API: %d.%d.%d\n", (int)(version >> 32), /* Current version */
          (int)((version >> 16)) & 0xffff,         /* Revisiion */
          (int)(version & 0xffff));                /* Age */
 
-  err = ib_init();
+  Config config;
+
+  test_configure(config);
+
+  System sys;
+
+  test_startup(sys, config);
+
+  err = create_database(sys, DATABASE);
   assert(err == DB_SUCCESS);
 
-  test_configure();
-
-  err = ib_startup("default");
+  err = create_table(sys, DATABASE, TABLE);
   assert(err == DB_SUCCESS);
 
-  err = create_database(DATABASE);
-  assert(err == DB_SUCCESS);
-
-  err = create_table(DATABASE, TABLE);
-  assert(err == DB_SUCCESS);
-
-  ib_trx = ib_trx_begin(IB_TRX_REPEATABLE_READ);
+  ib_trx = api::trx_begin(sys, IB_TRX_REPEATABLE_READ);
   assert(ib_trx != nullptr);
 
-  err = open_table(DATABASE, TABLE, ib_trx, &crsr);
+  err = open_table(sys, DATABASE, TABLE, ib_trx, &crsr);
   assert(err == DB_SUCCESS);
 
-  err = ib_cursor_lock(crsr, IB_LOCK_IX);
+  err = crsr->lock(sys, IB_LOCK_IX);
   assert(err == DB_SUCCESS);
 
-  err = insert_rows(crsr);
+  err = insert_rows(sys, crsr);
   assert(err == DB_SUCCESS);
 
-  err = do_query(crsr, do_moveto1, do_select1);
+  err = do_query(sys, crsr, do_moveto1, do_select1);
   assert(err == DB_SUCCESS);
 
-  err = do_query(crsr, do_moveto2, do_select2);
+  err = do_query(sys, crsr, do_moveto2, do_select2);
   assert(err == DB_SUCCESS);
 
-  err = do_query(crsr, do_moveto3, do_select3);
+  err = do_query(sys, crsr, do_moveto3, do_select3);
   assert(err == DB_SUCCESS);
 
-  err = do_query(crsr, do_moveto4, do_select4);
+  err = do_query(sys, crsr, do_moveto4, do_select4);
   assert(err == DB_SUCCESS);
 
   /* There should be no records to select, pass NULL. */
-  err = do_query(crsr, do_moveto5, nullptr);
+  err = do_query(sys, crsr, do_moveto5, nullptr);
   assert(err == DB_SUCCESS);
 
-  err = ib_cursor_close(crsr);
+  err = Cursor::close(sys, crsr);
   assert(err == DB_SUCCESS);
   crsr = nullptr;
 
-  err = ib_trx_commit(ib_trx);
+  err = api::trx_commit(sys, ib_trx);
   assert(err == DB_SUCCESS);
 
-  err = drop_table(DATABASE, TABLE);
+  err = drop_table(sys, DATABASE, TABLE);
   assert(err == DB_SUCCESS);
 
-  err = ib_shutdown(IB_SHUTDOWN_NORMAL);
+  err = sys.shutdown(IB_SHUTDOWN_NORMAL);
   assert(err == DB_SUCCESS);
 
 #ifdef UNIV_DEBUG_VALGRIND

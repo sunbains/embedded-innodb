@@ -570,7 +570,6 @@ try_again:
 
   undo_no = undo_rec_obj.get_undo_no();
 
-  log_info("{}. trx_id: {} undo_no: {} trx->m_undo_no: {}", retry, trx->m_id, undo_no, trx->m_undo_no);
   ut_ad(undo_no + 1 == trx->m_undo_no);
 
   /* We print rollback progress info if we are in a crash recovery

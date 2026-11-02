@@ -61,6 +61,14 @@ target_link_libraries(test_system PRIVATE
 )
 add_test(NAME test_system COMMAND test_system)
 
+add_executable(test_mach test_mach.cc unit_test_logger.cc)
+target_link_libraries(test_mach PRIVATE
+    GTest::gtest_main
+    GTest::gtest
+    ${LIBS}
+)
+add_test(NAME test_mach COMMAND test_mach)
+
 add_executable(test_lock test_lock.cc unit-test.cc unit_test_logger.cc)
 
 # Link test_lock
