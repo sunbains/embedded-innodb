@@ -31,12 +31,12 @@ Created 4/18/1996 Heikki Tuuri
 #include "mtr0mtr.h"
 #include "ut0byte.h"
 
-struct que_thr_t;
-struct Table_node;
-struct Btree_pcursor;
+struct QueThr;
+struct TableNode;
+struct BtreePcursor;
 
 /** Responsible for data dictionary persistence. */
-struct Dict_store {
+struct DictStore {
   using hdr_t = byte;
 
   /** Constructor.
@@ -44,22 +44,22 @@ struct Dict_store {
    * @param[in] dict The dictionary object.
    * @param[in] btree The b-tree object.
    */
-  explicit Dict_store(Dict *dict, Btree *btree) noexcept;
+  explicit DictStore(Dict *dict, Btree *btree) noexcept;
 
   /** Destructor. */
-  ~Dict_store() = default;
+  ~DictStore() = default;
 
   /**
    * @brief Creates and initializes the data dictionary at the database creation.
    * 
    * @return true if successful, false otherwise.
    */
-  [[nodiscard]] db_err create_instance() noexcept;
+  [[nodiscard]] DbErr create_instance() noexcept;
 
   /**
    * @brief Destroys the data dictionary.
    */
-  static void destroy(Dict_store *store) noexcept;
+  static void destroy(DictStore *store) noexcept;
 
   /**
    * @brief Gets a pointer to the dictionary header and x-latches its page.
@@ -68,7 +68,7 @@ struct Dict_store {
    * 
    * @return Pointer to the dictionary header, page x-latched.
    */
-  [[nodiscard]] hdr_t *hdr_get(mtr_t *mtr) noexcept;
+  [[nodiscard]] hdr_t *hdr_get(Mtr *mtr) noexcept;
 
   /**
    * @brief Returns a new row, table, index, or tree id.
@@ -77,7 +77,7 @@ struct Dict_store {
    * 
    * @return The new id.
    */
-  [[nodiscard]] Dict_id hdr_get_new_id(Dict_id_type type) noexcept;
+  [[nodiscard]] Dict_id hdr_get_new_id(DictIdType type) noexcept;
 
   /**
    * @brief Writes the current value of the row id counter to the dictionary header file page.
@@ -131,7 +131,7 @@ struct Dict_store {
    * 
    * @return The next query thread to run, or nullptr if there is no next thread.
    */
-  que_thr_t *create_table_step(que_thr_t *thr) noexcept;
+  QueThr *create_table_step(QueThr *thr) noexcept;
 
   /**
    * Creates an index. This is a high-level function used in SQL execution graphs.
@@ -144,7 +144,7 @@ struct Dict_store {
    * 
    * @return The next query thread to run, or nullptr if there is no next thread.
    */
-  que_thr_t *create_index_step(que_thr_t *thr) noexcept;
+  QueThr *create_index_step(QueThr *thr) noexcept;
 
   /**
    * @brief Based on a table object, this function builds the entry to be inserted in the SYS_TABLES system table.
@@ -154,7 +154,7 @@ struct Dict_store {
    * 
    * @return The tuple which should be inserted.
    */
-  [[nodiscard]] DTuple *create_sys_tables_tuple(const Table *table, mem_heap_t *heap) noexcept;
+  [[nodiscard]] DTuple *create_sys_tables_tuple(const Table *table, MemHeap *heap) noexcept;
 
   /**
    * @brief Based on a table object, this function builds the entry to be inserted in the SYS_COLUMNS system table.
@@ -165,7 +165,7 @@ struct Dict_store {
    * 
    * @return The tuple which should be inserted.
    */
-  [[nodiscard]] DTuple *create_sys_columns_tuple(const Table *table, ulint i, mem_heap_t *heap) noexcept;
+  [[nodiscard]] DTuple *create_sys_columns_tuple(const Table *table, ulint i, MemHeap *heap) noexcept;
 
   /**
  * @brief Add a single foreign key definition to the data dictionary tables in the database.
@@ -181,7 +181,7 @@ struct Dict_store {
  * 
  * @return error code or DB_SUCCESS
  */
-  [[nodiscard]] db_err add_foreign_to_dictionary(ulint *id_nr, Table *table, Foreign *foreign, Trx *trx) noexcept;
+  [[nodiscard]] DbErr add_foreign_to_dictionary(ulint *id_nr, Table *table, Foreign *foreign, Trx *trx) noexcept;
 
   /**
    * @brief Creates the foreign key constraints system tables inside InnoDB
@@ -194,7 +194,7 @@ struct Dict_store {
    *
    * @return DB_SUCCESS on success, or an error code on failure.
    */
-  [[nodiscard]] db_err create_or_check_foreign_constraint_tables() noexcept;
+  [[nodiscard]] DbErr create_or_check_foreign_constraint_tables() noexcept;
 
   /**
    * @brief Creates the dictionary header and system tables.
@@ -203,7 +203,7 @@ struct Dict_store {
    * 
    * @return true if successful, false otherwise.
    */
-  [[nodiscard]] bool bootstrap_system_tables(mtr_t *mtr) noexcept;
+  [[nodiscard]] bool bootstrap_system_tables(Mtr *mtr) noexcept;
 
   /**
    * @brief Builds a column definition to insert.
@@ -212,7 +212,7 @@ struct Dict_store {
    * 
    * @return DB_SUCCESS
    */
-  [[nodiscard]] db_err build_col_def_step(Table_node *node) noexcept;
+  [[nodiscard]] DbErr build_col_def_step(TableNode *node) noexcept;
 
   /**
    * @brief Based on an index object, this function builds the entry to be inserted in the SYS_INDEXES system table.
@@ -222,7 +222,7 @@ struct Dict_store {
    * 
    * @return The tuple which should be inserted.
    */
-  [[nodiscard]] DTuple *create_sys_indexes_tuple(const Index *index, mem_heap_t *heap) noexcept;
+  [[nodiscard]] DTuple *create_sys_indexes_tuple(const Index *index, MemHeap *heap) noexcept;
 
   /**
    * @brief Based on an index object, this function builds the entry to be inserted in the SYS_FIELDS system table.
@@ -233,7 +233,7 @@ struct Dict_store {
    * 
    * @return The tuple which should be inserted.
    */
-  [[nodiscard]] DTuple *create_sys_fields_tuple(const Index *index, ulint i, mem_heap_t *heap) noexcept;
+  [[nodiscard]] DTuple *create_sys_fields_tuple(const Index *index, ulint i, MemHeap *heap) noexcept;
 
   /**
    * @brief Creates the tuple with which the index entry is searched for writing the index tree root page number, if such a tree is created.
@@ -243,7 +243,7 @@ struct Dict_store {
    * 
    * @return The tuple for search.
    */
-  [[nodiscard]] DTuple *create_search_tuple(const DTuple *tuple, mem_heap_t *heap) noexcept;
+  [[nodiscard]] DTuple *create_search_tuple(const DTuple *tuple, MemHeap *heap) noexcept;
 
   /**
    * @brief Builds a table definition to insert.
@@ -253,7 +253,7 @@ struct Dict_store {
    * 
    * @return DB_SUCCESS or error code.
    */
-  [[nodiscard]] db_err build_table_def_step(que_thr_t *thr, Table_node *node) noexcept;
+  [[nodiscard]] DbErr build_table_def_step(QueThr *thr, TableNode *node) noexcept;
 
   /**
    * @brief Builds an index definition row to insert.
@@ -263,7 +263,7 @@ struct Dict_store {
    * 
    * @return DB_SUCCESS or error code.
    */
-  [[nodiscard]] db_err build_index_def_step(que_thr_t *thr, Index_node *node) noexcept;
+  [[nodiscard]] DbErr build_index_def_step(QueThr *thr, IndexNode *node) noexcept;
 
   /**
    * @brief Builds a field definition row to insert.
@@ -272,7 +272,7 @@ struct Dict_store {
    * 
    * @return DB_SUCCESS
    */
-  [[nodiscard]] db_err build_field_def_step(Index_node *node) noexcept;
+  [[nodiscard]] DbErr build_field_def_step(IndexNode *node) noexcept;
 
   /**
    * @brief Creates an index tree for the index if it is not a member of a cluster.
@@ -281,7 +281,7 @@ struct Dict_store {
    * 
    * @return DB_SUCCESS or DB_OUT_OF_FILE_SPACE
    */
-  [[nodiscard]] db_err create_index_tree_step(Index_node *node) noexcept;
+  [[nodiscard]] DbErr create_index_tree_step(IndexNode *node) noexcept;
 
   /**
    * @brief Evaluate the given foreign key SQL statement.
@@ -294,7 +294,7 @@ struct Dict_store {
    * 
    * @return error code or DB_SUCCESS
    */
-  [[nodiscard]] db_err foreign_eval_sql(pars_info_t *info, const char *sql, Table *table, Foreign *foreign, Trx *trx) noexcept;
+  [[nodiscard]] DbErr foreign_eval_sql(ParsInfo *info, const char *sql, Table *table, Foreign *foreign, Trx *trx) noexcept;
 
   /**
  * @brief Add a single foreign key field definition to the data dictionary tables in the database.
@@ -306,7 +306,7 @@ struct Dict_store {
    * 
    * @return error code or DB_SUCCESS
    */
-  [[nodiscard]] db_err add_foreign_field_to_dictionary(ulint field_nr, Table *table, Foreign *foreign, Trx *trx) noexcept;
+  [[nodiscard]] DbErr add_foreign_field_to_dictionary(ulint field_nr, Table *table, Foreign *foreign, Trx *trx) noexcept;
 
   /**
    * Adds foreign key definitions to data dictionary tables in the database.
@@ -328,7 +328,7 @@ struct Dict_store {
    *
    * @return Error code or DB_SUCCESS.
    */
-  [[nodiscard]] db_err add_foreigns_to_dictionary(ulint start_id, Table *table, Trx *trx) noexcept;
+  [[nodiscard]] DbErr add_foreigns_to_dictionary(ulint start_id, Table *table, Trx *trx) noexcept;
 
   /**
    * Truncates the index tree associated with a row in the SYS_INDEXES table.
@@ -340,7 +340,7 @@ struct Dict_store {
    * 
    * @return New root page number, or FIL_NULL on failure.
    */
-  [[nodiscard]] page_no_t truncate_index_tree(Table *table, space_id_t space_id, Btree_pcursor *pcur, mtr_t *mtr) noexcept;
+  [[nodiscard]] page_no_t truncate_index_tree(Table *table, space_id_t space_id, BtreePcursor *pcur, Mtr *mtr) noexcept;
 
   /**
    * Drops the index tree associated with a row in the SYS_INDEXES table.
@@ -353,7 +353,7 @@ struct Dict_store {
    * @param[in,out] rec Record in the clustered index of SYS_INDEXES table.
    * @param[in] mtr Mini-transaction having the latch on the record page.
    */
-  void drop_index_tree(Rec rec, mtr_t *mtr) noexcept;
+  void drop_index_tree(Rec rec, Mtr *mtr) noexcept;
 
   /** The dictionary . */
   Dict *m_dict{};
@@ -366,7 +366,7 @@ struct Dict_store {
   Dict_id m_row_id{};
 
   /** File space manager.*/
-  FSP *m_fsp{};
+  Fsp *m_fsp{};
 
   /** B-tree system.*/
   Btree *m_btree{};

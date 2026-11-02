@@ -76,5 +76,5 @@ struct Session {
   Trx *m_trx{};
 
   /** Query graphs belonging to this session */
-  UT_LIST_BASE_NODE_T_EXTERN(que_t, graphs) m_graphs{};
+  UT_LIST_BASE_NODE_T_EXTERN(QueFork, graphs) m_graphs{};
 };

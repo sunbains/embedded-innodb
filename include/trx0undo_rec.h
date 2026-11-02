@@ -64,7 +64,7 @@ constexpr ulint TRX_UNDO_MODIFY_OP = 2;
  * This class wraps trx_undo_rec_t  providing a clean interface for parsing, building,
  * and manipulating undo records. It eliminates the need for raw byte pointer manipulation.
  */
-struct Trx_undo_record {
+struct TrxUndoRecord {
   struct Parsed {
     /** TRX_UNDO_INSERT_REC, TRX_UNDO_UPD_EXIST_REC, TRX_UNDO_UPD_DEL_REC, TRX_UNDO_DEL_MARK_REC */
     ulint m_type{ULINT_UNDEFINED};
@@ -83,15 +83,15 @@ struct Trx_undo_record {
   };
 
   /** Default constructor */
-  Trx_undo_record() : m_undo_rec() {}
+  TrxUndoRecord() : m_undo_rec() {}
 
   /** Implicit constructor.
   * @param[in] undo_rec - Undo record to wrap
   */
-  Trx_undo_record(trx_undo_rec_t undo_rec) : m_undo_rec(undo_rec) {}
+  TrxUndoRecord(trx_undo_rec_t undo_rec) : m_undo_rec(undo_rec) {}
 
   /** Constructor from trx_undo_rec_t  */
-  // explicit Trx_undo_record(trx_undo_rec_t undo_rec) : m_undo_rec(undo_rec) {}
+  // explicit TrxUndoRecord(trx_undo_rec_t undo_rec) : m_undo_rec(undo_rec) {}
 
   /** Get the raw pointer */
   trx_undo_rec_t raw() const noexcept { return m_undo_rec; }
@@ -121,8 +121,8 @@ struct Trx_undo_record {
    *
    * @return DB_SUCCESS or error code
    */
-  static db_err report_row_operation(
-    ulint flags, ulint op_type, que_thr_t *thr, const Index *index, const DTuple *clust_entry, const upd_t *update, ulint cmpl_info,
+  static DbErr report_row_operation(
+    ulint flags, ulint op_type, QueThr *thr, const Index *index, const DTuple *clust_entry, const Upd *update, ulint cmpl_info,
     const Rec rec, roll_ptr_t *roll_ptr
   );
 
@@ -133,7 +133,7 @@ struct Trx_undo_record {
    * @param[in] heap memory heap where copied
    * @return own: copy of the record
    */
-  static Trx_undo_record get_undo_rec_low(roll_ptr_t roll_ptr, mem_heap_t *heap);
+  static TrxUndoRecord get_undo_rec_low(roll_ptr_t roll_ptr, MemHeap *heap);
 
   /**
    * @brief Copies an undo record to heap.
@@ -149,7 +149,7 @@ struct Trx_undo_record {
    * @return DB_SUCCESS, or DB_MISSING_HISTORY if the undo log has been
    * truncated and we cannot fetch the old version
    */
-  static db_err get_undo_rec(roll_ptr_t roll_ptr, trx_id_t trx_id, Trx_undo_record *undo_rec, mem_heap_t *heap);
+  static DbErr get_undo_rec(roll_ptr_t roll_ptr, trx_id_t trx_id, TrxUndoRecord *undo_rec, MemHeap *heap);
 
   /**
    * @brief Build a previous version of a clustered index record.
@@ -157,15 +157,15 @@ struct Trx_undo_record {
    * @param[in] index_mtr mtr which contains the latch to index_rec page and purge_view
    * @param[in] rec version of a clustered index record
    * @param[in] index clustered index
-   * @param[in] offsets Phy_rec::get_col_offsets(rec, index)
+   * @param[in] offsets PhyRec::get_col_offsets(rec, index)
    * @param[in] heap memory heap from which the memory needed is allocated
    * @param[out] old_vers own: previous version, or nullptr if rec is the first inserted version, or if history data has been deleted
    * @return DB_SUCCESS, or DB_MISSING_HISTORY if the previous version is
    * earlier than purge_view, which means that it may have been removed,
    * DB_ERROR if corrupted record
    */
-  static db_err prev_version_build(
-    const Rec index_rec, mtr_t *index_mtr, const Rec rec, Index *index, Rec_offs offsets, mem_heap_t *heap, Rec *old_vers
+  static DbErr prev_version_build(
+    const Rec index_rec, Mtr *index_mtr, const Rec rec, Index *index, RecOffs offsets, MemHeap *heap, Rec *old_vers
   );
 
   /**
@@ -197,7 +197,7 @@ struct Trx_undo_record {
    * @param[in] heap memory heap from which the memory needed is allocated
    * @return pointer to remaining part of undo record
    */
-  static byte *get_row_ref(byte *ptr, Index *index, DTuple **ref, mem_heap_t *heap);
+  static byte *get_row_ref(byte *ptr, Index *index, DTuple **ref, MemHeap *heap);
 
   /**
    * @brief Skips a row reference from an undo log record.
@@ -235,8 +235,8 @@ struct Trx_undo_record {
    * means that the record is corrupted
    */
   static byte *update_rec_get_update(
-    byte *ptr, Index *index, ulint type, trx_id_t trx_id, roll_ptr_t roll_ptr, ulint info_bits, Trx *trx, mem_heap_t *heap,
-    upd_t **upd
+    byte *ptr, Index *index, ulint type, trx_id_t trx_id, roll_ptr_t roll_ptr, ulint info_bits, Trx *trx, MemHeap *heap,
+    Upd **upd
   );
 
   /**
@@ -252,7 +252,7 @@ struct Trx_undo_record {
    * @param[in] heap memory heap from which the memory needed is allocated
    * @return pointer to remaining part of undo record
    */
-  static byte *get_partial_row(byte *ptr, Index *index, DTuple **row, bool ignore_prefix, mem_heap_t *heap);
+  static byte *get_partial_row(byte *ptr, Index *index, DTuple **row, bool ignore_prefix, MemHeap *heap);
 
   /**
    * @brief Parses a redo log record of adding an undo log record.
@@ -271,17 +271,17 @@ struct Trx_undo_record {
    * @param[in] mtr mtr or nullptr
    * @return end of log record or nullptr
    */
-  static byte *parse_erase_page_end(byte *ptr, byte *end_ptr, page_t *page, mtr_t *mtr);
+  static byte *parse_erase_page_end(byte *ptr, byte *end_ptr, page_t *page, Mtr *mtr);
 
   /**
    * @brief Copies this undo record to the heap.
    * @param[in,out] heap Heap to use for storing the copy.
    * @return own: copy of undo log record
    */
-  Trx_undo_record copy(mem_heap_t *heap) const {
+  TrxUndoRecord copy(MemHeap *heap) const {
     const auto len = mach_read_from_2(m_undo_rec) - ut_align_offset(m_undo_rec, UNIV_PAGE_SIZE);
     auto copied = reinterpret_cast<trx_undo_rec_t>(mem_heap_dup(heap, m_undo_rec, len));
-    return Trx_undo_record(copied);
+    return TrxUndoRecord(copied);
   }
 
   /**
@@ -290,7 +290,7 @@ struct Trx_undo_record {
    * @param[in,out] heap Heap to use for storing the copy.
    * @return own: copy of undo log record
    */
-  static trx_undo_rec_t copy(const trx_undo_rec_t undo_rec, mem_heap_t *heap) {
+  static trx_undo_rec_t copy(const trx_undo_rec_t undo_rec, MemHeap *heap) {
     const auto len = mach_read_from_2(undo_rec) - ut_align_offset(undo_rec, UNIV_PAGE_SIZE);
     return reinterpret_cast<trx_undo_rec_t>(mem_heap_dup(heap, undo_rec, len));
   }

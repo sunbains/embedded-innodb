@@ -7,7 +7,7 @@
 
 /* Logging modes for a mini-transaction */
 
-enum mtr_log_mode_t : byte {
+enum MtrLogMode : byte {
   /** Default mode: log all operations modifying disk-based data */
   MTR_LOG_ALL = 21,
 
@@ -27,7 +27,7 @@ enum mtr_log_mode_t : byte {
  * @brief Types for the mlock objects to store in the mtr memo;
  * NOTE that the first 3 values must be RW_S_LATCH, RW_X_LATCH, RW_NO_LATCH
  */
-enum mtr_memo_type_t : byte {
+enum MtrMemoType : byte {
   /** Page is fixed in an S-latch */
   MTR_MEMO_PAGE_S_FIX = RW_S_LATCH,
 
@@ -51,7 +51,7 @@ enum mtr_memo_type_t : byte {
 The log items are declared 'byte' so that the compiler can warn if val
 and type parameters are switched in a call to mlog_write_ulint. NOTE!
 For 1 - 8 bytes, the flag value must give the length also! @{ */
-enum mlog_type_t : byte {
+enum MlogType : byte {
   /** Unknown log type. */
   MLOG_UNKNOWN = 0,
 
@@ -163,7 +163,7 @@ constexpr byte MLOG_FILE_FLAG_TEMP = 1;
 /** Number of slots in memo */
 constexpr ulint MTR_BUF_MEMO_SIZE = 200;
 
-enum mtr_state_t : byte {
+enum MtrState : byte {
   /** State is undefinedd. */
   MTR_UNDEFINED = 0,
 
@@ -177,14 +177,14 @@ enum mtr_state_t : byte {
   MTR_COMMITTED = 76,
 };
 
-/** Magic marker for mtr_t to check for corruption when compiled
+/** Magic marker for Mtr to check for corruption when compiled
  * in debug mode. */
 constexpr ulint MTR_MAGIC_N = 54551;
 
 /* Type definition of a mini-transaction memo stack slot. */
-struct mtr_memo_slot_t {
+struct MtrMemoSlot {
   /** Type of the stored object (MTR_MEMO_S_LOCK, ...) */
-  mtr_memo_type_t m_type;
+  MtrMemoType m_type;
 
   /** Pointer to the object */
   void *m_object;
@@ -193,7 +193,7 @@ struct mtr_memo_slot_t {
 /**
 * @return text representation of mtr_log_t
 */
-inline const char *mlog_type_str(mlog_type_t type) noexcept {
+inline const char *mlog_type_str(MlogType type) noexcept {
   switch (type) {
     case MLOG_1BYTE:
       return "MLOG_1BYTE";
@@ -254,7 +254,7 @@ inline const char *mlog_type_str(mlog_type_t type) noexcept {
     case MLOG_FILE_DELETE:
       return "MLOG_FILE_DELETE";
     default:
-      log_fatal("Unknown mlog_type_t: ", (ulint)type);
+      log_fatal("Unknown MlogType: ", (ulint)type);
       return "UNKNOWN";
   }
 }

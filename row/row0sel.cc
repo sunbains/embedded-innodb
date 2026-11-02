@@ -63,22 +63,22 @@ constexpr ulint SEL_PREFETCH_LIMIT = 1;
 to que_run_threads: this is to allow canceling runaway queries */
 constexpr ulint SEL_COST_LIMIT = 100;
 
-Row_sel *srv_row_sel;
+RowSel *srv_row_sel;
 
-Row_sel::Row_sel(Dict *dict, Lock_sys *lock_sys) noexcept : m_dict(dict), m_lock_sys(lock_sys) {}
+RowSel::RowSel(Dict *dict, LockSys *lock_sys) noexcept : m_dict(dict), m_lock_sys(lock_sys) {}
 
-Row_sel *Row_sel::create(Dict *dict, Lock_sys *lock_sys) noexcept {
-  auto ptr = ut_new(sizeof(Row_sel));
-  return new (ptr) Row_sel(dict, lock_sys);
+RowSel *RowSel::create(Dict *dict, LockSys *lock_sys) noexcept {
+  auto ptr = ut_new(sizeof(RowSel));
+  return new (ptr) RowSel(dict, lock_sys);
 }
 
-void Row_sel::destroy(Row_sel *&row_sel) noexcept {
+void RowSel::destroy(RowSel *&row_sel) noexcept {
   call_destructor(row_sel);
   ut_delete(row_sel);
   row_sel = nullptr;
 }
 
-bool Row_sel::sec_rec_is_for_blob(
+bool RowSel::sec_rec_is_for_blob(
   ulint mtype, ulint prtype, ulint mbminlen, ulint mbmaxlen, const byte *clust_field, ulint clust_len, const byte *sec_field,
   ulint sec_len
 ) noexcept {
@@ -106,14 +106,14 @@ bool Row_sel::sec_rec_is_for_blob(
   return cmp_data_data(nullptr, mtype, prtype, buf.data(), len, sec_field, sec_len) == 0;
 }
 
-bool Row_sel::sec_rec_is_for_clust_rec(const Rec sec_rec, Index *sec_index, const Rec clust_rec, Index *clust_index) noexcept {
+bool RowSel::sec_rec_is_for_clust_rec(const Rec sec_rec, Index *sec_index, const Rec clust_rec, Index *clust_index) noexcept {
   std::array<ulint, REC_OFFS_SMALL_SIZE> sec_offsets{};
   std::array<ulint, REC_OFFS_NORMAL_SIZE> clust_offsets{};
   auto sec_offs = sec_offsets.data();
   auto clust_offs = clust_offsets.data();
 
-  Rec_offs(sec_offs).set_n_alloc(sec_offsets.size());
-  Rec_offs(clust_offs).set_n_alloc(clust_offsets.size());
+  RecOffs(sec_offs).set_n_alloc(sec_offsets.size());
+  RecOffs(clust_offs).set_n_alloc(clust_offsets.size());
 
   if (unlikely(clust_rec.get_deleted_flag())) {
 
@@ -124,16 +124,16 @@ bool Row_sel::sec_rec_is_for_clust_rec(const Rec sec_rec, Index *sec_index, cons
     return false;
   }
 
-  mem_heap_t *heap{};
+  MemHeap *heap{};
 
   {
-    Phy_rec record{clust_index, clust_rec};
+    PhyRec record{clust_index, clust_rec};
 
     clust_offs = record.get_all_col_offsets(clust_offs, &heap, Current_location());
   }
 
   {
-    Phy_rec record{sec_index, sec_rec};
+    PhyRec record{sec_index, sec_rec};
 
     sec_offs = record.get_all_col_offsets(sec_offs, &heap, Current_location());
   }
@@ -191,18 +191,18 @@ bool Row_sel::sec_rec_is_for_clust_rec(const Rec sec_rec, Index *sec_index, cons
   return true;
 }
 
-sel_node_t::sel_node_t() noexcept {
+SelNode::SelNode() noexcept {
   m_common.type = QUE_NODE_SELECT;
   m_state = SEL_NODE_OPEN;
   m_plans = nullptr;
 }
 
-sel_node_t *sel_node_t::create(mem_heap_t *heap) noexcept {
-  auto ptr = mem_heap_alloc(heap, sizeof(sel_node_t));
-  return new (ptr) sel_node_t();
+SelNode *SelNode::create(MemHeap *heap) noexcept {
+  auto ptr = mem_heap_alloc(heap, sizeof(SelNode));
+  return new (ptr) SelNode();
 }
 
-void sel_node_t::clear() noexcept {
+void SelNode::clear() noexcept {
   if (unlikely(m_plans == nullptr)) {
     return;
   }
@@ -213,7 +213,7 @@ void sel_node_t::clear() noexcept {
   }
 }
 
-void sel_node_t::eval_select_list() noexcept {
+void SelNode::eval_select_list() noexcept {
   auto exp = m_select_list;
 
   while (exp != nullptr) {
@@ -223,7 +223,7 @@ void sel_node_t::eval_select_list() noexcept {
   }
 }
 
-void sel_node_t::assign_into_var_values(sym_node_t *var) noexcept {
+void SelNode::assign_into_var_values(SymNode *var) noexcept {
   ut_a(var != nullptr);
 
   auto exp = m_select_list;
@@ -232,32 +232,32 @@ void sel_node_t::assign_into_var_values(sym_node_t *var) noexcept {
     eval_node_copy_val(var->alias, exp);
 
     exp = que_node_get_next(exp);
-    var = static_cast<sym_node_t *>(que_node_get_next(var));
+    var = static_cast<SymNode *>(que_node_get_next(var));
   }
 }
 
-void sel_node_t::reset_aggregate_vals() noexcept {
+void SelNode::reset_aggregate_vals() noexcept {
   ut_ad(m_is_aggregate);
 
-  auto func_node = static_cast<func_node_t *>(m_select_list);
+  auto func_node = static_cast<FuncNode *>(m_select_list);
 
   while (func_node != nullptr) {
     eval_node_set_int_val(func_node, 0);
 
-    func_node = static_cast<func_node_t *>(que_node_get_next(func_node));
+    func_node = static_cast<FuncNode *>(que_node_get_next(func_node));
   }
 
   m_aggregate_already_fetched = false;
 }
 
-void sel_node_t::copy_input_variable_vals() noexcept {
+void SelNode::copy_input_variable_vals() noexcept {
   for (auto var : m_copy_variables) {
     eval_node_copy_val(var, var->alias);
     var->indirection = nullptr;
   }
 }
 
-void Row_sel::fetch_columns(Index *index, const Rec rec, const ulint *offsets, sym_node_t *column) noexcept {
+void RowSel::fetch_columns(Index *index, const Rec rec, const ulint *offsets, SymNode *column) noexcept {
   ut_ad(rec.offs_validate(index, offsets));
 
   const auto index_type = index->is_clustered() ? SYM_CLUST_FIELD_NO : SYM_SEC_FIELD_NO;
@@ -273,7 +273,7 @@ void Row_sel::fetch_columns(Index *index, const Rec rec, const ulint *offsets, s
       ulint len;
       bool needs_copy;
       const byte *data{};
-      mem_heap_t *heap{};
+      MemHeap *heap{};
 
       if (unlikely(rec_offs_nth_extern(offsets, field_no))) {
         /* Copy an externally stored field to the temporary heap */
@@ -312,17 +312,17 @@ void Row_sel::fetch_columns(Index *index, const Rec rec, const ulint *offsets, s
   }
 }
 
-static void prefetch_buf_alloc(sym_node_t *column) noexcept {
+static void prefetch_buf_alloc(SymNode *column) noexcept {
   ut_ad(que_node_get_type(column) == QUE_NODE_SYMBOL);
 
-  column->prefetch_buf = static_cast<sel_buf_t *>(mem_alloc(SEL_MAX_N_PREFETCH * sizeof(sel_buf_t)));
+  column->prefetch_buf = static_cast<SelBuf *>(mem_alloc(SEL_MAX_N_PREFETCH * sizeof(SelBuf)));
 
   for (ulint i{}; i < SEL_MAX_N_PREFETCH; ++i) {
-    new (&column->prefetch_buf[i]) sel_buf_t();
+    new (&column->prefetch_buf[i]) SelBuf();
   }
 }
 
-void Row_sel::free_prefetch_buf(sel_buf_t *sel_buf) noexcept {
+void RowSel::free_prefetch_buf(SelBuf *sel_buf) noexcept {
   for (ulint i{}; i < SEL_MAX_N_PREFETCH; ++i) {
     sel_buf[i].clear();
   }
@@ -423,7 +423,7 @@ inline bool Plan::test_end_conds() noexcept {
     /* Evaluate the left side of the comparison, i.e., get the
     column value if there is an indirection */
 
-    eval_sym(static_cast<sym_node_t *>(cond->args));
+    eval_sym(static_cast<SymNode *>(cond->args));
 
     /* Do the comparison */
 
@@ -448,7 +448,7 @@ inline bool Plan::test_other_conds() noexcept {
   return true;
 }
 
-[[nodiscard]] db_err Row_sel::build_prev_vers(Row_vers::Row &row) noexcept {
+[[nodiscard]] DbErr RowSel::build_prev_vers(RowVers::Row &row) noexcept {
   if (row.m_old_row_heap != nullptr) {
     mem_heap_empty(row.m_old_row_heap);
   } else {
@@ -458,15 +458,15 @@ inline bool Plan::test_other_conds() noexcept {
   return srv_row_vers->build_for_consistent_read(row);
 }
 
-db_err Plan::get_clust_rec(sel_node_t *sel_node, const Rec rec, que_thr_t *thr, Rec &out_rec, mtr_t *mtr) noexcept {
-  mem_heap_t *heap{};
+DbErr Plan::get_clust_rec(SelNode *sel_node, const Rec rec, QueThr *thr, Rec &out_rec, Mtr *mtr) noexcept {
+  MemHeap *heap{};
   std::array<ulint, REC_OFFS_NORMAL_SIZE> rec_offsets{};
 
-  Rec_offs(rec_offsets.data()).set_n_alloc(rec_offsets.size());
+  RecOffs(rec_offsets.data()).set_n_alloc(rec_offsets.size());
 
   out_rec = nullptr;
 
-  auto func_exit = [&heap](db_err err) -> auto {
+  auto func_exit = [&heap](DbErr err) -> auto {
     if (unlikely(heap != nullptr)) {
       mem_heap_free(heap);
     }
@@ -474,10 +474,10 @@ db_err Plan::get_clust_rec(sel_node_t *sel_node, const Rec rec, que_thr_t *thr, 
     return DB_SUCCESS;
   };
 
-  Rec_offs offsets;
+  RecOffs offsets;
 
   {
-    Phy_rec record{m_pcur.get_btr_cur()->m_index, rec};
+    PhyRec record{m_pcur.get_btr_cur()->m_index, rec};
 
     offsets = record.get_all_col_offsets(rec_offsets.data(), &heap, Current_location());
   }
@@ -509,7 +509,7 @@ db_err Plan::get_clust_rec(sel_node_t *sel_node, const Rec rec, que_thr_t *thr, 
   }
 
   {
-    Phy_rec record{index, clust_rec};
+    PhyRec record{index, clust_rec};
 
     offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
   }
@@ -535,7 +535,7 @@ db_err Plan::get_clust_rec(sel_node_t *sel_node, const Rec rec, que_thr_t *thr, 
 
     if (!m_lock_sys->clust_rec_cons_read_sees(clust_rec, index, offsets, sel_node->m_read_view)) {
 
-      Row_vers::Row row{
+      RowVers::Row row{
         .m_cluster_rec = clust_rec,
         .m_mtr = mtr,
         .m_cluster_index = index,
@@ -586,8 +586,8 @@ db_err Plan::get_clust_rec(sel_node_t *sel_node, const Rec rec, que_thr_t *thr, 
   return DB_SUCCESS;
 }
 
-inline db_err Row_sel::set_rec_lock(
-  const Buf_block *block, const Rec rec, Index *index, const ulint *offsets, Lock_mode mode, ulint type, que_thr_t *thr
+inline DbErr RowSel::set_rec_lock(
+  const BufBlock *block, const Rec rec, Index *index, const ulint *offsets, LockMode mode, ulint type, QueThr *thr
 ) noexcept {
   auto trx = thr_get_trx(thr);
   auto buf_pool = m_dict->m_store.m_btree->m_buf_pool;
@@ -601,7 +601,7 @@ inline db_err Row_sel::set_rec_lock(
   }
 }
 
-void Plan::open_pcur(bool search_latch_locked, mtr_t *mtr) noexcept {
+void Plan::open_pcur(bool search_latch_locked, Mtr *mtr) noexcept {
   ulint has_search_latch{}; /* RW_S_LATCH or 0 */
 
   if (search_latch_locked) {
@@ -648,7 +648,7 @@ void Plan::open_pcur(bool search_latch_locked, mtr_t *mtr) noexcept {
   m_pcur_is_open = true;
 }
 
-bool Plan::restore_pcur_pos(mtr_t *mtr) noexcept {
+bool Plan::restore_pcur_pos(Mtr *mtr) noexcept {
   ut_ad(!m_cursor_at_end);
 
   auto relative_position = m_pcur.get_rel_pos();
@@ -656,13 +656,13 @@ bool Plan::restore_pcur_pos(mtr_t *mtr) noexcept {
 
   /* If the cursor is traveling upwards, and relative_position is
 
-  (1) Btree_cursor_pos::BEFORE: this is not allowed, as we did not have a lock
+  (1) BtreeCursorPos::BEFORE: this is not allowed, as we did not have a lock
   yet on the successor of the page infimum;
-  (2) Btree_cursor_pos::AFTER: btr_pcur_t::restore_position placed the cursor on the
+  (2) BtreeCursorPos::AFTER: btr_pcur_t::restore_position placed the cursor on the
   first record GREATER than the predecessor of a page supremum; we have
   not yet processed the cursor record: no need to move the cursor to the
   next record;
-  (3) Btree_cursor_pos::ON: btr_pcur_t::restore_position placed the cursor on the
+  (3) BtreeCursorPos::ON: btr_pcur_t::restore_position placed the cursor on the
   last record LESS or EQUAL to the old stored user record; (a) if
   equal_position is false, this means that the cursor is now on a record
   less than the old user record, and we must move to the next record;
@@ -671,25 +671,25 @@ bool Plan::restore_pcur_pos(mtr_t *mtr) noexcept {
   record, else there is no need to move the cursor. */
 
   if (m_asc) {
-    if (relative_position == Btree_cursor_pos::ON) {
+    if (relative_position == BtreeCursorPos::ON) {
       return equal_position ? m_stored_cursor_rec_processed : true;
     }
 
-    ut_ad(relative_position == Btree_cursor_pos::AFTER || relative_position == Btree_cursor_pos::AFTER_LAST_IN_TREE);
+    ut_ad(relative_position == BtreeCursorPos::AFTER || relative_position == BtreeCursorPos::AFTER_LAST_IN_TREE);
 
     return false;
   }
 
   /* If the cursor is traveling downwards, and relative_position is
 
-  (1) Btree_cursor_pos::BEFORE: btr_pcur_t::restore_position placed the cursor on
+  (1) BtreeCursorPos::BEFORE: btr_pcur_t::restore_position placed the cursor on
   the last record LESS than the successor of a page infimum; we have not
   processed the cursor record: no need to move the cursor;
-  (2) Btree_cursor_pos::AFTER: btr_pcur_t::restore_position placed the cursor on the
+  (2) BtreeCursorPos::AFTER: btr_pcur_t::restore_position placed the cursor on the
   first record GREATER than the predecessor of a page supremum; we have
   processed the cursor record: we should move the cursor to the previous
   record;
-  (3) Btree_cursor_pos::ON: btr_pcur_t::restore_position placed the cursor on the
+  (3) BtreeCursorPos::ON: btr_pcur_t::restore_position placed the cursor on the
   last record LESS or EQUAL to the old stored user record; (a) if
   equal_position is false, this means that the cursor is now on a record
   less than the old user record, and we need not move to the previous
@@ -697,32 +697,32 @@ bool Plan::restore_pcur_pos(mtr_t *mtr) noexcept {
   plan->stored_cursor_rec_processed is true, we must move to the previous
   record, else there is no need to move the cursor. */
 
-  if (relative_position == Btree_cursor_pos::BEFORE || relative_position == Btree_cursor_pos::BEFORE_FIRST_IN_TREE) {
+  if (relative_position == BtreeCursorPos::BEFORE || relative_position == BtreeCursorPos::BEFORE_FIRST_IN_TREE) {
 
     return false;
   }
 
-  if (relative_position == Btree_cursor_pos::ON) {
+  if (relative_position == BtreeCursorPos::ON) {
 
     return equal_position ? m_stored_cursor_rec_processed : false;
   }
 
-  ut_ad(relative_position == Btree_cursor_pos::AFTER || relative_position == Btree_cursor_pos::AFTER_LAST_IN_TREE);
+  ut_ad(relative_position == BtreeCursorPos::AFTER || relative_position == BtreeCursorPos::AFTER_LAST_IN_TREE);
 
   return true;
 }
 
-Search_status Plan::try_search_shortcut(sel_node_t *sel_node, mtr_t *mtr) noexcept {
-  mem_heap_t *heap{};
+SearchStatus Plan::try_search_shortcut(SelNode *sel_node, Mtr *mtr) noexcept {
+  MemHeap *heap{};
   std::array<ulint, REC_OFFS_NORMAL_SIZE> rec_offsets{};
 
-  Rec_offs(rec_offsets.data()).set_n_alloc(rec_offsets.size());
+  RecOffs(rec_offsets.data()).set_n_alloc(rec_offsets.size());
 
   ut_ad(m_unique_search);
   ut_ad(m_must_get_clust);
   ut_ad(sel_node->m_read_view != nullptr);
 
-  auto func_exit = [&heap](Search_status status) -> auto {
+  auto func_exit = [&heap](SearchStatus status) -> auto {
     if (likely_null(heap)) {
       mem_heap_free(heap);
     }
@@ -736,7 +736,7 @@ Search_status Plan::try_search_shortcut(sel_node_t *sel_node, mtr_t *mtr) noexce
 
   if (!page_rec_is_user_rec(rec)) {
 
-    return Search_status::RETRY;
+    return SearchStatus::RETRY;
   }
 
   ut_ad(m_mode == PAGE_CUR_GE);
@@ -747,7 +747,7 @@ Search_status Plan::try_search_shortcut(sel_node_t *sel_node, mtr_t *mtr) noexce
 
   if (m_pcur.get_up_match() < m_n_exact_match) {
 
-    return Search_status::EXHAUSTED;
+    return SearchStatus::EXHAUSTED;
   }
 
   /* This is a non-locking consistent read: if necessary, fetch
@@ -756,7 +756,7 @@ Search_status Plan::try_search_shortcut(sel_node_t *sel_node, mtr_t *mtr) noexce
   ulint *offsets;
 
   {
-    Phy_rec record{m_index, rec};
+    PhyRec record{m_index, rec};
 
     offsets = record.get_all_col_offsets(rec_offsets.data(), &heap, Current_location());
   }
@@ -765,15 +765,15 @@ Search_status Plan::try_search_shortcut(sel_node_t *sel_node, mtr_t *mtr) noexce
 
   if (m_index->is_clustered()) {
     if (!lock_sys->clust_rec_cons_read_sees(rec, m_index, offsets, sel_node->m_read_view)) {
-      return func_exit(Search_status::RETRY);
+      return func_exit(SearchStatus::RETRY);
     }
   } else if (!lock_sys->sec_rec_cons_read_sees(rec, sel_node->m_read_view)) {
-    return func_exit(Search_status::RETRY);
+    return func_exit(SearchStatus::RETRY);
   }
 
   if (rec.get_deleted_flag()) {
     /* Test the deleted flag. */
-    return func_exit(Search_status::EXHAUSTED);
+    return func_exit(SearchStatus::EXHAUSTED);
   }
 
   /* Fetch the columns needed in test conditions.  The index
@@ -786,18 +786,18 @@ Search_status Plan::try_search_shortcut(sel_node_t *sel_node, mtr_t *mtr) noexce
   /* Test the rest of search conditions */
 
   if (!test_other_conds()) {
-    return func_exit(Search_status::EXHAUSTED);
+    return func_exit(SearchStatus::EXHAUSTED);
   }
 
   ut_ad(m_pcur.m_latch_mode == BTR_SEARCH_LEAF);
 
   ++m_n_rows_fetched;
 
-  return func_exit(Search_status::FOUND);
+  return func_exit(SearchStatus::FOUND);
 }
 
-db_err Row_sel::select(sel_node_t *sel_node, que_thr_t *thr) noexcept {
-  mtr_t mtr;
+DbErr RowSel::select(SelNode *sel_node, QueThr *thr) noexcept {
+  Mtr mtr;
   Plan *plan;
   bool moved;
   Index *index;
@@ -818,13 +818,13 @@ db_err Row_sel::select(sel_node_t *sel_node, que_thr_t *thr) noexcept {
   /* true if the search was made using a non-clustered index, and we had to
   access the clustered record: now &mtr contains a clustered index latch, and
   &mtr must be committed before we move to the next non-clustered record */
-  db_err err;
+  DbErr err;
 
-  mem_heap_t *heap{};
+  MemHeap *heap{};
   std::array<ulint, REC_OFFS_NORMAL_SIZE> rec_offsets{};
-  Rec_offs offsets(rec_offsets.data());
+  RecOffs offsets(rec_offsets.data());
 
-  Rec_offs(rec_offsets.data()).set_n_alloc(rec_offsets.size());
+  RecOffs(rec_offsets.data()).set_n_alloc(rec_offsets.size());
 
   ut_ad(thr->run_node == sel_node);
 
@@ -867,16 +867,16 @@ table_loop:
 
     const auto found_flag = plan->try_search_shortcut(sel_node, &mtr);
 
-    if (found_flag == Search_status::FOUND) {
+    if (found_flag == SearchStatus::FOUND) {
 
       goto next_table;
 
-    } else if (found_flag == Search_status::EXHAUSTED) {
+    } else if (found_flag == SearchStatus::EXHAUSTED) {
 
       goto table_exhausted;
     }
 
-    ut_ad(found_flag == Search_status::RETRY);
+    ut_ad(found_flag == SearchStatus::RETRY);
 
     plan->reset_cursor();
 
@@ -948,7 +948,7 @@ rec_loop:
       auto trx = thr_get_trx(thr);
 
       {
-        Phy_rec record{index, next_rec};
+        PhyRec record{index, next_rec};
 
         offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
       }
@@ -1004,7 +1004,7 @@ skip_lock:
     not used. */
 
     {
-      Phy_rec record{index, rec};
+      PhyRec record{index, rec};
 
       offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
     }
@@ -1085,7 +1085,7 @@ skip_lock:
   cons_read_requires_clust_rec = false;
 
   {
-    Phy_rec record{index, rec};
+    PhyRec record{index, rec};
 
     offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
   }
@@ -1098,7 +1098,7 @@ skip_lock:
 
       if (!m_lock_sys->clust_rec_cons_read_sees(rec, index, offsets, sel_node->m_read_view)) {
 
-        Row_vers::Row row{
+        RowVers::Row row{
           .m_cluster_rec = rec,
           .m_mtr = &mtr,
           .m_cluster_index = index,
@@ -1118,7 +1118,7 @@ skip_lock:
 
         if (old_vers.is_null()) {
           {
-            Phy_rec record{index, rec};
+            PhyRec record{index, rec};
 
             offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
           }
@@ -1128,7 +1128,7 @@ skip_lock:
           by row_sel_open_pcur() or row_sel_restore_pcur_pos().
           The latch will not be released until mtr_commit(mtr). */
 
-          Row_sel::fetch_columns(index, rec, offsets, UT_LIST_GET_FIRST(plan->m_columns));
+          RowSel::fetch_columns(index, rec, offsets, UT_LIST_GET_FIRST(plan->m_columns));
 
           if (!plan->test_end_conds()) {
 
@@ -1448,8 +1448,8 @@ func_exit:
   return err;
 }
 
-que_thr_t *Row_sel::step(que_thr_t *thr) noexcept {
-  auto sel_node = static_cast<sel_node_t *>(thr->run_node);
+QueThr *RowSel::step(QueThr *thr) noexcept {
+  auto sel_node = static_cast<SelNode *>(thr->run_node);
 
   ut_ad(que_node_get_type(sel_node) == QUE_NODE_SELECT);
 
@@ -1489,7 +1489,7 @@ que_thr_t *Row_sel::step(que_thr_t *thr) noexcept {
           return nullptr;
         }
 
-        table_node = static_cast<sym_node_t *>(que_node_get_next(table_node));
+        table_node = static_cast<SymNode *>(que_node_get_next(table_node));
       }
     }
 
@@ -1526,10 +1526,10 @@ que_thr_t *Row_sel::step(que_thr_t *thr) noexcept {
   }
 }
 
-que_thr_t *Row_sel::fetch_step(que_thr_t *thr) noexcept {
+QueThr *RowSel::fetch_step(QueThr *thr) noexcept {
   ut_ad(thr);
 
-  auto fetch_node = static_cast<fetch_node_t *>(thr->run_node);
+  auto fetch_node = static_cast<FetchNode *>(thr->run_node);
   auto sel_node = fetch_node->m_cursor_def;
 
   ut_ad(que_node_get_type(fetch_node) == QUE_NODE_FETCH);
@@ -1574,10 +1574,10 @@ que_thr_t *Row_sel::fetch_step(que_thr_t *thr) noexcept {
   return thr;
 }
 
-void *Row_sel::fetch_print(void *row) noexcept {
-  auto sel_node = static_cast<sel_node_t *>(row);
+void *RowSel::fetch_print(void *row) noexcept {
+  auto sel_node = static_cast<SelNode *>(row);
 
-  log_info(std::format("Row_sel::fetch_print: row {}", (void *)row));
+  log_info(std::format("RowSel::fetch_print: row {}", (void *)row));
 
   ulint i{};
   auto exp = sel_node->m_select_list;
@@ -1604,8 +1604,8 @@ void *Row_sel::fetch_print(void *row) noexcept {
   return (void *)42;
 }
 
-void *Row_sel::fetch_store_uint4(void *row, void *user_arg) noexcept {
-  auto sel_node = static_cast<sel_node_t *>(row);
+void *RowSel::fetch_store_uint4(void *row, void *user_arg) noexcept {
+  auto sel_node = static_cast<SelNode *>(row);
   auto val = static_cast<uint32_t *>(user_arg);
 
   auto dfield = que_node_get_val(sel_node->m_select_list);
@@ -1623,9 +1623,9 @@ void *Row_sel::fetch_store_uint4(void *row, void *user_arg) noexcept {
   return nullptr;
 }
 
-que_thr_t *Row_sel::printf_step(que_thr_t *thr) noexcept {
-  auto row_printf_node = static_cast<row_printf_node_t *>(thr->run_node);
-  auto sel_node = static_cast<sel_node_t *>(row_printf_node->m_sel_node);
+QueThr *RowSel::printf_step(QueThr *thr) noexcept {
+  auto row_printf_node = static_cast<RowPrintfNode *>(thr->run_node);
+  auto sel_node = static_cast<SelNode *>(row_printf_node->m_sel_node);
 
   ut_ad(que_node_get_type(row_printf_node) == QUE_NODE_ROW_PRINTF);
 
@@ -1676,22 +1676,22 @@ void Prebuilt::prebuild_graph() noexcept {
 
   if (m_sel_graph == nullptr) {
 
-    auto sel_node = sel_node_t::create(m_heap);
+    auto sel_node = SelNode::create(m_heap);
     auto thr = pars_complete_graph_for_exec(sel_node, m_trx, m_heap);
 
-    m_sel_graph = static_cast<que_fork_t *>(que_node_get_parent(thr));
+    m_sel_graph = static_cast<QueFork *>(que_node_get_parent(thr));
     m_sel_graph->state = QUE_FORK_ACTIVE;
   }
 }
 
-db_err Row_sel::get_clust_rec_with_prebuilt(
-  Prebuilt *prebuilt, Index *sec_index, const Rec rec, que_thr_t *thr, Rec *out_rec, Rec_offs *offsets, mem_heap_t **offset_heap,
-  mtr_t *mtr
+DbErr RowSel::get_clust_rec_with_prebuilt(
+  Prebuilt *prebuilt, Index *sec_index, const Rec rec, QueThr *thr, Rec *out_rec, RecOffs *offsets, MemHeap **offset_heap,
+  Mtr *mtr
 ) noexcept {
 
   *out_rec = nullptr;
 
-  auto func_exit = [this](Prebuilt *prebuilt, Rec *out_rec, const Rec clust_rec, mtr_t *mtr) noexcept {
+  auto func_exit = [this](Prebuilt *prebuilt, Rec *out_rec, const Rec clust_rec, Mtr *mtr) noexcept {
     *out_rec = clust_rec;
 
     if (prebuilt->m_select_lock_type != LOCK_NONE) {
@@ -1749,7 +1749,7 @@ db_err Row_sel::get_clust_rec_with_prebuilt(
   }
 
   {
-    Phy_rec record{clust_index, clust_rec};
+    PhyRec record{clust_index, clust_rec};
 
     *offsets = record.get_all_col_offsets(*offsets, offset_heap, Current_location());
   }
@@ -1781,7 +1781,7 @@ db_err Row_sel::get_clust_rec_with_prebuilt(
     if (trx->m_isolation_level > TRX_ISO_READ_UNCOMMITTED &&
         !m_lock_sys->clust_rec_cons_read_sees(clust_rec, clust_index, *offsets, trx->m_read_view)) {
 
-      Row_vers::Row row{
+      RowVers::Row row{
         .m_cluster_rec = clust_rec,
         .m_mtr = mtr,
         .m_cluster_index = clust_index,
@@ -1821,13 +1821,13 @@ db_err Row_sel::get_clust_rec_with_prebuilt(
   return func_exit(prebuilt, out_rec, clust_rec, mtr);
 }
 
-bool Row_sel::restore_position(bool *same_user_rec, ulint latch_mode, Btree_pcursor *pcur, bool moves_up, mtr_t *mtr) noexcept {
+bool RowSel::restore_position(bool *same_user_rec, ulint latch_mode, BtreePcursor *pcur, bool moves_up, Mtr *mtr) noexcept {
   const auto relative_position = pcur->get_rel_pos();
   const auto success = pcur->restore_position(latch_mode, mtr, Current_location());
 
   *same_user_rec = success;
 
-  if (relative_position == Btree_cursor_pos::ON) {
+  if (relative_position == BtreeCursorPos::ON) {
     if (success) {
       return false;
     }
@@ -1836,7 +1836,7 @@ bool Row_sel::restore_position(bool *same_user_rec, ulint latch_mode, Btree_pcur
       (void)pcur->move_to_next(mtr);
     }
 
-  } else if (relative_position == Btree_cursor_pos::AFTER || relative_position == Btree_cursor_pos::AFTER_LAST_IN_TREE) {
+  } else if (relative_position == BtreeCursorPos::AFTER || relative_position == BtreeCursorPos::AFTER_LAST_IN_TREE) {
 
     if (moves_up) {
       return true;
@@ -1848,7 +1848,7 @@ bool Row_sel::restore_position(bool *same_user_rec, ulint latch_mode, Btree_pcur
 
   } else {
 
-    ut_ad(relative_position == Btree_cursor_pos::BEFORE || relative_position == Btree_cursor_pos::BEFORE_FIRST_IN_TREE);
+    ut_ad(relative_position == BtreeCursorPos::BEFORE || relative_position == BtreeCursorPos::BEFORE_FIRST_IN_TREE);
 
     if (moves_up && pcur->is_on_user_rec()) {
       (void)pcur->move_to_next(mtr);
@@ -1858,7 +1858,7 @@ bool Row_sel::restore_position(bool *same_user_rec, ulint latch_mode, Btree_pcur
   return true;
 }
 
-inline void Prebuilt::Row_cache::add_row(const Rec rec, const Rec_offs &offsets) noexcept {
+inline void Prebuilt::RowCache::add_row(const Rec rec, const RecOffs &offsets) noexcept {
   ut_a(m_first == 0);
   ut_ad(!is_cache_full());
   ut_ad(rec.offs_validate(nullptr, offsets));
@@ -1876,13 +1876,13 @@ inline void Prebuilt::Row_cache::add_row(const Rec rec, const Rec_offs &offsets)
  * @param[out] out_rec record if found
  * @param[in] prebuilt prebuilt struct
  * @param[in,out] offsets for Rec:get_offsets(*out_rec)
- * @param[in,out] heap heap for Phy_rec::get_all_col_offsets()
+ * @param[in,out] heap heap for PhyRec::get_all_col_offsets()
  * @param[in] mtr started mtr
  *
- * @return Search_status::FOUND, Search_status::EXHAUSTED, Search_status::RETRY
+ * @return SearchStatus::FOUND, SearchStatus::EXHAUSTED, SearchStatus::RETRY
  */
-Search_status Row_sel::try_search_shortcut_for_prebuilt(
-  Rec *out_rec, Prebuilt *prebuilt, Rec_offs *offsets, mem_heap_t **heap, mtr_t *mtr
+SearchStatus RowSel::try_search_shortcut_for_prebuilt(
+  Rec *out_rec, Prebuilt *prebuilt, RecOffs *offsets, MemHeap **heap, Mtr *mtr
 ) noexcept {
   auto trx = prebuilt->m_trx;
   auto pcur = prebuilt->m_pcur;
@@ -1897,7 +1897,7 @@ Search_status Row_sel::try_search_shortcut_for_prebuilt(
 
   if (!page_rec_is_user_rec(rec)) {
 
-    return Search_status::RETRY;
+    return SearchStatus::RETRY;
   }
 
   /* As the cursor is now placed on a user record after a search with
@@ -1906,33 +1906,33 @@ Search_status Row_sel::try_search_shortcut_for_prebuilt(
 
   if (pcur->get_up_match() < dtuple_get_n_fields(search_tuple)) {
 
-    return Search_status::EXHAUSTED;
+    return SearchStatus::EXHAUSTED;
   }
 
   /* This is a non-locking consistent read: if necessary, fetch
   a previous version of the record */
 
   {
-    Phy_rec record{index, rec};
+    PhyRec record{index, rec};
 
     *offsets = record.get_all_col_offsets(*offsets, heap, Current_location());
   }
 
   if (!m_lock_sys->clust_rec_cons_read_sees(rec, index, *offsets, trx->m_read_view)) {
 
-    return Search_status::RETRY;
+    return SearchStatus::RETRY;
 
   } else if (rec.get_deleted_flag()) {
 
-    return Search_status::EXHAUSTED;
+    return SearchStatus::EXHAUSTED;
   }
 
   *out_rec = rec;
 
-  return Search_status::FOUND;
+  return SearchStatus::FOUND;
 }
 
-db_err Row_sel::unlock_for_client(Prebuilt *prebuilt, bool has_latches_on_recs) noexcept {
+DbErr RowSel::unlock_for_client(Prebuilt *prebuilt, bool has_latches_on_recs) noexcept {
   auto trx = prebuilt->m_trx;
 
   if (unlikely(trx->m_isolation_level != TRX_ISO_READ_COMMITTED)) {
@@ -1946,7 +1946,7 @@ db_err Row_sel::unlock_for_client(Prebuilt *prebuilt, bool has_latches_on_recs) 
 
   if (prebuilt->m_new_rec_locks >= 1) {
 
-    mtr_t mtr;
+    Mtr mtr;
     auto pcur = prebuilt->m_pcur;
 
     mtr.start();
@@ -1977,7 +1977,7 @@ db_err Row_sel::unlock_for_client(Prebuilt *prebuilt, bool has_latches_on_recs) 
   }
 
   if (prebuilt->m_new_rec_locks >= 1) {
-    mtr_t mtr;
+    Mtr mtr;
     auto clust_pcur = prebuilt->m_clust_pcur;
 
     mtr.start();
@@ -2000,8 +2000,8 @@ db_err Row_sel::unlock_for_client(Prebuilt *prebuilt, bool has_latches_on_recs) 
   return DB_SUCCESS;
 }
 
-db_err Row_sel::mvcc_fetch(
-  ib_recovery_t recovery, ib_srch_mode_t mode, Prebuilt *prebuilt, ib_match_t match_mode, ib_cur_op_t direction
+DbErr RowSel::mvcc_fetch(
+  IbRecovery recovery, ib_srch_mode_t mode, Prebuilt *prebuilt, IbMatch match_mode, IbCurOp direction
 ) noexcept {
   auto index = prebuilt->m_index;
   const auto search_tuple = prebuilt->m_search_tuple;
@@ -2009,11 +2009,11 @@ db_err Row_sel::mvcc_fetch(
   auto trx = prebuilt->m_trx;
 
   Index *clust_index;
-  que_thr_t *thr;
+  QueThr *thr;
   Rec rec;
   Rec result_rec;
   Rec clust_rec;
-  db_err err = DB_SUCCESS;
+  DbErr err = DB_SUCCESS;
   bool moves_up = false;
   bool unique_search{};
   bool mtr_has_extra_clust_latch{};
@@ -2023,10 +2023,10 @@ db_err Row_sel::mvcc_fetch(
   /* if the returned record was locked and we did a semi-consistent read (fetch the newest committed version), then this is set to true */
   ulint next_offs;
   bool same_user_rec;
-  mtr_t mtr;
-  mem_heap_t *heap = nullptr;
+  Mtr mtr;
+  MemHeap *heap = nullptr;
   std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
-  Rec_offs offsets(offsets_.data());
+  RecOffs offsets(offsets_.data());
   void *cmp_ctx = index->m_cmp_ctx;
 
   rec_offs_init(offsets_);
@@ -2174,7 +2174,7 @@ db_err Row_sel::mvcc_fetch(
       on the adaptive hash index semaphore! */
 
       switch (try_search_shortcut_for_prebuilt(&rec, prebuilt, &offsets, &heap, &mtr)) {
-        case Search_status::FOUND:
+        case SearchStatus::FOUND:
           /* When searching for an exact match we don't position the persistent cursor therefore we
          must read in the record found into the pre-fetch cache for the user to access. */
           if (match_mode == ROW_SEL_EXACT) {
@@ -2194,13 +2194,13 @@ db_err Row_sel::mvcc_fetch(
 
           goto func_exit;
 
-        case Search_status::EXHAUSTED:
+        case SearchStatus::EXHAUSTED:
           mtr.commit();
 
           err = DB_RECORD_NOT_FOUND;
           goto func_exit;
 
-        case Search_status::RETRY:
+        case SearchStatus::RETRY:
           break;
 
         default:
@@ -2263,7 +2263,7 @@ db_err Row_sel::mvcc_fetch(
       const Rec next = page_rec_get_next_const(rec);
 
       {
-        Phy_rec record{index, next};
+        PhyRec record{index, next};
 
         offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
       }
@@ -2334,7 +2334,7 @@ rec_loop:
       a gap and therefore we do not set locks there. */
 
       {
-        Phy_rec record{index, rec};
+        PhyRec record{index, rec};
 
         offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
       }
@@ -2401,7 +2401,7 @@ rec_loop:
   /* Calculate the 'offsets' associated with 'rec' */
 
   {
-    Phy_rec record{index, rec};
+    PhyRec record{index, rec};
 
     offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
   }
@@ -2532,7 +2532,7 @@ rec_loop:
 
         Rec old_vers;
 
-        Row_vers::Row row{
+        RowVers::Row row{
           .m_cluster_rec = rec,
           .m_mtr = &mtr,
           .m_cluster_index = clust_index,
@@ -2681,7 +2681,7 @@ rec_loop:
     } else {
       /* We used 'offsets' for the clust rec, recalculate them for 'rec' */
       {
-        Phy_rec record{index, rec};
+        PhyRec record{index, rec};
 
         offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
       }

@@ -41,7 +41,7 @@ constexpr ulint MLOG_BUF_MARGIN = 256;
  * @param type MLOG_1BYTE, MLOG_2BYTES, MLOG_4BYTES.
  * @param mtr Mini-transaction handle.
  */
-void mlog_write_ulint(byte *ptr, ulint val, mlog_type_t type, mtr_t *mtr);
+void mlog_write_ulint(byte *ptr, ulint val, MlogType type, Mtr *mtr);
 
 /**
  * @brief Writes 8 bytes to a file page buffered in the buffer pool.
@@ -51,7 +51,7 @@ void mlog_write_ulint(byte *ptr, ulint val, mlog_type_t type, mtr_t *mtr);
  * @param val Value to write.
  * @param mtr Mini-transaction handle.
  */
-void mlog_write_uint64(byte *ptr, uint64_t val, mtr_t *mtr);
+void mlog_write_uint64(byte *ptr, uint64_t val, Mtr *mtr);
 
 /**
  * @brief Writes a string to a file page buffered in the buffer pool.
@@ -62,7 +62,7 @@ void mlog_write_uint64(byte *ptr, uint64_t val, mtr_t *mtr);
  * @param len String length.
  * @param mtr Mini-transaction handle.
  */
-void mlog_write_string(byte *ptr, const byte *str, ulint len, mtr_t *mtr);
+void mlog_write_string(byte *ptr, const byte *str, ulint len, Mtr *mtr);
 
 /**
  * @brief Logs a write of a string to a file page buffered in the buffer pool.
@@ -72,7 +72,7 @@ void mlog_write_string(byte *ptr, const byte *str, ulint len, mtr_t *mtr);
  * @param len String length.
  * @param mtr Mini-transaction handle.
  */
-void mlog_log_string(byte *ptr, ulint len, mtr_t *mtr);
+void mlog_log_string(byte *ptr, ulint len, Mtr *mtr);
 
 /**
  * @brief Writes initial part of a log record consisting of one-byte item type
@@ -82,7 +82,7 @@ void mlog_log_string(byte *ptr, ulint len, mtr_t *mtr);
  * @param type Log item type: MLOG_1BYTE, ...
  * @param mtr Mini-transaction handle.
  */
-void mlog_write_initial_log_record(const byte *ptr, mlog_type_t type, mtr_t *mtr);
+void mlog_write_initial_log_record(const byte *ptr, MlogType type, Mtr *mtr);
 
 /**
  * @brief Catenates n bytes to the mtr log.
@@ -91,7 +91,7 @@ void mlog_write_initial_log_record(const byte *ptr, mlog_type_t type, mtr_t *mtr
  * @param str String to write.
  * @param len String length.
  */
-void mlog_catenate_string(mtr_t *mtr, const byte *str, ulint len);
+void mlog_catenate_string(Mtr *mtr, const byte *str, ulint len);
 
 /**
  * @brief Writes the initial part of a log record (3..11 bytes).
@@ -104,7 +104,7 @@ void mlog_catenate_string(mtr_t *mtr, const byte *str, ulint len);
  * @param mtr Mini-transaction handle.
  * @return New value of log_ptr.
  */
-byte *mlog_write_initial_log_record_fast(const byte *ptr, mlog_type_t type, byte *log_ptr, mtr_t *mtr);
+byte *mlog_write_initial_log_record_fast(const byte *ptr, MlogType type, byte *log_ptr, Mtr *mtr);
 
 /**
  * @brief Parses an initial log record written by mlog_write_initial_log_record.
@@ -116,7 +116,7 @@ byte *mlog_write_initial_log_record_fast(const byte *ptr, mlog_type_t type, byte
  * @param page_no Page number.
  * @return Parsed record end, nullptr if not a complete record.
  */
-byte *mlog_parse_initial_log_record(byte *ptr, byte *end_ptr, mlog_type_t *type, space_id_t *space, page_no_t *page_no);
+byte *mlog_parse_initial_log_record(byte *ptr, byte *end_ptr, MlogType *type, space_id_t *space, page_no_t *page_no);
 
 /**
  * @brief Parses a log record written by mlog_write_ulint or mlog_write_uint64.
@@ -127,7 +127,7 @@ byte *mlog_parse_initial_log_record(byte *ptr, byte *end_ptr, mlog_type_t *type,
  * @param page Page where to apply the log record, or nullptr.
  * @return Parsed record end, nullptr if not a complete record.
  */
-byte *mlog_parse_nbytes(mlog_type_t type, byte *ptr, byte *end_ptr, byte *page);
+byte *mlog_parse_nbytes(MlogType type, byte *ptr, byte *end_ptr, byte *page);
 
 /**
  * @brief Parses a log record written by mlog_write_string.
@@ -150,7 +150,7 @@ byte *mlog_parse_string(byte *ptr, byte *end_ptr, byte *page);
  * @param size Requested buffer size in bytes (if 0, calls mlog_close() and returns nullptr).
  * @return Buffer, nullptr if log mode MTR_LOG_NONE.
  */
-byte *mlog_open_and_write_index(mtr_t *mtr, const byte *rec, mlog_type_t type, ulint size);
+byte *mlog_open_and_write_index(Mtr *mtr, const byte *rec, MlogType type, ulint size);
 
 /**
  * @brief Parses a log record written by mlog_open_and_write_index.
@@ -169,7 +169,7 @@ byte *mlog_parse_index(byte *ptr, const byte *end_ptr, Index *&index);
  * @param size Buffer size in bytes; MUST be smaller than DYN_ARRAY_DATA_SIZE!
  * @return Buffer, nullptr if log mode MTR_LOG_NONE.
  */
-inline byte *mlog_open(mtr_t *mtr, ulint size) {
+inline byte *mlog_open(Mtr *mtr, ulint size) {
   /**
    * Set modifications flag to true.
    */
@@ -188,7 +188,7 @@ inline byte *mlog_open(mtr_t *mtr, ulint size) {
  * @param mtr Mtr.
  * @param ptr Buffer space from ptr up was not used.
  */
-inline void mlog_close(mtr_t *mtr, byte *ptr) {
+inline void mlog_close(Mtr *mtr, byte *ptr) {
   ut_ad(mtr->get_log_mode() != MTR_LOG_NONE);
 
   mtr->m_log.close(ptr);
@@ -201,7 +201,7 @@ inline void mlog_close(mtr_t *mtr, byte *ptr) {
  * @param val Value to write.
  * @param type MLOG_1BYTE, MLOG_2BYTES, or MLOG_4BYTES.
  */
-inline void mlog_catenate_ulint(mtr_t *mtr, ulint val, mlog_type_t type) {
+inline void mlog_catenate_ulint(Mtr *mtr, ulint val, MlogType type) {
   static_assert(MLOG_1BYTE == 1, "error MLOG_1BYTE != 1");
   static_assert(MLOG_2BYTES == 2, "error MLOG_2BYTES != 2");
   static_assert(MLOG_4BYTES == 4, "error MLOG_4BYTES != 4");
@@ -231,7 +231,7 @@ inline void mlog_catenate_ulint(mtr_t *mtr, ulint val, mlog_type_t type) {
  * @param mtr Mtr.
  * @param val Value to write.
  */
-inline void mlog_catenate_ulint_compressed(mtr_t *mtr, ulint val) {
+inline void mlog_catenate_ulint_compressed(Mtr *mtr, ulint val) {
   auto log_ptr = mlog_open(mtr, 10);
 
   /**
@@ -252,7 +252,7 @@ inline void mlog_catenate_ulint_compressed(mtr_t *mtr, ulint val) {
  * @param mtr Mtr.
  * @param val Value to write.
  */
-inline void mlog_catenate_uint64_compressed(mtr_t *mtr, uint64_t val) {
+inline void mlog_catenate_uint64_compressed(Mtr *mtr, uint64_t val) {
   auto log_ptr = mlog_open(mtr, 15);
 
   /**
@@ -278,7 +278,7 @@ inline void mlog_catenate_uint64_compressed(mtr_t *mtr, uint64_t val) {
  * @return New value of log_ptr.
  */
 inline byte *mlog_write_initial_log_record_for_file_op(
-  mlog_type_t type, space_id_t space_id, page_no_t page_no, byte *log_ptr, mtr_t *mtr
+  MlogType type, space_id_t space_id, page_no_t page_no, byte *log_ptr, Mtr *mtr
 ) {
   mach_write_to_1(log_ptr, type);
 

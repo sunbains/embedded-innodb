@@ -152,14 +152,14 @@ reading of a disk page */
 ulint srv_buf_pool_reads = 0;
 
 /** Structure to pass status variables to the client */
-export_struc export_vars;
+ExportVars export_vars;
 
 /** This mutex protects srv_conc data structures */
 static std::mutex srv_conc_mutex;
 
-struct srv_conc_slot_t {
+struct SrvConcSlot {
   /** event to wait */
-  Cond_var *m_event{};
+  CondVar *m_event{};
 
   /** true if slot reserved */
   bool m_reserved{};
@@ -170,14 +170,14 @@ struct srv_conc_slot_t {
   bool m_wait_ended{};
 
   /** queue node */
-  UT_LIST_NODE_T(srv_conc_slot_t) m_srv_conc_queue;
+  UT_LIST_NODE_T(SrvConcSlot) m_srv_conc_queue;
 };
 
 /** Queue of threads waiting to get in */
-static UT_LIST_BASE_NODE_T(srv_conc_slot_t, m_srv_conc_queue) srv_conc_queue;
+static UT_LIST_BASE_NODE_T(SrvConcSlot, m_srv_conc_queue) srv_conc_queue;
 
 /** Array of wait slots */
-static srv_conc_slot_t *srv_conc_slots;
+static SrvConcSlot *srv_conc_slots;
 
 /** The system log file names */
 static char **srv_log_group_home_dirs = nullptr;
@@ -218,10 +218,10 @@ bool srv_print_innodb_table_monitor = false;
 
 static time_t srv_last_monitor_time;
 
-static mutex_t srv_innodb_monitor_mutex;
+static Mutex srv_innodb_monitor_mutex;
 
 /** Mutex for locking srv_monitor_file */
-mutex_t srv_monitor_file_mutex;
+Mutex srv_monitor_file_mutex;
 
 #ifdef UNIV_LINUX
 static ulint srv_main_thread_process_no = 0;
@@ -433,7 +433,7 @@ the privileged mode used when processing the kernel calls in traditional
 Unix.*/
 
 /** Thread slot in the thread table */
-struct srv_slot_t {
+struct SrvSlot {
   /** thread id */
   os_thread_id_t m_id;
 
@@ -441,7 +441,7 @@ struct srv_slot_t {
   os_thread_t m_handle;
 
   /** thread type: user, utility etc. */
-  srv_thread_type m_type;
+  SrvThreadType m_type;
 
   /** true if this slot is in use */
   bool m_in_use;
@@ -453,27 +453,27 @@ struct srv_slot_t {
   ib_time_t m_suspend_time;
 
   /** event used in suspending the thread when it has nothing to do */
-  Cond_var *m_event;
+  CondVar *m_event;
 
   /*!< suspended query thread (only used for client threads) */
-  que_thr_t *m_thr;
+  QueThr *m_thr;
 };
 
 /** The server system struct */
-struct srv_sys_t {
+struct SrvSys {
   /** Server thread table */
-  srv_slot_t *m_threads{};
+  SrvSlot *m_threads{};
 
   /** Task queue */
-  UT_LIST_BASE_NODE_T(que_thr_t, queue) m_tasks{};
+  UT_LIST_BASE_NODE_T(QueThr, queue) m_tasks{};
 };
 
 /** Table for client threads where they will be suspended to wait for locks */
-static srv_slot_t *srv_client_table = nullptr;
+static SrvSlot *srv_client_table = nullptr;
 
-Cond_var *srv_lock_timeout_thread_event;
+CondVar *srv_lock_timeout_thread_event;
 
-static srv_sys_t *srv_sys = nullptr;
+static SrvSys *srv_sys = nullptr;
 
 /* padding to prevent other memory update hotspots from residing on
 the same memory cache line */
@@ -732,7 +732,7 @@ void InnoDB::var_init() noexcept {
  * @param index in: index of the slot
  * @return pointer to the slot
  */
-static srv_slot_t *srv_table_get_nth_slot(ulint index) {
+static SrvSlot *srv_table_get_nth_slot(ulint index) {
   ut_a(index < OS_THREAD_MAX_N);
 
   return srv_sys->m_threads + index;
@@ -761,7 +761,7 @@ ulint srv_get_n_threads() {
  * @param type in: type of the thread
  * @return reserved slot index
  */
-static ulint srv_table_reserve_slot(srv_thread_type type) {
+static ulint srv_table_reserve_slot(SrvThreadType type) {
   ut_a(type > 0);
   ut_a(type <= SRV_MASTER);
 
@@ -790,7 +790,7 @@ static ulint srv_table_reserve_slot(srv_thread_type type) {
  *
  * @return	event for the calling thread to wait
  */
-static Cond_var *srv_suspend_thread(srv_slot_t *slot) {
+static CondVar *srv_suspend_thread(SrvSlot *slot) {
   ut_ad(mutex_own(&srv_trx_sys->m_mutex));
 
   auto type = slot->m_type;
@@ -811,7 +811,7 @@ static Cond_var *srv_suspend_thread(srv_slot_t *slot) {
   return event;
 }
 
-ulint InnoDB::release_threads(srv_thread_type type, ulint n) noexcept {
+ulint InnoDB::release_threads(SrvThreadType type, ulint n) noexcept {
   ut_ad(type >= SRV_WORKER);
   ut_ad(type <= SRV_MASTER);
   ut_ad(n > 0);
@@ -843,13 +843,13 @@ ulint InnoDB::release_threads(srv_thread_type type, ulint n) noexcept {
 }
 
 void InnoDB::init() noexcept {
-  srv_sys = static_cast<srv_sys_t *>(mem_alloc(sizeof(srv_sys_t)));
+  srv_sys = static_cast<SrvSys *>(mem_alloc(sizeof(SrvSys)));
 
   mutex_create(&srv_innodb_monitor_mutex, IF_DEBUG("monitor_mutex", ) IF_SYNC_DEBUG(SYNC_NO_ORDER_CHECK, ) Current_location());
 
-  srv_sys->m_threads = static_cast<srv_slot_t *>(mem_alloc(OS_THREAD_MAX_N * sizeof(srv_slot_t)));
+  srv_sys->m_threads = static_cast<SrvSlot *>(mem_alloc(OS_THREAD_MAX_N * sizeof(SrvSlot)));
 
-  srv_slot_t *slot;
+  SrvSlot *slot;
 
   for (ulint i = 0; i < OS_THREAD_MAX_N; i++) {
     slot = srv_table_get_nth_slot(i);
@@ -859,7 +859,7 @@ void InnoDB::init() noexcept {
     ut_a(slot->m_event);
   }
 
-  srv_client_table = static_cast<srv_slot_t *>(mem_alloc(OS_THREAD_MAX_N * sizeof(srv_slot_t)));
+  srv_client_table = static_cast<SrvSlot *>(mem_alloc(OS_THREAD_MAX_N * sizeof(SrvSlot)));
 
   slot = srv_client_table;
 
@@ -883,7 +883,7 @@ void InnoDB::init() noexcept {
 
   UT_LIST_INIT(srv_conc_queue);
 
-  srv_conc_slots = static_cast<srv_conc_slot_t *>(mem_alloc(OS_THREAD_MAX_N * sizeof(srv_conc_slot_t)));
+  srv_conc_slots = static_cast<SrvConcSlot *>(mem_alloc(OS_THREAD_MAX_N * sizeof(SrvConcSlot)));
 
   auto conc_slot = srv_conc_slots;
 
@@ -931,7 +931,7 @@ void InnoDB::general_init() noexcept {
 
 /** Normalizes init parameter values to use units we use inside InnoDB.
 @return	DB_SUCCESS or error code */
-static db_err srv_normalize_init_values() {
+static DbErr srv_normalize_init_values() {
   srv_config.m_log_file_size = srv_config.m_log_file_curr_size / UNIV_PAGE_SIZE;
   srv_config.m_log_file_curr_size = srv_config.m_log_file_size * UNIV_PAGE_SIZE;
 
@@ -959,7 +959,7 @@ void InnoDB::modules_var_init() noexcept {
   os_sync_var_init();
 }
 
-db_err InnoDB::boot() noexcept {
+DbErr InnoDB::boot() noexcept {
   /* Transform the init parameter values given by the user to
   use units we use inside */
 
@@ -987,7 +987,7 @@ db_err InnoDB::boot() noexcept {
  *
  * @return	reserved slot
  */
-static srv_slot_t *srv_table_reserve_slot_for_user_thread() {
+static SrvSlot *srv_table_reserve_slot_for_user_thread() {
   ut_ad(mutex_own(&srv_trx_sys->m_mutex));
 
   ulint i{};
@@ -1037,7 +1037,7 @@ static srv_slot_t *srv_table_reserve_slot_for_user_thread() {
   return slot;
 }
 
-void InnoDB::suspend_user_thread(que_thr_t *thr) noexcept {
+void InnoDB::suspend_user_thread(QueThr *thr) noexcept {
   double wait_time;
   ulint had_dict_lock;
   int64_t start_time = 0;
@@ -1181,7 +1181,7 @@ void InnoDB::suspend_user_thread(que_thr_t *thr) noexcept {
   }
 }
 
-void InnoDB::release_user_thread_if_suspended(que_thr_t *thr) noexcept {
+void InnoDB::release_user_thread_if_suspended(QueThr *thr) noexcept {
   ut_ad(mutex_own(&srv_trx_sys->m_mutex));
 
   for (ulint i{}; i < OS_THREAD_MAX_N; ++i) {
@@ -1756,7 +1756,7 @@ static void srv_sync_log_buffer_in_background() {
 }
 
 void *InnoDB::master_thread(void *) noexcept {
-  Cond_var *event;
+  CondVar *event;
   ulint old_activity_count;
   ulint n_pages_purged = 0;
   ulint n_pages_flushed;
@@ -2150,7 +2150,7 @@ suspend_thread:
   }
 }
 
-void InnoDB::que_task_enqueue_low(que_thr_t *thr) noexcept {
+void InnoDB::que_task_enqueue_low(QueThr *thr) noexcept {
   ut_ad(mutex_own(&srv_trx_sys->m_mutex));
 
   UT_LIST_ADD_LAST(srv_sys->m_tasks, thr);

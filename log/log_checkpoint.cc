@@ -19,11 +19,11 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 #include "log0recv.h"
 #include "srv0srv.h"
 
-Log_checkpoint::~Log_checkpoint() noexcept {
+LogCheckpoint::~LogCheckpoint() noexcept {
   rw_lock_free(&m_lock);
 }
 
-std::string Log_checkpoint::to_string() const noexcept {
+std::string LogCheckpoint::to_string() const noexcept {
   return std::format(
     "Checkpoint: next_no: {}, next_lsn: {}, last_lsn: {}, next_lsn: {},"
     " max_modified_age_async: {}, max_modified_age_sync: {}, interval: {}, max_age_async: {},"
@@ -41,7 +41,7 @@ std::string Log_checkpoint::to_string() const noexcept {
   );
 }
 
-ulint Log_checkpoint::prepare(Log &log) noexcept {
+ulint LogCheckpoint::prepare(Log &log) noexcept {
   ut_ad(mutex_own(&log.m_mutex));
 
   m_phy_checkpoint.set_no(m_next_no);
@@ -54,7 +54,7 @@ ulint Log_checkpoint::prepare(Log &log) noexcept {
   return (m_next_no & 1) == 0 ? LOG_CHECKPOINT_1 : LOG_CHECKPOINT_2;
 }
 
-bool Log_checkpoint::persist(Log_vfile &log_group, off_t write_offset) noexcept {
+bool LogCheckpoint::persist(LogVfile &log_group, off_t write_offset) noexcept {
   ut_ad(write_offset == LOG_CHECKPOINT_1 || write_offset == LOG_CHECKPOINT_2);
 
   ++m_n_pending_writes;
@@ -62,13 +62,13 @@ bool Log_checkpoint::persist(Log_vfile &log_group, off_t write_offset) noexcept 
   return log_group.write_checkpoint(&m_phy_checkpoint, write_offset);
 }
 
-bool Log_checkpoint::read(off_t offset) noexcept {
+bool LogCheckpoint::read(off_t offset) noexcept {
   ut_ad(offset == LOG_CHECKPOINT_1 || offset == LOG_CHECKPOINT_2);
 
   return false;
 }
 
-void Log_checkpoint::complete() noexcept {
+void LogCheckpoint::complete() noexcept {
   ut_ad(m_n_pending_writes == 0);
 
   ++m_next_no;
@@ -77,7 +77,7 @@ void Log_checkpoint::complete() noexcept {
   rw_lock_x_unlock_gen(&m_lock, LOG_CHECKPOINT);
 }
 
-void Log_checkpoint::io_complete() noexcept {
+void LogCheckpoint::io_complete() noexcept {
   ut_ad(m_n_pending_writes > 0);
 
   --m_n_pending_writes;

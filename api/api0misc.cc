@@ -60,7 +60,7 @@ bool trx_is_interrupted(const Trx *trx) {
   return false;
 }
 
-bool ib_handle_errors(db_err *new_err, Trx *trx, que_thr_t *thr, trx_savept_t *savept) {
+bool ib_handle_errors(DbErr *new_err, Trx *trx, QueThr *thr, TrxSavept *savept) {
   for (;;) {
     auto err = trx->m_error_state;
     ut_a(err != DB_SUCCESS);
@@ -145,12 +145,12 @@ bool ib_handle_errors(db_err *new_err, Trx *trx, que_thr_t *thr, trx_savept_t *s
   }
 }
 
-db_err ib_trx_lock_table_with_retry(Trx *trx, Table *table, enum Lock_mode mode) {
+DbErr ib_trx_lock_table_with_retry(Trx *trx, Table *table, enum LockMode mode) {
   auto heap = mem_heap_create(512);
 
   trx->m_op_info = "setting table lock";
 
-  auto sel_node = sel_node_t::create(heap);
+  auto sel_node = SelNode::create(heap);
   auto thr = pars_complete_graph_for_exec(sel_node, trx, heap);
 
   thr->graph->state = QUE_FORK_ACTIVE;
@@ -158,7 +158,7 @@ db_err ib_trx_lock_table_with_retry(Trx *trx, Table *table, enum Lock_mode mode)
   /* We use the select query graph as the dummy graph needed
   in the lock module call */
 
-  thr = que_fork_get_first_thr(static_cast<que_fork_t *>(que_node_get_parent(thr)));
+  thr = que_fork_get_first_thr(static_cast<QueFork *>(que_node_get_parent(thr)));
   que_thr_move_to_run_state(thr);
 
   for (;;) {
@@ -182,7 +182,7 @@ db_err ib_trx_lock_table_with_retry(Trx *trx, Table *table, enum Lock_mode mode)
         }
       } else {
         auto parent = que_node_get_parent(thr);
-        auto run_thr = que_fork_start_command(static_cast<que_fork_t *>(parent));
+        auto run_thr = que_fork_start_command(static_cast<QueFork *>(parent));
 
         ut_a(run_thr == thr);
 
@@ -315,7 +315,7 @@ const char *ib_strerror(ib_err_t err) {
     case DB_INDEX_CORRUPT:
       return "Index corrupt";
     case DB_DDL_IN_PROGRESS:
-      return "DDL in progress";
+      return "Ddl in progress";
   }
 
   /* Do not add default: in order to produce a warning if new code

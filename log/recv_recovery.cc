@@ -27,9 +27,9 @@ Recovery operations - page recovery and application
 #include "srv0srv.h"
 
 constexpr ulint RECV_READ_AHEAD_AREA = 32;
-constexpr ulint RECV_DATA_BLOCK_SIZE = MEM_MAX_ALLOC_IN_BUF - sizeof(Log_record_data);
+constexpr ulint RECV_DATA_BLOCK_SIZE = MEM_MAX_ALLOC_IN_BUF - sizeof(LogRecordData);
 
-static Page_log_records *recv_get_log_record(space_id_t space, page_no_t page_no) noexcept {
+static PageLogRecords *recv_get_log_record(space_id_t space, page_no_t page_no) noexcept {
   auto space_it = recv_sys->m_log_records.find(space);
 
   if (space_it == recv_sys->m_log_records.end()) {
@@ -42,21 +42,21 @@ static Page_log_records *recv_get_log_record(space_id_t space, page_no_t page_no
   return page_it == page_map.end() ? nullptr : page_it->second;
 }
 
-static void recv_data_copy_to_buf(byte *buf, Log_record *recv) noexcept {
+static void recv_data_copy_to_buf(byte *buf, LogRecord *recv) noexcept {
   auto len = recv->m_len;
   auto recv_data = recv->m_data;
 
   while (len > 0) {
     const auto part_len = (len > RECV_DATA_BLOCK_SIZE) ? RECV_DATA_BLOCK_SIZE : len;
-    memcpy(buf, reinterpret_cast<byte *>(recv_data) + sizeof(Log_record_data), part_len);
+    memcpy(buf, reinterpret_cast<byte *>(recv_data) + sizeof(LogRecordData), part_len);
     buf += part_len;
     len -= part_len;
     recv_data = recv_data->m_next;
   }
 }
 
-void recv_recover_page(bool just_read_in, Buf_block *block) noexcept {
-  mtr_t mtr;
+void recv_recover_page(bool just_read_in, BufBlock *block) noexcept {
+  Mtr mtr;
 
   mutex_enter(&recv_sys->m_mutex);
 
@@ -89,7 +89,7 @@ void recv_recover_page(bool just_read_in, Buf_block *block) noexcept {
     rw_lock_x_lock_move_ownership(&block->m_rw_lock);
   }
 
-  Buf_pool::Request req{
+  BufPool::Request req{
     .m_rw_latch = RW_X_LATCH, .m_guess = block, .m_mode = BUF_KEEP_OLD, .m_file = __FILE__, .m_line = __LINE__, .m_mtr = &mtr
   };
 
@@ -121,7 +121,7 @@ void recv_recover_page(bool just_read_in, Buf_block *block) noexcept {
       ptr = buf = static_cast<byte *>(mem_alloc(recv->m_len));
       recv_data_copy_to_buf(buf, recv);
     } else {
-      buf = reinterpret_cast<byte *>(recv->m_data) + sizeof(Log_record_data);
+      buf = reinterpret_cast<byte *>(recv->m_data) + sizeof(LogRecordData);
     }
 
     if (recv->m_type == MLOG_INIT_FILE_PAGE) {
@@ -182,7 +182,7 @@ static ulint recv_read_in_area(space_id_t space, page_no_t start_page_no) noexce
   for (auto page_no = low_limit; page_no < low_limit + RECV_READ_AHEAD_AREA; ++page_no) {
     auto log_record = recv_get_log_record(space, page_no);
 
-    if (log_record != nullptr && !srv_buf_pool->peek(Page_id(space, page_no))) {
+    if (log_record != nullptr && !srv_buf_pool->peek(PageId(space, page_no))) {
 
       mutex_enter(&recv_sys->m_mutex);
 
@@ -197,12 +197,12 @@ static ulint recv_read_in_area(space_id_t space, page_no_t start_page_no) noexce
     }
   }
 
-  buf_read_recv_pages(false, Page_id(space, 0), page_nos.data(), n);
+  buf_read_recv_pages(false, PageId(space, 0), page_nos.data(), n);
 
   return n;
 }
 
-void recv_apply_log_recs(DBLWR *dblwr, bool flush_and_free_pages) noexcept {
+void recv_apply_log_recs(Dblwr *dblwr, bool flush_and_free_pages) noexcept {
   for (;;) {
     mutex_enter(&recv_sys->m_mutex);
 
@@ -237,13 +237,13 @@ void recv_apply_log_recs(DBLWR *dblwr, bool flush_and_free_pages) noexcept {
 
         mutex_exit(&recv_sys->m_mutex);
 
-        if (srv_buf_pool->peek(Page_id(space_id, page_no))) {
+        if (srv_buf_pool->peek(PageId(space_id, page_no))) {
 
-          mtr_t mtr;
+          Mtr mtr;
 
           mtr.start();
 
-          Buf_pool::Request req{
+          BufPool::Request req{
             .m_rw_latch = RW_X_LATCH,
             .m_page_id = {space_id, page_no},
             .m_mode = BUF_GET,

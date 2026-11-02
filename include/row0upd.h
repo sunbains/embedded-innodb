@@ -38,7 +38,7 @@ Created 12/27/1996 Heikki Tuuri
 #include "trx0types.h"
 #include "trx0undo.h"
 
-struct Lock_sys;
+struct LockSys;
 
 #ifndef UNIV_DEBUG
 #define upd_get_nth_field(update, n) (update->fields + (n))
@@ -76,7 +76,7 @@ constexpr ulint UPD_NODE_NO_ORD_CHANGE = 1;
 constexpr ulint UPD_NODE_NO_SIZE_CHANGE = 2;
 
 /* Update vector field */
-struct upd_field_t {
+struct UpdField {
   /**
    * @brief Sets an index field number to be updated by an update vector field.
    *
@@ -111,11 +111,11 @@ struct upd_field_t {
   que_node_t *m_exp{};
 
   /** New value for the column */
-  dfield_t m_new_val;
+  Dfield m_new_val;
 };
 
 /* Update vector structure */
-struct upd_t {
+struct Upd {
 
   /**
    * @brief Returns a field of an update vector by field number.
@@ -124,7 +124,7 @@ struct upd_t {
    *
    * @return Update vector field, or nullptr if not found.
    */
-  inline const upd_field_t *get_field(ulint no) const noexcept {
+  inline const UpdField *get_field(ulint no) const noexcept {
     for (ulint i{}; i < m_n_fields; ++i) {
       auto uf = &m_fields[i];
 
@@ -144,7 +144,7 @@ struct upd_t {
    *
    * @return Update vector field.
    */
-  inline const upd_field_t *get_nth_field(ulint n) const noexcept {
+  inline const UpdField *get_nth_field(ulint n) const noexcept {
     ut_ad(n < m_n_fields);
 
     return &m_fields[n];
@@ -157,8 +157,8 @@ struct upd_t {
    *
    * @return Update vector field.
    */
-  inline upd_field_t *get_nth_field(ulint n) noexcept {
-    return const_cast<upd_field_t *>(static_cast<const upd_t *>(this)->get_nth_field(n));
+  inline UpdField *get_nth_field(ulint n) noexcept {
+    return const_cast<UpdField *>(static_cast<const Upd *>(this)->get_nth_field(n));
   }
 
   /** New value of info bits to record; default is 0 */
@@ -168,14 +168,14 @@ struct upd_t {
   uint16_t m_n_fields{};
 
   /** Array of update fields */
-  upd_field_t *m_fields{};
+  UpdField *m_fields{};
 };
 
 /* Update node structure which also implements the delete operation
 of a row */
-struct upd_node_t {
+struct UpdNode {
   /** Node type: QUE_NODE_UPDATE */
-  que_common_t m_common;
+  QueCommon m_common;
 
   /** True if delete, false if update */
   bool m_is_delete{};
@@ -192,26 +192,26 @@ struct upd_node_t {
 
   /** NULL or an update node template which is used to implement
    * ON DELETE/UPDATE CASCADE or ... SET NULL for foreign keys */
-  upd_node_t *m_cascade_node{};
+  UpdNode *m_cascade_node{};
 
   /** NULL or a mem heap where the cascade node is created */
-  mem_heap_t *m_cascade_heap{};
+  MemHeap *m_cascade_heap{};
 
   /** Query graph subtree implementing a base table cursor:
    * the rows returned will be updated */
-  sel_node_t *m_select{};
+  SelNode *m_select{};
 
   /** Persistent cursor placed on the clustered index record
    * which should be updated or deleted; the cursor is stored
    * in the graph of 'select' field above, except in the case
    * of the client interface */
-  Btree_pcursor *m_pcur{};
+  BtreePcursor *m_pcur{};
 
   /** Table where updated */
   Table *m_table{};
 
   /** Update vector for the row */
-  upd_t *m_update{};
+  Upd *m_update{};
 
   /** When this struct is used to implement a cascade operation
    * for foreign keys, we store here the size of the buffer
@@ -244,19 +244,19 @@ struct upd_node_t {
 
   /** NULL, or prefixes of the externally stored columns in
    * the old row */
-  row_ext_t *m_ext{};
+  RowExt *m_ext{};
 
   /** NULL, or a copy of the updated row */
   DTuple *m_upd_row{};
 
   /** NULL, or prefixes of the externally stored columns in upd_row */
-  row_ext_t *m_upd_ext{};
+  RowExt *m_upd_ext{};
 
   /** Memory heap used as auxiliary storage; this must be emptied after a successful update */
-  mem_heap_t *m_heap{};
+  MemHeap *m_heap{};
 
   /** Table node in symbol table */
-  sym_node_t *m_table_sym{};
+  SymNode *m_table_sym{};
 
   /** Column assignment list */
   que_node_t *m_col_assign_list{};
@@ -265,19 +265,19 @@ struct upd_node_t {
   IF_DEBUG(ulint m_magic_n{UPD_NODE_MAGIC_N};)
 };
 
-struct Row_update {
+struct RowUpdate {
 
   /**
    * @brief Constructor.
    *
    * @param[in] dict_sys Dictionary system.
    */
-  Row_update(Dict *dict, Lock_sys *lock_sys) noexcept;
+  RowUpdate(Dict *dict, LockSys *lock_sys) noexcept;
 
   /**
    * @brief Destructor.
    */
-  ~Row_update() noexcept;
+  ~RowUpdate() noexcept;
 
   /**
    * @brief Creates a row update object.
@@ -286,14 +286,14 @@ struct Row_update {
    *
    * @return Pointer to the created row update object.
    */
-  [[nodiscard]] static Row_update *create(Dict *dict, Lock_sys *lock_sys) noexcept;
+  [[nodiscard]] static RowUpdate *create(Dict *dict, LockSys *lock_sys) noexcept;
 
   /**
    * @brief Destroys a row update object.
    *
    * @param[in,out] row_upd Pointer to the row update object to destroy.
    */
-  static void destroy(Row_update *&row_upd) noexcept;
+  static void destroy(RowUpdate *&row_upd) noexcept;
 
   /**
    * @brief Writes into the redo log the values of trx id and roll ptr and enough info
@@ -307,7 +307,7 @@ struct Row_update {
    *
    * @return New pointer to mlog.
    */
-  [[nodiscard]] byte *write_sys_vals_to_log(const Index *index, Trx *trx, roll_ptr_t roll_ptr, byte *log_ptr, mtr_t *mtr) noexcept;
+  [[nodiscard]] byte *write_sys_vals_to_log(const Index *index, Trx *trx, roll_ptr_t roll_ptr, byte *log_ptr, Mtr *mtr) noexcept;
 
   /**
    * @brief Sets the trx id or roll ptr field of a clustered index entry.
@@ -329,7 +329,7 @@ struct Row_update {
    *
    * @return Pointer to the created update node.
    */
-  [[nodiscard]] upd_node_t *node_create(mem_heap_t *heap) noexcept;
+  [[nodiscard]] UpdNode *node_create(MemHeap *heap) noexcept;
 
   /**
    * @brief Writes to the redo log the new values of the fields occurring in the index.
@@ -339,7 +339,7 @@ struct Row_update {
    *                    The buffer is closed within this function.
    * @param[in] mtr     Mini-transaction into whose log to write.
    */
-  void index_write_log(const upd_t *update, byte *log_ptr, mtr_t *mtr) noexcept;
+  void index_write_log(const Upd *update, byte *log_ptr, Mtr *mtr) noexcept;
 
   /**
    * @brief Checks if a row update changes the size of any field in the index or if any field to be updated is stored externally.
@@ -350,17 +350,17 @@ struct Row_update {
    *
    * @return true if the update changes the size of any field in the index or if the field is external in the record or update.
    */
-  [[nodiscard]] bool changes_field_size_or_external(const Index *index, const ulint *offsets, const upd_t *update) noexcept;
+  [[nodiscard]] bool changes_field_size_or_external(const Index *index, const ulint *offsets, const Upd *update) noexcept;
 
   /**
    * @brief Replaces the new column values stored in the update vector to the given record. No field size changes are allowed.
    *
    * @param[in,out] rec      Record where values are replaced.
    * @param[in] index        The index the record belongs to.
-   * @param[in] offsets      Array returned by Phy_rec::get_col_offsets().
+   * @param[in] offsets      Array returned by PhyRec::get_col_offsets().
    * @param[in] update       Update vector.
    */
-  void rec_in_place(Rec rec, const Index *index, const ulint *offsets, const upd_t *update) noexcept;
+  void rec_in_place(Rec rec, const Index *index, const ulint *offsets, const Upd *update) noexcept;
 
   /**
    * @brief Builds an update vector from those fields which in a secondary index entry
@@ -375,8 +375,8 @@ struct Row_update {
    *
    * @return Update vector of differing fields.
    */
-  [[nodiscard]] static upd_t *build_sec_rec_difference_binary(
-    const Index *index, const DTuple *entry, const Rec rec, Trx *trx, mem_heap_t *heap
+  [[nodiscard]] static Upd *build_sec_rec_difference_binary(
+    const Index *index, const DTuple *entry, const Rec rec, Trx *trx, MemHeap *heap
   ) noexcept;
 
   /**
@@ -392,8 +392,8 @@ struct Row_update {
    *
    * @return Update vector of differing fields, excluding roll ptr and trx id.
    */
-  [[nodiscard]] upd_t *build_difference_binary(
-    const Index *index, const DTuple *entry, const Rec rec, Trx *trx, mem_heap_t *heap
+  [[nodiscard]] Upd *build_difference_binary(
+    const Index *index, const DTuple *entry, const Rec rec, Trx *trx, MemHeap *heap
   ) noexcept;
 
   /**
@@ -408,7 +408,7 @@ struct Row_update {
    * @param[in] heap       Memory heap for allocating and copying the new values.
    */
   void index_replace_new_col_vals_index_pos(
-    DTuple *entry, const Index *index, const upd_t *update, bool order_only, mem_heap_t *heap
+    DTuple *entry, const Index *index, const Upd *update, bool order_only, MemHeap *heap
   ) noexcept;
 
   /**
@@ -421,7 +421,7 @@ struct Row_update {
    * @param[in] update     An update vector built for the CLUSTERED index so that the field number in an upd_field is the clustered index position.
    * @param[in] heap       Memory heap for allocating and copying the new values.
    */
-  void index_replace_new_col_vals(DTuple *entry, Index *index, const upd_t *update, mem_heap_t *heap) noexcept;
+  void index_replace_new_col_vals(DTuple *entry, Index *index, const Upd *update, MemHeap *heap) noexcept;
 
   /**
    * @brief Replaces the new column values stored in the update vector.
@@ -433,7 +433,7 @@ struct Row_update {
    * @param[in] update     An update vector built for the clustered index.
    * @param[in] heap       Memory heap.
    */
-  static void replace(DTuple *row, row_ext_t **ext, const Index *index, const upd_t *update, mem_heap_t *heap) noexcept;
+  static void replace(DTuple *row, RowExt **ext, const Index *index, const Upd *update, MemHeap *heap) noexcept;
 
   /**
    * @brief Checks if an update vector changes an ordering field of an index record.
@@ -448,7 +448,7 @@ struct Row_update {
    *
    * @return true if update vector changes an ordering field in the index record.
    */
-  [[nodiscard]] static bool changes_ord_field_binary(const DTuple *row, Index *index, const upd_t *update) noexcept;
+  [[nodiscard]] static bool changes_ord_field_binary(const DTuple *row, Index *index, const Upd *update) noexcept;
 
   /**
    * @brief Checks if an update vector changes an ordering field of an index record.
@@ -461,7 +461,7 @@ struct Row_update {
    *
    * @return true if update vector may change an ordering field in an index record.
    */
-  [[nodiscard]] bool changes_some_index_ord_field_binary(const Table *table, const upd_t *update) noexcept;
+  [[nodiscard]] bool changes_some_index_ord_field_binary(const Table *table, const Upd *update) noexcept;
 
   /**
    * @brief Updates a row in a table. This is a high-level function used
@@ -471,7 +471,7 @@ struct Row_update {
    *
    * @return Query thread to run next or NULL.
    */
-  [[nodiscard]] que_thr_t *step(que_thr_t *thr) noexcept;
+  [[nodiscard]] QueThr *step(QueThr *thr) noexcept;
 
   /**
    * @brief Parses the log data of system field values.
@@ -491,12 +491,12 @@ struct Row_update {
    * database recovery.
    *
    * @param[in,out] rec      Record.
-   * @param[in] offsets      Array returned by Phy_rec::get_col_offsets().
+   * @param[in] offsets      Array returned by PhyRec::get_col_offsets().
    * @param[in] pos          TRX_ID position in rec.
    * @param[in] trx_id       Transaction id.
    * @param[in] roll_ptr     Roll ptr of the undo log record.
    */
-  void rec_sys_fields_in_recovery(Rec rec, const Rec_offs &offsets, ulint pos, trx_id_t trx_id, roll_ptr_t roll_ptr) noexcept;
+  void rec_sys_fields_in_recovery(Rec rec, const RecOffs &offsets, ulint pos, trx_id_t trx_id, roll_ptr_t roll_ptr) noexcept;
 
   /**
    * @brief Parses the log data written by row_upd_index_write_log.
@@ -508,7 +508,7 @@ struct Row_update {
    *
    * @return Log data end or NULL.
    */
-  [[nodiscard]] byte *index_parse(byte *ptr, byte *end_ptr, mem_heap_t *heap, upd_t **update_out) noexcept;
+  [[nodiscard]] byte *index_parse(byte *ptr, byte *end_ptr, MemHeap *heap, Upd **update_out) noexcept;
 
   /**
    * @brief Creates a query graph node of 'update' type to be used in the engine
@@ -519,7 +519,7 @@ struct Row_update {
    *
    * @return Update node.
    */
-  [[nodiscard]] upd_node_t *create_update_node(Table *table, mem_heap_t *heap) noexcept;
+  [[nodiscard]] UpdNode *create_update_node(Table *table, MemHeap *heap) noexcept;
 
   /**
    * @brief Creates an update vector object.
@@ -532,12 +532,12 @@ struct Row_update {
    *
    * @return          Pointer to the created update vector object.
    */
-  inline static upd_t *upd_create(ulint n, mem_heap_t *heap) noexcept {
-    auto ptr = mem_heap_alloc(heap, sizeof(upd_t));
-    auto update = new (ptr) upd_t;
+  inline static Upd *upd_create(ulint n, MemHeap *heap) noexcept {
+    auto ptr = mem_heap_alloc(heap, sizeof(Upd));
+    auto update = new (ptr) Upd;
 
     update->m_n_fields = n;
-    update->m_fields = reinterpret_cast<upd_field_t *>(mem_heap_alloc(heap, sizeof(upd_field_t) * n));
+    update->m_fields = reinterpret_cast<UpdField *>(mem_heap_alloc(heap, sizeof(UpdField) * n));
 
     return update;
   }
@@ -552,7 +552,7 @@ struct Row_update {
    *
    * @return Number of fields.
    */
-  inline static ulint upd_get_n_fields(const upd_t *update) noexcept { return update->m_n_fields; }
+  inline static ulint upd_get_n_fields(const Upd *update) noexcept { return update->m_n_fields; }
 
   /**
    * @brief Updates the trx id and roll ptr field in a clustered index record when
@@ -594,7 +594,7 @@ struct Row_update {
    *
    * @return true if changes.
    */
-  [[nodiscard]] bool changes_first_fields_binary(DTuple *entry, const Index *index, const upd_t *update, ulint n) noexcept;
+  [[nodiscard]] bool changes_first_fields_binary(DTuple *entry, const Index *index, const Upd *update, ulint n) noexcept;
 
   /**
    * @brief Checks if the index is currently mentioned as a referenced
@@ -620,20 +620,20 @@ struct Row_update {
    * @param[in] pcur Cursor positioned on a record. The cursor position is lost in this function.
    * @param[in] table Table in question.
    * @param[in] index Index of the cursor.
-   * @param[in,out] offsets Phy_rec::get_col_offsets(index, pcur.rec).
+   * @param[in,out] offsets PhyRec::get_col_offsets(index, pcur.rec).
    * @param[in] thr Query thread.
    * @param[in] mtr Mini-transaction.
    *
    * @return DB_SUCCESS or an error code.
    */
-  [[nodiscard]] db_err check_references_constraints(
-    upd_node_t *node, Btree_pcursor *pcur, Table *table, const Index *index, ulint *offsets, que_thr_t *thr, mtr_t *mtr
+  [[nodiscard]] DbErr check_references_constraints(
+    UpdNode *node, BtreePcursor *pcur, Table *table, const Index *index, ulint *offsets, QueThr *thr, Mtr *mtr
   ) noexcept;
 
   /**
   * @brief Fetch a prefix of an externally stored column.
   *
-  * This is similar to row_ext_lookup(), but the row_ext_t holds the old values
+  * This is similar to row_ext_lookup(), but the RowExt holds the old values
   * of the column and must not be poisoned with the new values.
   *
   * @param[in] data 'Internally' stored part of the field containing also the reference to the external part.
@@ -643,7 +643,7 @@ struct Row_update {
   *
   * @return BLOB prefix.
   */
-  [[nodiscard]] byte *ext_fetch(const byte *data, ulint local_len, ulint *len, mem_heap_t *heap) noexcept;
+  [[nodiscard]] byte *ext_fetch(const byte *data, ulint local_len, ulint *len, MemHeap *heap) noexcept;
 
   /**
    * @brief Replaces the new column value stored in the update vector in the given index entry field.
@@ -655,17 +655,17 @@ struct Row_update {
    * @param[in] heap Memory heap for allocating and copying the new value.
    */
   void index_replace_new_col_val(
-    dfield_t *dfield, const Field *field, const Column *col, const upd_field_t *uf, mem_heap_t *heap
+    Dfield *dfield, const Field *field, const Column *col, const UpdField *uf, MemHeap *heap
   ) noexcept;
 
   /**
    * Copies the column values from a record.
    *
    * @param[in] rec The record in a clustered index.
-   * @param[in] offsets The array returned by Phy_rec::get_col_offsets().
+   * @param[in] offsets The array returned by PhyRec::get_col_offsets().
    * @param[in] column The first column in a column list, or nullptr.
    */
-  inline void copy_columns(Rec rec, const ulint *offsets, sym_node_t *column) noexcept;
+  inline void copy_columns(Rec rec, const ulint *offsets, SymNode *column) noexcept;
 
   /**
    * Calculates the new values for fields to update. Note that
@@ -673,14 +673,14 @@ struct Row_update {
    *
    * @param[in,out] update Update vector.
    */
-  inline void eval_new_vals(upd_t *update) noexcept;
+  inline void eval_new_vals(Upd *update) noexcept;
 
   /**
    * @brief Stores to the heap the row on which the node->pcur is positioned.
    *
    * @param[in] node Row update node.
    */
-  void store_row(upd_node_t *node) noexcept;
+  void store_row(UpdNode *node) noexcept;
 
   /**
    * @brief Updates a secondary index entry of a row.
@@ -690,7 +690,7 @@ struct Row_update {
    *
    * @return DB_SUCCESS if operation successfully completed, else error code or DB_LOCK_WAIT.
    */
-  [[nodiscard]] db_err sec_index_entry(upd_node_t *node, que_thr_t *thr) noexcept;
+  [[nodiscard]] DbErr sec_index_entry(UpdNode *node, QueThr *thr) noexcept;
 
   /**
    * @brief Updates the secondary index record if it is changed in the row update or deletes it if this is a delete.
@@ -700,7 +700,7 @@ struct Row_update {
    *
    * @return DB_SUCCESS if operation successfully completed, else error code or DB_LOCK_WAIT.
    */
-  [[nodiscard]] inline db_err sec_step(upd_node_t *node, que_thr_t *thr) noexcept;
+  [[nodiscard]] inline DbErr sec_step(UpdNode *node, QueThr *thr) noexcept;
 
   /**
    * @brief Marks the clustered index record deleted and inserts the updated version
@@ -716,8 +716,8 @@ struct Row_update {
    *
    * @return DB_SUCCESS if operation successfully completed, else error code or DB_LOCK_WAIT.
    */
-  [[nodiscard]] db_err clust_rec_by_insert(
-    upd_node_t *node, const Index *index, que_thr_t *thr, bool check_ref, mtr_t *mtr
+  [[nodiscard]] DbErr clust_rec_by_insert(
+    UpdNode *node, const Index *index, QueThr *thr, bool check_ref, Mtr *mtr
   ) noexcept;
 
   /**
@@ -730,22 +730,22 @@ struct Row_update {
    *
    * @return DB_SUCCESS if operation successfully completed, else error code or DB_LOCK_WAIT.
    */
-  [[nodiscard]] db_err clust_rec(upd_node_t *node, const Index *index, que_thr_t *thr, mtr_t *mtr) noexcept;
+  [[nodiscard]] DbErr clust_rec(UpdNode *node, const Index *index, QueThr *thr, Mtr *mtr) noexcept;
 
   /**
    * @brief Delete marks a clustered index record.
    *
    * @param[in] node Row update node.
    * @param[in] index Clustered index.
-   * @param[in,out] offsets Phy_rec::get_col_offsets() for the record under the cursor.
+   * @param[in,out] offsets PhyRec::get_col_offsets() for the record under the cursor.
    * @param[in] thr Query thread.
    * @param[in] check_ref True if index may be referenced in a foreign key constraint.
    * @param[in] mtr Mini-transaction; gets committed here.
    *
    * @return DB_SUCCESS if operation successfully completed, else error code.
    */
-  [[nodiscard]] db_err del_mark_clust_rec(
-    upd_node_t *node, const Index *index, ulint *offsets, que_thr_t *thr, bool check_ref, mtr_t *mtr
+  [[nodiscard]] DbErr del_mark_clust_rec(
+    UpdNode *node, const Index *index, ulint *offsets, QueThr *thr, bool check_ref, Mtr *mtr
   ) noexcept;
 
   /**
@@ -756,7 +756,7 @@ struct Row_update {
    *
    * @return DB_SUCCESS if operation successfully completed, DB_LOCK_WAIT in case of a lock wait, else error code.
    */
-  [[nodiscard]] db_err clust_step(upd_node_t *node, que_thr_t *thr) noexcept;
+  [[nodiscard]] DbErr clust_step(UpdNode *node, QueThr *thr) noexcept;
 
   /**
    * @brief Updates the affected index records of a row.
@@ -770,7 +770,7 @@ struct Row_update {
    *
    * @return DB_SUCCESS if operation successfully completed, else error code or DB_LOCK_WAIT.
    */
-  [[nodiscard]] db_err update(upd_node_t *node, que_thr_t *thr) noexcept;
+  [[nodiscard]] DbErr update(UpdNode *node, QueThr *thr) noexcept;
 
   /**
    * @brief Dictionary.
@@ -780,5 +780,5 @@ struct Row_update {
   /**
    * @brief Lock system.
    */
-  Lock_sys *m_lock_sys{};
+  LockSys *m_lock_sys{};
 };

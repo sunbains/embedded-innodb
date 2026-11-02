@@ -38,13 +38,13 @@ extern Test_config g_test_config;
 #define LOG_BUFFER_SIZE (g_test_config.m_log_buffer_size * UNIV_PAGE_SIZE)
 
 // Test-specific event creation wrapper that can be mocked if needed
-inline Cond_var *test_event_create(const char *name) {
+inline CondVar *test_event_create(const char *name) {
   return os_event_create(name);
 }
 
-inline void test_event_set(Cond_var *event) { os_event_set(event); }
+inline void test_event_set(CondVar *event) { os_event_set(event); }
 
-inline void test_event_free(Cond_var *event) { os_event_free(event); }
+inline void test_event_free(CondVar *event) { os_event_free(event); }
 
 // Test memory allocator wrappers - can be instrumented for leak detection
 inline void *test_mem_alloc(ulint size) { return mem_alloc(size); }

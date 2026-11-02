@@ -39,7 +39,7 @@ Created 10/21/1995 Heikki Tuuri
 #include <filesystem>
 
 /** File node of a tablespace or the log data space */
-struct fil_node_t;
+struct FilNode;
 
 extern bool os_has_said_disk_full;
 
@@ -112,7 +112,7 @@ extern ulint os_n_fsyncs;
 
 /* File types for directory entry data type */
 
-enum os_file_type_t {
+enum OsFileType {
   OS_FILE_TYPE_UNKNOWN = 0,
 
   REGULAR_FILE,
@@ -129,12 +129,12 @@ bigger than 4000 bytes */
 constexpr ulint OS_FILE_MAX_PATH = 4000;
 
 /* Struct used in fetching information of a file in a directory */
-struct os_file_stat_t {
+struct OsFileStat {
   /** Path to a file */
   char name[OS_FILE_MAX_PATH];
 
   /** File type. */
-  os_file_type_t type;
+  OsFileType type;
 
   /** File size in bytes. */
   off_t size;
@@ -372,7 +372,7 @@ bool os_file_write(const char *name, os_file_t file, const void *buf, ulint n, o
  * @param type Type of the file (if it exists).
  * @return true if the call succeeded, false otherwise.
  */
-bool os_file_status(const char *path, bool *exists, os_file_type_t *type);
+bool os_file_status(const char *path, bool *exists, OsFileType *type);
 
 /** The function os_file_dirname returns a directory component of a
 * null-terminated pathname string.  In the usual case, dirname returns
@@ -436,7 +436,7 @@ void os_file_print(ib_stream_t ib_stream);
  * @param stat_info Information of a file in a directory.
  * @return true if stat information found, false otherwise.
  */
-bool os_file_get_status(const char *path, os_file_stat_t *stat_info);
+bool os_file_get_status(const char *path, OsFileStat *stat_info);
 
 /**
  * @brief Resets the variables.

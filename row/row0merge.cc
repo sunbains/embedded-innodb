@@ -97,9 +97,9 @@ exception that the REC_N_NEW_EXTRA_BYTES are omitted. */
 typedef byte *mrec_t;
 
 /** Buffer for sorting in main memory. */
-struct row_merge_buf_struct {
+struct RowMergeBuf {
   /** memory heap where allocated */
-  mem_heap_t *heap;
+  MemHeap *heap;
 
   /** the index the rows belong to */
   Index *index;
@@ -114,17 +114,17 @@ struct row_merge_buf_struct {
   ulint max_tuples;
 
   /** array of pointers to arrays of fields that form the data rows */
-  const dfield_t **rows;
+  const Dfield **rows;
 
   /** temporary copy of rows, for sorting */
-  const dfield_t **tmp_tuples;
+  const Dfield **tmp_tuples;
 };
 
 /** Buffer for sorting in main memory. */
-typedef struct row_merge_buf_struct row_merge_buf_t;
+struct RowMergeBuf;
 
 /** Information about temporary files used in merge sort */
-struct merge_file_struct {
+struct MergeFile {
   /** file descriptor */
   int fd;
   /** file offset (end of file) */
@@ -134,7 +134,7 @@ struct merge_file_struct {
 };
 
 /** Information about temporary files used in merge sort */
-typedef struct merge_file_struct merge_file_t;
+struct MergeFile;
 
 /**
  * @brief Allocate a sort buffer.
@@ -146,17 +146,17 @@ typedef struct merge_file_struct merge_file_t;
  *
  * @return Pointer to the allocated sort buffer.
  */
-static row_merge_buf_t *row_merge_buf_create_low(mem_heap_t *heap, Index *index, ulint max_tuples, ulint buf_size) {
+static RowMergeBuf *row_merge_buf_create_low(MemHeap *heap, Index *index, ulint max_tuples, ulint buf_size) {
   ut_ad(max_tuples > 0);
   ut_ad(max_tuples <= sizeof(row_merge_block_t));
   ut_ad(max_tuples < buf_size);
 
-  auto buf = reinterpret_cast<row_merge_buf_t *>(mem_heap_zalloc(heap, buf_size));
+  auto buf = reinterpret_cast<RowMergeBuf *>(mem_heap_zalloc(heap, buf_size));
 
   buf->heap = heap;
   buf->index = index;
   buf->max_tuples = max_tuples;
-  buf->rows = reinterpret_cast<const dfield_t **>(mem_heap_alloc(heap, 2 * max_tuples * sizeof *buf->rows));
+  buf->rows = reinterpret_cast<const Dfield **>(mem_heap_alloc(heap, 2 * max_tuples * sizeof *buf->rows));
   buf->tmp_tuples = buf->rows + max_tuples;
 
   return buf;
@@ -169,10 +169,10 @@ static row_merge_buf_t *row_merge_buf_create_low(mem_heap_t *heap, Index *index,
  *
  * @return Pointer to the allocated sort buffer.
  */
-static row_merge_buf_t *row_merge_buf_create(Index *index) noexcept {
+static RowMergeBuf *row_merge_buf_create(Index *index) noexcept {
   auto max_tuples = sizeof(row_merge_block_t) / ut_max(1, index->get_min_size());
-  auto buf_size = (sizeof(row_merge_buf_t)) + (max_tuples - 1) * sizeof row_merge_buf_t::rows;
-  auto heap = static_cast<mem_heap_t *>(mem_heap_create(buf_size + sizeof(row_merge_block_t)));
+  auto buf_size = (sizeof(RowMergeBuf)) + (max_tuples - 1) * sizeof RowMergeBuf::rows;
+  auto heap = static_cast<MemHeap *>(mem_heap_create(buf_size + sizeof(row_merge_block_t)));
   auto row_merge_buf = row_merge_buf_create_low(heap, index, max_tuples, buf_size);
 
   return row_merge_buf;
@@ -185,10 +185,10 @@ static row_merge_buf_t *row_merge_buf_create(Index *index) noexcept {
  *
  * @return Pointer to the emptied sort buffer.
  */
-static row_merge_buf_t *row_merge_buf_empty(row_merge_buf_t *buf) {
+static RowMergeBuf *row_merge_buf_empty(RowMergeBuf *buf) {
   ulint buf_size;
   ulint max_tuples = buf->max_tuples;
-  mem_heap_t *heap = buf->heap;
+  MemHeap *heap = buf->heap;
   auto index = buf->index;
 
   buf_size = (sizeof *buf) + (max_tuples - 1) * sizeof *buf->rows;
@@ -199,7 +199,7 @@ static row_merge_buf_t *row_merge_buf_empty(row_merge_buf_t *buf) {
 }
 
 /** Deallocate a sort buffer. */
-static void row_merge_buf_free(row_merge_buf_t *buf) /*!< in,own: sort buffer, to be freed */
+static void row_merge_buf_free(RowMergeBuf *buf) /*!< in,own: sort buffer, to be freed */
 {
   mem_heap_free(buf->heap);
 }
@@ -213,7 +213,7 @@ static void row_merge_buf_free(row_merge_buf_t *buf) /*!< in,own: sort buffer, t
  *
  * @return True if the row was successfully added, false if the sort buffer is full.
  */
-static bool row_merge_buf_add(row_merge_buf_t *buf, const DTuple *row, const row_ext_t *ext) {
+static bool row_merge_buf_add(RowMergeBuf *buf, const DTuple *row, const RowExt *ext) {
   if (buf->n_recs >= buf->max_tuples) {
     return false;
   }
@@ -222,7 +222,7 @@ static bool row_merge_buf_add(row_merge_buf_t *buf, const DTuple *row, const row
 
   auto index = buf->index;
   const auto n_fields = index->get_n_fields();
-  auto entry = reinterpret_cast<dfield_t *>(mem_heap_alloc(buf->heap, n_fields * sizeof(dfield_t)));
+  auto entry = reinterpret_cast<Dfield *>(mem_heap_alloc(buf->heap, n_fields * sizeof(Dfield)));
   auto dfield = entry;
 
   buf->rows[buf->n_recs] = entry;
@@ -302,7 +302,7 @@ static bool row_merge_buf_add(row_merge_buf_t *buf, const DTuple *row, const row
 
 #ifdef UNIV_DEBUG
   {
-    auto size = Phy_rec::get_encoded_size(index, REC_STATUS_ORDINARY, {entry, n_fields});
+    auto size = PhyRec::get_encoded_size(index, REC_STATUS_ORDINARY, {entry, n_fields});
 
     ut_ad(extra_size == size.first);
     ut_ad(data_size == size.second);
@@ -341,7 +341,7 @@ static bool row_merge_buf_add(row_merge_buf_t *buf, const DTuple *row, const row
 }
 
 /** Structure for reporting duplicate records. */
-struct row_merge_dup_t {
+struct RowMergeDup {
   const Index *index;   /*!< index being sorted */
   table_handle_t table; /*!< table object */
   ulint n_dup;          /*!< number of duplicates */
@@ -349,8 +349,8 @@ struct row_merge_dup_t {
 
 /** Report a duplicate key. */
 static void row_merge_dup_report(
-  row_merge_dup_t *dup, /*!< in/out: for reporting duplicates */
-  const dfield_t *entry
+  RowMergeDup *dup, /*!< in/out: for reporting duplicates */
+  const Dfield *entry
 ) /*!< in: duplicate index entry */
 {
   if (dup->n_dup++ > 0) {
@@ -377,13 +377,13 @@ static int row_merge_tuple_cmp(
   void *cmp_ctx,     /*!< in: compare context, required
                           for BLOBs and user defined types */
   ulint n_field,     /*!< in: number of fields */
-  const dfield_t *a, /*!< in: first tuple to be compared */
-  const dfield_t *b, /*!< in: second tuple to be compared */
-  row_merge_dup_t *dup
+  const Dfield *a, /*!< in: first tuple to be compared */
+  const Dfield *b, /*!< in: second tuple to be compared */
+  RowMergeDup *dup
 ) /*!< in/out: for reporting duplicates */
 {
   int cmp;
-  const dfield_t *field = a;
+  const Dfield *field = a;
 
   /* Compare the fields of the rows until a difference is
   found or we run out of fields to compare.  If !cmp at the
@@ -429,9 +429,9 @@ static void row_merge_tuple_sort(
   void *cmp_ctx,         /*!< in: compare context, required
                              for BLOBs and user defined types */
   ulint n_field,         /*!< in: number of fields */
-  row_merge_dup_t *dup,  /*!< in/out: for reporting duplicates */
-  const dfield_t **rows, /*!< in/out: rows */
-  const dfield_t **aux,  /*!< in/out: work area */
+  RowMergeDup *dup,  /*!< in/out: for reporting duplicates */
+  const Dfield **rows, /*!< in/out: rows */
+  const Dfield **aux,  /*!< in/out: work area */
   ulint low,             /*!< in: lower bound of the
                              sorting area, inclusive */
   ulint high
@@ -443,8 +443,8 @@ static void row_merge_tuple_sort(
 
 /** Sort a buffer. */
 static void row_merge_buf_sort(
-  row_merge_buf_t *buf, /*!< in/out: sort buffer */
-  row_merge_dup_t *dup
+  RowMergeBuf *buf, /*!< in/out: sort buffer */
+  RowMergeDup *dup
 ) /*!< in/out: for reporting duplicates */
 {
   row_merge_tuple_sort(buf->index->m_cmp_ctx, buf->index->get_n_unique(), dup, buf->rows, buf->tmp_tuples, 0, buf->n_recs);
@@ -452,9 +452,9 @@ static void row_merge_buf_sort(
 
 /** Write a buffer to a block. */
 static void row_merge_buf_write(
-  const row_merge_buf_t *buf, /*!< in: sorted buffer */
+  const RowMergeBuf *buf, /*!< in: sorted buffer */
 #ifdef UNIV_DEBUG
-  const merge_file_t *of, /*!< in: output file */
+  const MergeFile *of, /*!< in: output file */
 #endif                    /* UNIV_DEBUG */
   row_merge_block_t *block
 ) /*!< out: buffer for writing to file */
@@ -468,7 +468,7 @@ static void row_merge_buf_write(
 
   for (ulint i{}; i < buf->n_recs; ++i) {
     const auto dfield = buf->rows[i];
-    auto size = Phy_rec::get_encoded_size(index, REC_STATUS_ORDINARY, {dfield, n_fields});
+    auto size = PhyRec::get_encoded_size(index, REC_STATUS_ORDINARY, {dfield, n_fields});
     auto total_size = size.first + size.second;
 
     /* Encode extra_size + 1 */
@@ -483,7 +483,7 @@ static void row_merge_buf_write(
     ut_ad(b + total_size < block[1]);
 
     /* Encode into b + size.first */
-    Phy_rec::encode(index, b + size.first, REC_STATUS_ORDINARY, {dfield, n_fields});
+    PhyRec::encode(index, b + size.first, REC_STATUS_ORDINARY, {dfield, n_fields});
 
     b += total_size;
   }
@@ -502,14 +502,14 @@ static void row_merge_buf_write(
 
 /** Create a memory heap and allocate space for row_merge_rec_offsets().
 @return	memory heap */
-static mem_heap_t *row_merge_heap_create(
+static MemHeap *row_merge_heap_create(
   const Index *index, /*!< in: record descriptor */
   ulint **offsets1,   /*!< out: offsets */
   ulint **offsets2
 ) /*!< out: offsets */
 {
   ulint i = 1 + REC_OFFS_HEADER_SIZE + index->get_n_fields();
-  mem_heap_t *heap = mem_heap_create(2 * i * sizeof *offsets1);
+  MemHeap *heap = mem_heap_create(2 * i * sizeof *offsets1);
 
   *offsets1 = reinterpret_cast<ulint *>(mem_heap_alloc(heap, i * sizeof(*offsets1)));
   *offsets2 = reinterpret_cast<ulint *>(mem_heap_alloc(heap, i * sizeof(*offsets2)));
@@ -525,7 +525,7 @@ return the index with the max id.
 @return	matching index, NULL if not found */
 static Index *row_merge_dict_table_get_index(
   Table *table, /*!< in: table */
-  const merge_index_def_t *index_def
+  const MergeIndexDef *index_def
 ) /*!< in: index definition */
 {
   ulint i;
@@ -590,7 +590,7 @@ static bool row_merge_write(
  * @return Pointer to the next record, or nullptr on end of list (non-NULL on I/O error).
  */
 static const byte *row_merge_read_rec(
-  row_merge_block_t *block, mrec_buf_t *buf, const byte *b, const Index *index, int fd, ulint *foffs, mrec_t *mrec, Rec_offs offsets
+  row_merge_block_t *block, mrec_buf_t *buf, const byte *b, const Index *index, int fd, ulint *foffs, mrec_t *mrec, RecOffs offsets
 ) {
   ulint extra_size;
   ulint avail_size;
@@ -657,7 +657,7 @@ static const byte *row_merge_read_rec(
     *mrec = *buf + extra_size;
 
     {
-      Phy_rec rec{index, *mrec};
+      PhyRec rec{index, *mrec};
       rec.get_col_offsets(offsets);
     }
 
@@ -679,7 +679,7 @@ static const byte *row_merge_read_rec(
   *mrec = const_cast<byte *>(b + extra_size);
 
   {
-    Phy_rec rec{index, *mrec};
+    PhyRec rec{index, *mrec};
     rec.get_col_offsets(offsets);
   }
 
@@ -734,7 +734,7 @@ static void row_merge_write_rec_low(
   ulint foffs,       /*!< in: file offset */
 #endif               /* UNIV_DEBUG */
   const mrec_t mrec, /*!< in: record to write */
-  const Rec_offs &offsets
+  const RecOffs &offsets
 ) /*!< in: offsets of mrec */
 #ifndef UNIV_DEBUG
 #define row_merge_write_rec_low(b, e, size, fd, foffs, mrec, offsets) row_merge_write_rec_low(b, e, mrec, offsets)
@@ -760,7 +760,7 @@ static byte *row_merge_write_rec(
   int fd,                   /*!< in: file descriptor */
   ulint *foffs,             /*!< in/out: file offset */
   const mrec_t mrec,        /*!< in: record to write */
-  const Rec_offs &offsets
+  const RecOffs &offsets
 ) /*!< in: offsets of mrec */
 {
   ut_ad(block);
@@ -888,14 +888,14 @@ static int row_merge_cmp(
  * @param block File buffer
  * @return DB_SUCCESS or error
  */
-static db_err row_merge_read_clustered_index(
-  Trx *trx, table_handle_t table, const Table *old_table, const Table *new_table, Index **index, merge_file_t *files, ulint n_index,
+static DbErr row_merge_read_clustered_index(
+  Trx *trx, table_handle_t table, const Table *old_table, const Table *new_table, Index **index, MergeFile *files, ulint n_index,
   row_merge_block_t *block
 ) noexcept {
   ulint *nonnull{};
   ulint n_nonnull{};
-  db_err err = DB_SUCCESS;
-  Btree_pcursor pcur(srv_fsp, srv_btree_sys);
+  DbErr err = DB_SUCCESS;
+  BtreePcursor pcur(srv_fsp, srv_btree_sys);
 
   trx->m_op_info = "reading clustered index";
 
@@ -907,13 +907,13 @@ static db_err row_merge_read_clustered_index(
 
   /* Create and initialize memory for record buffers */
 
-  auto merge_buf = static_cast<row_merge_buf_t **>(mem_alloc(n_index * sizeof(row_merge_buf_t *)));
+  auto merge_buf = static_cast<RowMergeBuf **>(mem_alloc(n_index * sizeof(RowMergeBuf *)));
 
   for (ulint i{}; i < n_index; ++i) {
     merge_buf[i] = row_merge_buf_create(index[i]);
   }
 
-  mtr_t mtr;
+  Mtr mtr;
 
   mtr.start();
 
@@ -957,7 +957,7 @@ static db_err row_merge_read_clustered_index(
 
   auto row_heap = mem_heap_create(sizeof(mrec_buf_t));
 
-  auto func_exit = [&](db_err err) -> auto {
+  auto func_exit = [&](DbErr err) -> auto {
     pcur.close();
 
     mtr.commit();
@@ -983,7 +983,7 @@ static db_err row_merge_read_clustered_index(
     Rec rec;
     ulint *offsets;
     DTuple *row{};
-    row_ext_t *ext;
+    RowExt *ext;
     bool has_next = true;
 
     pcur.move_to_next_on_page();
@@ -991,7 +991,7 @@ static db_err row_merge_read_clustered_index(
     /* When switching pages, commit the mini-transaction
     in order to release the latch on the old page. */
 
-    merge_file_t *file{};
+    MergeFile *file{};
     const Index *index{};
 
     if (pcur.is_after_last_on_page()) {
@@ -1010,13 +1010,13 @@ static db_err row_merge_read_clustered_index(
       has_next = pcur.move_to_next_user_rec(&mtr);
     }
 
-    row_merge_buf_t *buf;
+    RowMergeBuf *buf;
 
     if (likely(has_next)) {
       rec = pcur.get_rec();
 
       {
-        Phy_rec record{clust_index, rec};
+        PhyRec record{clust_index, rec};
 
         offsets = record.get_col_offsets(nullptr, ULINT_UNDEFINED, &row_heap, Current_location());
       }
@@ -1034,8 +1034,8 @@ static db_err row_merge_read_clustered_index(
 
       if (likely_null(nonnull)) {
         for (ulint i = 0; i < n_nonnull; i++) {
-          dfield_t *field = &row->fields[nonnull[i]];
-          dtype_t *field_type = dfield_get_type(field);
+          Dfield *field = &row->fields[nonnull[i]];
+          Dtype *field_type = dfield_get_type(field);
 
           ut_a(!(field_type->prtype & DATA_NOT_NULL));
 
@@ -1071,7 +1071,7 @@ static db_err row_merge_read_clustered_index(
 
       if (buf->n_recs) {
         if (index->is_unique()) {
-          row_merge_dup_t dup;
+          RowMergeDup dup;
           dup.index = buf->index;
           dup.table = table;
           dup.n_dup = 0;
@@ -1143,22 +1143,22 @@ static db_err row_merge_read_clustered_index(
 
 /** Merge two blocks of records on disk and write a bigger block.
 @return	DB_SUCCESS or error code */
-static db_err row_merge_blocks(
+static DbErr row_merge_blocks(
   const Index *index,       /*!< in: index being created */
-  const merge_file_t *file, /*!< in: file containing
+  const MergeFile *file, /*!< in: file containing
                                             index entries */
   row_merge_block_t *block, /*!< in/out: 3 buffers */
   ulint *foffs0,            /*!< in/out: offset of first
                                             source list in the file */
   ulint *foffs1,            /*!< in/out: offset of second
                                             source list in the file */
-  merge_file_t *of,         /*!< in/out: output file */
+  MergeFile *of,         /*!< in/out: output file */
   table_handle_t table
 ) /*!< in/out: Client table, for
                                             reporting erroneous key value
                                             if applicable */
 {
-  mem_heap_t *heap; /*!< memory heap for offsets0, offsets1 */
+  MemHeap *heap; /*!< memory heap for offsets0, offsets1 */
 
   mrec_buf_t buf[3]; /*!< buffer for handling split mrec in block[] */
   const byte *b0;    /*!< pointer to block[0] */
@@ -1259,9 +1259,9 @@ done1:
  * @return true on success, false on failure.
  */
 static bool row_merge_blocks_copy(
-  const Index *index, const merge_file_t *file, row_merge_block_t *block, ulint *foffs0, merge_file_t *of
+  const Index *index, const MergeFile *file, row_merge_block_t *block, ulint *foffs0, MergeFile *of
 ) {
-  mem_heap_t *heap; /*!< memory heap for offsets0, offsets1 */
+  MemHeap *heap; /*!< memory heap for offsets0, offsets1 */
 
   mrec_buf_t buf[3]; /*!< buffer for handling
                        split mrec in block[] */
@@ -1323,10 +1323,10 @@ done0:
 
 /** Merge disk files.
 @return	DB_SUCCESS or error code */
-static __attribute__((nonnull)) db_err row_merge(
+static __attribute__((nonnull)) DbErr row_merge(
   Trx *trx,                 /*!< in: transaction */
   const Index *index,       /*!< in: index being created */
-  merge_file_t *file,       /*!< in/out: file containing
+  MergeFile *file,       /*!< in/out: file containing
                                      index entries */
   ulint *half,              /*!< in/out: half the file */
   row_merge_block_t *block, /*!< in/out: 3 buffers */
@@ -1338,8 +1338,8 @@ static __attribute__((nonnull)) db_err row_merge(
 {
   ulint foffs0;    /*!< first input offset */
   ulint foffs1;    /*!< second input offset */
-  db_err err;      /*!< error code */
-  merge_file_t of; /*!< output file */
+  DbErr err;      /*!< error code */
+  MergeFile of; /*!< output file */
   const ulint ihalf = *half;
   /*!< half the input file */
   ulint ohalf; /*!< half the output file */
@@ -1428,10 +1428,10 @@ static __attribute__((nonnull)) db_err row_merge(
 
 /** Merge disk files.
 @return	DB_SUCCESS or error code */
-static db_err row_merge_sort(
+static DbErr row_merge_sort(
   Trx *trx,                 /*!< in: transaction */
   const Index *index,       /*!< in: index being created */
-  merge_file_t *file,       /*!< in/out: file containing
+  MergeFile *file,       /*!< in/out: file containing
                                           index entries */
   row_merge_block_t *block, /*!< in/out: 3 buffers */
   int *tmpfd,               /*!< in/out: temporary file handle */
@@ -1447,7 +1447,7 @@ static db_err row_merge_sort(
   ut_ad(file->offset > 0);
 
   do {
-    db_err err;
+    DbErr err;
 
     err = row_merge(trx, index, file, &half, block, tmpfd, table);
 
@@ -1468,7 +1468,7 @@ static void row_merge_copy_blobs(
   const mrec_t mrec,    /*!< in: merge record */
   const ulint *offsets, /*!< in: offsets of mrec */
   DTuple *tuple,        /*!< in/out: data tuple */
-  mem_heap_t *heap
+  MemHeap *heap
 ) /*!< in/out: memory heap */
 {
   ulint i;
@@ -1478,7 +1478,7 @@ static void row_merge_copy_blobs(
   for (i = 0; i < n_fields; i++) {
     ulint len;
     const void *data;
-    dfield_t *field = dtuple_get_nth_field(tuple, i);
+    Dfield *field = dtuple_get_nth_field(tuple, i);
 
     if (!dfield_is_ext(field)) {
       continue;
@@ -1508,14 +1508,14 @@ static void row_merge_copy_blobs(
  *
  * @return DB_SUCCESS or error number.
  */
-static db_err row_merge_insert_index_tuples(Trx *trx, Index *index, Table *table, int fd, row_merge_block_t *block) {
+static DbErr row_merge_insert_index_tuples(Trx *trx, Index *index, Table *table, int fd, row_merge_block_t *block) {
   mrec_buf_t buf;
   const byte *b;
-  que_thr_t *thr;
-  ins_node_t *node;
-  mem_heap_t *tuple_heap;
-  mem_heap_t *graph_heap;
-  enum db_err err = DB_SUCCESS;
+  QueThr *thr;
+  InsertNode *node;
+  MemHeap *tuple_heap;
+  MemHeap *graph_heap;
+  enum DbErr err = DB_SUCCESS;
   ulint foffs = 0;
   ulint *offsets;
 
@@ -1647,7 +1647,7 @@ void row_merge_drop_indexes(
 }
 
 /** Create a merge file. */
-static void row_merge_file_create(merge_file_t *merge_file) /*!< out: merge file structure */
+static void row_merge_file_create(MergeFile *merge_file) /*!< out: merge file structure */
 {
   merge_file->fd = ib_create_tempfile("ibmrg");
   merge_file->offset = 0;
@@ -1655,7 +1655,7 @@ static void row_merge_file_create(merge_file_t *merge_file) /*!< out: merge file
 }
 
 /** Destroy a merge file. */
-static void row_merge_file_destroy(merge_file_t *merge_file) /*!< out: merge file structure */
+static void row_merge_file_destroy(MergeFile *merge_file) /*!< out: merge file structure */
 {
   if (merge_file->fd != -1) {
     close(merge_file->fd);
@@ -1669,7 +1669,7 @@ if a column must be constrained NOT NULL.
 inline ulint row_merge_col_prtype(
   const Column *col,    /*!< in: column */
   const char *col_name, /*!< in: name of the column */
-  const merge_index_def_t *index_def
+  const MergeIndexDef *index_def
 ) /*!< in: the index definition
                                         of the primary key */
 {
@@ -1694,8 +1694,8 @@ inline ulint row_merge_col_prtype(
   return prtype;
 }
 
-Table *row_merge_create_temporary_table(const char *table_name, const merge_index_def_t *index_def, const Table *table, Trx *trx) {
-  db_err err;
+Table *row_merge_create_temporary_table(const char *table_name, const MergeIndexDef *index_def, const Table *table, Trx *trx) {
+  DbErr err;
   const auto n_cols = table->get_n_user_cols();
 
   ut_ad(table);
@@ -1722,9 +1722,9 @@ Table *row_merge_create_temporary_table(const char *table_name, const merge_inde
   return (new_table);
 }
 
-db_err row_merge_rename_indexes(Trx *trx, Table *table) {
-  db_err err = DB_SUCCESS;
-  pars_info_t *info = pars_info_create();
+DbErr row_merge_rename_indexes(Trx *trx, Table *table) {
+  DbErr err = DB_SUCCESS;
+  ParsInfo *info = pars_info_create();
 
   /* We use the private SQL parser of Innobase to generate the
   query graphs needed in renaming indexes. */
@@ -1760,9 +1760,9 @@ db_err row_merge_rename_indexes(Trx *trx, Table *table) {
   return err;
 }
 
-db_err row_merge_rename_tables(Table *old_table, Table *new_table, const char *tmp_name, Trx *trx) {
-  db_err err = DB_ERROR;
-  pars_info_t *info;
+DbErr row_merge_rename_tables(Table *old_table, Table *new_table, const char *tmp_name, Trx *trx) {
+  DbErr err = DB_ERROR;
+  ParsInfo *info;
   const char *old_name = old_table->m_name;
 
   ut_ad(old_table != new_table);
@@ -1823,14 +1823,14 @@ db_err row_merge_rename_tables(Table *old_table, Table *new_table, const char *t
   return (err);
 }
 
-Index *row_merge_create_index(Trx *trx, Table *table, const merge_index_def_t *index_def) {
+Index *row_merge_create_index(Trx *trx, Table *table, const MergeIndexDef *index_def) {
   const auto n_fields = index_def->n_fields;
 
   /* Create the index prototype, using the passed in def, this is not
   a persistent operation. We pass 0 as the space id, and determine at
   a lower level the space id where to store the table. */
 
-  auto index = Index::create(table, index_def->name, Page_id{DICT_HDR_SPACE, NULL_PAGE_NO}, index_def->ind_type, n_fields);
+  auto index = Index::create(table, index_def->name, PageId{DICT_HDR_SPACE, NULL_PAGE_NO}, index_def->ind_type, n_fields);
   ut_a(index != nullptr);
 
   for (ulint i{}; i < n_fields; ++i) {
@@ -1864,7 +1864,7 @@ bool row_merge_is_index_usable(const Trx *trx, const Index *index) {
   return !trx->m_read_view || trx->m_read_view->sees_trx_id(index->m_trx_id);
 }
 
-db_err row_merge_drop_table(Trx *trx, Table *table) {
+DbErr row_merge_drop_table(Trx *trx, Table *table) {
   /* There must be no open transactions on the table. */
   ut_a(table->m_n_handles_opened == 0);
 
@@ -1875,7 +1875,7 @@ db_err row_merge_drop_table(Trx *trx, Table *table) {
   return err;
 }
 
-db_err row_merge_build_indexes(
+DbErr row_merge_build_indexes(
   Trx *trx, Table *old_table, Table *new_table, Index **indexes, ulint n_indexes, table_handle_t table
 ) {
   ut_ad(trx);
@@ -1890,7 +1890,7 @@ db_err row_merge_build_indexes(
 
   auto block_size = 3 * sizeof(row_merge_block_t);
   auto block = static_cast<row_merge_block_t *>(os_mem_alloc_large(&block_size));
-  auto merge_files = static_cast<merge_file_t *>(mem_alloc(n_indexes * sizeof(merge_file_t)));
+  auto merge_files = static_cast<MergeFile *>(mem_alloc(n_indexes * sizeof(MergeFile)));
 
   for (ulint i{}; i < n_indexes; ++i) {
     row_merge_file_create(&merge_files[i]);

@@ -35,11 +35,11 @@ Created 5/7/1996 Heikki Tuuri
 #include <map>
 #include <unordered_map>
 
-struct Trx_sys;
-struct Buf_block;
+struct TrxSys;
+struct BufBlock;
 struct Index;
-struct Read_view;
-struct que_thr_t;
+struct ReadView;
+struct QueThr;
 
 #ifdef UNIV_DEBUG
 extern bool lock_print_waits;
@@ -48,19 +48,19 @@ extern bool lock_print_waits;
 /* Buffer for storing information about the most recent deadlock error */
 extern ib_stream_t lock_latest_err_stream;
 
-struct Lock_sys {
+struct LockSys {
   /**
    * Creates the lock system at database start.
    *
    * @param[in] trx_sys The transaction system.
    * @param[in] n_cells Number of slots in the lock hash table.
    */
-  explicit Lock_sys(Trx_sys *trx_sys, ulint n_cells) noexcept;
+  explicit LockSys(TrxSys *trx_sys, ulint n_cells) noexcept;
 
   /**
    * Closes the lock system at database shutdown.
    */
-  ~Lock_sys() noexcept;
+  ~LockSys() noexcept;
 
   /**
    * Gets the size of a lock struct.
@@ -81,7 +81,7 @@ struct Lock_sys {
    * @param[in] block  The old index page, now reorganized.
    * @param[in] oblock A copy of the old, not reorganized page.
    */
-  void move_reorganize_page(const Buf_block *block, const Buf_block *oblock) noexcept;
+  void move_reorganize_page(const BufBlock *block, const BufBlock *oblock) noexcept;
 
   /**
    * @brief Moves the explicit locks on user records to another page if a record
@@ -94,7 +94,7 @@ struct Lock_sys {
    * @param[in] block The current index page.
    * @param[in] rec The first record moved on the page.
    */
-  void move_rec_list_end(const Buf_block *new_block, const Buf_block *block, const Rec rec) noexcept;
+  void move_rec_list_end(const BufBlock *new_block, const BufBlock *block, const Rec rec) noexcept;
 
   /**
    * @brief Moves the explicit locks on user records to another page if a record
@@ -108,7 +108,7 @@ struct Lock_sys {
    * @param[in] rec The first record on the page that is NOT copied.
    * @param[in] old_end The old previous-to-last record on the new page before the records were copied.
    */
-  void move_rec_list_start(const Buf_block *new_block, const Buf_block *block, const Rec rec, const Rec old_end) noexcept;
+  void move_rec_list_start(const BufBlock *new_block, const BufBlock *block, const Rec rec, const Rec old_end) noexcept;
 
   /**
    * @brief Updates the lock table when a page is split to the right.
@@ -120,7 +120,7 @@ struct Lock_sys {
    * @param[in] right_block The right page after the split.
    * @param[in] left_block The left page after the split.
    */
-  void update_split_right(const Buf_block *right_block, const Buf_block *left_block) noexcept;
+  void update_split_right(const BufBlock *right_block, const BufBlock *left_block) noexcept;
 
   /**
    * @brief Updates the lock table when a page is merged to the right.
@@ -133,7 +133,7 @@ struct Lock_sys {
    * @param[in] orig_succ The original successor of the infimum on the right page before the merge.
    * @param[in] left_block The merged index page which will be discarded.
    */
-  void update_merge_right(const Buf_block *right_block, const Rec orig_succ, const Buf_block *left_block) noexcept;
+  void update_merge_right(const BufBlock *right_block, const Rec orig_succ, const BufBlock *left_block) noexcept;
 
   /**
    * @brief Updates the lock table when the root page is copied to another in btr_root_raise_and_insert.
@@ -147,7 +147,7 @@ struct Lock_sys {
    * @param[in] block The index page to which the root page is copied.
    * @param[in] root The root page being copied.
    */
-  void update_root_raise(const Buf_block *block, const Buf_block *root) noexcept;
+  void update_root_raise(const BufBlock *block, const BufBlock *root) noexcept;
 
   /**
    * @brief Updates the lock table when a page is copied to another and the original
@@ -161,7 +161,7 @@ struct Lock_sys {
    * @param[in] new_block The index page to which the original page is copied.
    * @param[in] block The original index page that is being copied; NOT the root page.
    */
-  void update_copy_and_discard(const Buf_block *new_block, const Buf_block *block) noexcept;
+  void update_copy_and_discard(const BufBlock *new_block, const BufBlock *block) noexcept;
 
   /**
    * @brief Updates the lock table when a page is split to the left.
@@ -173,7 +173,7 @@ struct Lock_sys {
    * @param[in] right_block The right page after the split.
    * @param[in] left_block The left page after the split.
    */
-  void update_split_left(const Buf_block *right_block, const Buf_block *left_block) noexcept;
+  void update_split_left(const BufBlock *right_block, const BufBlock *left_block) noexcept;
 
   /**
    * @brief Updates the lock table when a page is merged to the left.
@@ -186,7 +186,7 @@ struct Lock_sys {
    * @param[in] orig_pred The original predecessor of the supremum on the left page before the merge.
    * @param[in] right_block The merged index page which will be discarded.
    */
-  void update_merge_left(const Buf_block *left_block, const Rec orig_pred, const Buf_block *right_block) noexcept;
+  void update_merge_left(const BufBlock *left_block, const Rec orig_pred, const BufBlock *right_block) noexcept;
 
   /**
    * @brief Resets the original locks on the heir record and replaces them with gap type locks
@@ -201,7 +201,7 @@ struct Lock_sys {
    * @param[in] heap_no Heap number of the donating record.
    */
   void rec_reset_and_inherit_gap_locks(
-    const Buf_block *heir_block, const Buf_block *block, ulint heir_heap_no, ulint heap_no
+    const BufBlock *heir_block, const BufBlock *block, ulint heir_heap_no, ulint heap_no
   ) noexcept;
 
   /**
@@ -215,7 +215,7 @@ struct Lock_sys {
    * @param[in] heir_heap_no The heap number of the record which will inherit the locks.
    * @param[in] block The index page which will be discarded.
    */
-  void update_discard(const Buf_block *heir_block, ulint heir_heap_no, const Buf_block *block) noexcept;
+  void update_discard(const BufBlock *heir_block, ulint heir_heap_no, const BufBlock *block) noexcept;
 
   /**
    * @brief Updates the lock table when a new user record is inserted.
@@ -226,7 +226,7 @@ struct Lock_sys {
    * @param[in] block Buffer block containing the inserted record.
    * @param[in] rec The inserted record.
    */
-  void update_insert(const Buf_block *block, const Rec rec) noexcept;
+  void update_insert(const BufBlock *block, const Rec rec) noexcept;
 
   /**
    * @brief Updates the lock table when a record is removed.
@@ -238,7 +238,7 @@ struct Lock_sys {
    * @param[in] block Buffer block containing the record to be removed.
    * @param[in] rec The record to be removed.
    */
-  void update_delete(const Buf_block *block, const Rec rec) noexcept;
+  void update_delete(const BufBlock *block, const Rec rec) noexcept;
 
   /**
    * @brief Stores the explicit locks of a record on the page infimum record.
@@ -252,7 +252,7 @@ struct Lock_sys {
    * @param[in] block Buffer block containing the record.
    * @param[in] rec Record whose lock state is stored on the infimum record of the same page; lock bits are reset on the record.
    */
-  void rec_store_on_page_infimum(const Buf_block *block, const Rec rec) noexcept;
+  void rec_store_on_page_infimum(const BufBlock *block, const Rec rec) noexcept;
 
   /**
    * @brief Restores the state of explicit lock requests on a single record.
@@ -265,7 +265,7 @@ struct Lock_sys {
    * @param[in] rec Record whose lock state is restored.
    * @param[in] donator Page (rec is not necessarily on this page) whose infimum stored the lock state; lock bits are reset on the infimum.
    */
-  void rec_restore_from_page_infimum(const Buf_block *block, const Rec rec, const Buf_block *donator) noexcept;
+  void rec_restore_from_page_infimum(const BufBlock *block, const Rec rec, const BufBlock *donator) noexcept;
 
   /**
    * @brief Checks if there are explicit record locks on a page.
@@ -277,7 +277,7 @@ struct Lock_sys {
    *
    * @return true if there are explicit record locks on the page, false otherwise.
    */
-  [[nodiscard]] bool rec_expl_exist_on_page(Page_id page_id) noexcept;
+  [[nodiscard]] bool rec_expl_exist_on_page(PageId page_id) noexcept;
 
   /**
    * @brief Checks if locks of other transactions prevent an immediate insert of a record.
@@ -298,8 +298,8 @@ struct Lock_sys {
    *
    * @return DB_SUCCESS, DB_LOCK_WAIT, DB_DEADLOCK, or DB_QUE_THR_SUSPENDED.
    */
-  [[nodiscard]] db_err rec_insert_check_and_lock(
-    ulint flags, const Rec rec, Buf_block *block, const Index *index, que_thr_t *thr, mtr_t *mtr, bool *inherit
+  [[nodiscard]] DbErr rec_insert_check_and_lock(
+    ulint flags, const Rec rec, BufBlock *block, const Index *index, QueThr *thr, Mtr *mtr, bool *inherit
   ) noexcept;
 
   /**
@@ -315,13 +315,13 @@ struct Lock_sys {
    * @param[in] block Buffer block of the record.
    * @param[in] rec Record which should be modified.
    * @param[in] index Clustered index.
-   * @param[in] offsets Column offsets for the record, obtained from Phy_rec::get_col_offsets(rec, index).
+   * @param[in] offsets Column offsets for the record, obtained from PhyRec::get_col_offsets(rec, index).
    * @param[in] thr Query thread.
    *
    * @return DB_SUCCESS, DB_LOCK_WAIT, DB_DEADLOCK, or DB_QUE_THR_SUSPENDED.
    */
-  [[nodiscard]] db_err clust_rec_modify_check_and_lock(
-    ulint flags, const Buf_block *block, const Rec rec, const Index *index, const ulint *offsets, que_thr_t *thr
+  [[nodiscard]] DbErr clust_rec_modify_check_and_lock(
+    ulint flags, const BufBlock *block, const Rec rec, const Index *index, const ulint *offsets, QueThr *thr
   ) noexcept;
 
   /**
@@ -344,8 +344,8 @@ struct Lock_sys {
    *
    * @return DB_SUCCESS, DB_LOCK_WAIT, DB_DEADLOCK, or DB_QUE_THR_SUSPENDED.
    */
-  [[nodiscard]] db_err sec_rec_modify_check_and_lock(
-    ulint flags, Buf_block *block, const Rec rec, const Index *index, que_thr_t *thr, mtr_t *mtr
+  [[nodiscard]] DbErr sec_rec_modify_check_and_lock(
+    ulint flags, BufBlock *block, const Rec rec, const Index *index, QueThr *thr, Mtr *mtr
   ) noexcept;
 
   /**
@@ -361,16 +361,16 @@ struct Lock_sys {
    * @param[in] block Buffer block of the record.
    * @param[in] rec User record or page supremum record which should be read or passed over by a read cursor.
    * @param[in] index Secondary index.
-   * @param[in] offsets Column offsets for the record, obtained from Phy_rec::get_col_offsets(rec, index).
+   * @param[in] offsets Column offsets for the record, obtained from PhyRec::get_col_offsets(rec, index).
    * @param[in] mode Mode of the lock which the read cursor should set on records: LOCK_S or LOCK_X; the latter is possible in SELECT FOR UPDATE.
    * @param[in] gap_mode LOCK_ORDINARY, LOCK_GAP, or LOCK_REC_NOT_GAP.
    * @param[in] thr Query thread.
    *
    * @return DB_SUCCESS, DB_LOCK_WAIT, DB_DEADLOCK, or DB_QUE_THR_SUSPENDED.
    */
-  [[nodiscard]] db_err sec_rec_read_check_and_lock(
-    ulint flags, const Buf_block *block, const Rec rec, const Index *index, const ulint *offsets, Lock_mode mode,
-    ulint gap_mode, que_thr_t *thr
+  [[nodiscard]] DbErr sec_rec_read_check_and_lock(
+    ulint flags, const BufBlock *block, const Rec rec, const Index *index, const ulint *offsets, LockMode mode,
+    ulint gap_mode, QueThr *thr
   ) noexcept;
 
   /**
@@ -386,16 +386,16 @@ struct Lock_sys {
    * @param[in] block Buffer block of the record.
    * @param[in] rec User record or page supremum record which should be read or passed over by a read cursor.
    * @param[in] index Clustered index.
-   * @param[in] offsets Column offsets for the record, obtained from Phy_rec::get_col_offsets(rec, index).
+   * @param[in] offsets Column offsets for the record, obtained from PhyRec::get_col_offsets(rec, index).
    * @param[in] mode Mode of the lock which the read cursor should set on records: LOCK_S or LOCK_X; the latter is possible in SELECT FOR UPDATE.
    * @param[in] gap_mode LOCK_ORDINARY, LOCK_GAP, or LOCK_REC_NOT_GAP.
    * @param[in] thr Query thread.
    *
    * @return DB_SUCCESS, DB_LOCK_WAIT, DB_DEADLOCK, or DB_QUE_THR_SUSPENDED.
    */
-  [[nodiscard]] db_err clust_rec_read_check_and_lock(
-    ulint flags, const Buf_block *block, const Rec rec, const Index *index, const ulint *offsets, Lock_mode mode,
-    ulint gap_mode, que_thr_t *thr
+  [[nodiscard]] DbErr clust_rec_read_check_and_lock(
+    ulint flags, const BufBlock *block, const Rec rec, const Index *index, const ulint *offsets, LockMode mode,
+    ulint gap_mode, QueThr *thr
   ) noexcept;
 
   /**
@@ -420,8 +420,8 @@ struct Lock_sys {
    *
    * @return DB_SUCCESS, DB_LOCK_WAIT, DB_DEADLOCK, or DB_QUE_THR_SUSPENDED.
    */
-  [[nodiscard]] db_err clust_rec_read_check_and_lock_alt(
-    ulint flags, const Buf_block *block, const Rec rec, const Index *index, Lock_mode mode, ulint gap_mode, que_thr_t *thr
+  [[nodiscard]] DbErr clust_rec_read_check_and_lock_alt(
+    ulint flags, const BufBlock *block, const Rec rec, const Index *index, LockMode mode, ulint gap_mode, QueThr *thr
   ) noexcept;
 
   /**
@@ -433,12 +433,12 @@ struct Lock_sys {
    *
    * @param[in] rec User record which should be read or passed over by a read cursor.
    * @param[in] index Clustered index.
-   * @param[in] offsets Column offsets for the record, obtained from Phy_rec::get_col_offsets(rec, index).
+   * @param[in] offsets Column offsets for the record, obtained from PhyRec::get_col_offsets(rec, index).
    * @param[in] view Consistent read view.
    *
    * @return true if the record is visible, or false if an earlier version of the record should be retrieved.
    */
-  [[nodiscard]] bool clust_rec_cons_read_sees(const Rec rec, Index *index, const ulint *offsets, Read_view *view)
+  [[nodiscard]] bool clust_rec_cons_read_sees(const Rec rec, Index *index, const ulint *offsets, ReadView *view)
     const noexcept;
 
   /**
@@ -455,7 +455,7 @@ struct Lock_sys {
    * @return true if certainly sees, or false if an earlier version of the
    * clustered index record might be needed.
    */
-  [[nodiscard]] bool sec_rec_cons_read_sees(const Rec rec, Read_view *view) const noexcept;
+  [[nodiscard]] bool sec_rec_cons_read_sees(const Rec rec, ReadView *view) const noexcept;
 
   /**
    * @brief Locks the specified database table in the given mode.
@@ -470,7 +470,7 @@ struct Lock_sys {
    *
    * @return DB_SUCCESS, DB_LOCK_WAIT, DB_DEADLOCK, or DB_QUE_THR_SUSPENDED.
    */
-  [[nodiscard]] db_err lock_table(ulint flags, Table *table, Lock_mode mode, que_thr_t *thr) noexcept;
+  [[nodiscard]] DbErr lock_table(ulint flags, Table *table, LockMode mode, QueThr *thr) noexcept;
 
   /**
    * @brief Removes a granted record lock of a transaction from the queue.
@@ -484,7 +484,7 @@ struct Lock_sys {
    * @param[in] rec Record for which the lock is set.
    * @param[in] lock_mode Lock mode, either LOCK_S or LOCK_X.
    */
-  void rec_unlock(Trx *trx, const Buf_block *block, const Rec rec, Lock_mode lock_mode) noexcept;
+  void rec_unlock(Trx *trx, const BufBlock *block, const Rec rec, LockMode lock_mode) noexcept;
 
   /**
    * @brief Releases transaction locks and releases other transactions waiting because of these locks.
@@ -533,7 +533,7 @@ struct Lock_sys {
    *         dest if there is no source table;
    *         NULL if the transaction is locking more than two tables or an inconsistency is found.
    */
-  [[nodiscard]] Table *get_src_table(Trx *trx, Table *dest, Lock_mode *mode) noexcept;
+  [[nodiscard]] Table *get_src_table(Trx *trx, Table *dest, LockMode *mode) noexcept;
 
   /**
    * @brief Determine if the given table is exclusively "owned" by the given transaction.
@@ -556,7 +556,7 @@ struct Lock_sys {
    * @param[in] trx_id The transaction id to check.
    * @param[in] rec The user record.
    * @param[in] index The clustered index.
-   * @param[in] offsets The column offsets obtained from Phy_rec::get_col_offsets(rec, index).
+   * @param[in] offsets The column offsets obtained from PhyRec::get_col_offsets(rec, index).
    * @param[in] has_trx_sys_mutex True if the caller owns the trx system mutex.
    *
    * @return true if the transaction id is sensible, false otherwise.
@@ -614,7 +614,7 @@ struct Lock_sys {
    *
    * @param[in] rec The user record to check
    * @param[in] index The clustered index containing the record
-   * @param[in] offsets The column offsets for the record, obtained from Phy_rec::get_col_offsets(rec, index)
+   * @param[in] offsets The column offsets for the record, obtained from PhyRec::get_col_offsets(rec, index)
    *
    * @return A pointer to the transaction that holds the implicit x-lock, or NULL if no such transaction exists
    *
@@ -645,7 +645,7 @@ struct Lock_sys {
    *
    * @return	heap_no of smallest user record, or PAGE_HEAP_NO_SUPREMUM
    */
-  [[nodiscard]] inline ulint get_min_heap_no(const Buf_block *block) noexcept {
+  [[nodiscard]] inline ulint get_min_heap_no(const BufBlock *block) noexcept {
     const auto page = block->m_frame;
 
     return Rec(page + PAGE_INFIMUM).get_heap_no();
@@ -706,30 +706,30 @@ struct Lock_sys {
   [[nodiscard]] bool is_print_lock_monitor_set() const noexcept { return m_print_lock_monitor; }
 
   /**
-   * @brief Creates a new instance of the Lock_sys class.
+   * @brief Creates a new instance of the LockSys class.
    *
-   * This function allocates memory for a new Lock_sys object and initializes it
+   * This function allocates memory for a new LockSys object and initializes it
    * with the specified number of cells.
    *
    * @param[in] trx_sys The transaction system.
    * @param[in] n_cells The number of cells to initialize in the lock system.
    *
-   * @return A pointer to the newly created Lock_sys object, or nullptr if the
+   * @return A pointer to the newly created LockSys object, or nullptr if the
    *         allocation fails.
    */
-  [[nodiscard]] static Lock_sys *create(Trx_sys *trx_sys, ulint n_cells) noexcept;
+  [[nodiscard]] static LockSys *create(TrxSys *trx_sys, ulint n_cells) noexcept;
 
   /**
-   * @brief Destroys the Lock_sys instance and deallocates its memory.
+   * @brief Destroys the LockSys instance and deallocates its memory.
    *
-   * This function deallocates the memory associated with the given Lock_sys
+   * This function deallocates the memory associated with the given LockSys
    * instance and sets the pointer to nullptr to prevent dangling references.
    *
-   * @param[in,out] lock_sys A reference to the pointer of the Lock_sys instance
+   * @param[in,out] lock_sys A reference to the pointer of the LockSys instance
    *                         to be destroyed. The pointer will be set to nullptr
    *                         after the instance is destroyed.
    */
-  static void destroy(Lock_sys *&lock_sys) noexcept;
+  static void destroy(LockSys *&lock_sys) noexcept;
 
 #ifndef UNIT_TESTING
  private:
@@ -754,7 +754,7 @@ struct Lock_sys {
    * @return A pointer to the created lock.
    */
   [[nodiscard]] Lock *rec_create_low(
-    Page_id page_id, Lock_mode type_mode, ulint heap_no, ulint n_bits, const Index *index, Trx *trx
+    PageId page_id, LockMode type_mode, ulint heap_no, ulint n_bits, const Index *index, Trx *trx
   ) noexcept;
 
 #ifdef UNIV_DEBUG
@@ -780,7 +780,7 @@ struct Lock_sys {
    * @param[in] page_no The page number within the space to validate.
    * @return true if the record lock queues on the page are valid, false otherwise.
    */
-  [[nodiscard]] bool rec_validate_page(Page_id page_id) noexcept;
+  [[nodiscard]] bool rec_validate_page(PageId page_id) noexcept;
 
   /**
    * @brief Checks if some other transaction has a lock request in the queue.
@@ -799,7 +799,7 @@ struct Lock_sys {
    * @return A pointer to the lock if found, or nullptr if no such lock exists.
    */
   [[nodiscard]] const Lock *rec_other_has_expl_req(
-    Page_id page_id, Lock_mode mode, ulint gap, ulint wait, ulint heap_no, const Trx *trx
+    PageId page_id, LockMode mode, ulint gap, ulint wait, ulint heap_no, const Trx *trx
   ) const noexcept;
 
 #endif /* UNIV_DEBUG */
@@ -869,7 +869,7 @@ struct Lock_sys {
    *
    * @return The first lock on the specified record, or nullptr if none exists.
    */
-  [[nodiscard]] inline Lock *rec_get_first(Page_id page_id, ulint heap_no) noexcept;
+  [[nodiscard]] inline Lock *rec_get_first(PageId page_id, ulint heap_no) noexcept;
 #endif /* UNIV_DEBUG */
 
   /**
@@ -884,7 +884,7 @@ struct Lock_sys {
    *
    * @return A pointer to the lock if found, or nullptr if no such lock exists.
    */
-  [[nodiscard]] inline Lock *table_has(Trx *trx, Table *table, Lock_mode mode) noexcept;
+  [[nodiscard]] inline Lock *table_has(Trx *trx, Table *table, LockMode mode) noexcept;
 
   /**
    * @brief Checks if a transaction has a GRANTED explicit lock on a record that is stronger or equal to the specified mode.
@@ -900,7 +900,7 @@ struct Lock_sys {
    *
    * @return A pointer to the lock if found, or nullptr if no such lock exists.
    */
-  [[nodiscard]] inline const Lock *rec_has_expl(Page_id page_id, ulint precise_mode, ulint heap_no, const Trx *trx) const noexcept;
+  [[nodiscard]] inline const Lock *rec_has_expl(PageId page_id, ulint precise_mode, ulint heap_no, const Trx *trx) const noexcept;
 
   /**
    * @brief Checks if some other transaction has a conflicting explicit lock request in the queue.
@@ -915,7 +915,7 @@ struct Lock_sys {
    *
    * @return A pointer to the conflicting lock if found, or nullptr if no such lock exists.
    */
-  [[nodiscard]] Lock *rec_other_has_conflicting(Page_id page_id, Lock_mode mode, ulint heap_no, Trx *trx) noexcept;
+  [[nodiscard]] Lock *rec_other_has_conflicting(PageId page_id, LockMode mode, ulint heap_no, Trx *trx) noexcept;
 
   /**
    * @brief Finds a similar record lock on the same page for the same transaction.
@@ -931,7 +931,7 @@ struct Lock_sys {
    *
    * @return A pointer to the similar lock if found, or nullptr if no such lock exists.
    */
-  [[nodiscard]] inline Lock *rec_find_similar_on_page(Lock_mode type_mode, ulint heap_no, Lock *lock, const Trx *trx) noexcept;
+  [[nodiscard]] inline Lock *rec_find_similar_on_page(LockMode type_mode, ulint heap_no, Lock *lock, const Trx *trx) noexcept;
 
   /**
    * @brief Checks if some transaction has an implicit x-lock on a record in a secondary index.
@@ -942,7 +942,7 @@ struct Lock_sys {
    *
    * @param[in] rec      The user record to check.
    * @param[in] index    The secondary index containing the record.
-   * @param[in] offsets  Column offsets obtained from Phy_rec::get_col_offsets(rec, index).
+   * @param[in] offsets  Column offsets obtained from PhyRec::get_col_offsets(rec, index).
    *
    * @return A pointer to the transaction that has the x-lock, or nullptr if no such transaction exists.
    */
@@ -964,7 +964,7 @@ struct Lock_sys {
    * @return The created lock.
    */
   [[nodiscard]] Lock *rec_create(
-    Lock_mode type_mode, const Buf_block *block, ulint heap_no, const Index *index, const Trx *trx
+    LockMode type_mode, const BufBlock *block, ulint heap_no, const Index *index, const Trx *trx
   ) noexcept;
 
   /**
@@ -986,8 +986,8 @@ struct Lock_sys {
    * @return DB_QUE_THR_SUSPENDED if the query thread should be stopped.
    * @return DB_SUCCESS if there was a deadlock but another transaction was chosen as a victim, and the lock was granted immediately.
    */
-  [[nodiscard]] db_err rec_enqueue_waiting(
-    Lock_mode type_mode, const Buf_block *block, ulint heap_no, const Index *index, que_thr_t *thr
+  [[nodiscard]] DbErr rec_enqueue_waiting(
+    LockMode type_mode, const BufBlock *block, ulint heap_no, const Index *index, QueThr *thr
   ) noexcept;
 
   /**
@@ -1007,7 +1007,7 @@ struct Lock_sys {
    * @return Lock where the bit was set.
    */
   [[nodiscard]] Lock *rec_add_to_queue(
-    Lock_mode type_mode, const Buf_block *block, ulint heap_no, const Index *index, const Trx *trx
+    LockMode type_mode, const BufBlock *block, ulint heap_no, const Index *index, const Trx *trx
   ) noexcept;
 
   /**
@@ -1030,7 +1030,7 @@ struct Lock_sys {
    * @return true if locking succeeded.
    */
   [[nodiscard]] inline bool rec_lock_fast(
-    bool impl, Lock_mode mode, const Buf_block *block, ulint heap_no, const Index *index, que_thr_t *thr
+    bool impl, LockMode mode, const BufBlock *block, ulint heap_no, const Index *index, QueThr *thr
   ) noexcept;
 
   /**
@@ -1051,8 +1051,8 @@ struct Lock_sys {
    *
    * @return DB_SUCCESS, DB_LOCK_WAIT, or an error code.
    */
-  [[nodiscard]] db_err rec_lock_slow(
-    bool impl, Lock_mode mode, const Buf_block *block, ulint heap_no, const Index *index, que_thr_t *thr
+  [[nodiscard]] DbErr rec_lock_slow(
+    bool impl, LockMode mode, const BufBlock *block, ulint heap_no, const Index *index, QueThr *thr
   ) noexcept;
 
   /**
@@ -1074,8 +1074,8 @@ struct Lock_sys {
    *
    * @return DB_SUCCESS, DB_LOCK_WAIT, or an error code.
    */
-  [[nodiscard]] db_err rec_lock(
-    bool impl, Lock_mode mode, const Buf_block *block, ulint heap_no, const Index *index, que_thr_t *thr
+  [[nodiscard]] DbErr rec_lock(
+    bool impl, LockMode mode, const BufBlock *block, ulint heap_no, const Index *index, QueThr *thr
   ) noexcept;
 
   /**
@@ -1150,7 +1150,7 @@ struct Lock_sys {
    *
    * @param[in] page_id The page id to be discarded.
    */
-  void rec_free_all_from_discard_page(Page_id page_id) noexcept;
+  void rec_free_all_from_discard_page(PageId page_id) noexcept;
 
   /**
    * @brief Resets the lock bits for a single record and releases transactions waiting for lock requests.
@@ -1161,7 +1161,7 @@ struct Lock_sys {
    * @param[in] page_id  The page id containing the record.
    * @param[in] heap_no  The heap number of the record.
    */
-  void rec_reset_and_release_wait(Page_id page_id, ulint heap_no) noexcept;
+  void rec_reset_and_release_wait(PageId page_id, ulint heap_no) noexcept;
 
   /**
    * @brief Makes a record inherit the locks (except LOCK_INSERT_INTENTION type)
@@ -1178,7 +1178,7 @@ struct Lock_sys {
    * @param[in] heir_heap_no Heap number of the inheriting record.
    * @param[in] heap_no      Heap number of the donating record.
    */
-  void rec_inherit_to_gap(const Buf_block *heir_block, const Buf_block *block, ulint heir_heap_no, ulint heap_no) noexcept;
+  void rec_inherit_to_gap(const BufBlock *heir_block, const BufBlock *block, ulint heir_heap_no, ulint heap_no) noexcept;
 
   /**
    * @brief Makes a record inherit the gap locks (except LOCK_INSERT_INTENTION type)
@@ -1194,7 +1194,7 @@ struct Lock_sys {
    * @param[in] heir_heap_no Heap number of the inheriting record.
    * @param[in] heap_no      Heap number of the donating record.
    */
-  void rec_inherit_to_gap_if_gap_lock(const Buf_block *block, ulint heir_heap_no, ulint heap_no) noexcept;
+  void rec_inherit_to_gap_if_gap_lock(const BufBlock *block, ulint heir_heap_no, ulint heap_no) noexcept;
 
   /**
    * @brief Moves the locks of a record to another record and resets the lock bits of
@@ -1210,7 +1210,7 @@ struct Lock_sys {
    *                             there must be no lock requests on it.
    * @param[in] donator_heap_no  Heap number of the record which gives the locks.
    */
-  void rec_move(const Buf_block *receiver, const Buf_block *donator, ulint receiver_heap_no, ulint donator_heap_no) noexcept;
+  void rec_move(const BufBlock *receiver, const BufBlock *donator, ulint receiver_heap_no, ulint donator_heap_no) noexcept;
 
   /**
    * @brief Creates a table lock object and adds it as the last in the lock queue
@@ -1221,7 +1221,7 @@ struct Lock_sys {
    * @param[in] trx Transaction.
    * @return Lock* New lock object.
    */
-  [[nodiscard]] inline Lock *table_create(Table *table, Lock_mode type_mode, Trx *trx) noexcept;
+  [[nodiscard]] inline Lock *table_create(Table *table, LockMode type_mode, Trx *trx) noexcept;
 
   /**
    * @brief Removes a table lock request from the queue and the trx list of locks.
@@ -1246,7 +1246,7 @@ struct Lock_sys {
    *         DB_QUE_THR_SUSPENDED if the query thread should be stopped,
    *         DB_SUCCESS if there was a deadlock but another transaction was chosen as a victim and the lock was granted immediately.
    */
-  [[nodiscard]] db_err table_enqueue_waiting(Lock_mode mode, Table *table, que_thr_t *thr) noexcept;
+  [[nodiscard]] DbErr table_enqueue_waiting(LockMode mode, Table *table, QueThr *thr) noexcept;
 
   /**
    * Checks if other transactions have an incompatible mode lock request in the lock queue.
@@ -1257,7 +1257,7 @@ struct Lock_sys {
    * @param[in] mode  Lock mode.
    * @return          Lock or nullptr.
    */
-  [[nodiscard]] inline Lock *table_other_has_incompatible(Trx *trx, ulint wait, Table *table, Lock_mode mode) noexcept;
+  [[nodiscard]] inline Lock *table_other_has_incompatible(Trx *trx, ulint wait, Table *table, LockMode mode) noexcept;
 
   /**
    * @brief Checks if a waiting table lock request still has to wait in a queue.
@@ -1332,11 +1332,11 @@ struct Lock_sys {
    * @param[in] block   Buffer block containing the record.
    * @param[in] rec     Record to validate.
    * @param[in] index   Index, or nullptr if not known.
-   * @param[in] offsets Column offsets obtained from Phy_rec::get_col_offsets(rec, index).
+   * @param[in] offsets Column offsets obtained from PhyRec::get_col_offsets(rec, index).
    * @return true if the lock queue is valid, false otherwise.
    */
   [[nodiscard]] bool rec_queue_validate(
-    const Buf_block *block, const Rec rec, const Index *index, const ulint *offsets
+    const BufBlock *block, const Rec rec, const Index *index, const ulint *offsets
   ) noexcept;
 
   /**
@@ -1362,9 +1362,9 @@ struct Lock_sys {
    * @param[in] block   The buffer block of the record.
    * @param[in] rec     The user record on the page.
    * @param[in] index   The index of the record.
-   * @param[in] offsets Column offsets obtained from Phy_rec::get_col_offsets(rec, index).
+   * @param[in] offsets Column offsets obtained from PhyRec::get_col_offsets(rec, index).
    */
-  void rec_convert_impl_to_expl(const Buf_block *block, const Rec rec, const Index *index, const ulint *offsets) noexcept;
+  void rec_convert_impl_to_expl(const BufBlock *block, const Rec rec, const Index *index, const ulint *offsets) noexcept;
 
   /**
    * @brief Checks if a transaction has no waiters.
@@ -1396,19 +1396,19 @@ struct Lock_sys {
    *
    * This pointer holds the buffer pool, which manages the buffer pool. The pointer
    * is not owned by the lock system, but by the buffer pool. We extract the buffer pool
-   * pointer from Trx_sys::Fil::m_buf_pool to simplify the calls.
+   * pointer from TrxSys::Fil::m_buf_pool to simplify the calls.
    *
    * FIXME: This needs to be fixed, reduce these dependencies. We let it go for now
    * to simplify the changes.
    */
-  Buf_pool *m_buf_pool{};
+  BufPool *m_buf_pool{};
 
   /**
    * @brief The transaction system.
    *
    * This pointer holds the transaction system, which manages all transactions in the system.
    */
-  Trx_sys *m_trx_sys{};
+  TrxSys *m_trx_sys{};
 
   /**
    * @brief Whether to print the InnoDB lock monitor.

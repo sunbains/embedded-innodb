@@ -41,10 +41,10 @@ Created 2018-01-27 by Sunny Bains. */
 
 // Forward declarations
 struct Trx;
-struct mtr_t;
+struct Mtr;
 class PCursor;
-struct Btree_pcursor;
-struct Buf_block;
+struct BtreePcursor;
+struct BufBlock;
 struct Table;
 
 #include "btr0cur.h"
@@ -54,7 +54,6 @@ struct Table;
 #include "rem0types.h"
 #include "ut0mpmcbq.h"
 
-using dberr_t = db_err;
 using Page_range_t = std::pair<page_no_t, page_no_t>;
 
 /** The core idea is to find the left and right paths down the B+Tree.These
@@ -67,29 +66,29 @@ and there are 5 sub-trees at the selected level then we will split the 5th
 sub-tree dynamically when it is ready for scan.
 
 We want to allow multiple parallel range scans on diffrent indexes at the
-same time. To achieve this split out the scan  context (Scan_ctx) from the
-execution context (Ctx). The Scan_ctx has the index  and transaction
+same time. To achieve this split out the scan  context (ScanCtx) from the
+execution context (Ctx). The ScanCtx has the index  and transaction
 information and the Ctx keeps track of the cursor for a specific thread
 during the scan.
 
-To start a scan we need to instantiate a Parallel_reader. A parallel reader
-can contain several Scan_ctx instances and a Scan_ctx can contain several
+To start a scan we need to instantiate a ParallelReader. A parallel reader
+can contain several ScanCtx instances and a ScanCtx can contain several
 Ctx instances. Its' the Ctx instances that are eventually executed.
 
-This design allows for a single Parallel_reader to scan multiple indexes
+This design allows for a single ParallelReader to scan multiple indexes
 at once.  Each index range scan has to be added via its add_scan() method.
 This functionality is required to handle parallel partition scans because
 partitions are separate indexes. This can be used to scan completely
-different indexes and tables by one instance of a Parallel_reader.
+different indexes and tables by one instance of a ParallelReader.
 
 To solve the imbalance problem we dynamically split the sub-trees as and
 when required. e.g., If you have 5 sub-trees to scan and 4 threads then
 it will tag the 5th sub-tree as "to_be_split" during phase I (add_scan()),
 the first thread that finishes scanning the first set of 4 partitions will
 then dynamically split the 5th sub-tree and add the newly created sub-trees
-to the execution context (Ctx) run queue in the Parallel_reader. As the
+to the execution context (Ctx) run queue in the ParallelReader. As the
 other threads complete their sub-tree scans they will pick up more execution
-contexts (Ctx) from the Parallel_reader run queue and start scanning the
+contexts (Ctx) from the ParallelReader run queue and start scanning the
 sub-partitions as normal.
 
 Note: The Ctx instances are in a virtual list. Each Ctx instance has a
@@ -100,7 +99,7 @@ reference counting, this allows us to dispose of the Ctx instances
 without worrying about dangling pointers.
 
 NOTE: Secondary index scans are not supported currently. */
-class Parallel_reader {
+class ParallelReader {
  public:
   /** Maximum value for innodb-parallel-read-threads. */
   constexpr static size_t MAX_THREADS{256};
@@ -117,8 +116,8 @@ class Parallel_reader {
 
   // Forward declaration.
   class Ctx;
-  class Scan_ctx;
-  struct Thread_ctx;
+  class ScanCtx;
+  struct ThreadCtx;
 
   /** Scan state. */
   enum class State : uint8_t {
@@ -136,27 +135,27 @@ class Parallel_reader {
   };
 
   /** Callback to initialise callers state. */
-  using Start = std::function<db_err(Thread_ctx *thread_ctx)>;
+  using Start = std::function<DbErr(ThreadCtx *thread_ctx)>;
 
   /** Callback to finalise callers state. */
-  using Finish = std::function<dberr_t(Thread_ctx *thread_ctx)>;
+  using Finish = std::function<DbErr(ThreadCtx *thread_ctx)>;
 
   /** Callback to process the rows. */
-  using F = std::function<dberr_t(const Ctx *)>;
+  using F = std::function<DbErr(const Ctx *)>;
 
   /** Specifies the range from where to start the scan and where to end it. */
-  struct Scan_range {
+  struct ScanRange {
     /** Default constructor. */
-    Scan_range() : m_start(), m_end() {}
+    ScanRange() : m_start(), m_end() {}
 
     /** Copy constructor.
     @param[in] scan_range       Instance to copy from. */
-    Scan_range(const Scan_range &scan_range) = default;
+    ScanRange(const ScanRange &scan_range) = default;
 
     /** Constructor.
     @param[in] start            Start key
     @param[in] end              End key. */
-    Scan_range(const DTuple *start, const DTuple *end) : m_start(start), m_end(end) {}
+    ScanRange(const DTuple *start, const DTuple *end) : m_start(start), m_end(end) {}
 
     /** Start of the scan, can be nullptr for -infinity. */
     const DTuple *m_start{};
@@ -168,7 +167,7 @@ class Parallel_reader {
     [[nodiscard]] std::string to_string() const;
   };
 
-  /** Scan (Scan_ctx) configuration. */
+  /** Scan (ScanCtx) configuration. */
   struct Config {
     /** Constructor.
     @param[in] scan_range     Range to scan.
@@ -177,7 +176,7 @@ class Parallel_reader {
     @param[in] partition_id   Partition id if the index to be scanned.
                               belongs to a partitioned table. */
     Config(
-      const Scan_range &scan_range, Index *index, size_t read_level = 0, size_t partition_id = std::numeric_limits<size_t>::max()
+      const ScanRange &scan_range, Index *index, size_t read_level = 0, size_t partition_id = std::numeric_limits<size_t>::max()
     )
         : m_scan_range(scan_range),
           m_index(index),
@@ -192,7 +191,7 @@ class Parallel_reader {
       = default;
 
     /** Range to scan. */
-    const Scan_range m_scan_range;
+    const ScanRange m_scan_range;
 
     /** (Cluster) Index in table to scan. */
     Index *m_index{};
@@ -209,13 +208,13 @@ class Parallel_reader {
   };
 
   /** Thread related context information. */
-  struct Thread_ctx {
+  struct ThreadCtx {
     /** Constructor.
     @param[in]  id  Thread ID */
-    explicit Thread_ctx(size_t id) noexcept : m_thread_id(id) {}
+    explicit ThreadCtx(size_t id) noexcept : m_thread_id(id) {}
 
     /** Destructor. */
-    ~Thread_ctx() noexcept {
+    ~ThreadCtx() noexcept {
       ut_a(m_callback_ctx == nullptr);
 
       if (m_blob_heap != nullptr) {
@@ -252,7 +251,7 @@ class Parallel_reader {
 
     /** Restore saved position and resume scan.
     @return DB_SUCCESS or error code. */
-    [[nodiscard]] dberr_t restore_from_savepoint() noexcept;
+    [[nodiscard]] DbErr restore_from_savepoint() noexcept;
 
     /** Thread ID. */
     size_t m_thread_id{std::numeric_limits<size_t>::max()};
@@ -262,7 +261,7 @@ class Parallel_reader {
     void *m_callback_ctx{};
 
     /** BLOB heap per thread. */
-    mem_heap_t *m_blob_heap{};
+    MemHeap *m_blob_heap{};
 
     /** Worker thread state. */
     State m_state{State::UNKNOWN};
@@ -270,18 +269,18 @@ class Parallel_reader {
     /** Current persistent cursor. */
     PCursor *m_pcursor{};
 
-    Thread_ctx(Thread_ctx &&) = delete;
-    Thread_ctx(const Thread_ctx &) = delete;
-    Thread_ctx &operator=(Thread_ctx &&) = delete;
-    Thread_ctx &operator=(const Thread_ctx &) = delete;
+    ThreadCtx(ThreadCtx &&) = delete;
+    ThreadCtx(const ThreadCtx &) = delete;
+    ThreadCtx &operator=(ThreadCtx &&) = delete;
+    ThreadCtx &operator=(const ThreadCtx &) = delete;
   };
 
   /** Constructor.
   @param[in]  max_threads Maximum number of threads to use. */
-  explicit Parallel_reader(size_t max_threads);
+  explicit ParallelReader(size_t max_threads);
 
   /** Destructor. */
-  ~Parallel_reader();
+  ~ParallelReader();
 
   /** Check how many threads are available for parallel reads.
   @param[in] n_required   Number of threads required.
@@ -303,7 +302,7 @@ class Parallel_reader {
   @param[in]      f           Callback function.
   (default is 0 which is leaf level)
   @return error. */
-  [[nodiscard]] dberr_t add_scan(Trx *trx, const Config &config, F &&f);
+  [[nodiscard]] DbErr add_scan(Trx *trx, const Config &config, F &&f);
 
   /** Wait for the join of threads spawned by the parallel reader. */
   void join() {
@@ -314,7 +313,7 @@ class Parallel_reader {
 
   /** Get the error stored in the global error state.
   @return global error state. */
-  [[nodiscard]] dberr_t get_error_state() const { return m_err; }
+  [[nodiscard]] DbErr get_error_state() const { return m_err; }
 
   /** @return true if the tree is empty, else false. */
   [[nodiscard]] bool is_tree_empty() const { return m_ctx_id.load(std::memory_order_relaxed) == 0; }
@@ -331,12 +330,12 @@ class Parallel_reader {
   Don't wait for the spawned to threads to complete.
   @param[in]  n_threads number of threads that *need* to be spawned
   @return DB_SUCCESS or error code. */
-  [[nodiscard]] dberr_t spawn(size_t n_threads) noexcept;
+  [[nodiscard]] DbErr spawn(size_t n_threads) noexcept;
 
   /** Start the threads to do the parallel read for the specified range.
   @param[in] n_threads          Number of threads to use for the scan.
   @return DB_SUCCESS or error code. */
-  [[nodiscard]] dberr_t run(size_t n_threads);
+  [[nodiscard]] DbErr run(size_t n_threads);
 
   /** @return the configured max threads size. */
   [[nodiscard]] size_t max_threads() const { return m_max_threads; }
@@ -346,7 +345,7 @@ class Parallel_reader {
 
   /** Set the error state.
   @param[in] err                Error state to set to. */
-  void set_error_state(dberr_t err) { m_err.store(err, std::memory_order_relaxed); }
+  void set_error_state(DbErr err) { m_err.store(err, std::memory_order_relaxed); }
 
   /** Set the number of threads to be spawned.
   @param[in]  n_threads number of threads to be spawned. */
@@ -356,10 +355,10 @@ class Parallel_reader {
   }
 
   // Disable copying.
-  Parallel_reader(const Parallel_reader &) = delete;
-  Parallel_reader(const Parallel_reader &&) = delete;
-  Parallel_reader &operator=(Parallel_reader &&) = delete;
-  Parallel_reader &operator=(const Parallel_reader &) = delete;
+  ParallelReader(const ParallelReader &) = delete;
+  ParallelReader(const ParallelReader &&) = delete;
+  ParallelReader &operator=(ParallelReader &&) = delete;
+  ParallelReader &operator=(const ParallelReader &) = delete;
 
  private:
   /** Release unused threads back to the pool.
@@ -382,7 +381,7 @@ class Parallel_reader {
 
   /** Poll for requests and execute.
   @param[in]  thread_ctx  thread related context information */
-  void worker(Thread_ctx *thread_ctx);
+  void worker(ThreadCtx *thread_ctx);
 
   /** Create the threads and do a parallel read across the partitions. */
   void parallel_read();
@@ -396,7 +395,7 @@ class Parallel_reader {
   // clang-format off
   using Ctxs = std::list<std::shared_ptr<Ctx>>;
 
-  using Scan_ctxs = std::list<std::shared_ptr<Scan_ctx>>;
+  using Scan_ctxs = std::list<std::shared_ptr<ScanCtx>>;
 
   // clang-format on
 
@@ -407,7 +406,7 @@ class Parallel_reader {
   size_t m_n_threads{0};
 
   /** Mutex protecting m_ctxs. */
-  mutable mutex_t m_mutex;
+  mutable Mutex m_mutex;
 
   /** Contexts that must be executed. */
   Ctxs m_ctxs{};
@@ -416,7 +415,7 @@ class Parallel_reader {
   Scan_ctxs m_scan_ctxs{};
 
   /** For signalling worker threads about events. */
-  Cond_var *m_event{};
+  CondVar *m_event{};
 
   /** Value returned by previous call of os_event_reset() on m_event. */
   uint64_t m_sig_count;
@@ -437,7 +436,7 @@ class Parallel_reader {
   Finish m_finish_callback{};
 
   /** Error during parallel read. */
-  std::atomic<dberr_t> m_err{DB_SUCCESS};
+  std::atomic<DbErr> m_err{DB_SUCCESS};
 
   /** List of threads used for paralle_read purpose. */
   std::vector<std::thread> m_parallel_read_threads;
@@ -449,11 +448,11 @@ class Parallel_reader {
   bool m_sync;
 
   /** Context information related to each parallel reader thread. */
-  std::vector<Thread_ctx *> m_thread_ctxs;
+  std::vector<ThreadCtx *> m_thread_ctxs;
 };
 
 /** Parallel reader context. */
-class Parallel_reader::Scan_ctx {
+class ParallelReader::ScanCtx {
  public:
   /** Constructor.
   @param[in]  reader          Parallel reader that owns this context.
@@ -461,10 +460,10 @@ class Parallel_reader::Scan_ctx {
   @param[in]  trx             Transaction covering the scan.
   @param[in]  config          Range scan config.
   @param[in]  f               Callback function. */
-  Scan_ctx(Parallel_reader *reader, size_t id, Trx *trx, const Parallel_reader::Config &config, F &&f);
+  ScanCtx(ParallelReader *reader, size_t id, Trx *trx, const ParallelReader::Config &config, F &&f);
 
   /** Destructor. */
-  ~Scan_ctx() = default;
+  ~ScanCtx() = default;
 
  private:
   /** Boundary of the range to scan. */
@@ -473,10 +472,10 @@ class Parallel_reader::Scan_ctx {
     ~Iter();
 
     /** Heap used to allocate m_rec, m_tuple and m_pcur. */
-    mem_heap_t *m_heap{};
+    MemHeap *m_heap{};
 
     /** m_rec column offsets. */
-    Rec_offs m_offsets{};
+    RecOffs m_offsets{};
 
     /** Start scanning from this key. Raw data of the row. */
     Rec m_rec{};
@@ -486,11 +485,11 @@ class Parallel_reader::Scan_ctx {
     const DTuple *m_tuple{};
 
     /** Persistent cursor.*/
-    Btree_pcursor *m_pcur{};
+    BtreePcursor *m_pcur{};
   };
 
-  /** mtr_t savepoint. */
-  using Savepoint = std::pair<ulint, Buf_block *>;
+  /** Mtr savepoint. */
+  using Savepoint = std::pair<ulint, BufBlock *>;
 
   /** For releasing the S latches after processing the blocks. */
   using Savepoints = std::vector<Savepoint>;
@@ -505,7 +504,7 @@ class Parallel_reader::Scan_ctx {
 
   /** Set the error state.
   @param[in] err                Error state to set to. */
-  void set_error_state(dberr_t err) { m_err.store(err, std::memory_order_relaxed); }
+  void set_error_state(DbErr err) { m_err.store(err, std::memory_order_relaxed); }
 
   /** @return true if in error state. */
   [[nodiscard]] bool is_error_set() const { return m_err.load(std::memory_order_relaxed) != DB_SUCCESS; }
@@ -515,21 +514,21 @@ class Parallel_reader::Scan_ctx {
   @param[in,out]  mtr           Mini-transaction covering the fetch.
   @param[in]      line          Line from where called.
   @return the block fetched from the buffer pool. */
-  [[nodiscard]] Buf_block *block_get_s_latched(const Page_id &page_id, mtr_t *mtr, ulint line) const;
+  [[nodiscard]] BufBlock *block_get_s_latched(const PageId &page_id, Mtr *mtr, ulint line) const;
 
   /** Partition the B+Tree for parallel read.
   @param[in] scan_range Range for partitioning.
   @param[in,out]  ranges        Ranges to scan.
   @param[in] split_level  Sub-range required level (0 == root).
   @return the partition scan ranges. */
-  dberr_t partition(const Scan_range &scan_range, Ranges &ranges, size_t split_level);
+  DbErr partition(const ScanRange &scan_range, Ranges &ranges, size_t split_level);
 
   /** Find the page number of the node that contains the search key. If the
   key is null then we assume -infinity.
   @param[in]  block             Page to look in.
   @param[in] key                Key of the first record in the range.
   @return the left child page number. */
-  [[nodiscard]] page_no_t search(const Buf_block *block, const DTuple *key) const;
+  [[nodiscard]] page_no_t search(const BufBlock *block, const DTuple *key) const;
 
   /** Traverse from given sub-tree page number to start of the scan range
   from the given page number.
@@ -538,14 +537,14 @@ class Parallel_reader::Scan_ctx {
   @param[in]      key           Key of the first record in the range.
   @param[in,out]  savepoints    Blocks S latched and accessed.
   @return the leaf node page cursor. */
-  [[nodiscard]] page_cur_t start_range(page_no_t page_no, mtr_t *mtr, const DTuple *key, Savepoints &savepoints) const;
+  [[nodiscard]] PageCursor start_range(page_no_t page_no, Mtr *mtr, const DTuple *key, Savepoints &savepoints) const;
 
   /** Create and add the range to the scan ranges.
   @param[in,out]  ranges        Ranges to scan.
   @param[in,out]  leaf_page_cursor Leaf page cursor on which to create the
                                 persistent cursor.
   @param[in,out]  mtr           Mini-transaction */
-  void create_range(Ranges &ranges, page_cur_t &leaf_page_cursor, mtr_t *mtr) const;
+  void create_range(Ranges &ranges, PageCursor &leaf_page_cursor, Mtr *mtr) const;
 
   /** Find the subtrees to scan in a block.
   @param[in]      scan_range    Partition based on this scan range.
@@ -554,11 +553,11 @@ class Parallel_reader::Scan_ctx {
   @param[in]      split_level   Sub-range starting level (0 == root).
   @param[in,out]  ranges        Ranges to scan.
   @param[in,out]  mtr           Mini-transaction */
-  dberr_t create_ranges(
-    const Scan_range &scan_range, page_no_t page_no, size_t depth, const size_t split_level, Ranges &ranges, mtr_t *mtr
+  DbErr create_ranges(
+    const ScanRange &scan_range, page_no_t page_no, size_t depth, const size_t split_level, Ranges &ranges, Mtr *mtr
   );
 
-  /** Build a dtuple_t from Rec .
+  /** Build a Dtuple from Rec .
   @param[in]      rec           Build the dtuple from this record.
   @param[in,out]  iter          Build in this iterator. */
   void copy_row(const Rec rec, Iter *iter) const;
@@ -568,7 +567,7 @@ class Parallel_reader::Scan_ctx {
   @param[in]      page_cursor   Current page cursor
   @param[in]      mtr           Mini-transaction covering the read.
   @return Start iterator. */
-  [[nodiscard]] std::shared_ptr<Iter> create_persistent_cursor(const page_cur_t &page_cursor, mtr_t *mtr) const;
+  [[nodiscard]] std::shared_ptr<Iter> create_persistent_cursor(const PageCursor &page_cursor, Mtr *mtr) const;
 
   /** Build an old version of the row if required.
   @param[in,out]  rec           Current row read from the index. This can
@@ -579,19 +578,19 @@ class Parallel_reader::Scan_ctx {
                                 built from the undo log.
   @param[in,out]  mtr           Mini-transaction covering the read.
   @return true if row is visible to the transaction. */
-  [[nodiscard]] bool check_visibility(Rec &rec, Rec_offs &offsets, mem_heap_t *&heap, mtr_t *mtr);
+  [[nodiscard]] bool check_visibility(Rec &rec, RecOffs &offsets, MemHeap *&heap, Mtr *mtr);
 
   /** Create an execution context for a range and add it to
-  the Parallel_reader's run queue.
+  the ParallelReader's run queue.
   @param[in] range              Range for which to create the context.
   @param[in] split              true if the sub-tree should be split further.
   @return DB_SUCCESS or error code. */
-  [[nodiscard]] dberr_t create_context(const Range &range, bool split);
+  [[nodiscard]] DbErr create_context(const Range &range, bool split);
 
   /** Create the execution contexts based on the ranges.
   @param[in]  ranges            Ranges for which to create the contexts.
   @return DB_SUCCESS or error code. */
-  [[nodiscard]] dberr_t create_contexts(const Ranges &ranges);
+  [[nodiscard]] DbErr create_contexts(const Ranges &ranges);
 
   /** @return the maximum number of threads configured. */
   [[nodiscard]] size_t max_threads() const { return m_reader->max_threads(); }
@@ -610,7 +609,7 @@ class Parallel_reader::Scan_ctx {
   bool index_s_own() const { return m_s_locks.load(std::memory_order_acquire) > 0; }
 
  private:
-  using Config = Parallel_reader::Config;
+  using Config = ParallelReader::Config;
 
   /** Context ID. */
   size_t m_id{std::numeric_limits<size_t>::max()};
@@ -628,30 +627,30 @@ class Parallel_reader::Scan_ctx {
   size_t m_depth{};
 
   /** The parallel reader. */
-  Parallel_reader *m_reader{};
+  ParallelReader *m_reader{};
 
   /** Error during parallel read. */
-  mutable std::atomic<dberr_t> m_err{DB_SUCCESS};
+  mutable std::atomic<DbErr> m_err{DB_SUCCESS};
 
   /** Number of threads that have S locked the index. */
   std::atomic_size_t m_s_locks{};
 
-  friend class Parallel_reader;
+  friend class ParallelReader;
 
-  Scan_ctx(Scan_ctx &&) = delete;
-  Scan_ctx(const Scan_ctx &) = delete;
-  Scan_ctx &operator=(Scan_ctx &&) = delete;
-  Scan_ctx &operator=(const Scan_ctx &) = delete;
+  ScanCtx(ScanCtx &&) = delete;
+  ScanCtx(const ScanCtx &) = delete;
+  ScanCtx &operator=(ScanCtx &&) = delete;
+  ScanCtx &operator=(const ScanCtx &) = delete;
 };
 
 /** Parallel reader execution context. */
-class Parallel_reader::Ctx {
+class ParallelReader::Ctx {
  public:
   /** Constructor.
   @param[in]    id              Thread ID.
   @param[in]    scan_ctx        Scan context.
   @param[in]    range           Range that the thread has to read. */
-  Ctx(size_t id, Scan_ctx *scan_ctx, const Scan_ctx::Range &range) : m_id(id), m_range(range), m_scan_ctx(scan_ctx) {}
+  Ctx(size_t id, ScanCtx *scan_ctx, const ScanCtx::Range &range) : m_id(id), m_range(range), m_scan_ctx(scan_ctx) {}
 
   /** Destructor. */
   ~Ctx() = default;
@@ -673,7 +672,7 @@ class Parallel_reader::Ctx {
   [[nodiscard]] size_t thread_id() const { return m_thread_ctx->m_thread_id; }
 
   /** @return the thread context of the reader thread. */
-  [[nodiscard]] Thread_ctx *thread_ctx() const { return m_thread_ctx; }
+  [[nodiscard]] ThreadCtx *thread_ctx() const { return m_thread_ctx; }
 
   /** @return the partition id of the index.
   @note this is std::numeric_limits<size_t>::max() if the index does not
@@ -689,21 +688,21 @@ class Parallel_reader::Ctx {
                                 built from the undo log.
   @param[in,out]  mtr           Mini-transaction covering the read.
   @return true if row is visible to the transaction. */
-  bool is_rec_visible(Rec &rec, ulint *&offsets, mem_heap_t *&heap, mtr_t *mtr) {
-    Rec_offs rec_offsets(offsets);
+  bool is_rec_visible(Rec &rec, ulint *&offsets, MemHeap *&heap, Mtr *mtr) {
+    RecOffs rec_offsets(offsets);
     return m_scan_ctx->check_visibility(rec, rec_offsets, heap, mtr);
   }
 
  private:
   /** Traverse the pages by key order.
   @return DB_SUCCESS or error code. */
-  [[nodiscard]] dberr_t traverse();
+  [[nodiscard]] DbErr traverse();
 
   /** Traverse the records in a node.
   @param[in]  pcursor persistent b-tree cursor
   @param[in]  mtr mtr
   @return error */
-  dberr_t traverse_recs(PCursor *pcursor, mtr_t *mtr);
+  DbErr traverse_recs(PCursor *pcursor, Mtr *mtr);
 
   /** Move to the next node in the specified level.
   @param[in]  pcursor persistent b-tree cursor
@@ -712,7 +711,7 @@ class Parallel_reader::Ctx {
 
   /** Split the context into sub-ranges and add them to the execution queue.
   @return DB_SUCCESS or error code. */
-  [[nodiscard]] dberr_t split();
+  [[nodiscard]] DbErr split();
 
   /** @return true if in error state. */
   [[nodiscard]] bool is_error_set() const { return m_scan_ctx->m_reader->is_error_set() || m_scan_ctx->is_error_set(); }
@@ -725,17 +724,17 @@ class Parallel_reader::Ctx {
   bool m_split{};
 
   /** Range to read in this context. */
-  Scan_ctx::Range m_range{};
+  ScanCtx::Range m_range{};
 
   /** Scanner context. */
-  Scan_ctx *m_scan_ctx{};
+  ScanCtx *m_scan_ctx{};
 
  public:
   /** Context information related to executing thread ID. */
-  Thread_ctx *m_thread_ctx{};
+  ThreadCtx *m_thread_ctx{};
 
   /** Current block. */
-  const Buf_block *m_block{};
+  const BufBlock *m_block{};
 
   /** Current row. */
   Rec m_rec{};
@@ -746,10 +745,10 @@ class Parallel_reader::Ctx {
   /** True if m_rec is the first record in the page. */
   bool m_first_rec{true};
 
-  Rec_offs m_offsets{};
+  RecOffs m_offsets{};
 
   /** Start of a new range to scan. */
   bool m_start{};
 
-  friend class Parallel_reader;
+  friend class ParallelReader;
 };

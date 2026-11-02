@@ -89,7 +89,7 @@ int cmp_data_data_slow(
  *
  * @return 1, 0, -1, if dfield1 is greater, equal, less than dfield2, respectively
  */
-inline int cmp_dfield_dfield(void *cmp_ctx, const dfield_t *dfield1, const dfield_t *dfield2) noexcept;
+inline int cmp_dfield_dfield(void *cmp_ctx, const Dfield *dfield1, const Dfield *dfield2) noexcept;
 
 /**
  * This function is used to compare a data tuple to a physical record.
@@ -106,7 +106,7 @@ inline int cmp_dfield_dfield(void *cmp_ctx, const dfield_t *dfield1, const dfiel
  *                             from dtuple in some of the common fields,
  *                             or which has an equal number or more fields
  *                             than dtuple.
- * @param[in] offsets          Array returned by Phy_rec::get_col_offsets().
+ * @param[in] offsets          Array returned by PhyRec::get_col_offsets().
  * @param[in] matched_fields   Number of already completely matched fields
  *                             when the function returns., contains the value
  *                             for current comparison.
@@ -119,7 +119,7 @@ inline int cmp_dfield_dfield(void *cmp_ctx, const dfield_t *dfield1, const dfiel
  *    the first externally stored field in rec
  */
 int cmp_dtuple_rec_with_match(
-  void *cmp_ctx, const DTuple *dtuple, const Rec rec, const Rec_offs &offsets, ulint *matched_fields, ulint *matched_bytes
+  void *cmp_ctx, const DTuple *dtuple, const Rec rec, const RecOffs &offsets, ulint *matched_fields, ulint *matched_bytes
 ) noexcept;
 
 /**
@@ -129,7 +129,7 @@ int cmp_dtuple_rec_with_match(
  * @param[in] cmp_ctx          Client compare context.
  * @param[in] dtuple           Pointer to the data tuple.
  * @param[in] rec              Pointer to the physical record which differs
- * @param[in] offsets          Array returned by Phy_rec::get_col_offsets().
+ * @param[in] offsets          Array returned by PhyRec::get_col_offsets().
  *
  * @return 1, 0, -1, if dtuple is greater, equal, less than rec, respectively
  */
@@ -142,11 +142,11 @@ int cmp_dtuple_rec(void *cmp_ctx, const DTuple *dtuple, const Rec rec, const uli
  * @param[in] cmp_ctx          Client compare context.
  * @param[in] dtuple           Pointer to the data tuple.
  * @param[in] rec              Pointer to the physical record.
- * @param[in] offsets          Array returned by Phy_rec::get_col_offsets().
+ * @param[in] offsets          Array returned by PhyRec::get_col_offsets().
  *
  * @return	true if prefix
  */
-bool cmp_dtuple_is_prefix_of_rec(void *cmp_ctx, const DTuple *dtuple, const Rec rec, const Rec_offs &offsets) noexcept;
+bool cmp_dtuple_is_prefix_of_rec(void *cmp_ctx, const DTuple *dtuple, const Rec rec, const RecOffs &offsets) noexcept;
 
 /**
  * Compare two physical records that contain the same number of columns,
@@ -154,14 +154,14 @@ bool cmp_dtuple_is_prefix_of_rec(void *cmp_ctx, const DTuple *dtuple, const Rec 
  *
  * @param[in] rec1             Pointer to the first physical record.
  * @param[in] rec2             Pointer to the second physical record.
- * @param[in] offsets1         Array returned by Phy_rec::get_col_offsets().
- * @param[in] offsets2         Array returned by Phy_rec::get_col_offsets().
+ * @param[in] offsets1         Array returned by PhyRec::get_col_offsets().
+ * @param[in] offsets2         Array returned by PhyRec::get_col_offsets().
  * @param[in] index            Data dictionary index.
  *
  * @return	1, 0, -1 if rec1 is greater, equal, less, respectively, than rec2
  */
 int cmp_rec_rec_simple(
-  const Rec rec1, const Rec rec2, const Rec_offs &offsets1, const Rec_offs &offsets2, const Index *index
+  const Rec rec1, const Rec rec2, const RecOffs &offsets1, const RecOffs &offsets2, const Index *index
 ) noexcept;
 
 /**
@@ -171,8 +171,8 @@ int cmp_rec_rec_simple(
  *
  * @param[in] rec1             Pointer to the first physical record.
  * @param[in] rec2             Pointer to the second physical record.
- * @param[in] offsets1         Array returned by Phy_rec::get_col_offsets().
- * @param[in] offsets2         Array returned by Phy_rec::get_col_offsets().
+ * @param[in] offsets1         Array returned by PhyRec::get_col_offsets().
+ * @param[in] offsets2         Array returned by PhyRec::get_col_offsets().
  * @param[in] index            Data dictionary index.
  * @param[out] matched_fields  Number of already completely matched fields when
  *                             the function returns, contains the value for
@@ -184,7 +184,7 @@ int cmp_rec_rec_simple(
  * @return 1, 0, -1 if rec1 is greater, equal, less, respectively
  */
 int cmp_rec_rec_with_match(
-  const Rec rec1, const Rec rec2, const Rec_offs &offsets1, const Rec_offs &offsets2, const Index *index, ulint *matched_fields,
+  const Rec rec1, const Rec rec2, const RecOffs &offsets1, const RecOffs &offsets2, const Index *index, ulint *matched_fields,
   ulint *matched_bytes
 ) noexcept;
 
@@ -194,8 +194,8 @@ int cmp_rec_rec_with_match(
  *
  * @param[in] rec1             Pointer to the first physical record.
  * @param[in] rec2             Pointer to the second physical record.
- * @param[in] offsets1         Array returned by Phy_rec::get_col_offsets().
- * @param[in] offsets2         Array returned by Phy_rec::get_col_offsets().
+ * @param[in] offsets1         Array returned by PhyRec::get_col_offsets().
+ * @param[in] offsets2         Array returned by PhyRec::get_col_offsets().
  * @param[in] index            Data dictionary index.
  *
  * @return 1, 0 , -1 if rec1 is greater, equal, less, respectively, than
@@ -233,7 +233,7 @@ inline int cmp_data_data(
  *
  * @return 1, 0, -1, if dfield1 is greater, equal, less than dfield2, respectively
  */
-inline int cmp_dfield_dfield(void *cmp_ctx, const dfield_t *dfield1, const dfield_t *dfield2) noexcept {
+inline int cmp_dfield_dfield(void *cmp_ctx, const Dfield *dfield1, const Dfield *dfield2) noexcept {
   ut_ad(dfield_check_typed(dfield1));
 
   const auto type = dfield_get_type(dfield1);
@@ -255,8 +255,8 @@ inline int cmp_dfield_dfield(void *cmp_ctx, const dfield_t *dfield1, const dfiel
  *
  * @param[in] rec1             Pointer to the first physical record.
  * @param[in] rec2             Pointer to the second physical record.
- * @param[in] offsets1         Array returned by Phy_rec::get_col_offsets().
- * @param[in] offsets2         Array returned by Phy_rec::get_col_offsets().
+ * @param[in] offsets1         Array returned by PhyRec::get_col_offsets().
+ * @param[in] offsets2         Array returned by PhyRec::get_col_offsets().
  * @param[in] index            Data dictionary index.
  *
  * @return 1, 0 , -1 if rec1 is greater, equal, less, respectively, than

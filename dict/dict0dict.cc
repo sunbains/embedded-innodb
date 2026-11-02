@@ -244,7 +244,7 @@ ulint Index::get_nth_field_pos(const Index *index, ulint col_no) const noexcept 
   return ULINT_UNDEFINED;
 }
 
-Table *Dict::table_get_on_id(ib_recovery_t recovery, Dict_id table_id, Trx *trx) noexcept {
+Table *Dict::table_get_on_id(IbRecovery recovery, Dict_id table_id, Trx *trx) noexcept {
   if (table_id <= DICT_FIELDS_ID || trx->m_dict_operation_lock_mode == RW_X_LATCH) {
     /* It is a system table which will always exist in the table
     cache: we avoid acquiring the dictionary mutex, because
@@ -303,7 +303,7 @@ Table *Dict::table_get(const char *table_name, bool ref_count) noexcept {
   return table;
 }
 
-Table *Dict::table_get_using_id(ib_recovery_t recovery, Dict_id table_id, bool ref_count) noexcept {
+Table *Dict::table_get_using_id(IbRecovery recovery, Dict_id table_id, bool ref_count) noexcept {
   ut_ad(mutex_own(&m_mutex));
 
   auto table = table_get_on_id(recovery, table_id);
@@ -796,7 +796,7 @@ bool Dict::index_too_big_for_tree(const Table *table, const Index *new_index) no
   return false;
 }
 
-db_err Dict::index_add_to_cache(Index *index, ulint page_no, bool strict) noexcept {
+DbErr Dict::index_add_to_cache(Index *index, ulint page_no, bool strict) noexcept {
   ut_ad(mutex_own(&m_mutex));
   ut_ad(index->m_n_defined == index->m_n_fields);
   ut_ad(index->m_magic_n == DICT_INDEX_MAGIC_N);
@@ -955,7 +955,7 @@ bool Table::link_cols(Index *index) noexcept {
   return n_found == index->get_n_fields();
 }
 
-DTuple *Index::build_node_ptr(const Rec rec, ulint page_no, mem_heap_t *heap, ulint level) const noexcept {
+DTuple *Index::build_node_ptr(const Rec rec, ulint page_no, MemHeap *heap, ulint level) const noexcept {
   const auto n_unique = get_n_unique_in_tree();
   auto tuple = dtuple_create(heap, n_unique + 1);
 
@@ -1028,7 +1028,7 @@ Rec Index::copy_rec_order_prefix(const Rec rec, ulint *n_fields, byte *&buf, uli
   return rec.copy_prefix_to_buf(this, n, buf, buf_size);
 }
 
-DTuple *Index::build_data_tuple(Rec rec, ulint n_fields, mem_heap_t *heap) const noexcept {
+DTuple *Index::build_data_tuple(Rec rec, ulint n_fields, MemHeap *heap) const noexcept {
   ut_ad(n_fields <= rec.get_n_fields());
 
   auto tuple = dtuple_create(heap, n_fields);
@@ -1074,7 +1074,7 @@ void Table::copy_types(DTuple *tuple) const noexcept {
   }
 }
 
-Index::Index(mem_heap_t *heap, Table *table, const char *index_name, Page_id page_id, ulint type, ulint n_fields) noexcept {
+Index::Index(MemHeap *heap, Table *table, const char *index_name, PageId page_id, ulint type, ulint n_fields) noexcept {
   m_heap = heap;
   m_type = type;
   m_table = table;
@@ -1094,7 +1094,7 @@ Index::Index(mem_heap_t *heap, Table *table, const char *index_name, Page_id pag
   ut_d(m_magic_n = DICT_INDEX_MAGIC_N);
 }
 
-Index *Index::create(Table *table, const char *index_name, Page_id page_id, ulint type, ulint n_fields) noexcept {
+Index *Index::create(Table *table, const char *index_name, PageId page_id, ulint type, ulint n_fields) noexcept {
   ut_ad(table->m_name != nullptr);
   ut_ad(index_name != nullptr);
 
@@ -1116,7 +1116,7 @@ Index *Index::create(Table *table, const char *index_name, Page_id page_id, ulin
   return index;
 }
 
-Index *Index::create(const char *table_name, const char *index_name, Page_id page_id, ulint type, ulint n_fields) noexcept {
+Index *Index::create(const char *table_name, const char *index_name, PageId page_id, ulint type, ulint n_fields) noexcept {
   ut_ad(table_name != nullptr);
   ut_ad(index_name != nullptr);
 
@@ -1174,7 +1174,7 @@ Index *Dict::build_cluster_index(Index *index) noexcept {
 
   {
     const auto n_fields = index->m_n_fields + table->m_n_cols;
-    const auto page_id = Page_id(table->m_space_id, NULL_PAGE_NO);
+    const auto page_id = PageId(table->m_space_id, NULL_PAGE_NO);
 
     new_index = Index::create(table, index->m_name, page_id, index->m_type, n_fields);
 
@@ -1331,7 +1331,7 @@ Index *Dict::build_secondary_index(Index *index) noexcept {
   return new_index;
 }
 
-Table::Table(mem_heap_t *heap, const char *name, space_id_t space_id, ulint n_cols, ulint flags, bool ibd_file_missing) noexcept {
+Table::Table(MemHeap *heap, const char *name, space_id_t space_id, ulint n_cols, ulint flags, bool ibd_file_missing) noexcept {
   m_heap = heap;
   m_space_id = space_id;
   m_flags = uint(flags);
@@ -1356,7 +1356,7 @@ Table::~Table() noexcept {
 }
 
 Table *Table::create(
-  const char *name, space_id_t space, ulint n_cols, ulint flags, bool ibd_file_missing, Source_location loc
+  const char *name, space_id_t space, ulint n_cols, ulint flags, bool ibd_file_missing, SourceLocation loc
 ) noexcept {
   ut_a(!(flags & (~0UL << DICT_TF2_BITS)));
 
@@ -1368,7 +1368,7 @@ Table *Table::create(
   return reinterpret_cast<Table *>(ptr);
 }
 
-void Table::destroy(Table *&table, Source_location loc) noexcept {
+void Table::destroy(Table *&table, SourceLocation loc) noexcept {
   auto heap = table->m_heap;
   call_destructor(table);
   mem_heap_free_func(heap, loc);

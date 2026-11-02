@@ -53,7 +53,7 @@ check fields at the both ends of the field. */
  * @param n_blocks out: number of blocks in the heap, if a nullptr pointer is passed as this argument, it is ignored
  */
 void mem_heap_validate_or_print(
-  mem_heap_t *heap, byte *top, bool print, bool *error, ulint *us_size, ulint *ph_size, ulint *n_blocks
+  MemHeap *heap, byte *top, bool print, bool *error, ulint *us_size, ulint *ph_size, ulint *n_blocks
 );
 
 /**
@@ -61,14 +61,14 @@ void mem_heap_validate_or_print(
  * @param heap in: memory heap
  * @return true if ok
  */
-bool mem_heap_validate(mem_heap_t *heap);
+bool mem_heap_validate(MemHeap *heap);
 
 /**
  * Checks that an object is a memory heap (or a block of it)
  * @param heap in: memory heap
  * @return true if ok
  */
-bool mem_heap_check(mem_heap_t *heap);
+bool mem_heap_check(MemHeap *heap);
 
 /**
  * Validates the dynamic memory

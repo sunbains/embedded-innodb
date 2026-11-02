@@ -35,27 +35,27 @@ constexpr uint64_t MICROSECS_IN_A_SECOND = 1000000;
 constexpr uint64_t NANOSECS_IN_A_SECOND = 1000 * MICROSECS_IN_A_SECOND;
 
 /* Type definition for an operating system mutex struct */
-struct OS_mutex {
+struct OsMutex {
   /** Constructor */
-  OS_mutex() : m_event(nullptr), m_ptr(nullptr), m_count(0) {
+  OsMutex() : m_event(nullptr), m_ptr(nullptr), m_count(0) {
     auto std_mutex = new (std::nothrow) std::mutex;
     m_ptr = std_mutex;
-    m_event = Cond_var::create(nullptr);
+    m_event = CondVar::create(nullptr);
   }
 
   /** Destructor */
-  ~OS_mutex() {
+  ~OsMutex() {
     delete static_cast<std::mutex *>(m_ptr);
-    Cond_var::destroy(m_event);
+    CondVar::destroy(m_event);
   }
 
   /* Create an instance of a mutex. 
   @return the mutex */
-  static OS_mutex *create(const char *);
+  static OsMutex *create(const char *);
 
   /** Destroy an instance of a mutex created with create()
    * @param mutex the mutex to destroy */
-  static void destroy(OS_mutex *);
+  static void destroy(OsMutex *);
 
   void lock() {
     static_cast<std::mutex *>(m_ptr)->lock();
@@ -74,7 +74,7 @@ struct OS_mutex {
   }
 
   /** Used by sync0arr.c for queing threads */
-  Cond_var *m_event{};
+  CondVar *m_event{};
 
   /** OS handle to mutex */
   void *m_ptr{};
@@ -85,9 +85,9 @@ struct OS_mutex {
   uint16_t m_count{};
 
   /** list of all 'slow' OS mutexes created */
-  UT_LIST_NODE_T(OS_mutex) m_os_mutex_list;
+  UT_LIST_NODE_T(OsMutex) m_os_mutex_list;
 
-  using Mutexes = UT_LIST_BASE_NODE_T(OS_mutex, m_os_mutex_list);
+  using Mutexes = UT_LIST_BASE_NODE_T(OsMutex, m_os_mutex_list);
 
   /** Mutex protecting counts and the lists of OS mutexes and events */
   static std::mutex s_mutex;
@@ -103,50 +103,50 @@ struct OS_mutex {
 os_thread_exit */
 std::atomic_int os_thread_count{};
 
-std::mutex OS_mutex::s_mutex{};
-std::mutex Cond_var::s_mutex{};
+std::mutex OsMutex::s_mutex{};
+std::mutex CondVar::s_mutex{};
 
-OS_mutex::Mutexes OS_mutex::s_mutexes{};
-Cond_var::Events Cond_var::s_events{};
+OsMutex::Mutexes OsMutex::s_mutexes{};
+CondVar::Events CondVar::s_events{};
 
-ulint OS_mutex::s_count = 0;
-ulint Cond_var::s_count = 0;
+ulint OsMutex::s_count = 0;
+ulint CondVar::s_count = 0;
 
 void os_sync_var_init() {
   os_thread_count.store(0, std::memory_order_release);
 }
 
 void os_sync_init() {
-  UT_LIST_INIT(Cond_var::s_events);
-  UT_LIST_INIT(OS_mutex::s_mutexes);
+  UT_LIST_INIT(CondVar::s_events);
+  UT_LIST_INIT(OsMutex::s_mutexes);
 }
 
 void os_sync_free() {
-  for (auto event = UT_LIST_GET_FIRST(Cond_var::s_events); event != nullptr; event = UT_LIST_GET_FIRST(Cond_var::s_events)) {
+  for (auto event = UT_LIST_GET_FIRST(CondVar::s_events); event != nullptr; event = UT_LIST_GET_FIRST(CondVar::s_events)) {
 
-    Cond_var::destroy(event);
+    CondVar::destroy(event);
   }
 
-  for (auto mutex = UT_LIST_GET_FIRST(OS_mutex::s_mutexes); mutex != nullptr; mutex = UT_LIST_GET_FIRST(OS_mutex::s_mutexes)) {
+  for (auto mutex = UT_LIST_GET_FIRST(OsMutex::s_mutexes); mutex != nullptr; mutex = UT_LIST_GET_FIRST(OsMutex::s_mutexes)) {
 
-    OS_mutex::destroy(mutex);
+    OsMutex::destroy(mutex);
   }
 }
 
-Cond_var *Cond_var::create(const char *) {
-  auto event = new Cond_var;
+CondVar *CondVar::create(const char *) {
+  auto event = new CondVar;
 
   std::lock_guard<std::mutex> lock(s_mutex);
 
   /* Put to the list of events */
-  UT_LIST_ADD_FIRST(Cond_var::s_events, event);
+  UT_LIST_ADD_FIRST(CondVar::s_events, event);
 
   ++s_count;
 
   return event;
 }
 
-void Cond_var::set() {
+void CondVar::set() {
   std::lock_guard<std::mutex> lock(m_mutex);
 
   if (!m_is_set) {
@@ -156,7 +156,7 @@ void Cond_var::set() {
   }
 }
 
-int64_t Cond_var::reset() {
+int64_t CondVar::reset() {
   std::lock_guard<std::mutex> lock(m_mutex);
 
   if (m_is_set) {
@@ -166,7 +166,7 @@ int64_t Cond_var::reset() {
   return m_signal_count;
 }
 
-void Cond_var::destroy(Cond_var *event) {
+void CondVar::destroy(CondVar *event) {
   std::lock_guard<std::mutex> lock(s_mutex);
 
   UT_LIST_REMOVE(s_events, event);
@@ -176,7 +176,7 @@ void Cond_var::destroy(Cond_var *event) {
   delete event;
 }
 
-void Cond_var::wait(int64_t reset_sig_count) {
+void CondVar::wait(int64_t reset_sig_count) {
   std::unique_lock<std::mutex> lk(m_mutex);
   auto old_sig_count = reset_sig_count != 0 ? reset_sig_count : m_signal_count;
 
@@ -189,7 +189,7 @@ void Cond_var::wait(int64_t reset_sig_count) {
   });
 }
 
-ulint Cond_var::wait_time(std::chrono::microseconds timeout, int64_t reset_sig_count) {
+ulint CondVar::wait_time(std::chrono::microseconds timeout, int64_t reset_sig_count) {
   std::chrono::time_point<std::chrono::system_clock> timepoint;
 
   if (timeout != std::chrono::microseconds::max()) {
@@ -215,8 +215,8 @@ ulint Cond_var::wait_time(std::chrono::microseconds timeout, int64_t reset_sig_c
   return ret ? 0 : OS_SYNC_TIME_EXCEEDED;
 }
 
-OS_mutex *OS_mutex::create(const char *) {
-  auto mutex = new (std::nothrow) OS_mutex;
+OsMutex *OsMutex::create(const char *) {
+  auto mutex = new (std::nothrow) OsMutex;
 
   std::lock_guard<std::mutex> lock(s_mutex);
 
@@ -227,15 +227,15 @@ OS_mutex *OS_mutex::create(const char *) {
   return mutex;
 }
 
-void os_mutex_enter(OS_mutex *mutex) {
+void os_mutex_enter(OsMutex *mutex) {
   mutex->lock();
 }
 
-void os_mutex_exit(OS_mutex *mutex) {
+void os_mutex_exit(OsMutex *mutex) {
   mutex->unlock();
 }
 
-void OS_mutex::destroy(OS_mutex *mutex) {
+void OsMutex::destroy(OsMutex *mutex) {
   std::lock_guard<std::mutex> lock(s_mutex);
 
   UT_LIST_REMOVE(s_mutexes, mutex);
@@ -245,14 +245,14 @@ void OS_mutex::destroy(OS_mutex *mutex) {
   delete mutex;
 }
 
-OS_mutex *os_mutex_create(const char *) {
-  return OS_mutex::create(nullptr);
+OsMutex *os_mutex_create(const char *) {
+  return OsMutex::create(nullptr);
 }
 
-void os_mutex_destroy(OS_mutex *mutex) {
-  OS_mutex::destroy(mutex);
+void os_mutex_destroy(OsMutex *mutex) {
+  OsMutex::destroy(mutex);
 }
 
 ulint os_mutex_count() {
-  return OS_mutex::s_count;
+  return OsMutex::s_count;
 }

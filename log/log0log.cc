@@ -46,7 +46,7 @@ Log::Log(size_t size) noexcept : m_buffer(size) {
 
   m_lsn = LOG_START_LSN;
 
-  ut_a(LOG_BUFFER_SIZE >= 16 * sizeof(Log_phy_block));
+  ut_a(LOG_BUFFER_SIZE >= 16 * sizeof(LogPhyBlock));
 
   m_no_flush_event = os_event_create(nullptr);
 
@@ -58,7 +58,7 @@ Log::Log(size_t size) noexcept : m_buffer(size) {
 
   m_checkpoint.m_last_lsn = m_lsn;
 
-  m_lsn = LOG_START_LSN + Log_phy_block::HEADER_SIZE;
+  m_lsn = LOG_START_LSN + LogPhyBlock::HEADER_SIZE;
 }
 
 Log::~Log() noexcept {
@@ -113,7 +113,7 @@ bool Log::calc_max_ages() noexcept {
 Log *Log::create(size_t log_buffer_size) noexcept {
   ut_a(log_sys == nullptr);
 
-  log_sys = new (static_cast<log_t *>(mem_zalloc(sizeof(Log)))) Log(log_buffer_size);
+  log_sys = new (static_cast<Log *>(mem_zalloc(sizeof(Log)))) Log(log_buffer_size);
 
   return log_sys;
 }
@@ -153,7 +153,7 @@ void Log::destroy(Log *&log_sys) noexcept {
   }
 }
 
-lsn_t Log::close([[maybe_unused]] ib_recovery_t recovery) noexcept {
+lsn_t Log::close([[maybe_unused]] IbRecovery recovery) noexcept {
   if (m_wal_backend && !m_pending_data.empty()) {
     // Flush accumulated data from slow path
     auto end_lsn = m_wal_backend->append(m_pending_data.data(), m_pending_data.size());
@@ -179,8 +179,8 @@ void Log::write_up_to([[maybe_unused]] lsn_t lsn, [[maybe_unused]] bool async, [
   }
 }
 
-void Log::init_wal_backend(const Log_wal_backend::Config &config) noexcept {
-  m_wal_backend = std::make_unique<Log_wal_backend>(config, m_lsn.load());
+void Log::init_wal_backend(const LogWalBackend::Config &config) noexcept {
+  m_wal_backend = std::make_unique<LogWalBackend>(config, m_lsn.load());
   (void) m_wal_backend->open();
   m_wal_backend->start_io();
 }

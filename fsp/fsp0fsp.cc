@@ -197,7 +197,7 @@ constexpr ulint XDES_SIZE = XDES_BITMAP + UT_BITS_IN_BYTES(FSP_EXTENT_SIZE * XDE
 /** Offset of the descriptor array on a descriptor page */
 constexpr ulint XDES_ARR_OFFSET = FSP_HEADER_OFFSET + FSP_HEADER_SIZE;
 
-FSP *srv_fsp{};
+Fsp *srv_fsp{};
 
 /**
  * Calculates the number of pages reserved by a segment, and how
@@ -209,7 +209,7 @@ FSP *srv_fsp{};
  *
  * @return number of reserved pages
  */
-static ulint fseg_n_reserved_pages_low(FSP::fseg_inode_t *header, ulint *used, mtr_t *mtr) noexcept;
+static ulint fseg_n_reserved_pages_low(Fsp::fseg_inode_t *header, ulint *used, Mtr *mtr) noexcept;
 
 /**
  * @brief Gets a descriptor bit of a page.
@@ -221,7 +221,7 @@ static ulint fseg_n_reserved_pages_low(FSP::fseg_inode_t *header, ulint *used, m
  *
  * @return true if free
  */
-inline bool xdes_get_bit(const FSP::xdes_t *descr, ulint bit, ulint offset, mtr_t *mtr) noexcept {
+inline bool xdes_get_bit(const Fsp::xdes_t *descr, ulint bit, ulint offset, Mtr *mtr) noexcept {
   ut_ad(mtr->memo_contains_page(descr, MTR_MEMO_PAGE_X_FIX));
   ut_ad(bit == XDES_FREE_BIT || bit == XDES_CLEAN_BIT);
   ut_ad(offset < FSP_EXTENT_SIZE);
@@ -242,7 +242,7 @@ inline bool xdes_get_bit(const FSP::xdes_t *descr, ulint bit, ulint offset, mtr_
  * @param[in] val               Bit value
  * @param[in,out] mtr           Mini-transaction handle
  */
-inline void xdes_set_bit(FSP::xdes_t *descr, ulint bit, ulint offset, bool val, mtr_t *mtr) noexcept {
+inline void xdes_set_bit(Fsp::xdes_t *descr, ulint bit, ulint offset, bool val, Mtr *mtr) noexcept {
   ut_ad(mtr->memo_contains_page(descr, MTR_MEMO_PAGE_X_FIX));
   ut_ad(bit == XDES_FREE_BIT || bit == XDES_CLEAN_BIT);
   ut_ad(offset < FSP_EXTENT_SIZE);
@@ -271,7 +271,7 @@ inline void xdes_set_bit(FSP::xdes_t *descr, ulint bit, ulint offset, bool val, 
  *
  * @return bit index of the bit, ULINT_UNDEFINED if not found
  */
-inline ulint xdes_find_bit(FSP::xdes_t *descr, ulint bit, bool val, ulint hint, mtr_t *mtr) noexcept {
+inline ulint xdes_find_bit(Fsp::xdes_t *descr, ulint bit, bool val, ulint hint, Mtr *mtr) noexcept {
   ut_ad(hint < FSP_EXTENT_SIZE);
   ut_ad(mtr->memo_contains_page(descr, MTR_MEMO_PAGE_X_FIX));
 
@@ -300,7 +300,7 @@ inline ulint xdes_find_bit(FSP::xdes_t *descr, ulint bit, bool val, ulint hint, 
  *
  * @return number of pages used
  */
-inline ulint xdes_get_n_used(const FSP::xdes_t *descr, mtr_t *mtr) noexcept {
+inline ulint xdes_get_n_used(const Fsp::xdes_t *descr, Mtr *mtr) noexcept {
   ut_ad(mtr->memo_contains_page(descr, MTR_MEMO_PAGE_X_FIX));
 
   ulint count{};
@@ -322,7 +322,7 @@ inline ulint xdes_get_n_used(const FSP::xdes_t *descr, mtr_t *mtr) noexcept {
  *
  * @return true if totally free
  */
-inline bool xdes_is_free(const FSP::xdes_t *descr, mtr_t *mtr) noexcept {
+inline bool xdes_is_free(const Fsp::xdes_t *descr, Mtr *mtr) noexcept {
   return xdes_get_n_used(descr, mtr) == 0;
 }
 
@@ -334,7 +334,7 @@ inline bool xdes_is_free(const FSP::xdes_t *descr, mtr_t *mtr) noexcept {
  *
  * @return true if full
  */
-inline bool xdes_is_full(const FSP::xdes_t *descr, mtr_t *mtr) noexcept {
+inline bool xdes_is_full(const Fsp::xdes_t *descr, Mtr *mtr) noexcept {
   return FSP_EXTENT_SIZE == xdes_get_n_used(descr, mtr);
 }
 
@@ -344,7 +344,7 @@ inline bool xdes_is_full(const FSP::xdes_t *descr, mtr_t *mtr) noexcept {
  * @param[in] state             State to set
  * @param[in] mtr               Mini-transaction handle
  */
-inline void xdes_set_state(FSP::xdes_t *descr, ulint state, mtr_t *mtr) noexcept {
+inline void xdes_set_state(Fsp::xdes_t *descr, ulint state, Mtr *mtr) noexcept {
   ut_ad(state >= XDES_FREE);
   ut_ad(state <= XDES_FSEG);
   ut_ad(mtr->memo_contains_page(descr, MTR_MEMO_PAGE_X_FIX));
@@ -360,7 +360,7 @@ inline void xdes_set_state(FSP::xdes_t *descr, ulint state, mtr_t *mtr) noexcept
  *
  * @return state
  */
-inline ulint xdes_get_state(const FSP::xdes_t *descr, mtr_t *mtr) noexcept {
+inline ulint xdes_get_state(const Fsp::xdes_t *descr, Mtr *mtr) noexcept {
   ut_ad(mtr->memo_contains_page(descr, MTR_MEMO_PAGE_X_FIX));
 
   auto state = mtr->read_ulint(descr + XDES_STATE, MLOG_4BYTES);
@@ -375,7 +375,7 @@ inline ulint xdes_get_state(const FSP::xdes_t *descr, mtr_t *mtr) noexcept {
  * @param[in] descr             Descriptor data
  * @param[in] mtr               Mini-transaction handle
  */
-inline void xdes_init(FSP::xdes_t *descr, mtr_t *mtr) noexcept {
+inline void xdes_init(Fsp::xdes_t *descr, Mtr *mtr) noexcept {
   ut_ad(mtr->memo_contains_page(descr, MTR_MEMO_PAGE_X_FIX));
   ut_ad((XDES_SIZE - XDES_BITMAP) % 4 == 0);
 
@@ -413,7 +413,7 @@ inline ulint xdes_calc_descriptor_index(page_no_t page_no) noexcept {
  *
  * @return offset of the first page in extent
  */
-inline ulint xdes_get_offset(FSP::xdes_t *descr) noexcept {
+inline ulint xdes_get_offset(Fsp::xdes_t *descr) noexcept {
   return page_get_page_no(Rec(descr).page_align()) + ((page_offset(descr) - XDES_ARR_OFFSET) / XDES_SIZE) * FSP_EXTENT_SIZE;
 }
 
@@ -422,7 +422,7 @@ inline ulint xdes_get_offset(FSP::xdes_t *descr) noexcept {
  *
  * @param[in] block             Pointer to block
  */
-static void fsp_init_file_page_low(Buf_block *block) noexcept {
+static void fsp_init_file_page_low(BufBlock *block) noexcept {
   auto page = block->get_frame();
 
   block->m_check_index_page_at_flush = false;
@@ -443,7 +443,7 @@ static void fsp_init_file_page_low(Buf_block *block) noexcept {
  * @param[in] block             Pointer to block
  * @param[in] mtr               Mini-transaction handle
  */
-static void fsp_init_file_page(Buf_block *block, mtr_t *mtr) noexcept {
+static void fsp_init_file_page(BufBlock *block, Mtr *mtr) noexcept {
   fsp_init_file_page_low(block);
 
   mlog_write_initial_log_record(block->get_frame(), MLOG_INIT_FILE_PAGE, mtr);
@@ -457,7 +457,7 @@ static void fsp_init_file_page(Buf_block *block, mtr_t *mtr) noexcept {
  *
  * @return	segment inode
  */
-inline FSP::fseg_inode_t *fsp_seg_inode_page_get_nth_inode(page_t *page, ulint i, mtr_t *mtr __attribute__((unused))) noexcept {
+inline Fsp::fseg_inode_t *fsp_seg_inode_page_get_nth_inode(page_t *page, ulint i, Mtr *mtr __attribute__((unused))) noexcept {
   ut_ad(i < FSP_SEG_INODES_PER_PAGE);
   ut_ad(mtr->memo_contains_page(page, MTR_MEMO_PAGE_X_FIX));
 
@@ -472,7 +472,7 @@ inline FSP::fseg_inode_t *fsp_seg_inode_page_get_nth_inode(page_t *page, ulint i
  *
  * @return	segment inode index, or ULINT_UNDEFINED if not found
  */
-static ulint fsp_seg_inode_page_find_used(page_t *page, mtr_t *mtr) noexcept {
+static ulint fsp_seg_inode_page_find_used(page_t *page, Mtr *mtr) noexcept {
   for (ulint i{}; i < FSP_SEG_INODES_PER_PAGE; ++i) {
 
     auto inode = fsp_seg_inode_page_get_nth_inode(page, i, mtr);
@@ -497,7 +497,7 @@ static ulint fsp_seg_inode_page_find_used(page_t *page, mtr_t *mtr) noexcept {
  *
  * @return segment inode index, or ULINT_UNDEFINED if not found
  */
-static ulint fsp_seg_inode_page_find_free(page_t *page, ulint i, mtr_t *mtr) noexcept {
+static ulint fsp_seg_inode_page_find_free(page_t *page, ulint i, Mtr *mtr) noexcept {
   for (; i < FSP_SEG_INODES_PER_PAGE; ++i) {
 
     auto inode = fsp_seg_inode_page_get_nth_inode(page, i, mtr);
@@ -520,7 +520,7 @@ static ulint fsp_seg_inode_page_find_free(page_t *page, ulint i, mtr_t *mtr) noe
  * @param[in] inode             The segment inode to be freed.
  * @param[in] mtr               Mini-transaction handle.
  */
-void FSP::free_seg_inode(space_id_t space, fseg_inode_t *inode, mtr_t *mtr) noexcept {
+void Fsp::free_seg_inode(space_id_t space, fseg_inode_t *inode, Mtr *mtr) noexcept {
   auto page = Rec(inode).page_align();
   auto space_header = get_space_header(space, mtr);
 
@@ -557,8 +557,8 @@ void FSP::free_seg_inode(space_id_t space, fseg_inode_t *inode, mtr_t *mtr) noex
  *
  * @return A pointer to the file segment inode if found - x-latched, otherwise nullptr.
  */
-static FSP::fseg_inode_t *fseg_inode_try_get(fseg_header_t *header, space_id_t space, mtr_t *mtr) noexcept {
-  Fil_addr inode_addr;
+static Fsp::fseg_inode_t *fseg_inode_try_get(fseg_header_t *header, space_id_t space, Mtr *mtr) noexcept {
+  FilAddr inode_addr;
 
   inode_addr.m_page_no = mach_read_from_4(header + FSEG_HDR_PAGE_NO);
   inode_addr.m_boffset = mach_read_from_2(header + FSEG_HDR_OFFSET);
@@ -586,7 +586,7 @@ static FSP::fseg_inode_t *fseg_inode_try_get(fseg_header_t *header, space_id_t s
  *
  * @return A pointer to the fseg_inode_t structure if found, otherwise NULL.
  */
-static FSP::fseg_inode_t *fseg_inode_get(fseg_header_t *header, space_id_t space, mtr_t *mtr) noexcept {
+static Fsp::fseg_inode_t *fseg_inode_get(fseg_header_t *header, space_id_t space, Mtr *mtr) noexcept {
   auto inode = fseg_inode_try_get(header, space, mtr);
   ut_a(inode != nullptr);
   return inode;
@@ -601,7 +601,7 @@ static FSP::fseg_inode_t *fseg_inode_get(fseg_header_t *header, space_id_t space
  *
  * @return The page number, FIL_NULL if not in use.
  */
-inline ulint fseg_get_nth_frag_page_no(FSP::fseg_inode_t *inode, ulint n, mtr_t *mtr __attribute__((unused))) noexcept {
+inline ulint fseg_get_nth_frag_page_no(Fsp::fseg_inode_t *inode, ulint n, Mtr *mtr __attribute__((unused))) noexcept {
   ut_ad(n < FSEG_FRAG_ARR_N_SLOTS);
   ut_ad(mtr->memo_contains_page(inode, MTR_MEMO_PAGE_X_FIX));
   ut_ad(mach_read_from_4(inode + FSEG_MAGIC_N) == FSEG_MAGIC_N_VALUE);
@@ -617,7 +617,7 @@ inline ulint fseg_get_nth_frag_page_no(FSP::fseg_inode_t *inode, ulint n, mtr_t 
  * @param[in] page_no           The page number to set.
  * @param[in] mtr               Mini-transaction handle.
  */
-inline void fseg_set_nth_frag_page_no(FSP::fseg_inode_t *inode, ulint n, ulint page_no, mtr_t *mtr) noexcept {
+inline void fseg_set_nth_frag_page_no(Fsp::fseg_inode_t *inode, ulint n, ulint page_no, Mtr *mtr) noexcept {
   ut_ad(n < FSEG_FRAG_ARR_N_SLOTS);
   ut_ad(mtr->memo_contains_page(inode, MTR_MEMO_PAGE_X_FIX));
   ut_ad(mach_read_from_4(inode + FSEG_MAGIC_N) == FSEG_MAGIC_N_VALUE);
@@ -632,7 +632,7 @@ inline void fseg_set_nth_frag_page_no(FSP::fseg_inode_t *inode, ulint n, ulint p
  *
  * @return Slot index; ULINT_UNDEFINED if none found.
  */
-static ulint fseg_find_free_frag_page_slot(FSP::fseg_inode_t *inode, mtr_t *mtr) noexcept {
+static ulint fseg_find_free_frag_page_slot(Fsp::fseg_inode_t *inode, Mtr *mtr) noexcept {
   for (ulint i{}; i < FSEG_FRAG_ARR_N_SLOTS; ++i) {
     const auto page_no = fseg_get_nth_frag_page_no(inode, i, mtr);
 
@@ -653,7 +653,7 @@ static ulint fseg_find_free_frag_page_slot(FSP::fseg_inode_t *inode, mtr_t *mtr)
  *
  * @return Slot index; ULINT_UNDEFINED if none found.
  */
-static ulint fseg_find_last_used_frag_page_slot(FSP::fseg_inode_t *inode, mtr_t *mtr) noexcept {
+static ulint fseg_find_last_used_frag_page_slot(Fsp::fseg_inode_t *inode, Mtr *mtr) noexcept {
   for (ulint i{}; i < FSEG_FRAG_ARR_N_SLOTS; ++i) {
     const ulint page_no = fseg_get_nth_frag_page_no(inode, FSEG_FRAG_ARR_N_SLOTS - i - 1, mtr);
 
@@ -673,7 +673,7 @@ static ulint fseg_find_last_used_frag_page_slot(FSP::fseg_inode_t *inode, mtr_t 
  *
  * @return The number of fragment pages.
  */
-static ulint fseg_get_n_frag_pages(FSP::fseg_inode_t *inode, mtr_t *mtr) noexcept {
+static ulint fseg_get_n_frag_pages(Fsp::fseg_inode_t *inode, Mtr *mtr) noexcept {
   ulint count{};
 
   for (ulint i{}; i < FSEG_FRAG_ARR_N_SLOTS; ++i) {
@@ -691,7 +691,7 @@ static ulint fseg_get_n_frag_pages(FSP::fseg_inode_t *inode, mtr_t *mtr) noexcep
  * @param[in] inode             Segment inode
  * @param[in] mtr               Mini-transaction handle
  */
-static void fseg_print_low(FSP::fseg_inode_t *inode, mtr_t *mtr) noexcept {
+static void fseg_print_low(Fsp::fseg_inode_t *inode, Mtr *mtr) noexcept {
   ut_ad(mtr->memo_contains_page(inode, MTR_MEMO_PAGE_X_FIX));
 
   ulint used{};
@@ -727,7 +727,7 @@ static void fseg_print_low(FSP::fseg_inode_t *inode, mtr_t *mtr) noexcept {
   ut_ad(mach_read_from_4(inode + FSEG_MAGIC_N) == FSEG_MAGIC_N_VALUE);
 }
 
-static ulint fseg_n_reserved_pages_low(FSP::fseg_inode_t *inode, ulint *used, mtr_t *mtr) noexcept {
+static ulint fseg_n_reserved_pages_low(Fsp::fseg_inode_t *inode, ulint *used, Mtr *mtr) noexcept {
   ut_ad(mtr->memo_contains_page(inode, MTR_MEMO_PAGE_X_FIX));
 
   *used = mtr->read_ulint(inode + FSEG_NOT_FULL_N_USED, MLOG_4BYTES) + FSP_EXTENT_SIZE * flst_get_len(inode + FSEG_FULL, mtr) +
@@ -739,7 +739,7 @@ static ulint fseg_n_reserved_pages_low(FSP::fseg_inode_t *inode, ulint *used, mt
   return ret;
 }
 
-bool FSP::try_extend_data_file_with_pages(space_id_t space, page_no_t page_no, fsp_header_t *header, mtr_t *mtr) noexcept {
+bool Fsp::try_extend_data_file_with_pages(space_id_t space, page_no_t page_no, fsp_header_t *header, Mtr *mtr) noexcept {
   ut_a(space != SYS_TABLESPACE);
 
   auto size = mtr->read_ulint(header + FSP_SIZE, MLOG_4BYTES);
@@ -757,7 +757,7 @@ bool FSP::try_extend_data_file_with_pages(space_id_t space, page_no_t page_no, f
   return success;
 }
 
-bool FSP::try_extend_data_file(ulint *actual_increase, space_id_t space, fsp_header_t *header, mtr_t *mtr) noexcept {
+bool Fsp::try_extend_data_file(ulint *actual_increase, space_id_t space, fsp_header_t *header, Mtr *mtr) noexcept {
   *actual_increase = 0;
 
   auto extent_size = FSP_EXTENT_SIZE;
@@ -816,7 +816,7 @@ bool FSP::try_extend_data_file(ulint *actual_increase, space_id_t space, fsp_hea
   return true;
 }
 
-void FSP::free_page(space_id_t space, page_no_t page_no, mtr_t *mtr) noexcept {
+void Fsp::free_page(space_id_t space, page_no_t page_no, Mtr *mtr) noexcept {
   auto header = get_space_header(space, mtr);
   auto descr = xdes_get_descriptor_with_space_hdr(header, space, page_no, mtr);
   auto state = xdes_get_state(descr, mtr);
@@ -869,7 +869,7 @@ void FSP::free_page(space_id_t space, page_no_t page_no, mtr_t *mtr) noexcept {
   }
 }
 
-void FSP::free_extent(space_id_t space, ulint page, mtr_t *mtr) noexcept {
+void Fsp::free_extent(space_id_t space, ulint page, Mtr *mtr) noexcept {
   auto header = get_space_header(space, mtr);
   auto descr = xdes_get_descriptor_with_space_hdr(header, space, page, mtr);
 
@@ -885,7 +885,7 @@ void FSP::free_extent(space_id_t space, ulint page, mtr_t *mtr) noexcept {
   flst_add_last(header + FSP_FREE, descr + XDES_FLST_NODE, mtr);
 }
 
-void FSP::fseg_fill_free_list(FSP::fseg_inode_t *inode, space_id_t space, page_no_t hint, mtr_t *mtr) noexcept {
+void Fsp::fseg_fill_free_list(Fsp::fseg_inode_t *inode, space_id_t space, page_no_t hint, Mtr *mtr) noexcept {
   ut_ad(!((page_offset(inode) - FSEG_ARR_OFFSET) % FSEG_INODE_SIZE));
 
   ulint used;
@@ -929,7 +929,7 @@ void FSP::fseg_fill_free_list(FSP::fseg_inode_t *inode, space_id_t space, page_n
   }
 }
 
-FSP::xdes_t *FSP::fseg_alloc_free_extent(fseg_inode_t *inode, space_id_t space, mtr_t *mtr) noexcept {
+Fsp::xdes_t *Fsp::fseg_alloc_free_extent(fseg_inode_t *inode, space_id_t space, Mtr *mtr) noexcept {
   xdes_t *descr;
 
   ut_ad(!((page_offset(inode) - FSEG_ARR_OFFSET) % FSEG_INODE_SIZE));
@@ -963,7 +963,7 @@ FSP::xdes_t *FSP::fseg_alloc_free_extent(fseg_inode_t *inode, space_id_t space, 
   return descr;
 }
 
-bool FSP::reserve_free_pages(space_id_t space, fsp_header_t *space_header, ulint size, mtr_t *mtr) noexcept {
+bool Fsp::reserve_free_pages(space_id_t space, fsp_header_t *space_header, ulint size, Mtr *mtr) noexcept {
   ut_a(size < FSP_EXTENT_SIZE / 2);
 
   auto descr = xdes_get_descriptor_with_space_hdr(space_header, space, 0, mtr);
@@ -978,7 +978,7 @@ bool FSP::reserve_free_pages(space_id_t space, fsp_header_t *space_header, ulint
   }
 }
 
-void FSP::fseg_free_page_low(fseg_inode_t *seg_inode, space_id_t space, ulint page, mtr_t *mtr) noexcept {
+void Fsp::fseg_free_page_low(fseg_inode_t *seg_inode, space_id_t space, ulint page, Mtr *mtr) noexcept {
   ut_ad(mach_read_from_4(seg_inode + FSEG_MAGIC_N) == FSEG_MAGIC_N_VALUE);
   ut_ad(!((page_offset(seg_inode) - FSEG_ARR_OFFSET) % FSEG_INODE_SIZE));
 
@@ -1068,7 +1068,7 @@ void FSP::fseg_free_page_low(fseg_inode_t *seg_inode, space_id_t space, ulint pa
   }
 }
 
-void FSP::fseg_free_extent(fseg_inode_t *seg_inode, space_id_t space, page_no_t page, mtr_t *mtr) noexcept {
+void Fsp::fseg_free_extent(fseg_inode_t *seg_inode, space_id_t space, page_no_t page, Mtr *mtr) noexcept {
   auto descr = xdes_get_descriptor(space, page, mtr);
 
   ut_a(xdes_get_state(descr, mtr) == XDES_FSEG);
@@ -1096,7 +1096,7 @@ void FSP::fseg_free_extent(fseg_inode_t *seg_inode, space_id_t space, page_no_t 
 #ifdef UNIV_DEBUG
   const auto first_page_in_extent = page - (page % FSP_EXTENT_SIZE);
 
-  Page_id page_id(space, NULL_PAGE_NO);
+  PageId page_id(space, NULL_PAGE_NO);
   for (ulint i{}; i < FSP_EXTENT_SIZE; ++i) {
     page_id.set_page_no(first_page_in_extent + i);
     m_buf_pool->set_file_page_was_freed(page_id);
@@ -1104,7 +1104,7 @@ void FSP::fseg_free_extent(fseg_inode_t *seg_inode, space_id_t space, page_no_t 
 #endif /* UNIV_DEBUG */
 }
 
-FSP::xdes_t *FSP::fseg_get_first_extent(fseg_inode_t *inode, space_id_t space, mtr_t *mtr) noexcept {
+Fsp::xdes_t *Fsp::fseg_get_first_extent(fseg_inode_t *inode, space_id_t space, Mtr *mtr) noexcept {
   ut_ad(space == page_get_space_id(Rec(inode).page_align()));
   ut_ad(mach_read_from_4(inode + FSEG_MAGIC_N) == FSEG_MAGIC_N_VALUE);
 
@@ -1133,8 +1133,8 @@ FSP::xdes_t *FSP::fseg_get_first_extent(fseg_inode_t *inode, space_id_t space, m
   }
 }
 
-bool FSP::fseg_validate_low(fseg_inode_t *inode, mtr_t *mtr2) noexcept {
-  mtr_t mtr;
+bool Fsp::fseg_validate_low(fseg_inode_t *inode, Mtr *mtr2) noexcept {
+  Mtr mtr;
 
   ut_ad(mtr2->memo_contains_page(inode, MTR_MEMO_PAGE_X_FIX));
   ut_ad(mach_read_from_4(inode + FSEG_MAGIC_N) == FSEG_MAGIC_N_VALUE);
@@ -1214,19 +1214,19 @@ bool FSP::fseg_validate_low(fseg_inode_t *inode, mtr_t *mtr2) noexcept {
   return true;
 }
 
-FSP *FSP::create(Log *log, Fil *fil, Buf_pool *buf_pool) noexcept {
-  auto ptr = static_cast<log_t *>(ut_new(sizeof(FSP)));
-  return new (ptr) FSP(log, fil, buf_pool);
+Fsp *Fsp::create(Log *log, Fil *fil, BufPool *buf_pool) noexcept {
+  auto ptr = static_cast<Log *>(ut_new(sizeof(Fsp)));
+  return new (ptr) Fsp(log, fil, buf_pool);
 }
 
-void FSP::destroy(FSP *&fsp) noexcept {
+void Fsp::destroy(Fsp *&fsp) noexcept {
   call_destructor(fsp);
   ut_delete(fsp);
   fsp = nullptr;
 }
 
-FSP::fsp_header_t *FSP::get_space_header(space_id_t id, mtr_t *mtr) noexcept {
-  Buf_pool::Request req{
+Fsp::fsp_header_t *Fsp::get_space_header(space_id_t id, Mtr *mtr) noexcept {
+  BufPool::Request req{
     .m_rw_latch = RW_X_LATCH, .m_page_id = {id, 0}, .m_mode = BUF_GET, .m_file = __FILE__, .m_line = __LINE__, .m_mtr = mtr
   };
 
@@ -1240,14 +1240,14 @@ FSP::fsp_header_t *FSP::get_space_header(space_id_t id, mtr_t *mtr) noexcept {
   return header;
 }
 
-FSP::xdes_t *FSP::xdes_lst_get_descriptor(space_id_t space, Fil_addr lst_node, mtr_t *mtr) noexcept {
+Fsp::xdes_t *Fsp::xdes_lst_get_descriptor(space_id_t space, FilAddr lst_node, Mtr *mtr) noexcept {
   ut_ad(mtr->memo_contains(m_fil->space_get_latch(space), MTR_MEMO_X_LOCK));
   auto descr = fut_get_ptr(space, lst_node, RW_X_LATCH, mtr) - XDES_FLST_NODE;
 
   return descr;
 }
 
-void FSP::fill_free_list(bool init_space, space_id_t space, fsp_header_t *header, mtr_t *mtr) noexcept {
+void Fsp::fill_free_list(bool init_space, space_id_t space, fsp_header_t *header, Mtr *mtr) noexcept {
   ut_ad(page_offset(header) == FSP_HEADER_OFFSET);
 
   /* Check if we can fill free list from above the free list limit */
@@ -1279,15 +1279,15 @@ void FSP::fill_free_list(bool init_space, space_id_t space, fsp_header_t *header
 
     if (unlikely(init_xdes)) {
 
-      Buf_block *block;
+      BufBlock *block;
 
       /* We are going to initialize a new descriptor page:
       the prior contents of the pages should be ignored. */
 
       if (i > 0) {
-        block = m_buf_pool->create(Page_id(space, i), mtr);
+        block = m_buf_pool->create(PageId(space, i), mtr);
 
-        Buf_pool::Request req{
+        BufPool::Request req{
           .m_rw_latch = RW_X_LATCH,
           .m_page_id = {space, static_cast<page_no_t>(i)},
           .m_mode = BUF_GET,
@@ -1335,7 +1335,7 @@ void FSP::fill_free_list(bool init_space, space_id_t space, fsp_header_t *header
   }
 }
 
-FSP::xdes_t *FSP::alloc_free_extent(space_id_t space, ulint hint, mtr_t *mtr) noexcept {
+Fsp::xdes_t *Fsp::alloc_free_extent(space_id_t space, ulint hint, Mtr *mtr) noexcept {
   auto header = get_space_header(space, mtr);
   auto descr = xdes_get_descriptor_with_space_hdr(header, space, hint, mtr);
 
@@ -1364,7 +1364,7 @@ FSP::xdes_t *FSP::alloc_free_extent(space_id_t space, ulint hint, mtr_t *mtr) no
   return descr;
 }
 
-ulint FSP::alloc_free_page(space_id_t space, page_no_t hint, mtr_t *mtr) noexcept {
+ulint Fsp::alloc_free_page(space_id_t space, page_no_t hint, Mtr *mtr) noexcept {
   auto header = get_space_header(space, mtr);
 
   /* Get the hinted descriptor */
@@ -1465,9 +1465,9 @@ ulint FSP::alloc_free_page(space_id_t space, page_no_t hint, mtr_t *mtr) noexcep
   be obtained immediately with buf_page_get without need for a disk
   read. */
 
-  auto block = m_buf_pool->create(Page_id(space, page_no), mtr);
+  auto block = m_buf_pool->create(PageId(space, page_no), mtr);
 
-  Buf_pool::Request req{
+  BufPool::Request req{
     .m_rw_latch = RW_X_LATCH, .m_page_id = {space, page_no}, .m_mode = BUF_GET, .m_file = __FILE__, .m_line = __LINE__, .m_mtr = mtr
   };
 
@@ -1484,7 +1484,7 @@ ulint FSP::alloc_free_page(space_id_t space, page_no_t hint, mtr_t *mtr) noexcep
   return page_no;
 }
 
-FSP::xdes_t *FSP::xdes_get_descriptor_with_space_hdr(fsp_header_t *sp_header, space_id_t space, ulint offset, mtr_t *mtr) noexcept {
+Fsp::xdes_t *Fsp::xdes_get_descriptor_with_space_hdr(fsp_header_t *sp_header, space_id_t space, ulint offset, Mtr *mtr) noexcept {
   ut_ad(mtr->memo_contains(m_fil->space_get_latch(space), MTR_MEMO_X_LOCK));
   ut_ad(mtr->memo_contains_page(sp_header, MTR_MEMO_PAGE_S_FIX) || mtr->memo_contains_page(sp_header, MTR_MEMO_PAGE_X_FIX));
   ut_ad(page_offset(sp_header) == FSP_HEADER_OFFSET);
@@ -1515,7 +1515,7 @@ FSP::xdes_t *FSP::xdes_get_descriptor_with_space_hdr(fsp_header_t *sp_header, sp
     descr_page = Rec(sp_header).page_align();
   } else {
 
-    Buf_pool::Request req{
+    BufPool::Request req{
       .m_rw_latch = RW_X_LATCH,
       .m_page_id = {space, descr_page_no},
       .m_mode = BUF_GET,
@@ -1534,8 +1534,8 @@ FSP::xdes_t *FSP::xdes_get_descriptor_with_space_hdr(fsp_header_t *sp_header, sp
   return descr_page + XDES_ARR_OFFSET + XDES_SIZE * xdes_calc_descriptor_index(offset);
 }
 
-FSP::xdes_t *FSP::xdes_get_descriptor(space_id_t space_id, page_no_t page_no, mtr_t *mtr) noexcept {
-  Buf_pool::Request req{
+Fsp::xdes_t *Fsp::xdes_get_descriptor(space_id_t space_id, page_no_t page_no, Mtr *mtr) noexcept {
+  BufPool::Request req{
     .m_rw_latch = RW_X_LATCH, .m_page_id = {space_id, 0}, .m_mode = BUF_GET, .m_file = __FILE__, .m_line = __LINE__, .m_mtr = mtr
   };
 
@@ -1548,7 +1548,7 @@ FSP::xdes_t *FSP::xdes_get_descriptor(space_id_t space_id, page_no_t page_no, mt
   return xdes_get_descriptor_with_space_hdr(sp_header, space_id, page_no, mtr);
 }
 
-bool FSP::alloc_seg_inode_page(fsp_header_t *space_header, mtr_t *mtr) noexcept {
+bool Fsp::alloc_seg_inode_page(fsp_header_t *space_header, Mtr *mtr) noexcept {
   ut_ad(page_offset(space_header) == FSP_HEADER_OFFSET);
 
   space_id_t space = page_get_space_id(Rec(space_header).page_align());
@@ -1559,7 +1559,7 @@ bool FSP::alloc_seg_inode_page(fsp_header_t *space_header, mtr_t *mtr) noexcept 
     return false;
   }
 
-  Buf_pool::Request req{
+  BufPool::Request req{
     .m_rw_latch = RW_X_LATCH, .m_page_id = {space, page_no}, .m_mode = BUF_GET, .m_file = __FILE__, .m_line = __LINE__, .m_mtr = mtr
   };
 
@@ -1585,7 +1585,7 @@ bool FSP::alloc_seg_inode_page(fsp_header_t *space_header, mtr_t *mtr) noexcept 
   return true;
 }
 
-FSP::fseg_inode_t *FSP::alloc_seg_inode(fsp_header_t *space_header, mtr_t *mtr) noexcept {
+Fsp::fseg_inode_t *Fsp::alloc_seg_inode(fsp_header_t *space_header, Mtr *mtr) noexcept {
   ut_ad(page_offset(space_header) == FSP_HEADER_OFFSET);
 
   if (flst_get_len(space_header + FSP_SEG_INODES_FREE, mtr) == 0) {
@@ -1602,9 +1602,9 @@ FSP::fseg_inode_t *FSP::alloc_seg_inode(fsp_header_t *space_header, mtr_t *mtr) 
   auto ptr = Rec(space_header).page_align();
   auto page_ptr = space_header + FSP_SEG_INODES_FREE;
 
-  Buf_pool::Request req{
+  BufPool::Request req{
     .m_rw_latch = RW_X_LATCH,
-    .m_page_id = Page_id{page_get_space_id(ptr), flst_get_first(page_ptr, mtr).m_page_no},
+    .m_page_id = PageId{page_get_space_id(ptr), flst_get_first(page_ptr, mtr).m_page_no},
     .m_mode = BUF_GET,
     .m_file = __FILE__,
     .m_line = __LINE__,
@@ -1635,8 +1635,8 @@ FSP::fseg_inode_t *FSP::alloc_seg_inode(fsp_header_t *space_header, mtr_t *mtr) 
   return inode;
 }
 
-page_no_t FSP::fseg_alloc_free_page_low(
-  space_id_t space, fseg_inode_t *seg_inode, page_no_t hint, byte direction, mtr_t *mtr
+page_no_t Fsp::fseg_alloc_free_page_low(
+  space_id_t space, fseg_inode_t *seg_inode, page_no_t hint, byte direction, Mtr *mtr
 ) noexcept {
   bool frag_page_allocated{};
 
@@ -1664,7 +1664,7 @@ page_no_t FSP::fseg_alloc_free_page_low(
   page_no_t ret_page;
 
   /* the extent of the allocated page */
-  FSP::xdes_t *ret_descr;
+  Fsp::xdes_t *ret_descr;
 
   /* In the big if-else below we look for ret_page and ret_descr */
   if (xdes_get_state(hint_descr, mtr) == XDES_FSEG && mtr->read_uint64(hint_descr + XDES_ID) == seg_id &&
@@ -1718,7 +1718,7 @@ page_no_t FSP::fseg_alloc_free_page_low(
   } else if (reserved - used > 0) {
 
     /* 5. We take any unused page from the segment */
-    Fil_addr first;
+    FilAddr first;
 
     if (flst_get_len(seg_inode + FSEG_NOT_FULL, mtr) > 0) {
       first = flst_get_first(seg_inode + FSEG_NOT_FULL, mtr);
@@ -1805,11 +1805,11 @@ page_no_t FSP::fseg_alloc_free_page_low(
     can be obtained immediately with buf_pool->get without need
     for a disk read */
 
-    auto block = m_buf_pool->create(Page_id(space, ret_page), mtr);
+    auto block = m_buf_pool->create(PageId(space, ret_page), mtr);
 
     buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_FSP_PAGE));
 
-    Buf_pool::Request req{
+    BufPool::Request req{
       .m_rw_latch = RW_X_LATCH,
       .m_page_id = {space, ret_page},
       .m_mode = BUF_GET,
@@ -1836,12 +1836,12 @@ page_no_t FSP::fseg_alloc_free_page_low(
     fseg_mark_page_used(seg_inode, space, ret_page, mtr);
   }
 
-  m_buf_pool->check_index_page_at_flush(Page_id(space, ret_page));
+  m_buf_pool->check_index_page_at_flush(PageId(space, ret_page));
 
   return ret_page;
 }
 
-byte *FSP::parse_init_file_page(byte *ptr, byte *, Buf_block *block) noexcept {
+byte *Fsp::parse_init_file_page(byte *ptr, byte *, BufBlock *block) noexcept {
   if (block != nullptr) {
     fsp_init_file_page_low(block);
   }
@@ -1849,19 +1849,19 @@ byte *FSP::parse_init_file_page(byte *ptr, byte *, Buf_block *block) noexcept {
   return ptr;
 }
 
-void FSP::init_fields(page_t *page, space_id_t space_id, ulint flags) noexcept {
+void Fsp::init_fields(page_t *page, space_id_t space_id, ulint flags) noexcept {
   ut_a(flags == DICT_TF_FORMAT_V1);
 
   mach_write_to_4(FSP_HEADER_OFFSET + FSP_SPACE_ID + page, space_id);
   mach_write_to_4(FSP_HEADER_OFFSET + FSP_SPACE_FLAGS + page, flags);
 }
 
-void FSP::header_init(space_id_t space, ulint size, mtr_t *mtr) noexcept {
+void Fsp::header_init(space_id_t space, ulint size, Mtr *mtr) noexcept {
   mtr_x_lock(m_fil->space_get_latch(space), mtr);
 
-  auto block = m_buf_pool->create(Page_id(space, 0), mtr);
+  auto block = m_buf_pool->create(PageId(space, 0), mtr);
 
-  Buf_pool::Request req{
+  BufPool::Request req{
     .m_rw_latch = RW_X_LATCH, .m_page_id = {space, 0}, .m_mode = BUF_GET, .m_file = __FILE__, .m_line = __LINE__, .m_mtr = mtr
   };
 
@@ -1901,7 +1901,7 @@ void FSP::header_init(space_id_t space, ulint size, mtr_t *mtr) noexcept {
   fill_free_list(space != SYS_TABLESPACE, space, header, mtr);
 }
 
-space_id_t FSP::get_space_id(const page_t *page) noexcept {
+space_id_t Fsp::get_space_id(const page_t *page) noexcept {
   auto fsp_id = mach_read_from_4(FSP_HEADER_OFFSET + page + FSP_SPACE_ID);
   auto id = mach_read_from_4(page + FIL_PAGE_SPACE_ID);
 
@@ -1913,14 +1913,14 @@ space_id_t FSP::get_space_id(const page_t *page) noexcept {
   }
 }
 
-ulint FSP::get_flags(const page_t *page) noexcept {
+ulint Fsp::get_flags(const page_t *page) noexcept {
   ut_ad(page_offset(page) == 0);
 
   return mach_read_from_4(FSP_HEADER_OFFSET + FSP_SPACE_FLAGS + page);
 }
 
-ulint FSP::init_system_space_free_limit() noexcept {
-  mtr_t mtr;
+ulint Fsp::init_system_space_free_limit() noexcept {
+  Mtr mtr;
 
   mtr.start();
 
@@ -1939,8 +1939,8 @@ ulint FSP::init_system_space_free_limit() noexcept {
   return limit;
 }
 
-ulint FSP::get_system_space_size() noexcept {
-  mtr_t mtr;
+ulint Fsp::get_system_space_size() noexcept {
+  Mtr mtr;
 
   mtr.start();
 
@@ -1954,17 +1954,17 @@ ulint FSP::get_system_space_size() noexcept {
   return size;
 }
 
-Buf_block *FSP::fseg_create_general(space_id_t space_id, page_no_t page_no, ulint byte_offset, bool reserved, mtr_t *mtr) noexcept {
+BufBlock *Fsp::fseg_create_general(space_id_t space_id, page_no_t page_no, ulint byte_offset, bool reserved, Mtr *mtr) noexcept {
   ut_ad(byte_offset + FSEG_HEADER_SIZE <= UNIV_PAGE_SIZE - FIL_PAGE_DATA_END);
 
   auto latch = m_fil->space_get_latch(space_id);
 
-  Buf_block *block{};
+  BufBlock *block{};
   fseg_header_t *header{};
 
   if (page_no != 0) {
 
-    Buf_pool::Request req{
+    BufPool::Request req{
       .m_rw_latch = RW_X_LATCH,
       .m_page_id = {space_id, page_no},
       .m_mode = BUF_GET,
@@ -2022,7 +2022,7 @@ Buf_block *FSP::fseg_create_general(space_id_t space_id, page_no_t page_no, ulin
 
       if (unlikely(page_no != FIL_NULL)) {
 
-        Buf_pool::Request req{
+        BufPool::Request req{
           .m_rw_latch = RW_X_LATCH,
           .m_page_id = {space_id, page_no},
           .m_mode = BUF_GET,
@@ -2064,11 +2064,11 @@ Buf_block *FSP::fseg_create_general(space_id_t space_id, page_no_t page_no, ulin
   return block;
 }
 
-Buf_block *FSP::fseg_create(space_id_t space, page_no_t page, ulint byte_offset, mtr_t *mtr) noexcept {
+BufBlock *Fsp::fseg_create(space_id_t space, page_no_t page, ulint byte_offset, Mtr *mtr) noexcept {
   return fseg_create_general(space, page, byte_offset, false, mtr);
 }
 
-ulint FSP::fseg_n_reserved_pages(fseg_header_t *header, ulint *used, mtr_t *mtr) noexcept {
+ulint Fsp::fseg_n_reserved_pages(fseg_header_t *header, ulint *used, Mtr *mtr) noexcept {
   const auto space = page_get_space_id(Rec(header).page_align());
   auto latch = m_fil->space_get_latch(space);
 
@@ -2081,8 +2081,8 @@ ulint FSP::fseg_n_reserved_pages(fseg_header_t *header, ulint *used, mtr_t *mtr)
   return fseg_n_reserved_pages_low(inode, used, mtr);
 }
 
-page_no_t FSP::fseg_alloc_free_page_general(
-  fseg_header_t *seg_header, page_no_t hint, byte direction, bool reserved, mtr_t *mtr
+page_no_t Fsp::fseg_alloc_free_page_general(
+  fseg_header_t *seg_header, page_no_t hint, byte direction, bool reserved, Mtr *mtr
 ) noexcept {
   space_id_t space = page_get_space_id(Rec(seg_header).page_align());
   auto latch = m_fil->space_get_latch(space);
@@ -2113,11 +2113,11 @@ page_no_t FSP::fseg_alloc_free_page_general(
   return page_no;
 }
 
-page_no_t FSP::fseg_alloc_free_page(fseg_header_t *seg_header, page_no_t hint, byte direction, mtr_t *mtr) noexcept {
+page_no_t Fsp::fseg_alloc_free_page(fseg_header_t *seg_header, page_no_t hint, byte direction, Mtr *mtr) noexcept {
   return fseg_alloc_free_page_general(seg_header, hint, direction, false, mtr);
 }
 
-bool FSP::reserve_free_extents(ulint *n_reserved, space_id_t space, ulint n_ext, ulint alloc_type, mtr_t *mtr) noexcept {
+bool Fsp::reserve_free_extents(ulint *n_reserved, space_id_t space, ulint n_ext, ulint alloc_type, Mtr *mtr) noexcept {
   *n_reserved = n_ext;
 
   auto latch = m_fil->space_get_latch(space);
@@ -2128,7 +2128,7 @@ bool FSP::reserve_free_extents(ulint *n_reserved, space_id_t space, ulint n_ext,
 
   auto space_header = get_space_header(space, mtr);
 
-  auto extend = [this](space_id_t space, fsp_header_t *space_header, mtr_t *mtr) -> auto {
+  auto extend = [this](space_id_t space, fsp_header_t *space_header, Mtr *mtr) -> auto {
     ulint n_pages_added{};
     auto success = try_extend_data_file(&n_pages_added, space, space_header, mtr);
 
@@ -2208,8 +2208,8 @@ bool FSP::reserve_free_extents(ulint *n_reserved, space_id_t space, ulint n_ext,
   return true;
 }
 
-uint64_t FSP::get_available_space_in_free_extents(space_id_t space) noexcept {
-  mtr_t mtr;
+uint64_t Fsp::get_available_space_in_free_extents(space_id_t space) noexcept {
+  Mtr mtr;
 
   ut_ad(!mutex_own(&m_buf_pool->m_trx_sys->m_mutex));
 
@@ -2263,7 +2263,7 @@ uint64_t FSP::get_available_space_in_free_extents(space_id_t space) noexcept {
   }
 }
 
-void FSP::fseg_mark_page_used(fseg_inode_t *seg_inode, space_id_t space, page_no_t page, mtr_t *mtr) noexcept {
+void Fsp::fseg_mark_page_used(fseg_inode_t *seg_inode, space_id_t space, page_no_t page, Mtr *mtr) noexcept {
   ut_ad(!((page_offset(seg_inode) - FSEG_ARR_OFFSET) % FSEG_INODE_SIZE));
   ut_ad(mach_read_from_4(seg_inode + FSEG_MAGIC_N) == FSEG_MAGIC_N_VALUE);
 
@@ -2298,7 +2298,7 @@ void FSP::fseg_mark_page_used(fseg_inode_t *seg_inode, space_id_t space, page_no
   }
 }
 
-void FSP::fseg_free_page(fseg_header_t *seg_header, space_id_t space, page_no_t page, mtr_t *mtr) noexcept {
+void Fsp::fseg_free_page(fseg_header_t *seg_header, space_id_t space, page_no_t page, Mtr *mtr) noexcept {
   auto latch = m_fil->space_get_latch(space);
 
   ut_ad(!mutex_own(&m_buf_pool->m_trx_sys->m_mutex) || mtr->memo_contains(latch, MTR_MEMO_X_LOCK));
@@ -2309,10 +2309,10 @@ void FSP::fseg_free_page(fseg_header_t *seg_header, space_id_t space, page_no_t 
 
   fseg_free_page_low(seg_inode, space, page, mtr);
 
-  ut_d(m_buf_pool->set_file_page_was_freed(Page_id(space, page)));
+  ut_d(m_buf_pool->set_file_page_was_freed(PageId(space, page)));
 }
 
-bool FSP::fseg_free_step(fseg_header_t *header, mtr_t *mtr) noexcept {
+bool Fsp::fseg_free_step(fseg_header_t *header, Mtr *mtr) noexcept {
   const auto space = page_get_space_id(Rec(header).page_align());
   auto header_page = page_get_page_no(Rec(header).page_align());
   auto latch = m_fil->space_get_latch(space);
@@ -2373,7 +2373,7 @@ bool FSP::fseg_free_step(fseg_header_t *header, mtr_t *mtr) noexcept {
   }
 }
 
-bool FSP::fseg_free_step_not_header(fseg_header_t *header, mtr_t *mtr) noexcept {
+bool Fsp::fseg_free_step_not_header(fseg_header_t *header, Mtr *mtr) noexcept {
   const auto space = page_get_space_id(Rec(header).page_align());
   auto latch = m_fil->space_get_latch(space);
 
@@ -2415,7 +2415,7 @@ bool FSP::fseg_free_step_not_header(fseg_header_t *header, mtr_t *mtr) noexcept 
 }
 
 #ifdef UNIV_DEBUG
-bool FSP::fseg_validate(fseg_header_t *header, mtr_t *mtr) noexcept {
+bool Fsp::fseg_validate(fseg_header_t *header, Mtr *mtr) noexcept {
   auto space = page_get_space_id(Rec(header).page_align());
 
   mtr_x_lock(m_fil->space_get_latch(space), mtr);
@@ -2426,7 +2426,7 @@ bool FSP::fseg_validate(fseg_header_t *header, mtr_t *mtr) noexcept {
 }
 #endif /* UNIV_DEBUG */
 
-void FSP::fseg_print(fseg_header_t *header, mtr_t *mtr) noexcept {
+void Fsp::fseg_print(fseg_header_t *header, Mtr *mtr) noexcept {
   auto space = page_get_space_id(Rec(header).page_align());
 
   mtr_x_lock(m_fil->space_get_latch(space), mtr);
@@ -2436,9 +2436,9 @@ void FSP::fseg_print(fseg_header_t *header, mtr_t *mtr) noexcept {
   fseg_print_low(inode, mtr);
 }
 
-bool FSP::validate(space_id_t space) noexcept {
-  mtr_t mtr;
-  mtr_t mtr2;
+bool Fsp::validate(space_id_t space) noexcept {
+  Mtr mtr;
+  Mtr mtr2;
 
   auto latch = m_fil->space_get_latch(space);
 
@@ -2570,7 +2570,7 @@ bool FSP::validate(space_id_t space) noexcept {
   while (!m_fil->addr_is_null(node_addr)) {
 
     ulint n{};
-    Fil_addr next_node_addr;
+    FilAddr next_node_addr;
 
     do {
       mtr.start();
@@ -2614,7 +2614,7 @@ bool FSP::validate(space_id_t space) noexcept {
   while (!m_fil->addr_is_null(node_addr)) {
 
     ulint n{};
-    Fil_addr next_node_addr;
+    FilAddr next_node_addr;
 
     do {
       mtr.start();
@@ -2656,19 +2656,19 @@ bool FSP::validate(space_id_t space) noexcept {
   return true;
 }
 
-void FSP::print(space_id_t space) noexcept {
+void Fsp::print(space_id_t space) noexcept {
   auto latch = m_fil->space_get_latch(space);
 
   /* Start first a mini-transaction mtr2 to lock out all other threads
   from the fsp system */
 
-  mtr_t mtr2;
+  Mtr mtr2;
 
   mtr2.start();
 
   mtr_x_lock(latch, &mtr2);
 
-  mtr_t mtr;
+  Mtr mtr;
 
   mtr.start();
 
@@ -2721,7 +2721,7 @@ void FSP::print(space_id_t space) noexcept {
   while (!m_fil->addr_is_null(node_addr)) {
 
     ulint n{};
-    Fil_addr next_node_addr;
+    FilAddr next_node_addr;
 
     do {
 
@@ -2760,7 +2760,7 @@ void FSP::print(space_id_t space) noexcept {
   while (!m_fil->addr_is_null(node_addr)) {
 
     ulint n{};
-    Fil_addr next_node_addr;
+    FilAddr next_node_addr;
 
     do {
 
@@ -2794,6 +2794,6 @@ void FSP::print(space_id_t space) noexcept {
   log_info("NUMBER of file segments: ", n_segs);
 }
 
-ulint FSP::get_size_low(page_t *page) noexcept {
+ulint Fsp::get_size_low(page_t *page) noexcept {
   return mach_read_from_4(page + FSP_HEADER_OFFSET + FSP_SIZE);
 }

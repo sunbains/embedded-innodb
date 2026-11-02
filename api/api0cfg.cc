@@ -629,7 +629,7 @@ static const ib_cfg_var cfg_vars_defaults[] = {
    STRUCT_FLD(validate, ib_cfg_var_validate_numeric),
    STRUCT_FLD(set, ib_cfg_var_set_generic),
    STRUCT_FLD(get, ib_cfg_var_get_generic),
-   STRUCT_FLD(tank, &Buf_LRU::s_old_threshold_ms)},
+   STRUCT_FLD(tank, &BufLru::s_old_threshold_ms)},
 
   {STRUCT_FLD(name, "open_files"),
    STRUCT_FLD(type, IB_CFG_ULINT),

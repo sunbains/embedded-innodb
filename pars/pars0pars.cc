@@ -48,41 +48,41 @@ bool pars_print_lexed = false;
 
 /* Global variable used while parsing a single procedure or query : the code is
 NOT re-entrant */
-sym_tab_t *pars_sym_tab_global;
+SymTab *pars_sym_tab_global;
 
 /* Global variables used to denote certain reserved words, used in
 constructing the parsing tree */
 
-pars_res_word_t pars_to_char_token = {PARS_TO_CHAR_TOKEN};
-pars_res_word_t pars_to_number_token = {PARS_TO_NUMBER_TOKEN};
-pars_res_word_t pars_to_binary_token = {PARS_TO_BINARY_TOKEN};
-pars_res_word_t pars_binary_to_number_token = {PARS_BINARY_TO_NUMBER_TOKEN};
-pars_res_word_t pars_substr_token = {PARS_SUBSTR_TOKEN};
-pars_res_word_t pars_replstr_token = {PARS_REPLSTR_TOKEN};
-pars_res_word_t pars_concat_token = {PARS_CONCAT_TOKEN};
-pars_res_word_t pars_instr_token = {PARS_INSTR_TOKEN};
-pars_res_word_t pars_length_token = {PARS_LENGTH_TOKEN};
-pars_res_word_t pars_sysdate_token = {PARS_SYSDATE_TOKEN};
-pars_res_word_t pars_printf_token = {PARS_PRINTF_TOKEN};
-pars_res_word_t pars_assert_token = {PARS_ASSERT_TOKEN};
-pars_res_word_t pars_rnd_token = {PARS_RND_TOKEN};
-pars_res_word_t pars_rnd_str_token = {PARS_RND_STR_TOKEN};
-pars_res_word_t pars_count_token = {PARS_COUNT_TOKEN};
-pars_res_word_t pars_sum_token = {PARS_SUM_TOKEN};
-pars_res_word_t pars_distinct_token = {PARS_DISTINCT_TOKEN};
-pars_res_word_t pars_binary_token = {PARS_BINARY_TOKEN};
-pars_res_word_t pars_blob_token = {PARS_BLOB_TOKEN};
-pars_res_word_t pars_int_token = {PARS_INT_TOKEN};
-pars_res_word_t pars_char_token = {PARS_CHAR_TOKEN};
-pars_res_word_t pars_float_token = {PARS_FLOAT_TOKEN};
-pars_res_word_t pars_update_token = {PARS_UPDATE_TOKEN};
-pars_res_word_t pars_asc_token = {PARS_ASC_TOKEN};
-pars_res_word_t pars_desc_token = {PARS_DESC_TOKEN};
-pars_res_word_t pars_open_token = {PARS_OPEN_TOKEN};
-pars_res_word_t pars_close_token = {PARS_CLOSE_TOKEN};
-pars_res_word_t pars_share_token = {PARS_SHARE_TOKEN};
-pars_res_word_t pars_unique_token = {PARS_UNIQUE_TOKEN};
-pars_res_word_t pars_clustered_token = {PARS_CLUSTERED_TOKEN};
+ParsResWord pars_to_char_token = {PARS_TO_CHAR_TOKEN};
+ParsResWord pars_to_number_token = {PARS_TO_NUMBER_TOKEN};
+ParsResWord pars_to_binary_token = {PARS_TO_BINARY_TOKEN};
+ParsResWord pars_binary_to_number_token = {PARS_BINARY_TO_NUMBER_TOKEN};
+ParsResWord pars_substr_token = {PARS_SUBSTR_TOKEN};
+ParsResWord pars_replstr_token = {PARS_REPLSTR_TOKEN};
+ParsResWord pars_concat_token = {PARS_CONCAT_TOKEN};
+ParsResWord pars_instr_token = {PARS_INSTR_TOKEN};
+ParsResWord pars_length_token = {PARS_LENGTH_TOKEN};
+ParsResWord pars_sysdate_token = {PARS_SYSDATE_TOKEN};
+ParsResWord pars_printf_token = {PARS_PRINTF_TOKEN};
+ParsResWord pars_assert_token = {PARS_ASSERT_TOKEN};
+ParsResWord pars_rnd_token = {PARS_RND_TOKEN};
+ParsResWord pars_rnd_str_token = {PARS_RND_STR_TOKEN};
+ParsResWord pars_count_token = {PARS_COUNT_TOKEN};
+ParsResWord pars_sum_token = {PARS_SUM_TOKEN};
+ParsResWord pars_distinct_token = {PARS_DISTINCT_TOKEN};
+ParsResWord pars_binary_token = {PARS_BINARY_TOKEN};
+ParsResWord pars_blob_token = {PARS_BLOB_TOKEN};
+ParsResWord pars_int_token = {PARS_INT_TOKEN};
+ParsResWord pars_char_token = {PARS_CHAR_TOKEN};
+ParsResWord pars_float_token = {PARS_FLOAT_TOKEN};
+ParsResWord pars_update_token = {PARS_UPDATE_TOKEN};
+ParsResWord pars_asc_token = {PARS_ASC_TOKEN};
+ParsResWord pars_desc_token = {PARS_DESC_TOKEN};
+ParsResWord pars_open_token = {PARS_OPEN_TOKEN};
+ParsResWord pars_close_token = {PARS_CLOSE_TOKEN};
+ParsResWord pars_share_token = {PARS_SHARE_TOKEN};
+ParsResWord pars_unique_token = {PARS_UNIQUE_TOKEN};
+ParsResWord pars_clustered_token = {PARS_CLUSTERED_TOKEN};
 
 /** Global variable used to denote the '*' in SELECT * FROM.. */
 #define PARS_STAR_DENOTER 12345678
@@ -195,11 +195,11 @@ static ulint pars_func_get_class(int func) noexcept {
  * @param[in] func Function token code.
  * @param[in] arg First argument in the argument list.
  *
- * @return func_node_t* Function node in a query tree.
+ * @return FuncNode* Function node in a query tree.
  */
-static func_node_t *pars_func_low(int func, que_node_t *arg) {
-  auto node = reinterpret_cast<func_node_t *>(
-      mem_heap_alloc(pars_sym_tab_global->heap, sizeof(func_node_t)));
+static FuncNode *pars_func_low(int func, que_node_t *arg) {
+  auto node = reinterpret_cast<FuncNode *>(
+      mem_heap_alloc(pars_sym_tab_global->heap, sizeof(FuncNode)));
 
   node->common.type = QUE_NODE_FUNC;
   dfield_set_data(&(node->common.val), nullptr, 0);
@@ -216,12 +216,12 @@ static func_node_t *pars_func_low(int func, que_node_t *arg) {
   return node;
 }
 
-func_node_t *pars_func(que_node_t *res_word, que_node_t *arg) {
-  return pars_func_low((reinterpret_cast<pars_res_word_t *>(res_word))->code,
+FuncNode *pars_func(que_node_t *res_word, que_node_t *arg) {
+  return pars_func_low((reinterpret_cast<ParsResWord *>(res_word))->code,
                        arg);
 }
 
-func_node_t *pars_op(int func, que_node_t *arg1, que_node_t *arg2) {
+FuncNode *pars_op(int func, que_node_t *arg1, que_node_t *arg2) {
   que_node_list_add_last(nullptr, arg1);
 
   if (arg2 != nullptr) {
@@ -231,9 +231,9 @@ func_node_t *pars_op(int func, que_node_t *arg1, que_node_t *arg2) {
   return pars_func_low(func, arg1);
 }
 
-order_node_t *pars_order_by(sym_node_t *column, pars_res_word_t *asc) {
-  auto node = reinterpret_cast<order_node_t *>(
-      mem_heap_alloc(pars_sym_tab_global->heap, sizeof(order_node_t)));
+OrderNode *pars_order_by(SymNode *column, ParsResWord *asc) {
+  auto node = reinterpret_cast<OrderNode *>(
+      mem_heap_alloc(pars_sym_tab_global->heap, sizeof(OrderNode)));
 
   node->common.type = QUE_NODE_ORDER;
 
@@ -275,7 +275,7 @@ static bool pars_is_string_type(ulint mtype) {
  *
  * @param node The function node whose data type is to be resolved.
  */
-static void pars_resolve_func_data_type(func_node_t *node) {
+static void pars_resolve_func_data_type(FuncNode *node) {
   ut_a(que_node_get_type(node) == QUE_NODE_FUNC);
 
   auto arg = node->args;
@@ -367,12 +367,12 @@ static void pars_resolve_func_data_type(func_node_t *node) {
  * variable sym nodes are added to the copy_variables list of sel_node.
  * @param[in] exp_node Expression node.
  */
-static void pars_resolve_exp_variables_and_types(sel_node_t *sel_node,
+static void pars_resolve_exp_variables_and_types(SelNode *sel_node,
                                                  que_node_t *exp_node) {
   ut_a(exp_node != nullptr);
 
   if (que_node_get_type(exp_node) == QUE_NODE_FUNC) {
-    auto func_node = reinterpret_cast<func_node_t *>(exp_node);
+    auto func_node = reinterpret_cast<FuncNode *>(exp_node);
     auto arg = func_node->args;
 
     while (arg != nullptr) {
@@ -388,7 +388,7 @@ static void pars_resolve_exp_variables_and_types(sel_node_t *sel_node,
 
   ut_a(que_node_get_type(exp_node) == QUE_NODE_SYMBOL);
 
-  auto sym_node = reinterpret_cast<sym_node_t *>(exp_node);
+  auto sym_node = reinterpret_cast<SymNode *>(exp_node);
 
   if (sym_node->resolved) {
 
@@ -435,7 +435,7 @@ static void pars_resolve_exp_variables_and_types(sel_node_t *sel_node,
  * @param[in] exp_node The expression list first node, or nullptr.
  */
 static void
-pars_resolve_exp_list_variables_and_types(sel_node_t *sel_node,
+pars_resolve_exp_list_variables_and_types(SelNode *sel_node,
                                           que_node_t *exp_node) noexcept {
   while (exp_node != nullptr) {
     pars_resolve_exp_variables_and_types(sel_node, exp_node);
@@ -450,12 +450,12 @@ pars_resolve_exp_list_variables_and_types(sel_node_t *sel_node,
  * @param[in] table_node First node in a table list.
  * @param[in] exp_node Expression.
  */
-static void pars_resolve_exp_columns(sym_node_t *table_node,
+static void pars_resolve_exp_columns(SymNode *table_node,
                                      que_node_t *exp_node) noexcept {
   ut_a(exp_node != nullptr);
 
   if (que_node_get_type(exp_node) == QUE_NODE_FUNC) {
-    auto func_node = reinterpret_cast<func_node_t *>(exp_node);
+    auto func_node = reinterpret_cast<FuncNode *>(exp_node);
     auto arg = func_node->args;
 
     while (arg != nullptr) {
@@ -469,7 +469,7 @@ static void pars_resolve_exp_columns(sym_node_t *table_node,
 
   ut_a(que_node_get_type(exp_node) == QUE_NODE_SYMBOL);
 
-  auto sym_node = reinterpret_cast<sym_node_t *>(exp_node);
+  auto sym_node = reinterpret_cast<SymNode *>(exp_node);
 
   if (sym_node->resolved) {
 
@@ -503,7 +503,7 @@ static void pars_resolve_exp_columns(sym_node_t *table_node,
       }
     }
 
-    t_node = reinterpret_cast<sym_node_t *>(que_node_get_next(t_node));
+    t_node = reinterpret_cast<SymNode *>(que_node_get_next(t_node));
   }
 }
 
@@ -513,7 +513,7 @@ static void pars_resolve_exp_columns(sym_node_t *table_node,
  * @param[in] table_node First node in a table list.
  * @param[in] exp_node Expression list first node, or nullptr.
  */
-static void pars_resolve_exp_list_columns(sym_node_t *table_node,
+static void pars_resolve_exp_list_columns(SymNode *table_node,
                                           que_node_t *exp_node) noexcept {
 
   while (exp_node != nullptr) {
@@ -528,7 +528,7 @@ static void pars_resolve_exp_list_columns(sym_node_t *table_node,
  *
  * @param[in] sym_node Table node.
  */
-static void pars_retrieve_table_def(sym_node_t *sym_node) noexcept {
+static void pars_retrieve_table_def(SymNode *sym_node) noexcept {
   ut_a(sym_node != nullptr);
   ut_a(que_node_get_type(sym_node) == QUE_NODE_SYMBOL);
 
@@ -549,7 +549,7 @@ static void pars_retrieve_table_def(sym_node_t *sym_node) noexcept {
  *
  * @return Number of tables.
  */
-static ulint pars_retrieve_table_list_defs(sym_node_t *sym_node) noexcept {
+static ulint pars_retrieve_table_list_defs(SymNode *sym_node) noexcept {
   if (sym_node == nullptr) {
     return 0;
   }
@@ -561,7 +561,7 @@ static ulint pars_retrieve_table_list_defs(sym_node_t *sym_node) noexcept {
 
     ++count;
 
-    sym_node = reinterpret_cast<sym_node_t *>(que_node_get_next(sym_node));
+    sym_node = reinterpret_cast<SymNode *>(que_node_get_next(sym_node));
   }
 
   return count;
@@ -572,7 +572,7 @@ static ulint pars_retrieve_table_list_defs(sym_node_t *sym_node) noexcept {
  *
  * @param[in] sel_node The select node already containing the table list.
  */
-static void pars_select_all_columns(sel_node_t *sel_node) noexcept {
+static void pars_select_all_columns(SelNode *sel_node) noexcept {
   sel_node->m_select_list = nullptr;
 
   auto table_node = sel_node->m_table_list;
@@ -590,12 +590,12 @@ static void pars_select_all_columns(sel_node_t *sel_node) noexcept {
           que_node_list_add_last(sel_node->m_select_list, col_node);
     }
 
-    table_node = reinterpret_cast<sym_node_t *>(que_node_get_next(table_node));
+    table_node = reinterpret_cast<SymNode *>(que_node_get_next(table_node));
   }
 }
 
-sel_node_t *pars_select_list(que_node_t *select_list, sym_node_t *into_list) {
-  auto sel_node = sel_node_t::create(pars_sym_tab_global->heap);
+SelNode *pars_select_list(que_node_t *select_list, SymNode *into_list) {
+  auto sel_node = SelNode::create(pars_sym_tab_global->heap);
 
   sel_node->m_select_list = select_list;
   sel_node->m_into_list = into_list;
@@ -613,7 +613,7 @@ sel_node_t *pars_select_list(que_node_t *select_list, sym_node_t *into_list) {
  *
  * @param[in] sel_node The select node already containing the select list.
  */
-static void pars_check_aggregate(sel_node_t *sel_node) noexcept {
+static void pars_check_aggregate(SelNode *sel_node) noexcept {
   ulint n_nodes{};
   ulint n_aggregate_nodes{};
 
@@ -625,7 +625,7 @@ static void pars_check_aggregate(sel_node_t *sel_node) noexcept {
 
     if (que_node_get_type(exp_node) == QUE_NODE_FUNC) {
 
-      auto func_node = reinterpret_cast<func_node_t *>(exp_node);
+      auto func_node = reinterpret_cast<FuncNode *>(exp_node);
 
       if (func_node->func_class == PARS_FUNC_AGGREGATE) {
 
@@ -645,11 +645,11 @@ static void pars_check_aggregate(sel_node_t *sel_node) noexcept {
   }
 }
 
-sel_node_t *pars_select_statement(sel_node_t *sel_node, sym_node_t *table_list,
+SelNode *pars_select_statement(SelNode *sel_node, SymNode *table_list,
                                   que_node_t *search_cond,
-                                  pars_res_word_t *for_update,
-                                  pars_res_word_t *lock_shared,
-                                  order_node_t *order_by) {
+                                  ParsResWord *for_update,
+                                  ParsResWord *lock_shared,
+                                  OrderNode *order_by) {
   sel_node->m_state = SEL_NODE_OPEN;
 
   sel_node->m_table_list = table_list;
@@ -717,8 +717,8 @@ sel_node_t *pars_select_statement(sel_node_t *sel_node, sym_node_t *table_list,
   return sel_node;
 }
 
-que_node_t *pars_cursor_declaration(sym_node_t *sym_node,
-                                    sel_node_t *sel_node) {
+que_node_t *pars_cursor_declaration(SymNode *sym_node,
+                                    SelNode *sel_node) {
   sym_node->resolved = true;
   sym_node->token_type = SYM_CURSOR;
   sym_node->cursor_def = sel_node;
@@ -729,7 +729,7 @@ que_node_t *pars_cursor_declaration(sym_node_t *sym_node,
   return sym_node;
 }
 
-que_node_t *pars_function_declaration(sym_node_t *sym_node) {
+que_node_t *pars_function_declaration(SymNode *sym_node) {
   sym_node->resolved = true;
   sym_node->token_type = SYM_FUNCTION;
 
@@ -739,8 +739,8 @@ que_node_t *pars_function_declaration(sym_node_t *sym_node) {
   return sym_node;
 }
 
-upd_node_t *pars_update_statement_start(bool is_delete, sym_node_t *table_sym,
-                                        col_assign_node_t *col_assign_list) {
+UpdNode *pars_update_statement_start(bool is_delete, SymNode *table_sym,
+                                        ColAssignNode *col_assign_list) {
   auto node = srv_row_upd->node_create(pars_sym_tab_global->heap);
 
   node->m_is_delete = is_delete;
@@ -750,9 +750,9 @@ upd_node_t *pars_update_statement_start(bool is_delete, sym_node_t *table_sym,
   return node;
 }
 
-col_assign_node_t *pars_column_assignment(sym_node_t *column, que_node_t *exp) {
-  auto node = reinterpret_cast<col_assign_node_t *>(
-      mem_heap_alloc(pars_sym_tab_global->heap, sizeof(col_assign_node_t)));
+ColAssignNode *pars_column_assignment(SymNode *column, que_node_t *exp) {
+  auto node = reinterpret_cast<ColAssignNode *>(
+      mem_heap_alloc(pars_sym_tab_global->heap, sizeof(ColAssignNode)));
 
   node->common.type = QUE_NODE_COL_ASSIGNMENT;
 
@@ -771,10 +771,10 @@ col_assign_node_t *pars_column_assignment(sym_node_t *column, que_node_t *exp) {
  *
  * @param[in] node The update node containing the assignment list.
  */
-static void pars_process_assign_list(upd_node_t *node) noexcept {
+static void pars_process_assign_list(UpdNode *node) noexcept {
   auto table_sym = node->m_table_sym;
   auto col_assign_list =
-      reinterpret_cast<col_assign_node_t *>(node->m_col_assign_list);
+      reinterpret_cast<ColAssignNode *>(node->m_col_assign_list);
   auto clust_index = node->m_table->get_first_index();
 
   ulint n_assigns{};
@@ -797,10 +797,10 @@ static void pars_process_assign_list(upd_node_t *node) noexcept {
     ++n_assigns;
 
     assign_node =
-        reinterpret_cast<col_assign_node_t *>(que_node_get_next(assign_node));
+        reinterpret_cast<ColAssignNode *>(que_node_get_next(assign_node));
   }
 
-  node->m_update = Row_update::upd_create(n_assigns, pars_sym_tab_global->heap);
+  node->m_update = RowUpdate::upd_create(n_assigns, pars_sym_tab_global->heap);
 
   assign_node = col_assign_list;
 
@@ -820,7 +820,7 @@ static void pars_process_assign_list(upd_node_t *node) noexcept {
     }
 
     assign_node =
-        reinterpret_cast<col_assign_node_t *>(que_node_get_next(assign_node));
+        reinterpret_cast<ColAssignNode *>(que_node_get_next(assign_node));
   }
 
   /* Find out if the update can modify an ordering field in any index */
@@ -835,7 +835,7 @@ static void pars_process_assign_list(upd_node_t *node) noexcept {
   node->m_cmpl_info = changes_ord_field | changes_field_size;
 }
 
-upd_node_t *pars_update_statement(upd_node_t *node, sym_node_t *cursor_sym,
+UpdNode *pars_update_statement(UpdNode *node, SymNode *cursor_sym,
                                   que_node_t *search_cond) {
   auto table_sym = node->m_table_sym;
 
@@ -848,7 +848,7 @@ upd_node_t *pars_update_statement(upd_node_t *node, sym_node_t *cursor_sym,
 
   que_node_list_add_last(nullptr, table_sym);
 
-  sel_node_t *sel_node;
+  SelNode *sel_node;
 
   if (cursor_sym != nullptr) {
     pars_resolve_exp_variables_and_types(nullptr, cursor_sym);
@@ -907,9 +907,9 @@ upd_node_t *pars_update_statement(upd_node_t *node, sym_node_t *cursor_sym,
   return node;
 }
 
-ins_node_t *pars_insert_statement(sym_node_t *table_sym,
+InsertNode *pars_insert_statement(SymNode *table_sym,
                                   que_node_t *values_list,
-                                  sel_node_t *sel_node) {
+                                  SelNode *sel_node) {
   ut_a(values_list != nullptr || sel_node != nullptr);
   ut_a(values_list == nullptr || sel_node == nullptr);
 
@@ -917,7 +917,7 @@ ins_node_t *pars_insert_statement(sym_node_t *table_sym,
 
   pars_retrieve_table_def(table_sym);
 
-  auto ins_node = reinterpret_cast<ins_node_t *>(srv_row_ins->node_create(
+  auto ins_node = reinterpret_cast<InsertNode *>(srv_row_ins->node_create(
       ins_type, table_sym->table, pars_sym_tab_global->heap));
   auto row =
       dtuple_create(pars_sym_tab_global->heap, ins_node->m_table->get_n_cols());
@@ -956,7 +956,7 @@ ins_node_t *pars_insert_statement(sym_node_t *table_sym,
  * @param[in] is_unsigned if true, column is UNSIGNED
  * @param[in] is_not_null if true, column is NOT nullptr
  */
-static void pars_set_dfield_type(dfield_t *dfield, pars_res_word_t *type,
+static void pars_set_dfield_type(Dfield *dfield, ParsResWord *type,
                                  ulint len, bool is_unsigned,
                                  bool is_not_null) noexcept {
   ulint flags{};
@@ -992,7 +992,7 @@ static void pars_set_dfield_type(dfield_t *dfield, pars_res_word_t *type,
   }
 }
 
-sym_node_t *pars_variable_declaration(sym_node_t *node, pars_res_word_t *type) {
+SymNode *pars_variable_declaration(SymNode *node, ParsResWord *type) {
   node->resolved = true;
   node->token_type = SYM_VAR;
 
@@ -1003,8 +1003,8 @@ sym_node_t *pars_variable_declaration(sym_node_t *node, pars_res_word_t *type) {
   return node;
 }
 
-sym_node_t *pars_parameter_declaration(sym_node_t *node, ulint param_type,
-                                       pars_res_word_t *type) {
+SymNode *pars_parameter_declaration(SymNode *node, ulint param_type,
+                                       ParsResWord *type) {
   ut_a((param_type == PARS_INPUT) || (param_type == PARS_OUTPUT));
 
   pars_variable_declaration(node, type);
@@ -1022,18 +1022,18 @@ sym_node_t *pars_parameter_declaration(sym_node_t *node, ulint param_type,
  */
 static void pars_set_parent_in_list(que_node_t *node_list,
                                     que_node_t *parent) noexcept {
-  auto common = reinterpret_cast<que_common_t *>(node_list);
+  auto common = reinterpret_cast<QueCommon *>(node_list);
 
   while (common != nullptr) {
     common->parent = parent;
 
-    common = reinterpret_cast<que_common_t *>(que_node_get_next(common));
+    common = reinterpret_cast<QueCommon *>(que_node_get_next(common));
   }
 }
 
-elsif_node_t *pars_elsif_element(que_node_t *cond, que_node_t *stat_list) {
-  auto node = reinterpret_cast<elsif_node_t *>(
-      mem_heap_alloc(pars_sym_tab_global->heap, sizeof(elsif_node_t)));
+ElsifNode *pars_elsif_element(que_node_t *cond, que_node_t *stat_list) {
+  auto node = reinterpret_cast<ElsifNode *>(
+      mem_heap_alloc(pars_sym_tab_global->heap, sizeof(ElsifNode)));
 
   node->common.type = QUE_NODE_ELSIF;
 
@@ -1046,12 +1046,12 @@ elsif_node_t *pars_elsif_element(que_node_t *cond, que_node_t *stat_list) {
   return node;
 }
 
-if_node_t *pars_if_statement(que_node_t *cond, que_node_t *stat_list,
+IfNode *pars_if_statement(que_node_t *cond, que_node_t *stat_list,
                              que_node_t *else_part) {
-  elsif_node_t *elsif_node;
+  ElsifNode *elsif_node;
 
-  auto node = reinterpret_cast<if_node_t *>(
-      mem_heap_alloc(pars_sym_tab_global->heap, sizeof(if_node_t)));
+  auto node = reinterpret_cast<IfNode *>(
+      mem_heap_alloc(pars_sym_tab_global->heap, sizeof(IfNode)));
 
   node->common.type = QUE_NODE_IF;
 
@@ -1066,14 +1066,14 @@ if_node_t *pars_if_statement(que_node_t *cond, que_node_t *stat_list,
     /* There is a list of elsif conditions */
 
     node->else_part = nullptr;
-    node->elsif_list = static_cast<elsif_node_t *>(else_part);
+    node->elsif_list = static_cast<ElsifNode *>(else_part);
 
-    elsif_node = static_cast<elsif_node_t *>(else_part);
+    elsif_node = static_cast<ElsifNode *>(else_part);
 
     while (elsif_node != nullptr) {
       pars_set_parent_in_list(elsif_node->stat_list, node);
 
-      elsif_node = static_cast<elsif_node_t *>(que_node_get_next(elsif_node));
+      elsif_node = static_cast<ElsifNode *>(que_node_get_next(elsif_node));
     }
   } else {
     node->else_part = else_part;
@@ -1087,9 +1087,9 @@ if_node_t *pars_if_statement(que_node_t *cond, que_node_t *stat_list,
   return node;
 }
 
-while_node_t *pars_while_statement(que_node_t *cond, que_node_t *stat_list) {
-  auto node = reinterpret_cast<while_node_t *>(
-      mem_heap_alloc(pars_sym_tab_global->heap, sizeof(while_node_t)));
+WhileNode *pars_while_statement(que_node_t *cond, que_node_t *stat_list) {
+  auto node = reinterpret_cast<WhileNode *>(
+      mem_heap_alloc(pars_sym_tab_global->heap, sizeof(WhileNode)));
 
   node->common.type = QUE_NODE_WHILE;
 
@@ -1104,12 +1104,12 @@ while_node_t *pars_while_statement(que_node_t *cond, que_node_t *stat_list) {
   return (node);
 }
 
-for_node_t *pars_for_statement(sym_node_t *loop_var,
+ForNode *pars_for_statement(SymNode *loop_var,
                                que_node_t *loop_start_limit,
                                que_node_t *loop_end_limit,
                                que_node_t *stat_list) {
-  auto node = reinterpret_cast<for_node_t *>(
-      mem_heap_alloc(pars_sym_tab_global->heap, sizeof(for_node_t)));
+  auto node = reinterpret_cast<ForNode *>(
+      mem_heap_alloc(pars_sym_tab_global->heap, sizeof(ForNode)));
 
   node->common.type = QUE_NODE_FOR;
 
@@ -1131,27 +1131,27 @@ for_node_t *pars_for_statement(sym_node_t *loop_var,
   return node;
 }
 
-exit_node_t *pars_exit_statement() {
-  auto node = reinterpret_cast<exit_node_t *>(
-      mem_heap_alloc(pars_sym_tab_global->heap, sizeof(exit_node_t)));
+ExitNode *pars_exit_statement() {
+  auto node = reinterpret_cast<ExitNode *>(
+      mem_heap_alloc(pars_sym_tab_global->heap, sizeof(ExitNode)));
 
   node->common.type = QUE_NODE_EXIT;
 
   return node;
 }
 
-return_node_t *pars_return_statement() {
-  auto node = reinterpret_cast<return_node_t *>(
-      mem_heap_alloc(pars_sym_tab_global->heap, sizeof(return_node_t)));
+ReturnNode *pars_return_statement() {
+  auto node = reinterpret_cast<ReturnNode *>(
+      mem_heap_alloc(pars_sym_tab_global->heap, sizeof(ReturnNode)));
 
   node->common.type = QUE_NODE_RETURN;
 
   return node;
 }
 
-assign_node_t *pars_assignment_statement(sym_node_t *var, que_node_t *val) {
-  auto node = reinterpret_cast<assign_node_t *>(
-      mem_heap_alloc(pars_sym_tab_global->heap, sizeof(assign_node_t)));
+AssignNode *pars_assignment_statement(SymNode *var, que_node_t *val) {
+  auto node = reinterpret_cast<AssignNode *>(
+      mem_heap_alloc(pars_sym_tab_global->heap, sizeof(AssignNode)));
 
   node->common.type = QUE_NODE_ASSIGNMENT;
 
@@ -1167,7 +1167,7 @@ assign_node_t *pars_assignment_statement(sym_node_t *var, que_node_t *val) {
   return node;
 }
 
-func_node_t *pars_procedure_call(que_node_t *res_word, que_node_t *args) {
+FuncNode *pars_procedure_call(que_node_t *res_word, que_node_t *args) {
   auto node = pars_func(res_word, args);
 
   pars_resolve_exp_list_variables_and_types(nullptr, args);
@@ -1175,13 +1175,13 @@ func_node_t *pars_procedure_call(que_node_t *res_word, que_node_t *args) {
   return node;
 }
 
-fetch_node_t *pars_fetch_statement(sym_node_t *cursor, sym_node_t *into_list,
-                                   sym_node_t *user_func) {
+FetchNode *pars_fetch_statement(SymNode *cursor, SymNode *into_list,
+                                   SymNode *user_func) {
   /* Logical XOR. */
   ut_a(!into_list != !user_func);
 
-  auto ptr = mem_heap_alloc(pars_sym_tab_global->heap, sizeof(fetch_node_t));
-  auto fetch_node = new (ptr) fetch_node_t();
+  auto ptr = mem_heap_alloc(pars_sym_tab_global->heap, sizeof(FetchNode));
+  auto fetch_node = new (ptr) FetchNode();
 
   fetch_node->m_common.type = QUE_NODE_FETCH;
 
@@ -1215,9 +1215,9 @@ fetch_node_t *pars_fetch_statement(sym_node_t *cursor, sym_node_t *into_list,
   return fetch_node;
 }
 
-open_node_t *pars_open_statement(ulint type, sym_node_t *cursor) {
-  auto open_node = reinterpret_cast<open_node_t *>(
-      mem_heap_alloc(pars_sym_tab_global->heap, sizeof(open_node_t)));
+OpenNode *pars_open_statement(ulint type, SymNode *cursor) {
+  auto open_node = reinterpret_cast<OpenNode *>(
+      mem_heap_alloc(pars_sym_tab_global->heap, sizeof(OpenNode)));
 
   open_node->m_common.type = QUE_NODE_OPEN;
 
@@ -1227,15 +1227,15 @@ open_node_t *pars_open_statement(ulint type, sym_node_t *cursor) {
 
   ut_a(cursor_decl->token_type == SYM_CURSOR);
 
-  open_node->m_op_type = static_cast<open_node_op>(type);
+  open_node->m_op_type = static_cast<OpenNodeOp>(type);
   open_node->m_cursor_def = cursor_decl->cursor_def;
 
   return open_node;
 }
 
-row_printf_node_t *pars_row_printf_statement(sel_node_t *sel_node) {
-  auto row_printf_node = reinterpret_cast<row_printf_node_t *>(
-      mem_heap_alloc(pars_sym_tab_global->heap, sizeof(row_printf_node_t)));
+RowPrintfNode *pars_row_printf_statement(SelNode *sel_node) {
+  auto row_printf_node = reinterpret_cast<RowPrintfNode *>(
+      mem_heap_alloc(pars_sym_tab_global->heap, sizeof(RowPrintfNode)));
 
   row_printf_node->m_common.type = QUE_NODE_ROW_PRINTF;
 
@@ -1246,16 +1246,16 @@ row_printf_node_t *pars_row_printf_statement(sel_node_t *sel_node) {
   return row_printf_node;
 }
 
-Commit_node *pars_commit_statement() {
+CommitNode *pars_commit_statement() {
   return Trx::commit_node_create(pars_sym_tab_global->heap);
 }
 
-Trx_rollback *pars_rollback_statement() {
+TrxRollback *pars_rollback_statement() {
   return roll_node_create(pars_sym_tab_global->heap);
 }
 
-sym_node_t *pars_column_def(sym_node_t *sym_node, pars_res_word_t *type,
-                            sym_node_t *len, void *is_unsigned,
+SymNode *pars_column_def(SymNode *sym_node, ParsResWord *type,
+                            SymNode *len, void *is_unsigned,
                             void *is_not_null) {
   auto len2 = len != nullptr ? eval_node_get_int_val(len) : 0;
 
@@ -1265,7 +1265,7 @@ sym_node_t *pars_column_def(sym_node_t *sym_node, pars_res_word_t *type,
   return sym_node;
 }
 
-Table_node *pars_create_table(sym_node_t *table_sym, sym_node_t *column_defs,
+TableNode *pars_create_table(SymNode *table_sym, SymNode *column_defs,
                               void *not_fit_in_memory __attribute__((unused))) {
   const auto n_cols = que_node_list_get_len(column_defs);
   auto table = Table::create(table_sym->name, DICT_HDR_SPACE, n_cols, 0, false,
@@ -1287,11 +1287,11 @@ Table_node *pars_create_table(sym_node_t *table_sym, sym_node_t *column_defs,
     column->resolved = true;
     column->token_type = SYM_COLUMN;
 
-    column = static_cast<sym_node_t *>(que_node_get_next(column));
+    column = static_cast<SymNode *>(que_node_get_next(column));
   }
 
   auto node =
-      Table_node::create(srv_dict_sys, table, pars_sym_tab_global->heap, true);
+      TableNode::create(srv_dict_sys, table, pars_sym_tab_global->heap, true);
 
   table_sym->table = table;
   table_sym->resolved = true;
@@ -1300,10 +1300,10 @@ Table_node *pars_create_table(sym_node_t *table_sym, sym_node_t *column_defs,
   return node;
 }
 
-Index_node *pars_create_index(pars_res_word_t *unique_def,
-                              pars_res_word_t *clustered_def,
-                              sym_node_t *index_sym, sym_node_t *table_sym,
-                              sym_node_t *column_list) {
+IndexNode *pars_create_index(ParsResWord *unique_def,
+                              ParsResWord *clustered_def,
+                              SymNode *index_sym, SymNode *table_sym,
+                              SymNode *column_list) {
   ulint ind_type{};
   const auto n_fields = que_node_list_get_len(column_list);
 
@@ -1325,11 +1325,11 @@ Index_node *pars_create_index(pars_res_word_t *unique_def,
     column->resolved = true;
     column->token_type = SYM_COLUMN;
 
-    column = static_cast<sym_node_t *>(que_node_get_next(column));
+    column = static_cast<SymNode *>(que_node_get_next(column));
   }
 
   auto node =
-      Index_node::create(srv_dict_sys, index, pars_sym_tab_global->heap, true);
+      IndexNode::create(srv_dict_sys, index, pars_sym_tab_global->heap, true);
 
   table_sym->resolved = true;
   table_sym->token_type = SYM_TABLE;
@@ -1340,8 +1340,8 @@ Index_node *pars_create_index(pars_res_word_t *unique_def,
   return node;
 }
 
-que_fork_t *pars_procedure_definition(sym_node_t *sym_node,
-                                      sym_node_t *param_list,
+QueFork *pars_procedure_definition(SymNode *sym_node,
+                                      SymNode *param_list,
                                       que_node_t *stat_list) {
   auto heap = pars_sym_tab_global->heap;
   auto fork = que_fork_create(nullptr, nullptr, QUE_FORK_PROCEDURE, heap);
@@ -1350,8 +1350,8 @@ que_fork_t *pars_procedure_definition(sym_node_t *sym_node,
 
   auto thr = que_thr_create(fork, heap);
 
-  auto node = reinterpret_cast<proc_node_t *>(
-      mem_heap_alloc(heap, sizeof(proc_node_t)));
+  auto node = reinterpret_cast<ProcNode *>(
+      mem_heap_alloc(heap, sizeof(ProcNode)));
 
   node->common.type = QUE_NODE_PROC;
   node->common.parent = thr;
@@ -1374,7 +1374,7 @@ que_fork_t *pars_procedure_definition(sym_node_t *sym_node,
   return fork;
 }
 
-que_fork_t *pars_stored_procedure_call(sym_node_t *) {
+QueFork *pars_stored_procedure_call(SymNode *) {
   ut_error;
   return nullptr;
 }
@@ -1404,7 +1404,7 @@ void yyerror(const char *p) {
   log_fatal("PARSER ERROR: Syntax error in SQL string: ", p);
 }
 
-que_t *pars_sql(pars_info_t *info, const char *str) {
+QueFork *pars_sql(ParsInfo *info, const char *str) {
   auto heap = mem_heap_create(256);
 
   /* Currently, the parser is not reentrant: */
@@ -1434,8 +1434,8 @@ que_t *pars_sql(pars_info_t *info, const char *str) {
   return graph;
 }
 
-que_thr_t *pars_complete_graph_for_exec(que_node_t *node, Trx *trx,
-                                        mem_heap_t *heap) {
+QueThr *pars_complete_graph_for_exec(que_node_t *node, Trx *trx,
+                                        MemHeap *heap) {
   auto fork = que_fork_create(nullptr, nullptr, QUE_FORK_USER_INTERFACE, heap);
 
   fork->trx = trx;
@@ -1451,10 +1451,10 @@ que_thr_t *pars_complete_graph_for_exec(que_node_t *node, Trx *trx,
   return thr;
 }
 
-pars_info_t *pars_info_create() {
+ParsInfo *pars_info_create() {
   auto heap = mem_heap_create(512);
-  auto ptr = mem_heap_alloc(heap, sizeof(pars_info_t));
-  auto info = new (ptr) pars_info_t;
+  auto ptr = mem_heap_alloc(heap, sizeof(ParsInfo));
+  auto info = new (ptr) ParsInfo;
 
   info->m_heap = heap;
   info->m_graph_owns_us = true;
@@ -1462,19 +1462,19 @@ pars_info_t *pars_info_create() {
   return info;
 }
 
-void pars_info_free(pars_info_t *info) {
+void pars_info_free(ParsInfo *info) {
   auto heap = info->m_heap;
   call_destructor(info);
   mem_heap_free(heap);
 }
 
-void pars_info_add_literal(pars_info_t *info, const char *name,
+void pars_info_add_literal(ParsInfo *info, const char *name,
                            const void *address, ulint length, ulint type,
                            ulint prtype) {
   ut_ad(!pars_info_get_bound_lit(info, name));
 
-  auto pbl = reinterpret_cast<pars_bound_lit_t *>(
-      mem_heap_alloc(info->m_heap, sizeof(pars_bound_lit_t)));
+  auto pbl = reinterpret_cast<ParsBoundLit *>(
+      mem_heap_alloc(info->m_heap, sizeof(ParsBoundLit)));
 
   pbl->name = name;
   pbl->address = address;
@@ -1485,20 +1485,20 @@ void pars_info_add_literal(pars_info_t *info, const char *name,
   info->m_bound_lits.emplace_back(pbl);
 }
 
-void pars_info_add_str_literal(pars_info_t *info, const char *name,
+void pars_info_add_str_literal(ParsInfo *info, const char *name,
                                const char *str) {
   pars_info_add_literal(info, name, str, strlen(str), DATA_VARCHAR,
                         DATA_ENGLISH);
 }
 
-void pars_info_add_int4_literal(pars_info_t *info, const char *name, lint val) {
+void pars_info_add_int4_literal(ParsInfo *info, const char *name, lint val) {
   auto buf = mem_heap_alloc(info->m_heap, 4);
 
   mach_write_to_4(buf, val);
   pars_info_add_literal(info, name, buf, 4, DATA_INT, 0);
 }
 
-void pars_info_add_int8_literal(pars_info_t *info, const char *name,
+void pars_info_add_int8_literal(ParsInfo *info, const char *name,
                                 uint64_t val) {
   auto buf = mem_heap_alloc(info->m_heap, sizeof(val));
 
@@ -1506,7 +1506,7 @@ void pars_info_add_int8_literal(pars_info_t *info, const char *name,
   pars_info_add_literal(info, name, buf, sizeof(val), DATA_INT, 0);
 }
 
-void pars_info_add_uint64_literal(pars_info_t *info, const char *name,
+void pars_info_add_uint64_literal(ParsInfo *info, const char *name,
                                   uint64_t val) {
   auto buf = mem_heap_alloc(info->m_heap, 8);
 
@@ -1515,12 +1515,12 @@ void pars_info_add_uint64_literal(pars_info_t *info, const char *name,
   pars_info_add_literal(info, name, buf, 8, DATA_FIXBINARY, 0);
 }
 
-void pars_info_add_function(pars_info_t *info, const char *name,
+void pars_info_add_function(ParsInfo *info, const char *name,
                             pars_user_func_cb_t func, void *arg) {
   ut_ad(!pars_info_get_user_func(info, name));
 
-  auto puf = reinterpret_cast<pars_user_func_t *>(
-      mem_heap_alloc(info->m_heap, sizeof(pars_user_func_t)));
+  auto puf = reinterpret_cast<ParsUserFunc *>(
+      mem_heap_alloc(info->m_heap, sizeof(ParsUserFunc)));
 
   puf->name = name;
   puf->func = func;
@@ -1529,11 +1529,11 @@ void pars_info_add_function(pars_info_t *info, const char *name,
   info->m_funcs.emplace_back(puf);
 }
 
-void pars_info_add_id(pars_info_t *info, const char *name, const char *id) {
+void pars_info_add_id(ParsInfo *info, const char *name, const char *id) {
   ut_ad(!pars_info_get_bound_id(info, name));
 
-  auto bid = reinterpret_cast<pars_bound_id_t *>(
-      mem_heap_alloc(info->m_heap, sizeof(pars_bound_id_t)));
+  auto bid = reinterpret_cast<ParsBoundId *>(
+      mem_heap_alloc(info->m_heap, sizeof(ParsBoundId)));
 
   bid->id = id;
   bid->name = name;
@@ -1541,7 +1541,7 @@ void pars_info_add_id(pars_info_t *info, const char *name, const char *id) {
   info->m_bound_ids.emplace_back(bid);
 }
 
-pars_user_func_t *pars_info_get_user_func(pars_info_t *info, const char *name) {
+ParsUserFunc *pars_info_get_user_func(ParsInfo *info, const char *name) {
   if (info == nullptr || info->m_funcs.empty()) {
     return nullptr;
   }
@@ -1556,7 +1556,7 @@ pars_user_func_t *pars_info_get_user_func(pars_info_t *info, const char *name) {
   return nullptr;
 }
 
-pars_bound_lit_t *pars_info_get_bound_lit(pars_info_t *info, const char *name) {
+ParsBoundLit *pars_info_get_bound_lit(ParsInfo *info, const char *name) {
   if (info == nullptr || info->m_bound_lits.empty()) {
     return nullptr;
   }
@@ -1571,7 +1571,7 @@ pars_bound_lit_t *pars_info_get_bound_lit(pars_info_t *info, const char *name) {
   return nullptr;
 }
 
-pars_bound_id_t *pars_info_get_bound_id(pars_info_t *info, const char *name) {
+ParsBoundId *pars_info_get_bound_id(ParsInfo *info, const char *name) {
   if (info == nullptr || info->m_bound_ids.empty()) {
     return nullptr;
   }

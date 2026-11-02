@@ -19,7 +19,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 #pragma once
 
 /*
- * Transaction branch identification: XID and NULLXID:
+ * Transaction branch identification: Xid and NULLXID:
  */
 
 /** Sizes of transaction identifier @{ */
@@ -35,8 +35,8 @@ constexpr ulint MAXGTRIDSIZE = 64;
 constexpr ulint MAXBQUALSIZE = 64;
 
 /** X/Open XA distributed transaction identifier */
-struct XID {
-  /** Format identifier; -1 means that the XID is null */
+struct Xid {
+  /** Format identifier; -1 means that the Xid is null */
   int64_t formatID;
 
   /** Value from 1 through 64 */
@@ -60,7 +60,7 @@ constexpr lint XAER_ASYNC = -2;
 /** A resource manager error occurred in the transaction  branch */
 constexpr lint XAER_RMERR = -3;
 
-/** The XID is not valid */
+/** The Xid is not valid */
 constexpr lint XAER_NOTA = -4;
 
 /** Invalid arguments were given */
@@ -72,7 +72,7 @@ constexpr lint XAER_PROTO = -6;
 /** Resource manager unavailable */
 constexpr lint XAER_RMFAIL = -7;
 
-/** The XID already exists */
+/** The Xid already exists */
 constexpr lint XAER_DUPID = -8;
 
 /** Resource manager doing work outside transaction */

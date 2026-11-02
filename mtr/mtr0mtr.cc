@@ -38,22 +38,22 @@ Created 11/26/1995 Heikki Tuuri
  * @param[in,out] mtr           Release slot in this mtr.
  * @param[in] slot              Slot to release.
  * */
-inline void mtr_memo_slot_release(mtr_t *mtr, mtr_memo_slot_t *slot) noexcept {
+inline void mtr_memo_slot_release(Mtr *mtr, MtrMemoSlot *slot) noexcept {
   auto object = slot->m_object;
   auto type = slot->m_type;
 
   if (likely(object != nullptr)) {
     if (type <= MTR_MEMO_BUF_FIX) {
-      srv_buf_pool->release(static_cast<Buf_block *>(object), type, mtr);
+      srv_buf_pool->release(static_cast<BufBlock *>(object), type, mtr);
     } else if (type == MTR_MEMO_S_LOCK) {
-      rw_lock_s_unlock(static_cast<rw_lock_t *>(object));
+      rw_lock_s_unlock(static_cast<RwLock *>(object));
 #ifndef UNIV_DEBUG
     } else {
-      rw_lock_x_unlock(static_cast<rw_lock_t *>(object));
+      rw_lock_x_unlock(static_cast<RwLock *>(object));
     }
 #else
     } else if (type == MTR_MEMO_X_LOCK) {
-      rw_lock_x_unlock(static_cast<rw_lock_t *>(object));
+      rw_lock_x_unlock(static_cast<RwLock *>(object));
     } else {
       ut_ad(type == MTR_MEMO_MODIFY);
       ut_ad(mtr->memo_contains(object, MTR_MEMO_PAGE_X_FIX));
@@ -64,12 +64,12 @@ inline void mtr_memo_slot_release(mtr_t *mtr, mtr_memo_slot_t *slot) noexcept {
   }
 }
 
-void mtr_t::disable_redo_logging() noexcept {
+void Mtr::disable_redo_logging() noexcept {
   ut_ad(m_magic_n == MTR_MAGIC_N);
   m_log_mode = MTR_LOG_NONE;
 }
 
-static void mtr_memo_pop_all(mtr_t *mtr) noexcept {
+static void mtr_memo_pop_all(Mtr *mtr) noexcept {
   ut_ad(mtr->m_magic_n == MTR_MAGIC_N);
 
   /* Currently only used in commit */
@@ -78,8 +78,8 @@ static void mtr_memo_pop_all(mtr_t *mtr) noexcept {
   auto offset = mtr->m_memo.get_data_size();
 
   while (offset > 0) {
-    offset -= sizeof(mtr_memo_slot_t);
-    auto slot = static_cast<mtr_memo_slot_t *>(mtr->m_memo.get_element(offset));
+    offset -= sizeof(MtrMemoSlot);
+    auto slot = static_cast<MtrMemoSlot *>(mtr->m_memo.get_element(offset));
 
     mtr_memo_slot_release(mtr, slot);
   }
@@ -92,7 +92,7 @@ static void mtr_memo_pop_all(mtr_t *mtr) noexcept {
  * @param[in,out] log           Log to write to
  * @param[in] recovery          recovery flag
  */
-static void mtr_log_reserve_and_write(mtr_t *mtr, Log *log, ulint recovery) noexcept {
+static void mtr_log_reserve_and_write(Mtr *mtr, Log *log, ulint recovery) noexcept {
   auto mlog = &mtr->m_log;
   auto first_data = mlog->get_data();
 
@@ -134,10 +134,10 @@ static void mtr_log_reserve_and_write(mtr_t *mtr, Log *log, ulint recovery) noex
     /* Do nothing */
   }
 
-  mtr->m_end_lsn = log->close(ib_recovery_t(recovery));
+  mtr->m_end_lsn = log->close(IbRecovery(recovery));
 }
 
-void mtr_t::commit() noexcept {
+void Mtr::commit() noexcept {
   ut_ad(is_active());
   ut_ad(m_magic_n == MTR_MAGIC_N);
 
@@ -166,7 +166,7 @@ void mtr_t::commit() noexcept {
   m_state = MTR_COMMITTED;
 }
 
-void mtr_t::rollback_to_savepoint(ulint savepoint) noexcept {
+void Mtr::rollback_to_savepoint(ulint savepoint) noexcept {
   ut_ad(m_magic_n == MTR_MAGIC_N);
   ut_ad(is_active());
 
@@ -174,25 +174,25 @@ void mtr_t::rollback_to_savepoint(ulint savepoint) noexcept {
   ut_ad(offset >= savepoint);
 
   while (offset > savepoint) {
-    offset -= sizeof(mtr_memo_slot_t);
+    offset -= sizeof(MtrMemoSlot);
 
-    auto slot = static_cast<mtr_memo_slot_t *>(m_memo.get_element(offset));
+    auto slot = static_cast<MtrMemoSlot *>(m_memo.get_element(offset));
     ut_ad(slot->m_type != MTR_MEMO_MODIFY);
 
     mtr_memo_slot_release(this, slot);
   }
 }
 
-void mtr_t::memo_release(void *object, ulint type) noexcept {
+void Mtr::memo_release(void *object, ulint type) noexcept {
   ut_ad(m_magic_n == MTR_MAGIC_N);
   ut_ad(is_active());
 
   auto offset = m_memo.get_data_size();
 
   while (offset > 0) {
-    offset -= sizeof(mtr_memo_slot_t);
+    offset -= sizeof(MtrMemoSlot);
 
-    auto slot = static_cast<mtr_memo_slot_t *>(m_memo.get_element(offset));
+    auto slot = static_cast<MtrMemoSlot *>(m_memo.get_element(offset));
 
     if (object == slot->m_object && type == slot->m_type) {
 
@@ -203,7 +203,7 @@ void mtr_t::memo_release(void *object, ulint type) noexcept {
   }
 }
 
-ulint mtr_t::read_ulint(const byte *ptr, ulint type) const noexcept {
+ulint Mtr::read_ulint(const byte *ptr, ulint type) const noexcept {
   ut_ad(is_active());
   ut_ad(memo_contains_page(ptr, MTR_MEMO_PAGE_S_FIX) || memo_contains_page(ptr, MTR_MEMO_PAGE_X_FIX));
   if (type == MLOG_1BYTE) {
@@ -216,29 +216,29 @@ ulint mtr_t::read_ulint(const byte *ptr, ulint type) const noexcept {
   }
 }
 
-uint64_t mtr_t::read_uint64(const byte *ptr) const noexcept {
+uint64_t Mtr::read_uint64(const byte *ptr) const noexcept {
   ut_ad(is_active());
   ut_ad(memo_contains_page(ptr, MTR_MEMO_PAGE_S_FIX) || memo_contains_page(ptr, MTR_MEMO_PAGE_X_FIX));
   return mach_read_from_8(ptr);
 }
 
 #ifdef UNIV_DEBUG
-bool mtr_t::memo_contains_page(const byte *ptr, ulint type) const noexcept {
+bool Mtr::memo_contains_page(const byte *ptr, ulint type) const noexcept {
   return memo_contains(srv_buf_pool->block_align(ptr), type);
 }
 
-std::string mtr_t::to_string() const noexcept {
+std::string Mtr::to_string() const noexcept {
   return std::format(
     "Mini-transaction handle: memo size {} bytes log size {} bytes", m_memo.get_data_size(), m_log.get_data_size()
   );
 }
 #endif /* UNIV_DEBUG */
 
-void mtr_t::release_block_at_savepoint(ulint savepoint, Buf_block *block) noexcept {
+void Mtr::release_block_at_savepoint(ulint savepoint, BufBlock *block) noexcept {
   ut_ad(is_active());
   ut_ad(m_magic_n == MTR_MAGIC_N);
 
-  auto slot = static_cast<mtr_memo_slot_t *>(m_memo.get_element(savepoint));
+  auto slot = static_cast<MtrMemoSlot *>(m_memo.get_element(savepoint));
 
   ut_a(slot->m_object == block);
 

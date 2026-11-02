@@ -827,7 +827,7 @@ bool os_file_write(const char *name, os_file_t file, const void *p, ulint n, off
   return true;
 }
 
-bool os_file_status(const char *path, bool *exists, os_file_type_t *type) {
+bool os_file_status(const char *path, bool *exists, OsFileType *type) {
   struct stat statinfo;
 
   int ret = stat(path, &statinfo);
@@ -859,7 +859,7 @@ bool os_file_status(const char *path, bool *exists, os_file_type_t *type) {
   return true;
 }
 
-bool os_file_get_status(const char *path, os_file_stat_t *stat_info) {
+bool os_file_get_status(const char *path, OsFileStat *stat_info) {
   struct stat statinfo;
 
   int ret = stat(path, &statinfo);
@@ -929,7 +929,7 @@ bool os_file_create_subdirs_if_needed(const char *path) {
   }
 
   /* Test if subdir exists */
-  os_file_type_t type;
+  OsFileType type;
   auto success = os_file_status(subdir, &subdir_exists, &type);
 
   if (success && !subdir_exists) {

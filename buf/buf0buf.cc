@@ -135,7 +135,7 @@ in the database, using tables whose size is a power of 2.
 
 There are several lists of control blocks.
 
-The free list (Buf_pool::m_free_list) contains blocks which are currently not
+The free list (BufPool::m_free_list) contains blocks which are currently not
 used.
 
 The common LRU list contains all the blocks holding a file page
@@ -153,7 +153,7 @@ table which cannot fit in the memory. Putting the pages near the
 of the LRU list, we make sure that most of the buffer pool stays in the
 main memory, undisturbed.
 
-The chain of modified blocks (Buf_pool::m_flush_list) contains the blocks
+The chain of modified blocks (BufPool::m_flush_list) contains the blocks
 holding file pages that have been modified in the memory
 but not written to disk yet. The block with the oldest modification
 which has not yet been written to disk is at the end of the chain.
@@ -218,10 +218,10 @@ constexpr ulint BUF_PAGE_READ_MAX_RETRIES = 100;
 /** Checksum function. */
 crc32::Checksum crc32::checksum = {};
 
-Buf_pool *srv_buf_pool = nullptr;
+BufPool *srv_buf_pool = nullptr;
 
 /** A chunk of buffers.  The buffer pool is allocated in chunks. */
-struct buf_chunk_t {
+struct BufChunk {
   /** Allocated size of the chunk */
   ulint mem_size{};
 
@@ -232,10 +232,10 @@ struct buf_chunk_t {
   void *mem{};
 
   /** Array of buffer control blocks */
-  Buf_block *blocks{};
+  BufBlock *blocks{};
 };
 
-bool Buf_pool::peek_if_too_old(const Buf_page *bpage) {
+bool BufPool::peek_if_too_old(const BufPage *bpage) {
   if (unlikely(m_freed_page_clock == 0)) {
     /* If eviction has not started yet, do not update the statistics or move blocks
     in the LRU list.  This is either the warm-up phase or an in-memory workload. */
@@ -255,11 +255,11 @@ bool Buf_pool::peek_if_too_old(const Buf_page *bpage) {
     /* FIXME: bpage->m_freed_page_clock is 31 bits */
     return (m_freed_page_clock & ((1UL << 31) - 1)) >
            ((ulint)bpage->m_freed_page_clock +
-            (m_curr_size * (Buf_LRU::OLD_RATIO_DIV - m_LRU->get_old_ratio()) / (Buf_LRU::OLD_RATIO_DIV * 4)));
+            (m_curr_size * (BufLru::OLD_RATIO_DIV - m_LRU->get_old_ratio()) / (BufLru::OLD_RATIO_DIV * 4)));
   }
 }
 
-Buf_block *Buf_pool::block_alloc() {
+BufBlock *BufPool::block_alloc() {
   auto block = m_LRU->get_free_block();
 
   buf_block_set_state(block, BUF_BLOCK_MEMORY);
@@ -267,7 +267,7 @@ Buf_block *Buf_pool::block_alloc() {
   return block;
 }
 
-void Buf_pool::block_free(Buf_block *block) {
+void BufPool::block_free(BufBlock *block) {
 
   mutex_acquire();
 
@@ -282,7 +282,7 @@ void Buf_pool::block_free(Buf_block *block) {
   mutex_release();
 }
 
-void Buf_pool::release(Buf_block *block, ulint rw_latch, mtr_t *mtr) {
+void BufPool::release(BufBlock *block, ulint rw_latch, Mtr *mtr) {
   ut_a(block->get_state() == BUF_BLOCK_FILE_PAGE);
   ut_a(block->m_page.m_buf_fix_count > 0);
 
@@ -309,7 +309,7 @@ void Buf_pool::release(Buf_block *block, ulint rw_latch, mtr_t *mtr) {
   }
 }
 
-bool Buf_pool::is_corrupted(const byte *read_buf) {
+bool BufPool::is_corrupted(const byte *read_buf) {
   if (memcmp(read_buf + FIL_PAGE_LSN + 4, read_buf + UNIV_PAGE_SIZE - FIL_PAGE_END_LSN_CHKSUM + 4, 4)) {
 
     /* Stored log sequence numbers at the start and the end
@@ -414,7 +414,7 @@ void buf_page_print(const byte *read_buf, ulint) {
   }
 }
 
-void Buf_pool::block_init(Buf_block *block, byte *frame) {
+void BufPool::block_init(BufBlock *block, byte *frame) {
   UNIV_MEM_DESC(frame, UNIV_PAGE_SIZE, block);
 
   block->m_frame = frame;
@@ -444,13 +444,13 @@ void Buf_pool::block_init(Buf_block *block, byte *frame) {
 #endif /* UNIV_SYNC_DEBUG */
 }
 
-buf_chunk_t *Buf_pool::chunk_init(buf_chunk_t *chunk, ulint mem_size) {
+BufChunk *BufPool::chunk_init(BufChunk *chunk, ulint mem_size) {
 
   /* Round down to a multiple of page size, although it already should be. */
   mem_size = ut_2pow_round(mem_size, UNIV_PAGE_SIZE);
 
   /* Reserve space for the block descriptors. */
-  mem_size += ut_2pow_round((mem_size / UNIV_PAGE_SIZE) * sizeof(Buf_block) + (UNIV_PAGE_SIZE - 1), UNIV_PAGE_SIZE);
+  mem_size += ut_2pow_round((mem_size / UNIV_PAGE_SIZE) * sizeof(BufBlock) + (UNIV_PAGE_SIZE - 1), UNIV_PAGE_SIZE);
 
   chunk->mem_size = mem_size;
   chunk->mem = os_mem_alloc_large(&chunk->mem_size);
@@ -461,7 +461,7 @@ buf_chunk_t *Buf_pool::chunk_init(buf_chunk_t *chunk, ulint mem_size) {
   }
 
   /* Allocate the block descriptors from the start of the memory block. */
-  chunk->blocks = (Buf_block *)chunk->mem;
+  chunk->blocks = (BufBlock *)chunk->mem;
 
   /* Align a pointer to the first frame.  Note that when os_large_page_size is
   smaller than UNIV_PAGE_SIZE, we may allocate one fewer block than requested.
@@ -504,7 +504,7 @@ buf_chunk_t *Buf_pool::chunk_init(buf_chunk_t *chunk, ulint mem_size) {
   return chunk;
 }
 
-const Buf_block *Buf_pool::chunk_not_freed(buf_chunk_t *chunk) {
+const BufBlock *BufPool::chunk_not_freed(BufChunk *chunk) {
   ut_ad(mutex_own(&m_mutex));
 
   auto block = chunk->blocks;
@@ -535,9 +535,9 @@ const Buf_block *Buf_pool::chunk_not_freed(buf_chunk_t *chunk) {
   return nullptr;
 }
 
-Buf_pool::Buf_pool() : m_LRU(new(std::nothrow) Buf_LRU(this)), m_flusher(new(std::nothrow) Buf_flush(this)) {}
+BufPool::BufPool() : m_LRU(new(std::nothrow) BufLru(this)), m_flusher(new(std::nothrow) BufFlush(this)) {}
 
-bool Buf_pool::open(uint64_t pool_size) {
+bool BufPool::open(uint64_t pool_size) {
 
   if (m_LRU == nullptr || m_flusher == nullptr) {
     return false;
@@ -549,7 +549,7 @@ bool Buf_pool::open(uint64_t pool_size) {
 
   mutex_acquire();
 
-  auto chunk = reinterpret_cast<buf_chunk_t *>(mem_alloc(sizeof(buf_chunk_t)));
+  auto chunk = reinterpret_cast<BufChunk *>(mem_alloc(sizeof(BufChunk)));
 
   m_n_chunks = 1;
   m_chunks = chunk;
@@ -599,7 +599,7 @@ bool Buf_pool::open(uint64_t pool_size) {
   return true;
 }
 
-void Buf_pool::close() {
+void BufPool::close() {
   delete m_page_hash;
 
   for (ulint i = BUF_FLUSH_LRU; i < BUF_FLUSH_N_TYPES; i++) {
@@ -608,7 +608,7 @@ void Buf_pool::close() {
   }
 }
 
-Buf_pool::~Buf_pool() {
+BufPool::~BufPool() {
   auto chunks = m_chunks;
   auto chunk = chunks + m_n_chunks;
 
@@ -622,7 +622,7 @@ Buf_pool::~Buf_pool() {
   mem_free(m_chunks);
 }
 
-void Buf_pool::make_young(Buf_page *bpage) {
+void BufPool::make_young(BufPage *bpage) {
   mutex_acquire();
 
   ut_a(bpage->in_file());
@@ -632,7 +632,7 @@ void Buf_pool::make_young(Buf_page *bpage) {
   mutex_release();
 }
 
-void Buf_pool::set_accessed_make_young(Buf_page *bpage, unsigned access_time) {
+void BufPool::set_accessed_make_young(BufPage *bpage, unsigned access_time) {
   ut_ad(!mutex_own(&m_mutex));
   ut_a(bpage->in_file());
 
@@ -654,7 +654,7 @@ void Buf_pool::set_accessed_make_young(Buf_page *bpage, unsigned access_time) {
   }
 }
 
-void Buf_pool::check_index_page_at_flush(const Page_id &page_id) {
+void BufPool::check_index_page_at_flush(const PageId &page_id) {
   mutex_acquire();
 
   auto block = hash_get_block(page_id);
@@ -666,12 +666,12 @@ void Buf_pool::check_index_page_at_flush(const Page_id &page_id) {
   mutex_release();
 }
 
-Buf_block *Buf_pool::block_align(const byte *ptr) {
+BufBlock *BufPool::block_align(const byte *ptr) {
   ulint i = m_n_chunks;
   ;
 
-  /* TODO: protect Buf_pool::m_chunks with a mutex (it will
-  currently remain constant after Buf_pool::open()) */
+  /* TODO: protect BufPool::m_chunks with a mutex (it will
+  currently remain constant after BufPool::open()) */
   for (auto chunk = m_chunks; i--; ++chunk) {
     lint offs = ptr - chunk->blocks->m_frame;
 
@@ -702,7 +702,7 @@ Buf_block *Buf_pool::block_align(const byte *ptr) {
         file pages may have been freed and reused.  Do not complain. */
           break;
         case BUF_BLOCK_REMOVE_HASH:
-          /* Buf_pool::m_LRU->block_remove_hashed_page() will overwrite the FIL_PAGE_OFFSET and
+          /* BufPool::m_LRU->block_remove_hashed_page() will overwrite the FIL_PAGE_OFFSET and
           FIL_PAGE_SPACE_ID with 0xff and set the state to BUF_BLOCK_REMOVE_HASH. */
           ut_ad(page_get_space_id(Rec(ptr).page_align()) == 0xffffffff);
           ut_ad(page_get_page_no(Rec(ptr).page_align()) == 0xffffffff);
@@ -725,12 +725,12 @@ Buf_block *Buf_pool::block_align(const byte *ptr) {
   return nullptr;
 }
 
-bool Buf_pool::pointer_is_block_field(const void *ptr) {
+bool BufPool::pointer_is_block_field(const void *ptr) {
   auto chunk = m_chunks;
   const auto chunk_end = chunk + m_n_chunks;
 
-  /* TODO: protect Buf_pool::m_chunks with a mutex (it will
-  currently remain constant after Buf_pool::open()) */
+  /* TODO: protect BufPool::m_chunks with a mutex (it will
+  currently remain constant after BufPool::open()) */
   while (chunk < chunk_end) {
     if (ptr >= (void *)chunk->blocks && ptr < (void *)(chunk->blocks + chunk->size)) {
 
@@ -743,9 +743,9 @@ bool Buf_pool::pointer_is_block_field(const void *ptr) {
   return false;
 }
 
-Buf_block *Buf_pool::get(Request &req, Buf_block *guess) {
+BufBlock *BufPool::get(Request &req, BufBlock *guess) {
   ulint n_retries{};
-  Buf_block *block{};
+  BufBlock *block{};
   const auto &page_id{req.m_page_id};
 
   ut_ad(req.m_mtr != nullptr);
@@ -756,7 +756,7 @@ Buf_block *Buf_pool::get(Request &req, Buf_block *guess) {
 
   ++m_stat.n_page_gets;
 
-  mtr_memo_type_t fix_type;
+  MtrMemoType fix_type;
 
   for (;;) {
     mutex_acquire();
@@ -909,7 +909,7 @@ Buf_block *Buf_pool::get(Request &req, Buf_block *guess) {
   return block;
 }
 
-bool Buf_pool::try_get(Request &req) {
+bool BufPool::try_get(Request &req) {
   ut_ad(req.m_guess != nullptr);
   ut_ad(req.m_mtr != nullptr);
   ut_ad(req.m_mtr->m_state == MTR_ACTIVE);
@@ -937,7 +937,7 @@ bool Buf_pool::try_get(Request &req) {
   set_accessed_make_young(&req.m_guess->m_page, access_time);
 
   bool success;
-  mtr_memo_type_t fix_type;
+  MtrMemoType fix_type;
 
   /* The "try" part. */
   if (req.m_rw_latch == RW_S_LATCH) {
@@ -1005,7 +1005,7 @@ bool Buf_pool::try_get(Request &req) {
   }
 }
 
-bool Buf_pool::try_get_known_nowait(Request &req) {
+bool BufPool::try_get_known_nowait(Request &req) {
   ut_ad(req.m_mtr != nullptr);
   ut_ad(req.m_mtr->m_state == MTR_ACTIVE);
   ut_ad(req.m_rw_latch == RW_S_LATCH || req.m_rw_latch == RW_X_LATCH);
@@ -1041,7 +1041,7 @@ bool Buf_pool::try_get_known_nowait(Request &req) {
   } else if (!buf_page_is_accessed(&req.m_guess->m_page)) {
 
     /* Above, we do a dirty read on purpose, to avoid mutex contention.
-    The field Buf_page::access_time is only used for heuristic purposes.
+    The field BufPage::access_time is only used for heuristic purposes.
     Writes to the field must be protected by mutex, however. */
 
     const auto time_ms = ut_time_ms();
@@ -1054,7 +1054,7 @@ bool Buf_pool::try_get_known_nowait(Request &req) {
   }
 
   bool success;
-  mtr_memo_type_t fix_type;
+  MtrMemoType fix_type;
 
   /* This is the "nowait" part. */
   if (req.m_rw_latch == RW_S_LATCH) {
@@ -1091,7 +1091,7 @@ bool Buf_pool::try_get_known_nowait(Request &req) {
   }
 }
 
-const Buf_block *Buf_pool::try_get_by_page_id(Request &req) {
+const BufBlock *BufPool::try_get_by_page_id(Request &req) {
   ut_ad(req.m_mtr != nullptr);
   ut_ad(req.m_mtr->m_state == MTR_ACTIVE);
 
@@ -1157,7 +1157,7 @@ const Buf_block *Buf_pool::try_get_by_page_id(Request &req) {
   return block;
 }
 
-void Buf_pool::page_init_low(Buf_page *bpage) {
+void BufPool::page_init_low(BufPage *bpage) {
   bpage->m_flush_type = BUF_FLUSH_LRU;
   bpage->m_io_fix = BUF_IO_NONE;
   bpage->m_buf_fix_count = 0;
@@ -1169,7 +1169,7 @@ void Buf_pool::page_init_low(Buf_page *bpage) {
   ut_d(bpage->m_file_page_was_freed = false);
 }
 
-void Buf_pool::page_init(const Page_id &page_id, Buf_block *block) {
+void BufPool::page_init(const PageId &page_id, BufBlock *block) {
   ut_ad(mutex_own(&m_mutex));
   ut_ad(mutex_own(&(block->m_mutex)));
   ut_a(block->get_state() != BUF_BLOCK_FILE_PAGE);
@@ -1220,8 +1220,8 @@ void Buf_pool::page_init(const Page_id &page_id, Buf_block *block) {
   ut_a(it.second);
 }
 
-Buf_page *Buf_pool::init_for_read(db_err *err, const Page_id &page_id, int64_t tablespace_version) {
-  Buf_page *bpage{};
+BufPage *BufPool::init_for_read(DbErr *err, const PageId &page_id, int64_t tablespace_version) {
+  BufPage *bpage{};
   auto block = m_LRU->get_free_block();
 
   *err = DB_SUCCESS;
@@ -1279,7 +1279,7 @@ Buf_page *Buf_pool::init_for_read(db_err *err, const Page_id &page_id, int64_t t
   return bpage;
 }
 
-Buf_block *Buf_pool::create(const Page_id &page_id, mtr_t *mtr) {
+BufBlock *BufPool::create(const PageId &page_id, Mtr *mtr) {
   auto time_ms = ut_time_ms();
 
   ut_ad(mtr != nullptr);
@@ -1299,7 +1299,7 @@ Buf_block *Buf_pool::create(const Page_id &page_id, mtr_t *mtr) {
 
     block_free(free_block);
 
-    Buf_pool::Request req{
+    BufPool::Request req{
       .m_rw_latch = RW_NO_LATCH,
       .m_page_id = page_id,
       .m_mode = BUF_GET_NO_LATCH,
@@ -1357,7 +1357,7 @@ Buf_block *Buf_pool::create(const Page_id &page_id, mtr_t *mtr) {
   return block;
 }
 
-void Buf_pool::io_complete(Buf_page *bpage) {
+void BufPool::io_complete(BufPage *bpage) {
   ut_a(bpage->in_file());
 
   /* We do not need protect io_fix here by mutex to read
@@ -1371,7 +1371,7 @@ void Buf_pool::io_complete(Buf_page *bpage) {
 
   if (io_type == BUF_IO_READ) {
 
-    auto frame = reinterpret_cast<Buf_block *>(bpage)->m_frame;
+    auto frame = reinterpret_cast<BufBlock *>(bpage)->m_frame;
 
     /* If this page is not uninitialized and not in the
     doublewrite buffer, then the page number and space id
@@ -1429,7 +1429,7 @@ void Buf_pool::io_complete(Buf_page *bpage) {
 
     if (recv_recovery_on) {
       /* Pages must be uncompressed for crash recovery. */
-      recv_recover_page(true, (Buf_block *)bpage);
+      recv_recover_page(true, (BufBlock *)bpage);
     }
   }
 
@@ -1450,7 +1450,7 @@ void Buf_pool::io_complete(Buf_page *bpage) {
       --m_n_pend_reads;
       ++m_stat.n_pages_read;
 
-      rw_lock_x_unlock_gen(&((Buf_block *)bpage)->m_rw_lock, BUF_IO_READ);
+      rw_lock_x_unlock_gen(&((BufBlock *)bpage)->m_rw_lock, BUF_IO_READ);
 
       break;
 
@@ -1460,7 +1460,7 @@ void Buf_pool::io_complete(Buf_page *bpage) {
 
       m_flusher->write_complete(bpage);
 
-      rw_lock_s_unlock_gen(&((Buf_block *)bpage)->m_rw_lock, BUF_IO_WRITE);
+      rw_lock_s_unlock_gen(&((BufBlock *)bpage)->m_rw_lock, BUF_IO_WRITE);
 
       ++m_stat.n_pages_written;
 
@@ -1474,7 +1474,7 @@ void Buf_pool::io_complete(Buf_page *bpage) {
   mutex_release();
 }
 
-void Buf_pool::invalidate() {
+void BufPool::invalidate() {
   mutex_acquire();
 
   for (auto i = ulint(BUF_FLUSH_LRU); i < ulint(BUF_FLUSH_N_TYPES); ++i) {
@@ -1492,7 +1492,7 @@ void Buf_pool::invalidate() {
     write activity happening. */
     if (m_n_flush[i] > 0) {
       mutex_release();
-      m_flusher->wait_batch_end((buf_flush)i);
+      m_flusher->wait_batch_end((BufFlushType)i);
       mutex_acquire();
     }
   }
@@ -1514,7 +1514,7 @@ void Buf_pool::invalidate() {
   m_LRU_old_len = 0;
   m_LRU_flush_ended = 0;
 
-  m_stat = buf_pool_stat_t{};
+  m_stat = BufPoolStat{};
 
   refresh_io_stats();
 
@@ -1522,7 +1522,7 @@ void Buf_pool::invalidate() {
 }
 
 #if defined UNIV_DEBUG
-bool Buf_pool::validate() {
+bool BufPool::validate() {
   ulint n_single_flush = 0;
   ulint n_LRU_flush = 0;
   ulint n_list_flush = 0;
@@ -1538,7 +1538,7 @@ bool Buf_pool::validate() {
 
   for (ulint i = m_n_chunks; i--; chunk++) {
     ulint j;
-    Buf_block *block = chunk->blocks;
+    BufBlock *block = chunk->blocks;
 
     for (j = chunk->size; j--; block++) {
 
@@ -1627,7 +1627,7 @@ bool Buf_pool::validate() {
   return true;
 }
 
-void Buf_pool::print() {
+void BufPool::print() {
   uint64_t id;
   Index *index;
 
@@ -1669,7 +1669,7 @@ void Buf_pool::print() {
   auto chunk = m_chunks;
 
   for (ulint i = m_n_chunks; i--; chunk++) {
-    Buf_block *block = chunk->blocks;
+    BufBlock *block = chunk->blocks;
     ulint n_blocks = chunk->size;
 
     for (; n_blocks--; block++) {
@@ -1720,7 +1720,7 @@ void Buf_pool::print() {
   ut_a(validate());
 }
 
-ulint Buf_pool::get_latched_pages_number() {
+ulint BufPool::get_latched_pages_number() {
   ulint fixed_pages_number{};
 
   mutex_acquire();
@@ -1728,7 +1728,7 @@ ulint Buf_pool::get_latched_pages_number() {
   auto chunk = m_chunks;
 
   for (ulint i = m_n_chunks; i--; chunk++) {
-    Buf_block *block = chunk->blocks;
+    BufBlock *block = chunk->blocks;
     ulint n_blocks = chunk->size;
 
     for (; n_blocks--; block++) {
@@ -1748,7 +1748,7 @@ ulint Buf_pool::get_latched_pages_number() {
 }
 #endif /* UNIV_DEBUG */
 
-bool Buf_pool::all_freed() {
+bool BufPool::all_freed() {
   mutex_acquire();
 
   auto chunk = m_chunks;
@@ -1765,16 +1765,16 @@ bool Buf_pool::all_freed() {
   return true;
 }
 
-bool Buf_pool::is_io_pending() {
+bool BufPool::is_io_pending() {
   return m_n_pend_reads > 0 || m_n_flush[BUF_FLUSH_LRU] > 0 || m_n_flush[BUF_FLUSH_LIST] > 0 ||
          m_n_flush[BUF_FLUSH_SINGLE_PAGE] > 0;
 }
 
-ulint Buf_pool::get_n_pending_ios() {
+ulint BufPool::get_n_pending_ios() {
   return m_n_pend_reads + m_n_flush[BUF_FLUSH_LRU] + m_n_flush[BUF_FLUSH_LIST] + m_n_flush[BUF_FLUSH_SINGLE_PAGE];
 }
 
-void Buf_pool::print_io(ib_stream_t ib_stream) {
+void BufPool::print_io(ib_stream_t ib_stream) {
   time_t current_time = time(nullptr);
   double time_elapsed = difftime(current_time, m_last_printout_time);
 
@@ -1837,7 +1837,7 @@ void Buf_pool::print_io(ib_stream_t ib_stream) {
   mutex_release();
 }
 
-ulint Buf_pool::get_modified_ratio_pct() {
+ulint BufPool::get_modified_ratio_pct() {
   mutex_acquire();
 
   const ulint n_modified = m_flush_list.size();
@@ -1848,7 +1848,7 @@ ulint Buf_pool::get_modified_ratio_pct() {
   return n_pages == 0 ? 0 : (n_modified * 100) / n_pages;
 }
 
-void Buf_pool::refresh_io_stats() {
+void BufPool::refresh_io_stats() {
   mutex_acquire();
 
   m_old_stat = m_stat;
@@ -1856,7 +1856,7 @@ void Buf_pool::refresh_io_stats() {
   mutex_release();
 }
 
-void Buf_pool::init() {
+void BufPool::init() {
   mutex_create(&m_mutex, IF_DEBUG("buffer_pool", ) IF_SYNC_DEBUG(SYNC_BUF_POOL, ) Current_location());
 
   m_n_chunks = 0;
@@ -1866,8 +1866,8 @@ void Buf_pool::init() {
   m_n_pend_reads = 0;
   m_last_printout_time = time(nullptr);
 
-  m_stat = buf_pool_stat_t{};
-  m_old_stat = buf_pool_stat_t{};
+  m_stat = BufPoolStat{};
+  m_old_stat = BufPoolStat{};
 
   UT_LIST_INIT(m_flush_list);
 
@@ -1887,10 +1887,10 @@ void Buf_pool::init() {
   m_LRU_old_len = 0;
 }
 
-Buf_page *Buf_pool::set_file_page_was_freed(const Page_id &page_id) {
+BufPage *BufPool::set_file_page_was_freed(const PageId &page_id) {
   mutex_acquire();
 
-  Buf_page *bpage = hash_get_page(page_id);
+  BufPage *bpage = hash_get_page(page_id);
 
   if (bpage != nullptr) {
     bpage->m_file_page_was_freed = true;

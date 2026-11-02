@@ -30,22 +30,22 @@ Created 2/6/1997 Heikki Tuuri
 #include "trx0undo.h"
 #include "trx0undo_rec.h"
 
-Row_vers *srv_row_vers;
+RowVers *srv_row_vers;
 
-Row_vers::Row_vers(Trx_sys *trx_sys, Lock_sys *lock_sys) noexcept : m_trx_sys{trx_sys}, m_lock_sys{lock_sys} {}
+RowVers::RowVers(TrxSys *trx_sys, LockSys *lock_sys) noexcept : m_trx_sys{trx_sys}, m_lock_sys{lock_sys} {}
 
-Row_vers *Row_vers::create(Trx_sys *trx_sys, Lock_sys *lock_sys) noexcept {
-  auto ptr = ut_new(sizeof(Row_vers));
-  return new (ptr) Row_vers{trx_sys, lock_sys};
+RowVers *RowVers::create(TrxSys *trx_sys, LockSys *lock_sys) noexcept {
+  auto ptr = ut_new(sizeof(RowVers));
+  return new (ptr) RowVers{trx_sys, lock_sys};
 }
 
-void Row_vers::destroy(Row_vers *&row_vers) noexcept {
+void RowVers::destroy(RowVers *&row_vers) noexcept {
   call_destructor(row_vers);
   ut_delete(row_vers);
   row_vers = nullptr;
 }
 
-Trx *Row_vers::impl_x_locked_off_trx_sys_mutex(const Rec rec, const Index *index, const ulint *offsets) noexcept {
+Trx *RowVers::impl_x_locked_off_trx_sys_mutex(const Rec rec, const Index *index, const ulint *offsets) noexcept {
   ut_ad(mutex_own(&m_trx_sys->m_mutex));
 
 #ifdef UNIV_SYNC_DEBUG
@@ -54,14 +54,14 @@ Trx *Row_vers::impl_x_locked_off_trx_sys_mutex(const Rec rec, const Index *index
 
   mutex_exit(&m_trx_sys->m_mutex);
 
-  auto func_exit = [](mtr_t &mtr, mem_heap_t *heap, Trx *trx) -> auto {
+  auto func_exit = [](Mtr &mtr, MemHeap *heap, Trx *trx) -> auto {
     mtr.commit();
     mem_heap_free(heap);
 
     return trx;
   };
 
-  mtr_t mtr;
+  Mtr mtr;
 
   mtr.start();
 
@@ -92,7 +92,7 @@ Trx *Row_vers::impl_x_locked_off_trx_sys_mutex(const Rec rec, const Index *index
   auto heap = mem_heap_create(1024);
 
   {
-    Phy_rec record{clust_index, clust_rec};
+    PhyRec record{clust_index, clust_rec};
 
     clust_offsets = record.get_col_offsets(nullptr, ULINT_UNDEFINED, &heap, Current_location());
   }
@@ -133,7 +133,7 @@ Trx *Row_vers::impl_x_locked_off_trx_sys_mutex(const Rec rec, const Index *index
   auto rec_del = rec.get_deleted_flag();
 
   for (;;) {
-    row_ext_t *ext;
+    RowExt *ext;
     Rec prev_version;
 
     mutex_exit(&m_trx_sys->m_mutex);
@@ -149,7 +149,7 @@ Trx *Row_vers::impl_x_locked_off_trx_sys_mutex(const Rec rec, const Index *index
 
     heap = mem_heap_create(1024);
 
-    auto err = Trx_undo_record::prev_version_build(clust_rec, &mtr, version, clust_index, clust_offsets, heap, &prev_version);
+    auto err = TrxUndoRecord::prev_version_build(clust_rec, &mtr, version, clust_index, clust_offsets, heap, &prev_version);
 
     mem_heap_free(heap2); /* free version and clust_offsets */
 
@@ -176,7 +176,7 @@ Trx *Row_vers::impl_x_locked_off_trx_sys_mutex(const Rec rec, const Index *index
     ulint *clust_offsets;
 
     {
-      Phy_rec record{clust_index, prev_version};
+      PhyRec record{clust_index, prev_version};
 
       clust_offsets = record.get_col_offsets(nullptr, ULINT_UNDEFINED, &heap, Current_location());
     }
@@ -266,7 +266,7 @@ Trx *Row_vers::impl_x_locked_off_trx_sys_mutex(const Rec rec, const Index *index
   return func_exit(mtr, heap, trx);
 }
 
-bool Row_vers::must_preserve_del_marked(trx_id_t trx_id, mtr_t *mtr) noexcept {
+bool RowVers::must_preserve_del_marked(trx_id_t trx_id, Mtr *mtr) noexcept {
 
 #ifdef UNIV_SYNC_DEBUG
   ut_ad(!rw_lock_own(&m_trx_sys->m_purge->m_latch, RW_LOCK_SHARED));
@@ -278,12 +278,12 @@ bool Row_vers::must_preserve_del_marked(trx_id_t trx_id, mtr_t *mtr) noexcept {
   return m_trx_sys->m_purge->update_undo_must_exist(trx_id);
 }
 
-bool Row_vers::old_has_index_entry(bool also_curr, const Rec rec, mtr_t *mtr, Index *index, const DTuple *ientry) noexcept {
+bool RowVers::old_has_index_entry(bool also_curr, const Rec rec, Mtr *mtr, Index *index, const DTuple *ientry) noexcept {
   //const Rec version;
-  //mem_heap_t *heap2;
+  //MemHeap *heap2;
   //const DTuple *row;
   //const DTuple *entry;
-  //db_err err;
+  //DbErr err;
 
   ut_ad(mtr->memo_contains_page(rec, MTR_MEMO_PAGE_X_FIX) || mtr->memo_contains_page(rec, MTR_MEMO_PAGE_S_FIX));
 
@@ -299,13 +299,13 @@ bool Row_vers::old_has_index_entry(bool also_curr, const Rec rec, mtr_t *mtr, In
   ulint *clust_offsets;
 
   {
-    Phy_rec record{clust_index, rec};
+    PhyRec record{clust_index, rec};
 
     clust_offsets = record.get_col_offsets(nullptr, ULINT_UNDEFINED, &heap, Current_location());
   }
 
   if (also_curr && !rec.get_deleted_flag()) {
-    row_ext_t *ext;
+    RowExt *ext;
 
     /* The stack of versions is locked by mtr.  Thus, it is safe to fetch the prefixes for
     externally stored columns. */
@@ -344,7 +344,7 @@ bool Row_vers::old_has_index_entry(bool also_curr, const Rec rec, mtr_t *mtr, In
 
     heap = mem_heap_create(1024);
 
-    auto err = Trx_undo_record::prev_version_build(rec, mtr, version, clust_index, clust_offsets, heap, &prev_version);
+    auto err = TrxUndoRecord::prev_version_build(rec, mtr, version, clust_index, clust_offsets, heap, &prev_version);
 
     mem_heap_free(heap2); /* free version and clust_offsets */
 
@@ -357,13 +357,13 @@ bool Row_vers::old_has_index_entry(bool also_curr, const Rec rec, mtr_t *mtr, In
     }
 
     {
-      Phy_rec record{clust_index, prev_version};
+      PhyRec record{clust_index, prev_version};
 
       clust_offsets = record.get_col_offsets(nullptr, ULINT_UNDEFINED, &heap, Current_location());
     }
 
     if (prev_version.get_deleted_flag() == 0) {
-      row_ext_t *ext;
+      RowExt *ext;
 
       /* The stack of versions is locked by mtr.  Thus, it is safe to fetch the prefixes for
       externally stored columns. */
@@ -390,7 +390,7 @@ bool Row_vers::old_has_index_entry(bool also_curr, const Rec rec, mtr_t *mtr, In
   }
 }
 
-db_err Row_vers::build_for_consistent_read(Row &row) noexcept {
+DbErr RowVers::build_for_consistent_read(Row &row) noexcept {
   ut_ad(row.m_cluster_index->is_clustered());
   ut_ad(
     row.m_mtr->memo_contains_page(row.m_cluster_rec, MTR_MEMO_PAGE_X_FIX) ||
@@ -410,23 +410,23 @@ db_err Row_vers::build_for_consistent_read(Row &row) noexcept {
   rw_lock_s_lock(&m_trx_sys->m_purge->m_latch);
 
   auto version = row.m_cluster_rec;
-  mem_heap_t *heap{};
-  db_err err{DB_SUCCESS};
+  MemHeap *heap{};
+  DbErr err{DB_SUCCESS};
 
   for (;;) {
-    mem_heap_t *clust_heap = heap;
+    MemHeap *clust_heap = heap;
 
     heap = mem_heap_create(1024);
 
     /* If we have high-granularity consistent read view and creating transaction of the view is the same as trx_id in
     the record we see this record only in the case when undo_no of the record is < undo_no in the view. */
 
-    if (row.m_consistent_read_view->m_type == Read_view_type::HIGH_GRANULARITY &&
+    if (row.m_consistent_read_view->m_type == ReadViewType::HIGH_GRANULARITY &&
         row.m_consistent_read_view->m_creator_trx_id == trx_id) {
 
       auto roll_ptr = row_get_rec_roll_ptr(version, row.m_cluster_index, row.m_cluster_offsets);
-      auto undo_rec = Trx_undo_record::get_undo_rec_low(roll_ptr, heap);
-      auto undo_no = Trx_undo_record::get_undo_no(undo_rec);
+      auto undo_rec = TrxUndoRecord::get_undo_rec_low(roll_ptr, heap);
+      auto undo_no = TrxUndoRecord::get_undo_no(undo_rec);
 
       mem_heap_empty(heap);
 
@@ -437,7 +437,7 @@ db_err Row_vers::build_for_consistent_read(Row &row) noexcept {
 
         row.m_old_rec = version.copy(buf, row.m_cluster_offsets);
 
-        Rec_offs rec_offs(row.m_cluster_offsets);
+        RecOffs rec_offs(row.m_cluster_offsets);
         ut_d(row.m_old_rec.offs_make_valid(row.m_cluster_index, rec_offs));
 
         err = DB_SUCCESS;
@@ -448,7 +448,7 @@ db_err Row_vers::build_for_consistent_read(Row &row) noexcept {
 
     Rec prev_version;
 
-    err = Trx_undo_record::prev_version_build(
+    err = TrxUndoRecord::prev_version_build(
       row.m_cluster_rec, row.m_mtr, version, row.m_cluster_index, row.m_cluster_offsets, heap, &prev_version
     );
 
@@ -468,7 +468,7 @@ db_err Row_vers::build_for_consistent_read(Row &row) noexcept {
     }
 
     {
-      Phy_rec record{row.m_cluster_index, prev_version};
+      PhyRec record{row.m_cluster_index, prev_version};
 
       row.m_cluster_offsets =
         record.get_col_offsets(row.m_cluster_offsets, ULINT_UNDEFINED, &row.m_cluster_offset_heap, Current_location());
@@ -500,7 +500,7 @@ db_err Row_vers::build_for_consistent_read(Row &row) noexcept {
   return err;
 }
 
-db_err Row_vers::build_for_semi_consistent_read(Row &row) noexcept {
+DbErr RowVers::build_for_semi_consistent_read(Row &row) noexcept {
   ut_ad(row.m_cluster_index->is_clustered());
   ut_ad(
     row.m_mtr->memo_contains_page(row.m_cluster_rec, MTR_MEMO_PAGE_X_FIX) ||
@@ -518,8 +518,8 @@ db_err Row_vers::build_for_semi_consistent_read(Row &row) noexcept {
   /* The S-latch on purge_sys prevents the purge view from changing.  Thus, if we have an uncommitted transaction at
   this point, then purge cannot remove its undo log even if the transaction could commit now. */
 
-  mem_heap_t *heap{};
-  db_err err{DB_SUCCESS};
+  MemHeap *heap{};
+  DbErr err{DB_SUCCESS};
   Rec prev_version{};
   auto version = row.m_cluster_rec;
 
@@ -553,7 +553,7 @@ db_err Row_vers::build_for_semi_consistent_read(Row &row) noexcept {
         version = row.m_cluster_rec;
 
         {
-          Phy_rec record{row.m_cluster_index, version};
+          PhyRec record{row.m_cluster_index, version};
 
           row.m_cluster_offsets =
             record.get_col_offsets(row.m_cluster_offsets, ULINT_UNDEFINED, &row.m_cluster_offset_heap, Current_location());
@@ -564,7 +564,7 @@ db_err Row_vers::build_for_semi_consistent_read(Row &row) noexcept {
 
       row.m_old_rec = version.copy(buf, row.m_cluster_offsets);
 
-      Rec_offs rec_offs(row.m_cluster_offsets);
+      RecOffs rec_offs(row.m_cluster_offsets);
       ut_d(row.m_old_rec.offs_make_valid(row.m_cluster_index, rec_offs));
 
       err = DB_SUCCESS;
@@ -576,7 +576,7 @@ db_err Row_vers::build_for_semi_consistent_read(Row &row) noexcept {
 
     heap = mem_heap_create(1024);
 
-    err = Trx_undo_record::prev_version_build(
+    err = TrxUndoRecord::prev_version_build(
       row.m_cluster_rec, row.m_mtr, version, row.m_cluster_index, row.m_cluster_offsets, heap, &prev_version
     );
 
@@ -600,7 +600,7 @@ db_err Row_vers::build_for_semi_consistent_read(Row &row) noexcept {
     version = prev_version;
 
     {
-      Phy_rec record{row.m_cluster_index, version};
+      PhyRec record{row.m_cluster_index, version};
 
       row.m_cluster_offsets =
         record.get_col_offsets(row.m_cluster_offsets, ULINT_UNDEFINED, &row.m_cluster_offset_heap, Current_location());

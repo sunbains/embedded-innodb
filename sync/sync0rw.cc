@@ -161,35 +161,35 @@ int64_t rw_x_exit_count = 0;
 
 /* The global list of rw-locks */
 rw_lock_list_t rw_lock_list{};
-mutex_t rw_lock_list_mutex;
+Mutex rw_lock_list_mutex;
 
 #ifdef UNIV_SYNC_DEBUG
 /** The global mutex which protects debug info lists of all rw-locks.
 To modify the debug info list of an rw-lock, this mutex has to be
 acquired in addition to the mutex protecting the lock. */
-mutex_t rw_lock_debug_mutex;
+Mutex rw_lock_debug_mutex;
 
 /** If deadlock detection does not get immediately the mutex,
 it may wait for this event */
-Cond_var *rw_lock_debug_event;
+CondVar *rw_lock_debug_event;
 
 /** This is set to true, if there may be waiters for the event */
 bool rw_lock_debug_waiters;
 
 /** Creates a debug info struct. */
-static rw_lock_debug_t *rw_lock_debug_create(void);
+static RwLockDebug *rw_lock_debug_create(void);
 
 /** Frees a debug info struct. */
-static void rw_lock_debug_free(rw_lock_debug_t *info);
+static void rw_lock_debug_free(RwLockDebug *info);
 
 /** Creates a debug info struct.
 @return	own: debug info struct */
-static rw_lock_debug_t *rw_lock_debug_create(void) {
-  return (rw_lock_debug_t *)mem_alloc(sizeof(rw_lock_debug_t));
+static RwLockDebug *rw_lock_debug_create(void) {
+  return (RwLockDebug *)mem_alloc(sizeof(RwLockDebug));
 }
 
 /** Frees a debug info struct. */
-static void rw_lock_debug_free(rw_lock_debug_t *info) {
+static void rw_lock_debug_free(RwLockDebug *info) {
   mem_free(info);
 }
 #endif /* UNIV_SYNC_DEBUG */
@@ -210,7 +210,7 @@ void rw_lock_var_init() {
 }
 
 void rw_lock_create_func(
-  rw_lock_t *lock, /*!< in: pointer to memory */
+  RwLock *lock, /*!< in: pointer to memory */
 #ifdef UNIV_DEBUG
 #ifdef UNIV_SYNC_DEBUG
   ulint level,
@@ -264,7 +264,7 @@ void rw_lock_create_func(
   mutex_exit(&rw_lock_list_mutex);
 }
 
-void rw_lock_free(rw_lock_t *lock) {
+void rw_lock_free(RwLock *lock) {
   ut_ad(rw_lock_validate(lock));
   ut_a(lock->m_lock_word == X_LOCK_DECR);
 
@@ -288,7 +288,7 @@ void rw_lock_free(rw_lock_t *lock) {
 }
 
 #ifdef UNIV_DEBUG
-bool rw_lock_validate(rw_lock_t *lock) {
+bool rw_lock_validate(RwLock *lock) {
   ut_a(lock != nullptr);
 
   ulint waiters = rw_lock_get_waiters(lock);
@@ -302,7 +302,7 @@ bool rw_lock_validate(rw_lock_t *lock) {
 }
 #endif /* UNIV_DEBUG */
 
-void rw_lock_s_lock_spin(rw_lock_t *lock, ulint pass, const char *file_name, ulint line) {
+void rw_lock_s_lock_spin(RwLock *lock, ulint pass, const char *file_name, ulint line) {
   ulint i{};
   ulint index; /* index of the reserved wait cell */
 
@@ -384,7 +384,7 @@ lock_loop:
   }
 }
 
-void rw_lock_x_lock_move_ownership(rw_lock_t *lock) {
+void rw_lock_x_lock_move_ownership(RwLock *lock) {
   ut_ad(rw_lock_is_locked(lock, RW_LOCK_EX));
 
   rw_lock_set_writer_id_and_recursion_flag(lock, true);
@@ -398,7 +398,7 @@ The caller must have already decremented lock_word by X_LOCK_DECR.
 @param[in] file_name            File name where lock requested
 @param[in] line                 Line where requested */
 inline void rw_lock_x_lock_wait(
-  rw_lock_t *lock,
+  RwLock *lock,
 #ifdef UNIV_SYNC_DEBUG
   ulint pass,
 #endif /* UNIV_SYNC_DEBUG */
@@ -462,7 +462,7 @@ inline void rw_lock_x_lock_wait(
 @param[in] file_name       File name where lock requested
 @param[in] line            Line in filen_ame where requested
 @return	RW_LOCK_NOT_LOCKED if did not succeed, RW_LOCK_EX if success. */
-inline bool rw_lock_x_lock_low(rw_lock_t *lock, ulint pass, const char *file_name, ulint line) {
+inline bool rw_lock_x_lock_low(RwLock *lock, ulint pass, const char *file_name, ulint line) {
   if (rw_lock_lock_word_decr(lock, X_LOCK_DECR)) {
 
     /* lock->m_recursive also tells us if the writer_thread
@@ -503,7 +503,7 @@ inline bool rw_lock_x_lock_low(rw_lock_t *lock, ulint pass, const char *file_nam
   return true;
 }
 
-void rw_lock_x_lock_func(rw_lock_t *lock, ulint pass, const char *file_name, ulint line) {
+void rw_lock_x_lock_func(RwLock *lock, ulint pass, const char *file_name, ulint line) {
   ulint i;
   ulint index;
   bool spinning{false};
@@ -618,7 +618,7 @@ void rw_lock_debug_mutex_exit(void) {
   }
 }
 
-void rw_lock_add_debug_info(rw_lock_t *lock, ulint pass, ulint lock_type, const char *file_name, ulint line) {
+void rw_lock_add_debug_info(RwLock *lock, ulint pass, ulint lock_type, const char *file_name, ulint line) {
   ut_ad(lock);
   ut_ad(file_name);
 
@@ -641,7 +641,7 @@ void rw_lock_add_debug_info(rw_lock_t *lock, ulint pass, ulint lock_type, const 
   }
 }
 
-void rw_lock_remove_debug_info(rw_lock_t *lock, ulint pass, ulint lock_type) {
+void rw_lock_remove_debug_info(RwLock *lock, ulint pass, ulint lock_type) {
   ut_ad(lock);
 
   if ((pass == 0) && (lock_type != RW_LOCK_WAIT_EX)) {
@@ -671,7 +671,7 @@ void rw_lock_remove_debug_info(rw_lock_t *lock, ulint pass, ulint lock_type) {
   ut_error;
 }
 
-bool rw_lock_own(rw_lock_t *lock, ulint lock_type) {
+bool rw_lock_own(RwLock *lock, ulint lock_type) {
   ut_ad(lock);
   ut_ad(rw_lock_validate(lock));
 
@@ -698,7 +698,7 @@ bool rw_lock_own(rw_lock_t *lock, ulint lock_type) {
 
 #endif /* UNIV_SYNC_DEBUG */
 
-bool rw_lock_is_locked(rw_lock_t *lock, ulint lock_type) {
+bool rw_lock_is_locked(RwLock *lock, ulint lock_type) {
   bool ret = false;
 
   ut_ad(lock);
@@ -721,9 +721,9 @@ bool rw_lock_is_locked(rw_lock_t *lock, ulint lock_type) {
 
 #ifdef UNIV_SYNC_DEBUG
 void rw_lock_list_print_info(ib_stream_t ib_stream) {
-  rw_lock_t *lock;
+  RwLock *lock;
   ulint count = 0;
-  rw_lock_debug_t *info;
+  RwLockDebug *info;
 
   mutex_enter(&rw_lock_list_mutex);
 
@@ -764,8 +764,8 @@ void rw_lock_list_print_info(ib_stream_t ib_stream) {
   mutex_exit(&rw_lock_list_mutex);
 }
 
-void rw_lock_print(rw_lock_t *lock) {
-  rw_lock_debug_t *info;
+void rw_lock_print(RwLock *lock) {
+  RwLockDebug *info;
 
   ib_logger(
     ib_stream,
@@ -791,7 +791,7 @@ void rw_lock_print(rw_lock_t *lock) {
   }
 }
 
-void rw_lock_debug_print(rw_lock_debug_t *info) {
+void rw_lock_debug_print(RwLockDebug *info) {
   auto rwt = info->lock_type;
 
   ib_logger(
@@ -816,7 +816,7 @@ void rw_lock_debug_print(rw_lock_debug_t *info) {
 }
 
 ulint rw_lock_n_locked() {
-  rw_lock_t *lock;
+  RwLock *lock;
   ulint count = 0;
 
   mutex_enter(&rw_lock_list_mutex);

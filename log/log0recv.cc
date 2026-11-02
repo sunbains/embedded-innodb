@@ -45,13 +45,13 @@ Created 9/20/1997 Heikki Tuuri
 
 /** Log records are stored in the hash table in chunks at most of this size;
 this must be less than UNIV_PAGE_SIZE as it is stored in the buffer pool */
-constexpr ulint RECV_DATA_BLOCK_SIZE = MEM_MAX_ALLOC_IN_BUF - sizeof(Log_record_data);
+constexpr ulint RECV_DATA_BLOCK_SIZE = MEM_MAX_ALLOC_IN_BUF - sizeof(LogRecordData);
 
 /** Read-ahead area in applying log records to file pages */
 constexpr ulint RECV_READ_AHEAD_AREA = 32;
 
 /** The recovery system */
-Recv_sys *recv_sys = nullptr;
+RecvSys *recv_sys = nullptr;
 
 /** true when applying redo log records during crash recovery; false
 otherwise.  Note that this is false while a background thread is
@@ -105,9 +105,9 @@ lsn_t recv_max_page_lsn;
  * @param[in,out] dblwr Doublewrite instance to use for recovery
  * @param[in] recovery The recovery flag.
  */
-void recv_start_crash_recovery(DBLWR *dblwr, ib_recovery_t recovery) noexcept;
+void recv_start_crash_recovery(Dblwr *dblwr, IbRecovery recovery) noexcept;
 
-static std::string to_string(const Recv_sys::Tablespace_map &log_records) noexcept {
+static std::string to_string(const RecvSys::Tablespace_map &log_records) noexcept {
   std::string str{};
 
   for (const auto &[space_id, log_records_map] : log_records) {
@@ -140,12 +140,12 @@ void recv_sys_var_init() noexcept {
   recv_max_page_lsn = 0;
 }
 
-Recv_sys::~Recv_sys() noexcept {
+RecvSys::~RecvSys() noexcept {
   mutex_free(&m_mutex);
   cleanup_resources();
 }
 
-void Recv_sys::cleanup_resources() noexcept {
+void RecvSys::cleanup_resources() noexcept {
   if (m_heap != nullptr) {
     mem_heap_free(m_heap);
     m_heap = nullptr;
@@ -162,11 +162,11 @@ void Recv_sys::cleanup_resources() noexcept {
   }
 }
 
-Recv_sys::Recv_sys() noexcept {
-  mutex_create(&recv_sys->m_mutex, IF_DEBUG("Recv_sys::m_mutex", ) IF_SYNC_DEBUG(SYNC_RECV, ) Current_location());
+RecvSys::RecvSys() noexcept {
+  mutex_create(&recv_sys->m_mutex, IF_DEBUG("RecvSys::m_mutex", ) IF_SYNC_DEBUG(SYNC_RECV, ) Current_location());
 }
 
-void Recv_sys::open(ulint available_memory) noexcept {
+void RecvSys::open(ulint available_memory) noexcept {
   mutex_enter(&m_mutex);
 
   ut_a(m_heap == nullptr);
@@ -192,7 +192,7 @@ void Recv_sys::open(ulint available_memory) noexcept {
   mutex_exit(&m_mutex);
 }
 
-void Recv_sys::clear_log_records() noexcept {
+void RecvSys::clear_log_records() noexcept {
   for (auto &[space, page_recs] : m_log_records) {
     for (auto &[page_no, recs] : page_recs) {
       for (auto recv = recs->m_rec_head; recv != nullptr; recv = recs->m_rec_head) {
@@ -207,7 +207,7 @@ void Recv_sys::clear_log_records() noexcept {
   m_log_records.clear();
 }
 
-void Recv_sys::reset() noexcept {
+void RecvSys::reset() noexcept {
   ut_ad(mutex_own(&m_mutex));
 
   if (m_n_log_records != 0) {
@@ -224,7 +224,7 @@ void Recv_sys::reset() noexcept {
   mem_heap_empty(m_heap);
 }
 
-void Recv_sys::close() noexcept {
+void RecvSys::close() noexcept {
   mutex_enter(&m_mutex);
   cleanup_resources();
   clear_log_records();
@@ -257,10 +257,10 @@ void Recv_sys::close() noexcept {
  *
  * @return	log record end, nullptr if not a complete record
  */
-byte *recv_parse_or_apply_log_rec_body(mlog_type_t type, byte *ptr, byte *end_ptr, Buf_block *block, mtr_t *mtr) noexcept {
+byte *recv_parse_or_apply_log_rec_body(MlogType type, byte *ptr, byte *end_ptr, BufBlock *block, Mtr *mtr) noexcept {
   page_t *page{};
   Index *index{};
-  ut_d(Fil_page_type page_type{FIL_PAGE_TYPE_ALLOCATED});
+  ut_d(FilPageType page_type{FIL_PAGE_TYPE_ALLOCATED});
 
   ut_ad(!block == !mtr);
 
@@ -309,24 +309,24 @@ byte *recv_parse_or_apply_log_rec_body(mlog_type_t type, byte *ptr, byte *end_pt
       ut_ad(page == nullptr || page_type == FIL_PAGE_TYPE_INDEX);
 
       if ((ptr = mlog_parse_index(ptr, end_ptr, index)) != nullptr) {
-        ptr = Page_cursor::parse_insert_rec(false, ptr, end_ptr, block, index, mtr);
+        ptr = PageCursor::parse_insert_rec(false, ptr, end_ptr, block, index, mtr);
       }
       break;
     case MLOG_REC_CLUST_DELETE_MARK:
       ut_ad(page == nullptr || page_type == FIL_PAGE_TYPE_INDEX);
 
       if ((ptr = mlog_parse_index(ptr, end_ptr, index)) != nullptr) {
-        ptr = Btree_cursor::parse_del_mark_set_clust_rec(ptr, end_ptr, page, index);
+        ptr = BtreeCursor::parse_del_mark_set_clust_rec(ptr, end_ptr, page, index);
       }
     case MLOG_REC_SEC_DELETE_MARK:
       ut_ad(page == nullptr || page_type == FIL_PAGE_TYPE_INDEX);
-      ptr = Btree_cursor::parse_del_mark_set_sec_rec(ptr, end_ptr, page);
+      ptr = BtreeCursor::parse_del_mark_set_sec_rec(ptr, end_ptr, page);
       break;
     case MLOG_REC_UPDATE_IN_PLACE:
       ut_ad(page == nullptr || page_type == FIL_PAGE_TYPE_INDEX);
 
       if ((ptr = mlog_parse_index(ptr, end_ptr, index)) != nullptr) {
-        ptr = Btree_cursor::parse_update_in_place(ptr, end_ptr, page, index);
+        ptr = BtreeCursor::parse_update_in_place(ptr, end_ptr, page, index);
       }
       break;
     case MLOG_LIST_END_DELETE:
@@ -341,7 +341,7 @@ byte *recv_parse_or_apply_log_rec_body(mlog_type_t type, byte *ptr, byte *end_pt
       ut_ad(page == nullptr || page_type == FIL_PAGE_TYPE_INDEX);
 
       if ((ptr = mlog_parse_index(ptr, end_ptr, index)) != nullptr) {
-        ptr = Page_cursor::parse_copy_rec_list_to_created_page(ptr, end_ptr, block, index, mtr);
+        ptr = PageCursor::parse_copy_rec_list_to_created_page(ptr, end_ptr, block, index, mtr);
       }
       break;
     case MLOG_PAGE_REORGANIZE:
@@ -359,11 +359,11 @@ byte *recv_parse_or_apply_log_rec_body(mlog_type_t type, byte *ptr, byte *end_pt
       break;
     case MLOG_UNDO_INSERT:
       ut_ad(page == nullptr || page_type == FIL_PAGE_TYPE_UNDO_LOG);
-      ptr = Trx_undo_record::parse_add_undo_rec(ptr, end_ptr, page);
+      ptr = TrxUndoRecord::parse_add_undo_rec(ptr, end_ptr, page);
       break;
     case MLOG_UNDO_ERASE_END:
       ut_ad(page == nullptr || page_type == FIL_PAGE_TYPE_UNDO_LOG);
-      ptr = Trx_undo_record::parse_erase_page_end(ptr, end_ptr, page, mtr);
+      ptr = TrxUndoRecord::parse_erase_page_end(ptr, end_ptr, page, mtr);
       break;
     case MLOG_UNDO_INIT:
       /* Allow anything in page_type when creating a page. */
@@ -386,7 +386,7 @@ byte *recv_parse_or_apply_log_rec_body(mlog_type_t type, byte *ptr, byte *end_pt
       ut_ad(!page || page_type == FIL_PAGE_TYPE_INDEX);
 
       if ((ptr = mlog_parse_index(ptr, end_ptr, index)) != nullptr) {
-        ptr = Page_cursor::parse_delete_rec(ptr, end_ptr, block, index, mtr);
+        ptr = PageCursor::parse_delete_rec(ptr, end_ptr, block, index, mtr);
       }
       break;
     case MLOG_INIT_FILE_PAGE:
@@ -425,7 +425,7 @@ byte *recv_parse_or_apply_log_rec_body(mlog_type_t type, byte *ptr, byte *end_pt
  *
  * @return	file address struct, nullptr if not found from the hash table
  */
-static Page_log_records *recv_get_log_record(space_id_t space, page_no_t page_no) noexcept {
+static PageLogRecords *recv_get_log_record(space_id_t space, page_no_t page_no) noexcept {
   auto space_it = recv_sys->m_log_records.find(space);
 
   if (space_it == recv_sys->m_log_records.end()) {
@@ -438,8 +438,8 @@ static Page_log_records *recv_get_log_record(space_id_t space, page_no_t page_no
   return page_it == page_map.end() ? nullptr : page_it->second;
 }
 
-void Recv_sys::add_log_record(
-  mlog_type_t type, space_id_t space, page_no_t page_no, byte *body, byte *rec_end, lsn_t start_lsn, lsn_t end_lsn
+void RecvSys::add_log_record(
+  MlogType type, space_id_t space, page_no_t page_no, byte *body, byte *rec_end, lsn_t start_lsn, lsn_t end_lsn
 ) noexcept {
   if (srv_fil->tablespace_deleted_or_being_deleted_in_mem(space, -1)) {
     /* The tablespace does not exist any more: do not store the
@@ -448,9 +448,9 @@ void Recv_sys::add_log_record(
     return;
   }
 
-  auto recv = reinterpret_cast<Log_record *>(mem_heap_alloc(m_heap, sizeof(Log_record)));
+  auto recv = reinterpret_cast<LogRecord *>(mem_heap_alloc(m_heap, sizeof(LogRecord)));
 
-  new (recv) Log_record();
+  new (recv) LogRecord();
 
   recv->m_type = type;
   recv->m_end_lsn = end_lsn;
@@ -460,9 +460,9 @@ void Recv_sys::add_log_record(
   auto log_record = recv_get_log_record(space, page_no);
 
   if (log_record == nullptr) {
-    log_record = reinterpret_cast<Page_log_records *>(mem_heap_alloc(m_heap, sizeof(Page_log_records)));
+    log_record = reinterpret_cast<PageLogRecords *>(mem_heap_alloc(m_heap, sizeof(PageLogRecords)));
 
-    new (log_record) Page_log_records();
+    new (log_record) PageLogRecords();
 
     log_record->m_rec_head = recv;
     log_record->m_rec_tail = recv;
@@ -485,7 +485,7 @@ void Recv_sys::add_log_record(
 
   while (rec_end > body) {
     const auto len = std::min(ulint(rec_end - body), ulint(RECV_DATA_BLOCK_SIZE));
-    auto recv_data = reinterpret_cast<Log_record_data *>(mem_heap_alloc(m_heap, sizeof(Log_record_data) + len));
+    auto recv_data = reinterpret_cast<LogRecordData *>(mem_heap_alloc(m_heap, sizeof(LogRecordData) + len));
     *prev_field = recv_data;
     memcpy(recv_data + 1, body, len);
     prev_field = &recv_data->m_next;
@@ -500,21 +500,21 @@ void Recv_sys::add_log_record(
  * @param buf The buffer to copy the log record body to.
  * @param recv The log record.
  */
-static void recv_data_copy_to_buf(byte *buf, Log_record *recv) noexcept {
+static void recv_data_copy_to_buf(byte *buf, LogRecord *recv) noexcept {
   auto len = recv->m_len;
   auto recv_data = recv->m_data;
 
   while (len > 0) {
     const auto part_len = (len > RECV_DATA_BLOCK_SIZE) ? RECV_DATA_BLOCK_SIZE : len;
-    memcpy(buf, reinterpret_cast<byte *>(recv_data) + sizeof(Log_record_data), part_len);
+    memcpy(buf, reinterpret_cast<byte *>(recv_data) + sizeof(LogRecordData), part_len);
     buf += part_len;
     len -= part_len;
     recv_data = recv_data->m_next;
   }
 }
 
-void recv_recover_page(bool just_read_in, Buf_block *block) noexcept {
-  mtr_t mtr;
+void recv_recover_page(bool just_read_in, BufBlock *block) noexcept {
+  Mtr mtr;
 
   mutex_enter(&recv_sys->m_mutex);
 
@@ -558,7 +558,7 @@ void recv_recover_page(bool just_read_in, Buf_block *block) noexcept {
     rw_lock_x_lock_move_ownership(&block->m_rw_lock);
   }
 
-  Buf_pool::Request req{
+  BufPool::Request req{
     .m_rw_latch = RW_X_LATCH, .m_guess = block, .m_mode = BUF_KEEP_OLD, .m_file = __FILE__, .m_line = __LINE__, .m_mtr = &mtr
   };
 
@@ -596,7 +596,7 @@ void recv_recover_page(bool just_read_in, Buf_block *block) noexcept {
       ptr = buf = static_cast<byte *>(mem_alloc(recv->m_len));
       recv_data_copy_to_buf(buf, recv);
     } else {
-      buf = reinterpret_cast<byte *>(recv->m_data) + sizeof(Log_record_data);
+      buf = reinterpret_cast<byte *>(recv->m_data) + sizeof(LogRecordData);
     }
 
     if (recv->m_type == MLOG_INIT_FILE_PAGE) {
@@ -672,7 +672,7 @@ static ulint recv_read_in_area(space_id_t space, page_no_t start_page_no) noexce
   for (auto page_no = low_limit; page_no < low_limit + RECV_READ_AHEAD_AREA; ++page_no) {
     auto log_record = recv_get_log_record(space, page_no);
 
-    if (log_record != nullptr && !srv_buf_pool->peek(Page_id(space, page_no))) {
+    if (log_record != nullptr && !srv_buf_pool->peek(PageId(space, page_no))) {
 
       mutex_enter(&recv_sys->m_mutex);
 
@@ -688,12 +688,12 @@ static ulint recv_read_in_area(space_id_t space, page_no_t start_page_no) noexce
     }
   }
 
-  buf_read_recv_pages(false, Page_id(space, 0), page_nos.data(), n);
+  buf_read_recv_pages(false, PageId(space, 0), page_nos.data(), n);
 
   return n;
 }
 
-void recv_apply_log_recs(DBLWR *dblwr, bool flush_and_free_pages) noexcept {
+void recv_apply_log_recs(Dblwr *dblwr, bool flush_and_free_pages) noexcept {
   for (;;) {
     mutex_enter(&recv_sys->m_mutex);
 
@@ -728,13 +728,13 @@ void recv_apply_log_recs(DBLWR *dblwr, bool flush_and_free_pages) noexcept {
 
         mutex_exit(&recv_sys->m_mutex);
 
-        if (srv_buf_pool->peek(Page_id(space_id, page_no))) {
+        if (srv_buf_pool->peek(PageId(space_id, page_no))) {
 
-          mtr_t mtr;
+          Mtr mtr;
 
           mtr.start();
 
-          Buf_pool::Request req{
+          BufPool::Request req{
             .m_rw_latch = RW_X_LATCH,
             .m_page_id = {space_id, page_no},
             .m_mode = BUF_GET,
@@ -821,7 +821,7 @@ void recv_apply_log_recs(DBLWR *dblwr, bool flush_and_free_pages) noexcept {
  * @return	length of the record, or 0 if the record was not complete
  */
 static ulint recv_parse_log_rec(
-  byte *ptr, byte *end_ptr, mlog_type_t *type, space_id_t *space, page_no_t *page_no, byte **body
+  byte *ptr, byte *end_ptr, MlogType *type, space_id_t *space, page_no_t *page_no, byte **body
 ) noexcept {
   *body = nullptr;
 
@@ -832,13 +832,13 @@ static ulint recv_parse_log_rec(
 
   if (*ptr == MLOG_MULTI_REC_END) {
 
-    *type = static_cast<mlog_type_t>(*ptr);
+    *type = static_cast<MlogType>(*ptr);
 
     return 1;
   }
 
   if (*ptr == MLOG_DUMMY_RECORD) {
-    *type = static_cast<mlog_type_t>(*ptr);
+    *type = static_cast<MlogType>(*ptr);
 
     *space = ULINT32_UNDEFINED - 1; /* For debugging */
 
@@ -875,13 +875,13 @@ static ulint recv_parse_log_rec(
  * @param len The length of the data added, excluding log block headers.
  */
 static lsn_t recv_calc_lsn_on_data_add(lsn_t lsn, uint64_t len) noexcept {
-  auto frag_len = (ulint(lsn) % IB_FILE_BLOCK_SIZE) - Log_phy_block::HEADER_SIZE;
+  auto frag_len = (ulint(lsn) % IB_FILE_BLOCK_SIZE) - LogPhyBlock::HEADER_SIZE;
 
-  ut_ad(frag_len < IB_FILE_BLOCK_SIZE - Log_phy_block::HEADER_SIZE - Log_phy_block::TRAILER_SIZE);
+  ut_ad(frag_len < IB_FILE_BLOCK_SIZE - LogPhyBlock::HEADER_SIZE - LogPhyBlock::TRAILER_SIZE);
   auto lsn_len = ulint(len);
 
-  lsn_len += (lsn_len + frag_len) / (IB_FILE_BLOCK_SIZE - Log_phy_block::HEADER_SIZE - Log_phy_block::TRAILER_SIZE) *
-             (Log_phy_block::HEADER_SIZE + Log_phy_block::TRAILER_SIZE);
+  lsn_len += (lsn_len + frag_len) / (IB_FILE_BLOCK_SIZE - LogPhyBlock::HEADER_SIZE - LogPhyBlock::TRAILER_SIZE) *
+             (LogPhyBlock::HEADER_SIZE + LogPhyBlock::TRAILER_SIZE);
 
   return lsn + lsn_len;
 }
@@ -948,7 +948,7 @@ bool recv_parse_log_recs(bool store_to_hash) noexcept {
   ulint len;
   lsn_t old_lsn;
   ulint total_len;
-  mlog_type_t type;
+  MlogType type;
   byte *body;
   space_id_t space;
   page_no_t page_no;
@@ -1104,7 +1104,7 @@ bool recv_parse_log_recs(bool store_to_hash) noexcept {
  *
  * @return	true if more data added
  */
-[[maybe_unused]] static bool recv_sys_add_to_parsing_buf(const Log_phy_block *log_block, lsn_t scanned_lsn) noexcept {
+[[maybe_unused]] static bool recv_sys_add_to_parsing_buf(const LogPhyBlock *log_block, lsn_t scanned_lsn) noexcept {
   ulint more_len;
 
   ut_ad(scanned_lsn >= recv_sys->m_scanned_lsn);
@@ -1141,14 +1141,14 @@ bool recv_parse_log_recs(bool store_to_hash) noexcept {
 
   auto start_offset = data_len - more_len;
 
-  if (start_offset < Log_phy_block::HEADER_SIZE) {
-    start_offset = Log_phy_block::HEADER_SIZE;
+  if (start_offset < LogPhyBlock::HEADER_SIZE) {
+    start_offset = LogPhyBlock::HEADER_SIZE;
   }
 
   auto end_offset = data_len;
 
-  if (end_offset > IB_FILE_BLOCK_SIZE - Log_phy_block::TRAILER_SIZE) {
-    end_offset = IB_FILE_BLOCK_SIZE - Log_phy_block::TRAILER_SIZE;
+  if (end_offset > IB_FILE_BLOCK_SIZE - LogPhyBlock::TRAILER_SIZE) {
+    end_offset = IB_FILE_BLOCK_SIZE - LogPhyBlock::TRAILER_SIZE;
   }
 
   ut_ad(start_offset <= end_offset);
@@ -1198,8 +1198,8 @@ bool recv_parse_log_recs(bool store_to_hash) noexcept {
  * @return true if limit_lsn has been reached, or not able to scan any more in this log group.
  */
 [[maybe_unused]] static bool recv_scan_log_recs(
-  [[maybe_unused]] DBLWR *dblwr, [[maybe_unused]] ib_recovery_t recovery, [[maybe_unused]] ulint available_memory,
-  [[maybe_unused]] bool store_to_hash, [[maybe_unused]] const Log_phy_block *buf, [[maybe_unused]] ulint len,
+  [[maybe_unused]] Dblwr *dblwr, [[maybe_unused]] IbRecovery recovery, [[maybe_unused]] ulint available_memory,
+  [[maybe_unused]] bool store_to_hash, [[maybe_unused]] const LogPhyBlock *buf, [[maybe_unused]] ulint len,
   [[maybe_unused]] lsn_t start_lsn, [[maybe_unused]] lsn_t *contiguous_lsn, lsn_t *scanned_upto_lsn
 ) noexcept {
   *scanned_upto_lsn = start_lsn;
@@ -1216,10 +1216,10 @@ bool recv_parse_log_recs(bool store_to_hash) noexcept {
  * @param[in] contiguous_lsn The LSN up to which the log data is known to be contiguous.
  *
  */
-[[maybe_unused]] static void recv_group_scan_log_recs([[maybe_unused]] DBLWR *dblwr, [[maybe_unused]] ib_recovery_t recovery, [[maybe_unused]] lsn_t *contiguous_lsn) noexcept {
+[[maybe_unused]] static void recv_group_scan_log_recs([[maybe_unused]] Dblwr *dblwr, [[maybe_unused]] IbRecovery recovery, [[maybe_unused]] lsn_t *contiguous_lsn) noexcept {
 }
 
-void recv_start_crash_recovery(DBLWR *dblwr, ib_recovery_t recovery) noexcept {
+void recv_start_crash_recovery(Dblwr *dblwr, IbRecovery recovery) noexcept {
   ut_a(!recv_needed_recovery);
 
   recv_needed_recovery = true;
@@ -1235,7 +1235,7 @@ void recv_start_crash_recovery(DBLWR *dblwr, ib_recovery_t recovery) noexcept {
  * @param checkpoint_lsn The checkpoint LSN.
  * @param max_flushed_lsn The maximum flushed LSN from data files.
  */
-[[maybe_unused]] static void recv_init_crash_recovery(DBLWR *dblwr, ib_recovery_t recovery, lsn_t checkpoint_lsn, lsn_t max_flushed_lsn) noexcept {
+[[maybe_unused]] static void recv_init_crash_recovery(Dblwr *dblwr, IbRecovery recovery, lsn_t checkpoint_lsn, lsn_t max_flushed_lsn) noexcept {
   /* NOTE: we always do a 'recovery' at startup, but only if there is something wrong we
   will print a message to the user about recovery: */
 
@@ -1270,12 +1270,12 @@ void recv_start_crash_recovery(DBLWR *dblwr, ib_recovery_t recovery) noexcept {
   }
 }
 
-db_err recv_recovery_from_checkpoint_start(DBLWR *dblwr, ib_recovery_t recovery, lsn_t max_flushed_lsn) noexcept {
+DbErr recv_recovery_from_checkpoint_start(Dblwr *dblwr, IbRecovery recovery, lsn_t max_flushed_lsn) noexcept {
   ut_a(recv_sys == nullptr);
 
-  recv_sys = static_cast<Recv_sys *>(mem_alloc(sizeof(Recv_sys)));
+  recv_sys = static_cast<RecvSys *>(mem_alloc(sizeof(RecvSys)));
 
-  new (recv_sys) Recv_sys();
+  new (recv_sys) RecvSys();
 
   recv_sys->open(srv_buf_pool->get_curr_size());
 
@@ -1346,7 +1346,7 @@ db_err recv_recovery_from_checkpoint_start(DBLWR *dblwr, ib_recovery_t recovery,
   return DB_SUCCESS;
 }
 
-void recv_recovery_from_checkpoint_finish(DBLWR *dblwr, ib_recovery_t recovery) noexcept {
+void recv_recovery_from_checkpoint_finish(Dblwr *dblwr, IbRecovery recovery) noexcept {
   /* Apply the hashed log records to the respective file pages */
 
   if (recovery < IB_RECOVERY_NO_LOG_REDO) {
@@ -1407,8 +1407,8 @@ void recv_recovery_rollback_active() noexcept {
   sync_order_checks_on = true;
 #endif
 
-  (void)srv_dict_sys->m_ddl.drop_all_temp_indexes(ib_recovery_t(srv_config.m_force_recovery));
-  (void)srv_dict_sys->m_ddl.drop_all_temp_tables(ib_recovery_t(srv_config.m_force_recovery));
+  (void)srv_dict_sys->m_ddl.drop_all_temp_indexes(IbRecovery(srv_config.m_force_recovery));
+  (void)srv_dict_sys->m_ddl.drop_all_temp_tables(IbRecovery(srv_config.m_force_recovery));
 
   if (srv_config.m_force_recovery < IB_RECOVERY_NO_TRX_UNDO) {
     /* Rollback the uncommitted transactions which have no user
@@ -1422,7 +1422,7 @@ void recv_reset_logs([[maybe_unused]] lsn_t lsn, [[maybe_unused]] bool new_logs_
   /* Stub implementation */
 }
 
-std::string to_string(Recv_addr_state s) noexcept {
+std::string to_string(RecvAddrState s) noexcept {
   switch (s) {
     case RECV_UNKNOWN:
       return "RECV_UNKNOWN";
@@ -1440,11 +1440,11 @@ std::string to_string(Recv_addr_state s) noexcept {
   }
 }
 
-std::string Log_record_data::to_string() const noexcept {
+std::string LogRecordData::to_string() const noexcept {
   return std::format("FIXME");
 }
 
-std::string Log_record::to_string() const noexcept {
+std::string LogRecord::to_string() const noexcept {
   return std::format(
     "m_type: {}, : {}, m_start_lsn: {}, m_end_lsn: {}, data: {}",
     mlog_type_str(m_type),
@@ -1455,7 +1455,7 @@ std::string Log_record::to_string() const noexcept {
   );
 }
 
-std::string Page_log_records::to_string() const noexcept {
+std::string PageLogRecords::to_string() const noexcept {
   std::string str{};
 
   for (auto lr = m_rec_head; lr != nullptr; lr = lr->m_next) {
@@ -1466,7 +1466,7 @@ std::string Page_log_records::to_string() const noexcept {
   return str;
 }
 
-std::string Recv_sys::to_string() const noexcept {
+std::string RecvSys::to_string() const noexcept {
   std::string str = std::format(
     "m_parse_start_lsn: {}, m_scanned_lsn: {}, m_recovered_lsn: {}, m_scanned_checkpoint_no: {},"
     " m_recovered_offset: {}, m_len: {}, m_limit_lsn: {}, m_apply_log_recs: {}, m_apply_batch_on:"

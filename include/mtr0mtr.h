@@ -37,17 +37,17 @@ Created 11/26/1995 Heikki Tuuri
 #include "ut0byte.h"
 
 /* Mini-transaction handle and buffer */
-struct mtr_t {
+struct Mtr {
 #ifdef UNIV_DEBUG
   /** Destructor to check for dangling mtrs. */
-  ~mtr_t() noexcept { ut_a(m_state == MTR_UNDEFINED || m_state == MTR_COMMITTED); }
+  ~Mtr() noexcept { ut_a(m_state == MTR_UNDEFINED || m_state == MTR_COMMITTED); }
 #endif /* UNIV_DEBUG */
   /**
    * @brief Starts a mini-transaction and creates a mini-transaction handle and a buffer in the memory buffer given by the caller.
    *
    * @return mtr buffer which also acts as the mtr handle.
    */
-  inline mtr_t *start() noexcept {
+  inline Mtr *start() noexcept {
     m_log_mode = MTR_LOG_ALL;
     m_modifications = false;
     m_n_log_recs = 0;
@@ -96,7 +96,7 @@ struct mtr_t {
    * @param[in] savepoint       The savepoint.
    * @param[in] block           The block to release.
    */
-  void release_block_at_savepoint(ulint savepoint, Buf_block *block) noexcept;
+  void release_block_at_savepoint(ulint savepoint, BufBlock *block) noexcept;
 
   /**
    * @brief Releases an object in the memo stack.
@@ -112,13 +112,13 @@ struct mtr_t {
    * @param[in] object          The object.
    * @param[in] type            The object type: MTR_MEMO_S_LOCK, ...
    */
-  void memo_push(void *object, mtr_memo_type_t type) noexcept {
+  void memo_push(void *object, MtrMemoType type) noexcept {
     ut_ad(type >= MTR_MEMO_PAGE_S_FIX);
     ut_ad(type <= MTR_MEMO_X_LOCK);
     ut_ad(m_magic_n == MTR_MAGIC_N);
     ut_ad(m_state == MTR_ACTIVE);
 
-    auto slot = reinterpret_cast<mtr_memo_slot_t *>(m_memo.push(sizeof(mtr_memo_slot_t)));
+    auto slot = reinterpret_cast<MtrMemoSlot *>(m_memo.push(sizeof(MtrMemoSlot)));
 
     slot->m_type = type;
     slot->m_object = object;
@@ -150,13 +150,13 @@ struct mtr_t {
    * @param[in] savepoint       The savepoint.
    * @param[in] lock            The latch to release.
    */
-  void release_s_latch_at_savepoint(ulint savepoint, rw_lock_t *lock) const noexcept {
+  void release_s_latch_at_savepoint(ulint savepoint, RwLock *lock) const noexcept {
     ut_ad(m_magic_n == MTR_MAGIC_N);
     ut_ad(m_state == MTR_ACTIVE);
 
     ut_ad(m_memo.get_data_size() > savepoint);
 
-    auto slot = static_cast<mtr_memo_slot_t *>(m_memo.get_element(savepoint));
+    auto slot = static_cast<MtrMemoSlot *>(m_memo.get_element(savepoint));
 
     ut_ad(slot->m_object == lock);
     ut_ad(slot->m_type == MTR_MEMO_S_LOCK);
@@ -172,7 +172,7 @@ struct mtr_t {
    * @param mtr The mtr.
    * @return Logging mode: MTR_LOG_NONE, ...
    */
-  [[nodiscard]] mtr_log_mode_t get_log_mode() const noexcept {
+  [[nodiscard]] MtrLogMode get_log_mode() const noexcept {
     ut_ad(m_log_mode >= MTR_LOG_ALL);
     ut_ad(m_log_mode <= MTR_LOG_SHORT_INSERTS);
 
@@ -186,7 +186,7 @@ struct mtr_t {
    * @param mode Logging mode: MTR_LOG_NONE, ...
    * @return Old mode.
    */
-  [[nodiscard]] mtr_log_mode_t set_log_mode(mtr_log_mode_t mode) noexcept {
+  [[nodiscard]] MtrLogMode set_log_mode(MtrLogMode mode) noexcept {
     ut_ad(mode >= MTR_LOG_ALL);
     ut_ad(mode <= MTR_LOG_SHORT_INSERTS);
 
@@ -211,7 +211,7 @@ struct mtr_t {
    * @param[in] file            The file name.
    * @param[in] line            The line number.
    */
-  void s_lock_func(rw_lock_t *lock, const char *file, ulint line) {
+  void s_lock_func(RwLock *lock, const char *file, ulint line) {
     rw_lock_s_lock_func(lock, 0, file, line);
 
     memo_push(lock, MTR_MEMO_S_LOCK);
@@ -224,7 +224,7 @@ struct mtr_t {
    * @param[in] file            The file name.
    * @param[in] line The line number.
    */
-  inline void x_lock_func(rw_lock_t *lock, const char *file, ulint line) {
+  inline void x_lock_func(RwLock *lock, const char *file, ulint line) {
     rw_lock_x_lock_func(lock, 0, file, line);
 
     memo_push(lock, MTR_MEMO_X_LOCK);
@@ -264,9 +264,9 @@ struct mtr_t {
     auto offset = m_memo.get_data_size();
 
     while (offset > 0) {
-      offset -= sizeof(mtr_memo_slot_t);
+      offset -= sizeof(MtrMemoSlot);
 
-      auto slot = static_cast<mtr_memo_slot_t *>(m_memo.get_element(offset));
+      auto slot = static_cast<MtrMemoSlot *>(m_memo.get_element(offset));
 
       if (object == slot->m_object && type == slot->m_type) {
         return true;
@@ -290,7 +290,7 @@ struct mtr_t {
   void disable_redo_logging() noexcept;
 
   /** Mini-transaction state. */
-  mtr_state_t m_state{MTR_UNDEFINED};
+  MtrState m_state{MTR_UNDEFINED};
 
   /** True if the doublewrite is being created. */
   bool m_dblwr_create_in_progress{};
@@ -299,7 +299,7 @@ struct mtr_t {
   bool m_modifications;
 
   /** Specifies which operations should be logged. */
-  mtr_log_mode_t m_log_mode{MTR_LOG_ALL};
+  MtrLogMode m_log_mode{MTR_LOG_ALL};
 
   /** Count of how many page initial log records have been written to the mtr log */
   uint32_t m_n_log_recs;

@@ -30,7 +30,7 @@ Created September 2006 Marko Makela
 @param[in,out] ext              Column prefix cache
 @param[in] i                    Index of ext->extp[]
 @paramp[in] dfield              Data field. */
-static void row_ext_cache_fill(row_ext_t *ext, ulint i, const dfield_t *dfield) {
+static void row_ext_cache_fill(RowExt *ext, ulint i, const Dfield *dfield) {
   Blob blob(srv_fsp, srv_btree_sys);
   auto field = (const byte *)dfield_get_data(dfield);
   auto f_len = dfield_get_len(dfield);
@@ -54,8 +54,8 @@ static void row_ext_cache_fill(row_ext_t *ext, ulint i, const dfield_t *dfield) 
   }
 }
 
-row_ext_t *row_ext_create(ulint n_ext, const ulint *ext, const DTuple *tuple, mem_heap_t *heap) {
-  auto row_ext = reinterpret_cast<row_ext_t *>(mem_heap_alloc(heap, (sizeof(row_ext_t)) + (n_ext - 1) * sizeof(row_ext_t::len)));
+RowExt *row_ext_create(ulint n_ext, const ulint *ext, const DTuple *tuple, MemHeap *heap) {
+  auto row_ext = reinterpret_cast<RowExt *>(mem_heap_alloc(heap, (sizeof(RowExt)) + (n_ext - 1) * sizeof(RowExt::len)));
 
   row_ext->n_ext = n_ext;
   row_ext->ext = ext;

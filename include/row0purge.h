@@ -41,8 +41,8 @@ Created 3/14/1997 Heikki Tuuri
  * of obsolete records from both clustered and secondary indexes. It processes
  * undo log records to determine which records need to be purged.
  */
-struct Row_purge {
-  Row_purge() : m_pcur(srv_fsp, srv_btree_sys) {}
+struct RowPurge {
+  RowPurge() : m_pcur(srv_fsp, srv_btree_sys) {}
 
   /**
    * @brief Repositions the persistent cursor to the clustered index record.
@@ -55,7 +55,7 @@ struct Row_purge {
    * @param mtr Mini-transaction for the operation
    * @return true if the record was found and cursor positioned, false otherwise
    */
-  bool reposition_pcur(ulint latch_mode, mtr_t *mtr);
+  bool reposition_pcur(ulint latch_mode, Mtr *mtr);
 
   /**
    * @brief Attempts to remove a clustered index record with specified mode.
@@ -135,7 +135,7 @@ struct Row_purge {
    * @param thr Query execution thread
    * @return true if purge processing is needed, false if record can be skipped
    */
-  bool parse_undo_rec(bool *updated_extern, que_thr_t *thr);
+  bool parse_undo_rec(bool *updated_extern, QueThr *thr);
 
   /**
    * @brief Performs the main purge operation for a single undo log record.
@@ -147,12 +147,12 @@ struct Row_purge {
    * @param thr Query execution thread
    * @return DB_SUCCESS on successful completion
    */
-  ulint purge(que_thr_t *thr);
+  ulint purge(QueThr *thr);
 
   /**
    * @brief Creates a new purge node for query execution.
    *
-   * Allocates and initializes a new Row_purge node with the specified parent
+   * Allocates and initializes a new RowPurge node with the specified parent
    * thread and memory heap. Sets up the node for integration into the query
    * execution graph.
    *
@@ -160,7 +160,7 @@ struct Row_purge {
    * @param heap Memory heap for allocation
    * @return Pointer to the newly created purge node
    */
-  static Row_purge *node_create(que_thr_t *parent, mem_heap_t *heap);
+  static RowPurge *node_create(QueThr *parent, MemHeap *heap);
 
   /**
    * @brief Executes one step of the purge operation.
@@ -171,10 +171,10 @@ struct Row_purge {
    * @param thr Query execution thread
    * @return Query thread to run next
    */
-  static que_thr_t *step(que_thr_t *thr);
+  static QueThr *step(QueThr *thr);
 
   /** node type: QUE_NODE_PURGE */
-  que_common_t m_common;
+  QueCommon m_common;
 
   /*----------------------*/
   /* Local storage for this graph node */
@@ -183,10 +183,10 @@ struct Row_purge {
   roll_ptr_t m_roll_ptr;
 
   /** undo log record */
-  Trx_undo_record m_undo_rec;
+  TrxUndoRecord m_undo_rec;
 
   /** reservation for the undo log record in the purge array */
-  trx_undo_inf_t *m_reservation;
+  TrxUndoInf *m_reservation;
 
   /** undo number of the record */
   undo_no_t m_undo_no;
@@ -195,7 +195,7 @@ struct Row_purge {
   ulint m_rec_type;
 
   /** persistent cursor used in searching the clustered index record */
-  Btree_pcursor m_pcur;
+  BtreePcursor m_pcur;
 
   /* true if the clustered index record determined by ref was found in the clustered index, and we were able to position pcur on it */
   bool m_found_clust;
@@ -207,7 +207,7 @@ struct Row_purge {
   ulint m_cmpl_info;
 
   /** update vector for a clustered index record */
-  upd_t *m_update;
+  Upd *m_update;
 
   /** nullptr, or row reference to the next row to handle */
   DTuple *m_ref;
@@ -219,21 +219,21 @@ struct Row_purge {
   Index *m_index;
 
   /** memory heap used as auxiliary storage for row; this must be emptied after a successful purge of a row */
-  mem_heap_t *m_heap;
+  MemHeap *m_heap;
 };
 
 /**
  * @brief Creates a purge node for integration into a query graph.
  *
- * This is a C-style wrapper function that creates a Row_purge node
- * and returns it as a Row_purge pointer for compatibility with
+ * This is a C-style wrapper function that creates a RowPurge node
+ * and returns it as a RowPurge pointer for compatibility with
  * the existing query execution framework.
  *
  * @param parent Parent query thread node
  * @param heap Memory heap for allocation
  * @return Pointer to the newly created purge node
  */
-Row_purge *row_purge_node_create(que_thr_t *parent, mem_heap_t *heap);
+RowPurge *row_purge_node_create(QueThr *parent, MemHeap *heap);
 
 /**
  * @brief Executes one purge operation step in the query execution graph.
@@ -245,4 +245,4 @@ Row_purge *row_purge_node_create(que_thr_t *parent, mem_heap_t *heap);
  * @param thr Query execution thread
  * @return Query thread to run next, or nullptr if no more work
  */
-que_thr_t *row_purge_step(que_thr_t *thr);
+QueThr *row_purge_step(QueThr *thr);

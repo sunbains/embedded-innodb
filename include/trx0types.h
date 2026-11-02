@@ -44,51 +44,51 @@ constexpr ulint TRX_ID_MAX_LEN = 17;
 struct Trx;
 
 /** Transaction system */
-struct Trx_sys;
+struct TrxSys;
 
 /** Doublewrite information */
-struct DBLWR;
+struct Dblwr;
 
 /** Signal */
-struct trx_sig_t;
+struct TrxSig;
 
 /** Rollback segment */
-struct Trx_rseg;
+struct TrxRseg;
 
 /** Transaction undo log */
-struct trx_undo_t;
+struct TrxUndo;
 
 /** Array of undo numbers of undo records being rolled back or purged */
-struct trx_undo_arr_t;
+struct TrxUndoArr;
 
-/** A cell of trx_undo_arr_t */
-struct trx_undo_inf_t;
+/** A cell of TrxUndoArr */
+struct TrxUndoInf;
 
 /** The control structure used in the purge operation */
-struct Purge_sys;
+struct PurgeSys;
 
 /** Rollback command node in a query graph */
-class Trx_rollback;
-using Trx_rollback = Trx_rollback;
+class TrxRollback;
+struct TrxRollback;
 
 /** Commit command node in a query graph */
-struct Commit_node;
+struct CommitNode;
 
 /** SAVEPOINT command node in a query graph */
-struct trx_named_savept_t;
+struct TrxNamedSavept;
 
 /** Transaction savepoint */
-struct trx_savept_t;
+struct TrxSavept;
 
 /** Lock instance. */
 struct Lock;
 
 struct Session;
 struct Index;
-struct Read_view;
+struct ReadView;
 
 /** Rollback contexts */
-enum trx_rb_ctx {
+enum TrxRbCtx {
   /** No rollback */
   RB_NONE = 0,
 
@@ -106,7 +106,7 @@ enum trx_rb_ctx {
 };
 
 /** Type of data dictionary operation */
-enum trx_dict_op_t {
+enum TrxDictOp {
   /** The transaction is not modifying the data dictionary. */
   TRX_DICT_OP_NONE = 0,
 
@@ -129,7 +129,7 @@ using roll_ptr_t = uint64_t;
 using undo_no_t = uint64_t;
 
 /** Transaction savepoint */
-struct trx_savept_t {
+struct TrxSavept {
   /** Least undo number to undo */
   undo_no_t least_undo_no;
 };
@@ -157,7 +157,7 @@ transaction, e.g., a parallel query */
 constexpr ulint TRX_MAX_N_THREADS = 32;
 
 /* Transaction concurrency states (trx->conc_state) */
-enum Trx_status {
+enum TrxStatus {
   TRX_NOT_STARTED,
 
   TRX_ACTIVE,
@@ -183,7 +183,7 @@ constexpr ulint TRX_QUE_ROLLING_BACK = 2;
 constexpr ulint TRX_QUE_COMMITTING = 3;
 
 /** Transaction isolation levels (trx->isolation_level) */
-enum Trx_isolation {
+enum TrxIsolation {
   /** dirty read: non-locking SELECTs are performed so that we
   do not look at a possible earlier version of a record; thus they
   are not 'consistent' reads under this isolation level; otherwise like level 2 */
@@ -219,7 +219,7 @@ constexpr ulint TRX_DUP_REPLACE = 2;
 // constexpr ulint TRX_QUE_STATE_STR_MAX_LEN = 12;
 
 /* Types of a trx signal */
-enum Trx_signal {
+enum TrxSignal {
   TRX_SIG_NO_SIGNAL,
   TRX_SIG_TOTAL_ROLLBACK,
   TRX_SIG_ROLLBACK_TO_SAVEPT,
@@ -229,7 +229,7 @@ enum Trx_signal {
 };
 
 /* Sender types of a signal */
-enum Trx_signal_origin {
+enum TrxSignalOrigin {
   /** sent by the session itself, or by an error occurring within this session */
   TRX_SIG_SELF = 0,
 
@@ -238,7 +238,7 @@ enum Trx_signal_origin {
 };
 
 /** Commit node states */
-enum commit_node_state {
+enum CommitNodeState {
   /** about to send a commit signal to the transaction */
   COMMIT_NODE_SEND = 1,
 
@@ -247,20 +247,20 @@ enum commit_node_state {
 };
 
 /** Commit command node in a query graph */
-struct Commit_node {
+struct CommitNode {
 
   /** Node type: QUE_NODE_COMMIT */
-  que_common_t common;
+  QueCommon common;
 
   /** Node execution state */
-  commit_node_state state;
+  CommitNodeState state;
 };
 
 /* Signal to a transaction */
-struct trx_sig_t {
+struct TrxSig {
 
   /** Next signal in the queue */
-  trx_sig_t *next() noexcept { return signals.m_next; }
+  TrxSig *next() noexcept { return signals.m_next; }
 
   /* Signal type */
   unsigned type : 3;
@@ -269,16 +269,16 @@ struct trx_sig_t {
   unsigned sender : 1;
 
   /** non-nullptr if the sender of the signal wants reply after the operation induced by the signal is completed */
-  que_thr_t *receiver;
+  QueThr *receiver;
 
   /** Possible rollback savepoint */
-  trx_savept_t savept;
+  TrxSavept savept;
 
   /** queue of pending signals to the transaction */
-  UT_LIST_NODE_T(trx_sig_t) signals;
+  UT_LIST_NODE_T(TrxSig) signals;
 
   /** List of signals for which the sender transaction is waiting a reply */
-  UT_LIST_NODE_T(trx_sig_t) reply_signals;
+  UT_LIST_NODE_T(TrxSig) reply_signals;
 };
 
 constexpr ulint TRX_MAGIC_N = 91118598;

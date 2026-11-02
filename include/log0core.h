@@ -25,20 +25,20 @@ Created for testing and minimal coupling
 
 #include "log0types.h"
 
-/** Log_core - Core WAL functionality with minimal dependencies
+/** LogCore - Core WAL functionality with minimal dependencies
  * This class provides the essential WAL buffer management and block operations
  * without requiring external subsystems like file system, etc.
  */
-struct Log_core {
+struct LogCore {
   /**
    * Constructor - initializes log buffer and basic structures
    */
-  Log_core() noexcept;
+  LogCore() noexcept;
 
   /**
    * Destructor - frees allocated memory
    */
-  ~Log_core() noexcept;
+  ~LogCore() noexcept;
 
   /**
    * Fast write to log buffer if there's space within current block

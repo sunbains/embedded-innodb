@@ -25,11 +25,11 @@ Lock system validation and debugging
 
 #include "lock0types.h"
 
-struct Buf_block;
+struct BufBlock;
 struct Index;
 struct Table;
 struct Rec;
-struct Lock_sys;
+struct LockSys;
 
 /**
  * @brief Lock system validator for debugging and integrity checking
@@ -37,13 +37,13 @@ struct Lock_sys;
  * This class provides functionality to validate the integrity of the lock system,
  * including lock queues, transaction states, and lock consistency across the system.
  */
-struct Lock_validator {
+struct LockValidator {
   /**
-   * @brief Constructor for Lock_validator
+   * @brief Constructor for LockValidator
    * 
    * @param[in] lock_sys Pointer to the main lock system
    */
-  explicit Lock_validator(Lock_sys *lock_sys) noexcept;
+  explicit LockValidator(LockSys *lock_sys) noexcept;
 
 #ifdef UNIV_DEBUG
   /**
@@ -67,7 +67,7 @@ struct Lock_validator {
    * @param[in] page_id The page ID to validate.
    * @return true if the record lock queues on the page are valid, false otherwise.
    */
-  [[nodiscard]] bool rec_validate_page(Page_id page_id) noexcept;
+  [[nodiscard]] bool rec_validate_page(PageId page_id) noexcept;
 
   /**
    * @brief Validates the lock queue on a table.
@@ -92,11 +92,11 @@ struct Lock_validator {
    * @param[in] block   Buffer block containing the record.
    * @param[in] rec     Record to validate.
    * @param[in] index   Index, or nullptr if not known.
-   * @param[in] offsets Column offsets obtained from Phy_rec::get_col_offsets(rec, index).
+   * @param[in] offsets Column offsets obtained from PhyRec::get_col_offsets(rec, index).
    * @return true if the lock queue is valid, false otherwise.
    */
   [[nodiscard]] bool rec_queue_validate(
-    const Buf_block *block, const Rec rec, const Index *index, const ulint *offsets
+    const BufBlock *block, const Rec rec, const Index *index, const ulint *offsets
   ) noexcept;
 
   /**
@@ -116,7 +116,7 @@ struct Lock_validator {
    * @return A pointer to the lock if found, or nullptr if no such lock exists.
    */
   [[nodiscard]] const Lock *rec_other_has_expl_req(
-    Page_id page_id, Lock_mode mode, ulint gap, ulint wait, ulint heap_no, const Trx *trx
+    PageId page_id, LockMode mode, ulint gap, ulint wait, ulint heap_no, const Trx *trx
   ) const noexcept;
 
   /**
@@ -153,5 +153,5 @@ struct Lock_validator {
 
  private:
   /** Pointer to the main lock system */
-  Lock_sys *m_lock_sys;
+  LockSys *m_lock_sys;
 };

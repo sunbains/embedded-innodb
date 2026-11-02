@@ -52,27 +52,27 @@ of concurrent read locks before the rw_lock breaks. The current value of
 0x00100000 allows 1,048,575 concurrent readers and 2047 recursive writers.*/
 constexpr int X_LOCK_DECR = 0x00100000;
 
-typedef struct rw_lock_struct rw_lock_t;
+struct RwLock;
 
 #ifdef UNIV_SYNC_DEBUG
-typedef struct rw_lock_debug_struct rw_lock_debug_t;
+struct RwLockDebug;
 #endif /* UNIV_SYNC_DEBUG */
 
-typedef UT_LIST_BASE_NODE_T_EXTERN(rw_lock_t, list) rw_lock_list_t;
+typedef UT_LIST_BASE_NODE_T_EXTERN(RwLock, list) rw_lock_list_t;
 
 extern rw_lock_list_t rw_lock_list;
-extern mutex_t rw_lock_list_mutex;
+extern Mutex rw_lock_list_mutex;
 
 #ifdef UNIV_SYNC_DEBUG
 /** The global mutex which protects debug info lists of all rw-locks.
 To modify the debug info list of an rw-lock, this mutex has to be
 
 acquired in addition to the mutex protecting the lock. */
-extern mutex_t rw_lock_debug_mutex;
+extern Mutex rw_lock_debug_mutex;
 
 /** If deadlock detection does not get immediately the mutex it may wait for
  * this event */
-extern Cond_var *rw_lock_debug_event;
+extern CondVar *rw_lock_debug_event;
 
 /** This is set to true, if there may be waiters for the event */
 extern bool rw_lock_debug_waiters;
@@ -129,7 +129,7 @@ location (which must be appropriately aligned). The rw-lock is initialized
 to the non-locked state. Explicit freeing of the rw-lock with rw_lock_free
 is necessary only if the memory block containing it is freed. */
 void rw_lock_create_func(
-  rw_lock_t *lock, /** in: pointer to memory */
+  RwLock *lock, /** in: pointer to memory */
 #ifdef UNIV_DEBUG
 #ifdef UNIV_SYNC_DEBUG
   ulint level,             /** in: level */
@@ -143,13 +143,13 @@ void rw_lock_create_func(
 /** Calling this function is obligatory only if the memory buffer containing
 the rw-lock is freed. Removes an rw-lock object from the global list. The
 rw-lock is checked to be in the non-locked state. */
-void rw_lock_free(rw_lock_t *lock); /** in: rw-lock */
+void rw_lock_free(RwLock *lock); /** in: rw-lock */
 
 #ifdef UNIV_DEBUG
 /** Checks that the rw-lock has been initialized and that there are no
 simultaneous shared and exclusive locks.
 @return	true */
-bool rw_lock_validate(rw_lock_t *lock); /** in: rw-lock */
+bool rw_lock_validate(RwLock *lock); /** in: rw-lock */
 #endif                                  /* UNIV_DEBUG */
 
 /** NOTE! The following macros should be used in rw s-locking, not the
@@ -199,7 +199,7 @@ only a single x-lock may be taken on the lock. NOTE: If the same thread has
 an s-lock, locking does not succeed! */
 
 void rw_lock_x_lock_func(
-  rw_lock_t *lock,       /** in: pointer to rw-lock */
+  RwLock *lock,       /** in: pointer to rw-lock */
   ulint pass,            /** in: pass value; != 0, if the lock will
                            be passed to another thread to unlock */
   const char *file_name, /** in: file name where lock requested */
@@ -212,7 +212,7 @@ inline void rw_lock_x_unlock_func(
   ulint pass, /** in: pass value; != 0, if the lock may have
                 been passed to another thread to unlock */
 #endif
-  rw_lock_t *lock
+  RwLock *lock
 ); /** in/out: rw-lock */
 
 #ifdef UNIV_SYNC_DEBUG
@@ -231,7 +231,7 @@ read was done. The ownership is moved because we want that the current
 thread is able to acquire a second x-latch which is stored in an mtr.
 This, in turn, is needed to pass the debug checks of index page
 operations. */
-void rw_lock_x_lock_move_ownership(rw_lock_t *lock); /** in: lock which was x-locked in the
+void rw_lock_x_lock_move_ownership(RwLock *lock); /** in: lock which was x-locked in the
                       buffer read */
 
 #ifdef UNIV_SYNC_DEBUG
@@ -239,7 +239,7 @@ void rw_lock_x_lock_move_ownership(rw_lock_t *lock); /** in: lock which was x-lo
 the pass value == 0. */
 
 bool rw_lock_own(
-  rw_lock_t *lock, /** in: rw-lock */
+  RwLock *lock, /** in: rw-lock */
   ulint lock_type
 ) /** in: lock type: RW_LOCK_SHARED,
                                   RW_LOCK_EX */
@@ -248,14 +248,14 @@ bool rw_lock_own(
 
 /** Checks if somebody has locked the rw-lock in the specified mode. */
 bool rw_lock_is_locked(
-  rw_lock_t *lock, /** in: rw-lock */
+  RwLock *lock, /** in: rw-lock */
   ulint lock_type
 ); /** in: lock type: RW_LOCK_SHARED,
                                          RW_LOCK_EX */
 
 #ifdef UNIV_SYNC_DEBUG
 /** Prints debug info of an rw-lock. */
-void rw_lock_print(rw_lock_t *lock); /** in: rw-lock */
+void rw_lock_print(RwLock *lock); /** in: rw-lock */
 /** Prints debug info of currently locked rw-locks. */
 
 void rw_lock_list_print_info(ib_stream_t ib_stream); /** in: stream where to print */
@@ -278,7 +278,7 @@ void rw_lock_debug_mutex_enter(void);
 void rw_lock_debug_mutex_exit(void);
 
 /** Prints info of a debug struct. */
-void rw_lock_debug_print(rw_lock_debug_t *info); /** in: debug struct */
+void rw_lock_debug_print(RwLockDebug *info); /** in: debug struct */
 #endif                                           /* UNIV_SYNC_DEBUG */
 
 /** Reset the variables. */
@@ -294,7 +294,7 @@ shared locks are allowed. To prevent starving of a writer blocked by
 readers, a writer may queue for x-lock by decrementing m_lock_word: no
 new readers will be let in while the thread waits for readers to
 exit. */
-struct rw_lock_struct {
+struct RwLock {
   /** Holds the state of the lock. */
   std::atomic<int32_t> m_lock_word;
 
@@ -326,22 +326,22 @@ struct rw_lock_struct {
   value iff recursive flag is set. */
 
   /** Used by sync0arr.c for thread queueing */
-  Cond_var *m_event;
+  CondVar *m_event;
 
   /** Event for next-writer to wait on. A thread
   must decrement m_lock_word before waiting. */
-  Cond_var *m_wait_ex_event;
+  CondVar *m_wait_ex_event;
 
   /** Event for next-writer to wait on. A thread
   must decrement m_lock_word before waiting. */
 
   /** All allocated rw locks are put into a list */
-  UT_LIST_NODE_T(rw_lock_t) list;
+  UT_LIST_NODE_T(RwLock) list;
 
 #ifdef UNIV_SYNC_DEBUG
   /** In the debug version: pointer to the debug
   info list of the lock */
-  UT_LIST_BASE_NODE_T(rw_lock_debug_t) debug_list;
+  UT_LIST_BASE_NODE_T(RwLockDebug) debug_list;
 
   /** Level in the global latching order. */
   ulint m_level;
@@ -382,16 +382,16 @@ struct rw_lock_struct {
   ulint m_magic_n;
 };
 
-static_assert(std::is_standard_layout<rw_lock_t>::value, "rw_lock_t must have a standard layout");
+static_assert(std::is_standard_layout<RwLock>::value, "RwLock must have a standard layout");
 
-UT_LIST_NODE_GETTER_DEFINITION(rw_lock_t, list);
+UT_LIST_NODE_GETTER_DEFINITION(RwLock, list);
 
-/** Value of rw_lock_struct::magic_n */
+/** Value of RwLock::magic_n */
 constexpr ulint RW_LOCK_MAGIC_N = 22643;
 
 #ifdef UNIV_SYNC_DEBUG
 /** The structure for storing debug info of an rw-lock */
-struct rw_lock_debug_struct {
+struct RwLockDebug {
 
   /** The thread id of the thread which locked the rw-lock */
   os_thread_id_t thread_id;
@@ -409,7 +409,7 @@ struct rw_lock_debug_struct {
   ulint line;
 
   /** Debug structs are linked in a two-way list */
-  UT_LIST_NODE_T(rw_lock_debug_t) list;
+  UT_LIST_NODE_T(RwLockDebug) list;
 };
 #endif /* UNIV_SYNC_DEBUG */
 
@@ -422,7 +422,7 @@ waiting for the lock before suspending the thread.
                                 be passed to another thread to unlock
 @param[in] file_name            Namne of file where requested.
 @param[in] line                 Line in filename where requested. */
-void rw_lock_s_lock_spin(rw_lock_t *lock, ulint pass, const char *file_name, ulint line);
+void rw_lock_s_lock_spin(RwLock *lock, ulint pass, const char *file_name, ulint line);
 
 #ifdef UNIV_SYNC_DEBUG
 
@@ -432,26 +432,26 @@ void rw_lock_s_lock_spin(rw_lock_t *lock, ulint pass, const char *file_name, uli
                                 be passed to another thread to unlock
 @param[in] file_name            Namne of file where requested.
 @param[in] line                 Line in filename where requested. */
-void rw_lock_add_debug_info(rw_lock_t *lock, ulint pass, ulint lock_type, const char *file_name, ulint line);
+void rw_lock_add_debug_info(RwLock *lock, ulint pass, ulint lock_type, const char *file_name, ulint line);
 
 /** Removes a debug information struct for an rw-lock.
 @param[in,out] lock             Lock to remove.
 @param[in] pass                 Pass value
 @param[in] type                 lock type */
-void rw_lock_remove_debug_info(rw_lock_t *lock, ulint pass, ulint lock_type);
+void rw_lock_remove_debug_info(RwLock *lock, ulint pass, ulint lock_type);
 #endif /* UNIV_SYNC_DEBUG */
 
 /** Check if there are threads waiting for the rw-lock.
 @param[in,out] lock             Lock to check.
 @return	true if waiters, false otherwise */
-inline bool rw_lock_get_waiters(const rw_lock_t *lock) {
+inline bool rw_lock_get_waiters(const RwLock *lock) {
   return lock->m_waiters.load();
 }
 
 /** Sets lock->m_waiters to true. It is not an error if lock->m_waiters is
 already true.
 @param[in,out] lock             Lock that has waiters. */
-inline void rw_lock_set_waiter_flag(rw_lock_t *lock) {
+inline void rw_lock_set_waiter_flag(RwLock *lock) {
   bool f{};
   lock->m_waiters.compare_exchange_strong(f, true);
 }
@@ -459,7 +459,7 @@ inline void rw_lock_set_waiter_flag(rw_lock_t *lock) {
 /** Resets lock->m_waiters to false. It is not an error if lock->m_waiters is
 already false.
 @param[in,out] lock             Lock to set. */
-inline void rw_lock_reset_waiter_flag(rw_lock_t *lock) {
+inline void rw_lock_reset_waiter_flag(RwLock *lock) {
   bool t{true};
   ;
   lock->m_waiters.compare_exchange_strong(t, false);
@@ -469,7 +469,7 @@ inline void rw_lock_reset_waiter_flag(rw_lock_t *lock) {
 with the old rw_lock implementation.
 @param[in] lock                 Lock for which we want the writer count.
 @return	RW_LOCK_NOT_LOCKED, RW_LOCK_EX, RW_LOCK_WAIT_EX */
-inline ulint rw_lock_get_writer(const rw_lock_t *lock) {
+inline ulint rw_lock_get_writer(const RwLock *lock) {
   auto lock_word = lock->m_lock_word.load();
 
   if (lock_word > 0) {
@@ -487,7 +487,7 @@ inline ulint rw_lock_get_writer(const rw_lock_t *lock) {
 /** Returns the number of readers.
 @param[in] lock                 Lock for which number of readers required.
 @return	number of readers */
-inline ulint rw_lock_get_reader_count(const rw_lock_t *lock) {
+inline ulint rw_lock_get_reader_count(const RwLock *lock) {
   auto lock_word = lock->m_lock_word.load();
 
   if (lock_word > 0) {
@@ -505,7 +505,7 @@ inline ulint rw_lock_get_reader_count(const rw_lock_t *lock) {
 mutex, so the caller must be sure it is not changed during the call.
 @param[in] lock                 Lock for which writer count required.
 @return	value of writer_count */
-inline ulint rw_lock_get_x_lock_count(const rw_lock_t *lock) {
+inline ulint rw_lock_get_x_lock_count(const RwLock *lock) {
   auto lock_copy = lock->m_lock_word.load();
   ut_ad(lock_copy <= X_LOCK_DECR);
 
@@ -525,7 +525,7 @@ Returns true if the decrement was made, false if not.
 @param[in,out] lock             Lock to decrement.
 @param[in] amount               Amount to decrement.
 @return	true if decr occurs */
-inline bool rw_lock_lock_word_decr(rw_lock_t *lock, ulint amount) {
+inline bool rw_lock_lock_word_decr(RwLock *lock, ulint amount) {
   auto local_lock_word = lock->m_lock_word.load();
 
   while (local_lock_word > 0) {
@@ -541,7 +541,7 @@ inline bool rw_lock_lock_word_decr(rw_lock_t *lock, ulint amount) {
 @param[in,out] lock             Lock to increment.
 @param[in] amount               Amount to increment
 @return	lock->m_lock_word after increment */
-inline lint rw_lock_lock_word_incr(rw_lock_t *lock, ulint amount) {
+inline lint rw_lock_lock_word_incr(RwLock *lock, ulint amount) {
   return lock->m_lock_word.fetch_add(amount) + amount;
 }
 
@@ -554,7 +554,7 @@ point in time. The protocol is that lock->m_writer_thread MUST be updated
 BEFORE the lock->m_recursive flag is set.
 @param[in,out] lock              Lock to update
 @param[in] recursive             Recursion flag (true if allowed). */
-inline void rw_lock_set_writer_id_and_recursion_flag(rw_lock_t *lock, bool recursive) {
+inline void rw_lock_set_writer_id_and_recursion_flag(RwLock *lock, bool recursive) {
   lock->m_writer_thread.store(std::this_thread::get_id(), std::memory_order_relaxed);
   lock->m_recursive.store(recursive, std::memory_order_release);
 }
@@ -567,7 +567,7 @@ spinning.
 @param[in] file_name            File name where lock requested
 @param[in] line                 Line in file_name where requested
 @return	true on success */
-inline bool rw_lock_s_lock_low(rw_lock_t *lock, ulint pass, const char *file_name, ulint line) {
+inline bool rw_lock_s_lock_low(RwLock *lock, ulint pass, const char *file_name, ulint line) {
   if (!rw_lock_lock_word_decr(lock, 1)) {
     /* Locking did not succeed */
     return false;
@@ -596,7 +596,7 @@ the lock, before suspending the thread.
 @param[in] file_name            File name where lock requested
 @param[in] line                 Line in file_name where requested
 @return	true on success */
-inline void rw_lock_s_lock_func(rw_lock_t *lock, ulint pass, const char *file_name, ulint line) {
+inline void rw_lock_s_lock_func(RwLock *lock, ulint pass, const char *file_name, ulint line) {
   /* NOTE: As we do not know the thread ids for threads which have
   s-locked a latch, and s-lockers will be served only after waiting
   x-lock requests have been fulfilled, then if this thread already
@@ -628,7 +628,7 @@ obtained immediately.
 @param[in] file_name            File name where lock requested
 @param[in] line                 Line in file_name where requested
 @return	true if success */
-inline bool rw_lock_x_lock_func_nowait(rw_lock_t *lock, const char *file_name, ulint line) {
+inline bool rw_lock_x_lock_func_nowait(RwLock *lock, const char *file_name, ulint line) {
   int32_t x_lock_decr{X_LOCK_DECR};
 
   if (lock->m_lock_word.compare_exchange_strong(x_lock_decr, 0)) {
@@ -675,7 +675,7 @@ inline void rw_lock_s_unlock_func(
 #ifdef UNIV_SYNC_DEBUG
   ulint pass,
 #endif /* UNIV_SYNC_DEBUG */
-  rw_lock_t *lock
+  RwLock *lock
 ) {
   ut_ad((lock->m_lock_word % X_LOCK_DECR) != 0);
 
@@ -704,7 +704,7 @@ inline void rw_lock_x_unlock_func(
 #ifdef UNIV_SYNC_DEBUG
   ulint pass,
 #endif /* UNIV_SYNC_DEBUG */
-  rw_lock_t *lock
+  RwLock *lock
 ) {
   ut_ad(lock->m_lock_word == 0 || lock->m_lock_word <= -X_LOCK_DECR);
 

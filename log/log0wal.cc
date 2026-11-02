@@ -31,7 +31,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 /** Global logger for WAL-CPP library */
 util::Logger<util::MT_logger_writer> g_logger(util::MT_logger_writer{std::cerr}, util::Log_level::Info);
 
-Log_wal_backend::Log_wal_backend(const Config &config, lsn_t start_lsn) noexcept
+LogWalBackend::LogWalBackend(const Config &config, lsn_t start_lsn) noexcept
     : m_config(config), m_lsn(start_lsn), m_flushed_lsn(start_lsn), m_synced_lsn(start_lsn) {
 
   // Create WAL configuration
@@ -52,12 +52,12 @@ Log_wal_backend::Log_wal_backend(const Config &config, lsn_t start_lsn) noexcept
   m_wal = std::make_unique<wal::Log>(start_lsn, log_config);
 }
 
-Log_wal_backend::~Log_wal_backend() noexcept {
+LogWalBackend::~LogWalBackend() noexcept {
   stop_io();
   (void) close();
 }
 
-bool Log_wal_backend::open() noexcept {
+bool LogWalBackend::open() noexcept {
   // Ensure directory exists
   std::filesystem::create_directories(m_config.m_log_dir);
 
@@ -85,7 +85,7 @@ bool Log_wal_backend::open() noexcept {
   return true;
 }
 
-bool Log_wal_backend::close() noexcept {
+bool LogWalBackend::close() noexcept {
   if (m_fd >= 0) {
     ::close(m_fd);
     m_fd = -1;
@@ -93,7 +93,7 @@ bool Log_wal_backend::close() noexcept {
   return true;
 }
 
-lsn_t Log_wal_backend::append(const byte *data, ulint len) noexcept {
+lsn_t LogWalBackend::append(const byte *data, ulint len) noexcept {
   if (!m_wal || len == 0) {
     return 0;
   }
@@ -113,7 +113,7 @@ lsn_t Log_wal_backend::append(const byte *data, ulint len) noexcept {
   return 0;
 }
 
-bool Log_wal_backend::flush(lsn_t lsn, bool sync_to_disk) noexcept {
+bool LogWalBackend::flush(lsn_t lsn, bool sync_to_disk) noexcept {
   if (!m_wal || m_fd < 0) {
     return false;
   }
@@ -142,7 +142,7 @@ bool Log_wal_backend::flush(lsn_t lsn, bool sync_to_disk) noexcept {
   return true;
 }
 
-void Log_wal_backend::start_io() noexcept {
+void LogWalBackend::start_io() noexcept {
   if (m_io_running.exchange(true)) {
     return;  // Already running
   }
@@ -154,7 +154,7 @@ void Log_wal_backend::start_io() noexcept {
   m_wal->start_io(write_cb, m_thread_pool.get());
 }
 
-void Log_wal_backend::stop_io() noexcept {
+void LogWalBackend::stop_io() noexcept {
   if (!m_io_running.exchange(false)) {
     return;  // Not running
   }
@@ -170,13 +170,13 @@ void Log_wal_backend::stop_io() noexcept {
   (void) m_wal->shutdown(write_cb, &sync_cb);
 }
 
-void Log_wal_backend::wait_for_io_idle() noexcept {
+void LogWalBackend::wait_for_io_idle() noexcept {
   if (m_wal) {
     m_wal->wait_for_io_idle();
   }
 }
 
-wal::Result<lsn_t> Log_wal_backend::write_callback(std::span<struct iovec> iovecs) noexcept {
+wal::Result<lsn_t> LogWalBackend::write_callback(std::span<struct iovec> iovecs) noexcept {
   if (m_fd < 0 || iovecs.empty()) {
     return std::unexpected(wal::Status::IO_error);
   }
@@ -203,7 +203,7 @@ wal::Result<lsn_t> Log_wal_backend::write_callback(std::span<struct iovec> iovec
   return new_flushed;
 }
 
-wal::Result<bool> Log_wal_backend::sync_callback() noexcept {
+wal::Result<bool> LogWalBackend::sync_callback() noexcept {
   if (m_fd < 0) {
     return std::unexpected(wal::Status::IO_error);
   }

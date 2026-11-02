@@ -31,7 +31,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
  * WAL backend adapter for InnoDB redo logging.
  * Wraps wal::Log to provide InnoDB-compatible interface.
  */
-struct Log_wal_backend {
+struct LogWalBackend {
 
   /**
    * Configuration for the WAL backend.
@@ -62,16 +62,16 @@ struct Log_wal_backend {
    * @param[in] config Configuration for the backend.
    * @param[in] start_lsn Starting LSN for the log.
    */
-  explicit Log_wal_backend(const Config &config, lsn_t start_lsn) noexcept;
+  explicit LogWalBackend(const Config &config, lsn_t start_lsn) noexcept;
 
   /**
    * Destructor.
    */
-  ~Log_wal_backend() noexcept;
+  ~LogWalBackend() noexcept;
 
   /* Disable copy */
-  Log_wal_backend(const Log_wal_backend &) = delete;
-  Log_wal_backend &operator=(const Log_wal_backend &) = delete;
+  LogWalBackend(const LogWalBackend &) = delete;
+  LogWalBackend &operator=(const LogWalBackend &) = delete;
 
   /**
    * Open the log file.

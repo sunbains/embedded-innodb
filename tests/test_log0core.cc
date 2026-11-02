@@ -12,7 +12,7 @@ FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 *****************************************************************************/
 
 /** @file tests/test_log0core.cc
-Unit tests for Log_core class
+Unit tests for LogCore class
 
 Tests core logging functionality with minimal dependencies
 *******************************************************/
@@ -28,7 +28,7 @@ Tests core logging functionality with minimal dependencies
 
 struct Log_coreTest {
   static void run_all_tests() {
-    std::cout << "Running Log_core tests...\n";
+    std::cout << "Running LogCore tests...\n";
 
     test_constructor_destructor();
     test_basic_properties();
@@ -40,7 +40,7 @@ struct Log_coreTest {
     test_reset_functionality();
     test_edge_cases();
 
-    std::cout << "All Log_core tests passed!\n";
+    std::cout << "All LogCore tests passed!\n";
   }
 
 private:
@@ -48,7 +48,7 @@ private:
     std::cout << "  Testing constructor/destructor...\n";
 
     {
-      Log_core log;
+      LogCore log;
 
       // Test initial state
       assert(log.get_lsn() == LOG_START_LSN + LOG_BLOCK_HDR_SIZE);
@@ -63,7 +63,7 @@ private:
   static void test_basic_properties() {
     std::cout << "  Testing basic properties...\n";
 
-    Log_core log;
+    LogCore log;
 
     // Test getters
     lsn_t initial_lsn = log.get_lsn();
@@ -87,7 +87,7 @@ private:
 
     // Test block number conversion
     lsn_t test_lsn = LOG_START_LSN + IB_FILE_BLOCK_SIZE * 5;
-    ulint block_no = Log_core::block_convert_lsn_to_no(test_lsn);
+    ulint block_no = LogCore::block_convert_lsn_to_no(test_lsn);
     assert(block_no > 0);
     assert(block_no <= 0x3FFFFFFFUL + 1);
 
@@ -95,29 +95,29 @@ private:
     byte test_block[IB_FILE_BLOCK_SIZE];
     memset(test_block, 0, IB_FILE_BLOCK_SIZE);
 
-    Log_core::block_init(test_block, test_lsn);
+    LogCore::block_init(test_block, test_lsn);
 
     // Verify initialization
-    ulint hdr_no = Log_core::block_get_hdr_no(test_block);
-    ulint data_len = Log_core::block_get_data_len(test_block);
-    ulint first_rec = Log_core::block_get_first_rec_group(test_block);
+    ulint hdr_no = LogCore::block_get_hdr_no(test_block);
+    ulint data_len = LogCore::block_get_data_len(test_block);
+    ulint first_rec = LogCore::block_get_first_rec_group(test_block);
 
     assert(hdr_no == block_no);
     assert(data_len == LOG_BLOCK_HDR_SIZE);
     assert(first_rec == 0);
 
     // Test setting values
-    Log_core::block_set_data_len(test_block, 100);
-    assert(Log_core::block_get_data_len(test_block) == 100);
+    LogCore::block_set_data_len(test_block, 100);
+    assert(LogCore::block_get_data_len(test_block) == 100);
 
-    Log_core::block_set_first_rec_group(test_block, 50);
-    assert(Log_core::block_get_first_rec_group(test_block) == 50);
+    LogCore::block_set_first_rec_group(test_block, 50);
+    assert(LogCore::block_get_first_rec_group(test_block) == 50);
   }
 
   static void test_reserve_and_write_fast() {
     std::cout << "  Testing reserve_and_write_fast...\n";
 
-    Log_core log;
+    LogCore log;
 
     // Test successful write
     const char *test_data = "Hello, World!";
@@ -147,7 +147,7 @@ private:
   static void test_write_low() {
     std::cout << "  Testing write_low...\n";
 
-    Log_core log;
+    LogCore log;
 
     // Test writing data that fits in one block
     const char *test_data = "Test data for write_low";
@@ -168,7 +168,7 @@ private:
   static void test_block_boundaries() {
     std::cout << "  Testing block boundary handling...\n";
 
-    Log_core log;
+    LogCore log;
 
     // Create data that will span multiple blocks
     std::vector<byte> large_data(IB_FILE_BLOCK_SIZE * 2, 'A');
@@ -190,28 +190,28 @@ private:
     memset(test_block, 0xAA, IB_FILE_BLOCK_SIZE);
 
     // Calculate checksum
-    uint32_t checksum1 = Log_core::block_calc_checksum(test_block);
+    uint32_t checksum1 = LogCore::block_calc_checksum(test_block);
     assert(checksum1 != 0);
 
     // Set and get checksum
-    Log_core::block_set_checksum(test_block, checksum1);
-    uint32_t retrieved_checksum = Log_core::block_get_checksum(test_block);
+    LogCore::block_set_checksum(test_block, checksum1);
+    uint32_t retrieved_checksum = LogCore::block_get_checksum(test_block);
     assert(retrieved_checksum == checksum1);
 
     // Test store checksum functionality
-    Log_core log;
+    LogCore log;
     memset(test_block, 0xBB, IB_FILE_BLOCK_SIZE);
     log.block_store_checksum(test_block);
 
-    uint32_t stored_checksum = Log_core::block_get_checksum(test_block);
-    uint32_t calculated_checksum = Log_core::block_calc_checksum(test_block);
+    uint32_t stored_checksum = LogCore::block_get_checksum(test_block);
+    uint32_t calculated_checksum = LogCore::block_calc_checksum(test_block);
     assert(stored_checksum == calculated_checksum);
   }
 
   static void test_reset_functionality() {
     std::cout << "  Testing reset functionality...\n";
 
-    Log_core log;
+    LogCore log;
 
     // Write some data
     const char *test_data = "Some test data";
@@ -240,7 +240,7 @@ private:
   static void test_edge_cases() {
     std::cout << "  Testing edge cases...\n";
 
-    Log_core log;
+    LogCore log;
 
     // Test zero-length write
     lsn_t start_lsn;
@@ -267,9 +267,9 @@ private:
 
 // Test helper function for manual testing
 void manual_log_test() {
-  std::cout << "\nManual Log_core test:\n";
+  std::cout << "\nManual LogCore test:\n";
 
-  Log_core log;
+  LogCore log;
 
   std::cout << "Initial LSN: " << log.get_lsn() << "\n";
   std::cout << "Initial buf_free: " << log.get_buf_free() << "\n";

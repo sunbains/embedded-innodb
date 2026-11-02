@@ -27,26 +27,26 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 struct Plan;
 struct Prebuilt;
-struct Undo_node;
-struct Insert_node;
-struct Row_purge;
+struct UndoNode;
+struct InsertNode;
+struct RowPurge;
 
-struct upd_t;
-struct upd_field_t;
-struct upd_node_t;
+struct Upd;
+struct UpdField;
+struct UpdNode;
 
-struct sel_buf_t;
+struct SelBuf;
 
 using table_handle_t = void *;
-using ins_node_t = Insert_node;
-using row_ext_t = struct row_ext_struct;
+struct InsertNode;
+struct RowExt;
 using del_node_t = struct del_node_struct;
-using open_node_t = struct open_node_struct;
-using fetch_node_t = struct fetch_node_struct;
-using row_printf_node_t = struct row_printf_node_struct;
+struct OpenNode;
+struct FetchNode;
+struct RowPrintfNode;
 
 /* Insert node types */
-enum ib_ins_mode_t {
+enum IbInsMode {
   /* The first two modes are only used by the internal SQL parser */
 
   /** INSERT INTO ... SELECT ... */
@@ -60,7 +60,7 @@ enum ib_ins_mode_t {
 };
 
 /* Node execution states */
-enum ib_ins_state_t {
+enum IbInsState {
 
   /** We should set an IX lock on table */
   INS_NODE_SET_IX_LOCK = 1,
@@ -73,7 +73,7 @@ enum ib_ins_state_t {
 };
 
 /* Flags for positioning the cursor. */
-enum ib_cur_op_t {
+enum IbCurOp {
   /** Undefined cursor operation */
   ROW_SEL_UNDEFINED,
 
@@ -88,7 +88,7 @@ enum ib_cur_op_t {
 };
 
 /* Various match modes when fetching a record from a table. */
-enum ib_match_t {
+enum IbMatch {
   /** Closest match possible */
   ROW_SEL_DEFAULT,
 

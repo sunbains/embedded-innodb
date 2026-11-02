@@ -19,7 +19,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 ************************************************************************/
 
 /** This is a derived table class that can be plugged into the mt_drv test
-suite. This particular table class overrides following DML and DDL
+suite. This particular table class overrides following DML and Ddl
 functions:
 1) UPDATE
 2) INSERT

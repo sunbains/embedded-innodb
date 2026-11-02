@@ -47,7 +47,7 @@ Created 10/10/1995 Heikki Tuuri
 #include "sync0sync.h"
 #include "trx0types.h"
 
-struct AIO;
+struct Aio;
 
 /** Types of raw partitions in innodb_data_file_path */
 enum {
@@ -82,7 +82,7 @@ enum {
 };
 
 /** Shutdown state */
-enum srv_shutdown_state {
+enum SrvShutdownState {
   /** Database running normally */
   SRV_SHUTDOWN_NONE = 0,
 
@@ -98,7 +98,7 @@ enum srv_shutdown_state {
 };
 
 /** Types of threads existing in the system. */
-enum srv_thread_type {
+enum SrvThreadType {
   SRV_NONE = 0,
 
   /** Threads serving communication and queries */
@@ -130,7 +130,7 @@ extern const char *srv_main_thread_op_info;
 
 /* When this event is set the lock timeout and InnoDB monitor
 thread starts running */
-extern Cond_var *srv_lock_timeout_thread_event;
+extern CondVar *srv_lock_timeout_thread_event;
 
 /** Alternatives for srv_force_recovery. Non-zero values are intended
 to help the user get a damaged database up so that he can dump intact
@@ -140,7 +140,7 @@ of lower numbers are included.
 
 NOTE: The order below is important, the code uses <= and >= to check
 for recovery levels. */
-enum ib_recovery_t {
+enum IbRecovery {
   /** Stop on all the errors that are listed in the other options below */
   IB_RECOVERY_DEFAULT,
 
@@ -247,7 +247,7 @@ struct Config {
   ulint m_max_n_threads{0};
 
   /** Force recovery. */
-  ib_recovery_t m_force_recovery{IB_RECOVERY_DEFAULT};
+  IbRecovery m_force_recovery{IB_RECOVERY_DEFAULT};
 
   /** Fast shutdown. */
   ib_shutdown_t m_fast_shutdown{IB_SHUTDOWN_NORMAL};
@@ -368,10 +368,10 @@ reading of a disk page */
 extern ulint srv_buf_pool_reads;
 
 /* In this structure we store status variables to be passed to the client. */
-typedef struct Export_vars export_struc;
+struct ExportVars;
 
 /** Status variables to be passed to MySQL */
-extern export_struc export_vars;
+extern ExportVars export_vars;
 
 /** Log sequence number at shutdown */
 extern uint64_t srv_shutdown_lsn;
@@ -396,7 +396,7 @@ extern ulint srv_n_threads_active[];
 
 /** At a shutdown this value climbs from SRV_SHUTDOWN_NONE to
 SRV_SHUTDOWN_CLEANUP and then to SRV_SHUTDOWN_LAST_PHASE, and so on */
-extern srv_shutdown_state srv_shutdown_state;
+extern SrvShutdownState srv_shutdown_state;
 
 struct InnoDB {
   /**
@@ -404,7 +404,7 @@ struct InnoDB {
   *
   * @return	DB_SUCCESS or error code
   */
-  [[nodiscard]] static db_err boot() noexcept;
+  [[nodiscard]] static DbErr boot() noexcept;
 
   /**
    * Create the core in memory data structures.
@@ -439,7 +439,7 @@ struct InnoDB {
    * @return number of threads released: this may be less than n if not
    *  enough threads were suspended at the moment
    */
-  static ulint release_threads(srv_thread_type type, ulint n) noexcept;
+  static ulint release_threads(SrvThreadType type, ulint n) noexcept;
 
   /**
    * The master thread controlling the server.
@@ -473,7 +473,7 @@ struct InnoDB {
    *
    * @param[in,out] thr	query thread associated with the client OS thread
    */
-  static void suspend_user_thread(que_thr_t *thr) noexcept;
+  static void suspend_user_thread(QueThr *thr) noexcept;
 
   /**
    * Releases a user OS thread waiting for a lock to be released, if the
@@ -481,7 +481,7 @@ struct InnoDB {
    *
    * @param[in,out] thr	query thread associated with the client OS thread
    */
-  static void release_user_thread_if_suspended(que_thr_t *thr) noexcept;
+  static void release_user_thread_if_suspended(QueThr *thr) noexcept;
 
   /**
    * A thread which wakes up threads whose lock wait may have lasted too long.
@@ -550,7 +550,7 @@ struct InnoDB {
    *
    * @param[in] thr	query thread.
    */
-  static void que_task_enqueue_low(que_thr_t *thr) noexcept;
+  static void que_task_enqueue_low(QueThr *thr) noexcept;
 
   /**
    * Reads log group home directories from a character string.
@@ -586,11 +586,11 @@ struct InnoDB {
    *
    * @return	DB_SUCCESS or error code
    */
-  [[nodiscard]] static db_err shutdown(ib_shutdown_t shutdown) noexcept;
+  [[nodiscard]] static DbErr shutdown(ib_shutdown_t shutdown) noexcept;
 };
 
 /** In this structure we store status variables to be passed to the client. */
-struct Export_vars {
+struct ExportVars {
   /** Pending reads */
   ulint innodb_data_pending_reads;
 
@@ -635,7 +635,7 @@ struct Export_vars {
   ulint innodb_buffer_pool_pages_latched;
 #endif /* UNIV_DEBUG */
 
-  /** Buf_pool::stat.n_page_gets */
+  /** BufPool::stat.n_page_gets */
   ulint innodb_buffer_pool_read_requests;
 
   /** srv_buf_pool_reads */
@@ -689,13 +689,13 @@ struct Export_vars {
   /** UNIV_PAGE_SIZE */
   ulint innodb_page_size;
 
-  /** Buf_pool::stat.n_pages_created */
+  /** BufPool::stat.n_pages_created */
   ulint innodb_pages_created;
 
-  /** Buf_pool::stat.n_pages_read */
+  /** BufPool::stat.n_pages_read */
   ulint innodb_pages_read;
 
-  /** Buf_pool::stat.n_pages_written */
+  /** BufPool::stat.n_pages_written */
   ulint innodb_pages_written;
 
   /** srv_n_lock_wait_count */
@@ -727,45 +727,45 @@ struct Export_vars {
 };
 
 struct Fil;
-struct FSP;
+struct Fsp;
 struct Undo;
 struct Btree;
 struct Dict;
-struct DBLWR;
-struct Trx_sys;
-struct Lock_sys;
-struct Row_sel;
-struct Row_vers;
-struct Row_undo;
-struct Row_update;
-struct Row_insert;
+struct Dblwr;
+struct TrxSys;
+struct LockSys;
+struct RowSel;
+struct RowVers;
+struct RowUndo;
+struct RowUpdate;
+struct RowInsert;
 
 extern Undo *srv_undo;
 
 extern Fil *srv_fil;
 
-extern AIO *srv_aio;
+extern Aio *srv_aio;
 
-extern FSP *srv_fsp;
+extern Fsp *srv_fsp;
 
-extern DBLWR *srv_dblwr;
+extern Dblwr *srv_dblwr;
 
 extern Btree *srv_btree_sys;
 
-extern Trx_sys *srv_trx_sys;
+extern TrxSys *srv_trx_sys;
 
 extern Dict *srv_dict_sys;
 
-extern Lock_sys *srv_lock_sys;
+extern LockSys *srv_lock_sys;
 
-extern Row_vers *srv_row_vers;
+extern RowVers *srv_row_vers;
 
-extern Row_sel *srv_row_sel;
+extern RowSel *srv_row_sel;
 
-extern Row_undo *srv_row_undo;
+extern RowUndo *srv_row_undo;
 
-extern Row_update *srv_row_upd;
+extern RowUpdate *srv_row_upd;
 
-extern Row_insert *srv_row_ins;
+extern RowInsert *srv_row_ins;
 
 extern Config srv_config;

@@ -36,13 +36,13 @@ Created 3/26/1996 Heikki Tuuri
 #include "trx0undo.h"
 
 /** The transaction system */
-Trx_sys *srv_trx_sys{};
+TrxSys *srv_trx_sys{};
 
-Trx_sys::Trx_sys(FSP *fsp) noexcept : m_fsp(fsp) {
+TrxSys::TrxSys(Fsp *fsp) noexcept : m_fsp(fsp) {
   mutex_create(&m_mutex, IF_DEBUG("trx_sys_mutex", ) IF_SYNC_DEBUG(TRX_SYS_MUTEX, ) Current_location());
 }
 
-Trx_sys::~Trx_sys() noexcept {
+TrxSys::~TrxSys() noexcept {
   /* Check that all read views are closed except read view owned
   by a purge. */
 
@@ -96,12 +96,12 @@ Trx_sys::~Trx_sys() noexcept {
   mutex_free(&m_mutex);
 }
 
-dberr_t Trx_sys::start(ib_recovery_t recovery) noexcept {
+DbErr TrxSys::start(IbRecovery recovery) noexcept {
   const char *unit = "";
 
   auto purge_trx = create_background_trx(nullptr);
 
-  mtr_t mtr;
+  Mtr mtr;
 
   mtr.start();
 
@@ -109,7 +109,7 @@ dberr_t Trx_sys::start(ib_recovery_t recovery) noexcept {
 
   auto sys_header = read_header(&mtr);
 
-  Trx_rseg::list_and_array_init(recovery, sys_header, &mtr);
+  TrxRseg::list_and_array_init(recovery, sys_header, &mtr);
 
   m_latest_rseg = m_rseg_list.front();
 
@@ -153,8 +153,8 @@ dberr_t Trx_sys::start(ib_recovery_t recovery) noexcept {
   {
     ut_a(m_purge == nullptr);
 
-    auto ptr = ut_new(sizeof(Purge_sys));
-    m_purge = new (ptr) Purge_sys(purge_trx);
+    auto ptr = ut_new(sizeof(PurgeSys));
+    m_purge = new (ptr) PurgeSys(purge_trx);
   }
 
   mutex_exit(&m_mutex);
@@ -164,7 +164,7 @@ dberr_t Trx_sys::start(ib_recovery_t recovery) noexcept {
   return DB_SUCCESS;
 }
 
-bool Trx_sys::in_trx_list(Trx *in_trx) noexcept {
+bool TrxSys::in_trx_list(Trx *in_trx) noexcept {
   ut_ad(mutex_own(&m_mutex));
 
   for (auto trx : m_trx_list) {
@@ -177,10 +177,10 @@ bool Trx_sys::in_trx_list(Trx *in_trx) noexcept {
   return false;
 }
 
-void Trx_sys::flush_max_trx_id() noexcept {
+void TrxSys::flush_max_trx_id() noexcept {
   ut_ad(mutex_own(&m_mutex));
 
-  mtr_t mtr;
+  Mtr mtr;
 
   mtr.start();
 
@@ -191,7 +191,7 @@ void Trx_sys::flush_max_trx_id() noexcept {
   mtr.commit();
 }
 
-ulint Trx_sys::frseg_find_free(mtr_t *mtr) noexcept {
+ulint TrxSys::frseg_find_free(Mtr *mtr) noexcept {
   ut_ad(mutex_own(&m_mutex));
 
   auto sys_header = read_header(mtr);
@@ -209,8 +209,8 @@ ulint Trx_sys::frseg_find_free(mtr_t *mtr) noexcept {
   return ULINT_UNDEFINED;
 }
 
-dberr_t Trx_sys::create_system_tablespace() noexcept {
-  mtr_t mtr;
+DbErr TrxSys::create_system_tablespace() noexcept {
+  Mtr mtr;
 
   mtr.start();
 
@@ -260,7 +260,7 @@ dberr_t Trx_sys::create_system_tablespace() noexcept {
 
   /* Create the first rollback segment in the SYSTEM tablespace */
   ulint slot_no;
-  auto page_no = Trx_rseg::header_create(TRX_SYS_SPACE, ULINT_MAX, &slot_no, &mtr);
+  auto page_no = TrxRseg::header_create(TRX_SYS_SPACE, ULINT_MAX, &slot_no, &mtr);
 
   ut_a(slot_no == TRX_SYS_SYSTEM_RSEG_ID);
   ut_a(page_no != FIL_NULL);
@@ -272,7 +272,7 @@ dberr_t Trx_sys::create_system_tablespace() noexcept {
   return DB_SUCCESS;
 }
 
-Trx *Trx_sys::create_trx(void *arg) noexcept {
+Trx *TrxSys::create_trx(void *arg) noexcept {
   /* There is a circular reference between the session and the transaction. */
   auto session = Session::create(nullptr);
   auto trx = Trx::create(this, session, arg);
@@ -282,7 +282,7 @@ Trx *Trx_sys::create_trx(void *arg) noexcept {
   return trx;
 }
 
-void Trx_sys::destroy_trx(Trx *&trx) noexcept {
+void TrxSys::destroy_trx(Trx *&trx) noexcept {
   ut_a(trx->m_sess->m_trx == trx);
 
   trx->m_sess->m_trx = nullptr;
@@ -296,7 +296,7 @@ void Trx_sys::destroy_trx(Trx *&trx) noexcept {
   trx = nullptr;
 }
 
-Trx *Trx_sys::create_user_trx(void *arg) noexcept {
+Trx *TrxSys::create_user_trx(void *arg) noexcept {
   auto trx = create_trx(arg);
 
   mutex_enter(&m_mutex);
@@ -310,7 +310,7 @@ Trx *Trx_sys::create_user_trx(void *arg) noexcept {
   return trx;
 }
 
-void Trx_sys::destroy_user_trx(Trx *&trx) noexcept {
+void TrxSys::destroy_user_trx(Trx *&trx) noexcept {
   mutex_enter(&m_mutex);
 
   m_client_trx_list.remove(trx);
@@ -323,7 +323,7 @@ void Trx_sys::destroy_user_trx(Trx *&trx) noexcept {
   mutex_exit(&m_mutex);
 }
 
-Trx *Trx_sys::create_background_trx(void *arg) noexcept {
+Trx *TrxSys::create_background_trx(void *arg) noexcept {
   auto trx = create_trx(arg);
 
   mutex_enter(&m_mutex);
@@ -335,7 +335,7 @@ Trx *Trx_sys::create_background_trx(void *arg) noexcept {
   return trx;
 }
 
-void Trx_sys::destroy_background_trx(Trx *&trx) noexcept {
+void TrxSys::destroy_background_trx(Trx *&trx) noexcept {
   mutex_enter(&m_mutex);
 
   destroy_trx(trx);
@@ -346,7 +346,7 @@ void Trx_sys::destroy_background_trx(Trx *&trx) noexcept {
   mutex_exit(&m_mutex);
 }
 
-void Trx_sys::trx_list_insert_ordered(Trx *in_trx) noexcept {
+void TrxSys::trx_list_insert_ordered(Trx *in_trx) noexcept {
   ut_ad(mutex_own(&m_mutex));
 
   Trx *prev_trx{};
@@ -372,7 +372,7 @@ void Trx_sys::trx_list_insert_ordered(Trx *in_trx) noexcept {
   }
 }
 
-ulint Trx_sys::trx_assign_rseg() noexcept {
+ulint TrxSys::trx_assign_rseg() noexcept {
   ut_ad(mutex_own(&m_mutex));
 
   auto rseg = m_latest_rseg;
@@ -396,7 +396,7 @@ ulint Trx_sys::trx_assign_rseg() noexcept {
   }
 }
 
-void Trx_sys::init_at_db_start(ib_recovery_t recovery) noexcept {
+void TrxSys::init_at_db_start(IbRecovery recovery) noexcept {
   ut_ad(mutex_own(&m_mutex));
 
   /* Look from the rollback segments if there exist undo logs for
@@ -523,7 +523,7 @@ void Trx_sys::init_at_db_start(ib_recovery_t recovery) noexcept {
   }
 }
 
-int Trx_sys::recover(XID *xid_list, ulint len) noexcept {
+int TrxSys::recover(Xid *xid_list, ulint len) noexcept {
   ut_ad(len > 0);
 
   /* We should set those transactions which are in the prepared state
@@ -563,7 +563,7 @@ int Trx_sys::recover(XID *xid_list, ulint len) noexcept {
 }
 
 #ifdef WITH_XOPEN
-Trx *Trx_sys::get_trx_by_xid(XID *xid) noexcept {
+Trx *TrxSys::get_trx_by_xid(Xid *xid) noexcept {
   ut_a(xid != nullptr);
 
   mutex_enter(&m_mutex);
@@ -589,13 +589,13 @@ Trx *Trx_sys::get_trx_by_xid(XID *xid) noexcept {
 }
 #endif /* WITH_XOPEN */
 
-void Trx_sys::close_read_view(Read_view *view) {
+void TrxSys::close_read_view(ReadView *view) {
   ut_ad(mutex_own(&m_mutex));
 
   m_view_list.remove(view);
 }
 
-void Trx_sys::close_read_view_for_read_committed(Trx *trx) {
+void TrxSys::close_read_view_for_read_committed(Trx *trx) {
   ut_a(trx->m_global_read_view != nullptr);
 
   mutex_enter(&m_mutex);
@@ -610,7 +610,7 @@ void Trx_sys::close_read_view_for_read_committed(Trx *trx) {
   mutex_exit(&m_mutex);
 }
 
-void Trx_sys::set_cursor_view(Trx *trx, Cursor_view *cursor_view) {
+void TrxSys::set_cursor_view(Trx *trx, CursorView *cursor_view) {
   mutex_enter(&m_mutex);
 
   if (likely(cursor_view != nullptr)) {
@@ -622,12 +622,12 @@ void Trx_sys::set_cursor_view(Trx *trx, Cursor_view *cursor_view) {
   mutex_exit(&m_mutex);
 }
 
-Cursor_view *Trx_sys::create_cursor_view(Trx *cr_trx) {
+CursorView *TrxSys::create_cursor_view(Trx *cr_trx) {
   /* Use larger heap than in trx_create when creating a read_view because cursors are quite big. */
 
   auto heap = mem_heap_create(512);
 
-  auto curview = reinterpret_cast<Cursor_view *>(mem_heap_alloc(heap, sizeof(Cursor_view)));
+  auto curview = reinterpret_cast<CursorView *>(mem_heap_alloc(heap, sizeof(CursorView)));
 
   curview->heap = heap;
 
@@ -642,7 +642,7 @@ Cursor_view *Trx_sys::create_cursor_view(Trx *cr_trx) {
 
   auto view = curview->read_view;
   view->m_creator_trx_id = cr_trx->m_id;
-  view->m_type = Read_view_type::HIGH_GRANULARITY;
+  view->m_type = ReadViewType::HIGH_GRANULARITY;
   view->m_undo_no = cr_trx->m_undo_no;
 
   /* No future transactions should be visible in the view */
@@ -689,7 +689,7 @@ Cursor_view *Trx_sys::create_cursor_view(Trx *cr_trx) {
   return curview;
 }
 
-void Trx_sys::close_cursor_view(Trx *trx, Cursor_view *curview) {
+void TrxSys::close_cursor_view(Trx *trx, CursorView *curview) {
   ut_a(curview->read_view);
   ut_a(curview->heap);
 
@@ -707,8 +707,8 @@ void Trx_sys::close_cursor_view(Trx *trx, Cursor_view *curview) {
   mem_heap_free(curview->heap);
 }
 
-Read_view *Trx_sys::create_read_view_low(ulint n, mem_heap_t *heap) {
-  auto view = reinterpret_cast<Read_view *>(mem_heap_alloc(heap, sizeof(Read_view)));
+ReadView *TrxSys::create_read_view_low(ulint n, MemHeap *heap) {
+  auto view = reinterpret_cast<ReadView *>(mem_heap_alloc(heap, sizeof(ReadView)));
 
   view->m_n_trx_ids = n;
   view->m_trx_ids = reinterpret_cast<trx_id_t *>(mem_heap_alloc(heap, n * sizeof *view->m_trx_ids));
@@ -716,7 +716,7 @@ Read_view *Trx_sys::create_read_view_low(ulint n, mem_heap_t *heap) {
   return view;
 }
 
-Read_view *Trx_sys::oldest_copy_or_open_new(trx_id_t cr_trx_id, mem_heap_t *heap) {
+ReadView *TrxSys::oldest_copy_or_open_new(trx_id_t cr_trx_id, MemHeap *heap) {
   ut_ad(mutex_own(&m_mutex));
 
   auto old_view = m_view_list.back();
@@ -770,13 +770,13 @@ Read_view *Trx_sys::oldest_copy_or_open_new(trx_id_t cr_trx_id, mem_heap_t *heap
   return view_copy;
 }
 
-Read_view *Trx_sys::open_read_view_now(trx_id_t cr_trx_id, mem_heap_t *heap) {
+ReadView *TrxSys::open_read_view_now(trx_id_t cr_trx_id, MemHeap *heap) {
   ut_ad(mutex_own(&m_mutex));
 
   auto view = create_read_view_low(m_trx_list.size(), heap);
 
   view->m_creator_trx_id = cr_trx_id;
-  view->m_type = Read_view_type::NORMAL;
+  view->m_type = ReadViewType::NORMAL;
   view->m_undo_no = 0;
 
   /* No future transactions should be visible in the view */
@@ -820,13 +820,13 @@ Read_view *Trx_sys::open_read_view_now(trx_id_t cr_trx_id, mem_heap_t *heap) {
   return view;
 }
 
-Trx_sys *Trx_sys::create(FSP *fsp) noexcept {
-  auto ptr = ut_new(sizeof(Trx_sys));
+TrxSys *TrxSys::create(Fsp *fsp) noexcept {
+  auto ptr = ut_new(sizeof(TrxSys));
 
-  return ptr != nullptr ? new (ptr) Trx_sys(fsp) : nullptr;
+  return ptr != nullptr ? new (ptr) TrxSys(fsp) : nullptr;
 }
 
-void Trx_sys::destroy(Trx_sys *&trx_sys) noexcept {
+void TrxSys::destroy(TrxSys *&trx_sys) noexcept {
   call_destructor(trx_sys);
 
   ut_delete(trx_sys);

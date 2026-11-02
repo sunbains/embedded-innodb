@@ -73,33 +73,33 @@ constexpr auto SYS_DOUBLEWRITE_BLOCK_SIZE = FSP_EXTENT_SIZE;
 /* @} */
 
 /** Doublewrite control struct */
-struct DBLWR {
+struct Dblwr {
 
   /** 
    * Constructor.
    * 
    * @param[in,out] fsp Filespace manager to use for IO.
    */
-  explicit DBLWR(FSP *fsp);
+  explicit Dblwr(Fsp *fsp);
 
   /** 
    * Destructor.
    */
-  ~DBLWR() noexcept;
+  ~Dblwr() noexcept;
 
   /** 
-   * Create an instance of DBLWR.
+   * Create an instance of Dblwr.
    * 
    * @param[in,out] fsp Filespace manager to use for IO.
    * 
    * @return and instance or nullptr if there is an error.
    */
-  static DBLWR *create(FSP *fsp) noexcept;
+  static Dblwr *create(Fsp *fsp) noexcept;
 
   /**
-   * Destroy an instance of DBLWR.
+   * Destroy an instance of Dblwr.
    */
-  static void destroy(DBLWR *&dblwr) noexcept;
+  static void destroy(Dblwr *&dblwr) noexcept;
 
   /**
    * Creates the doublewrite buffer to a new InnoDB installation. The header of
@@ -107,7 +107,7 @@ struct DBLWR {
    * 
    * @return DB_SUCCESS if successful, otherwise an error code.
    */
-  db_err initialize() noexcept;
+  DbErr initialize() noexcept;
 
   /**
    * At a database startup initializes the doublewrite buffer memory structure if
@@ -143,10 +143,10 @@ struct DBLWR {
   static bool check_if_exists(Fil *fil, std::pair<page_no_t, page_no_t> &offsets) noexcept;
 
   /** Filespace manager for IO. */
-  FSP *m_fsp{};
+  Fsp *m_fsp{};
 
   /** mutex protecting the first_free field and write_buf */
-  mutex_t m_mutex{};
+  Mutex m_mutex{};
 
   /** The page number of the first doublewrite block (64 pages) */
   page_no_t m_block1{};
@@ -166,8 +166,8 @@ struct DBLWR {
 
   /** Array to store pointers to the buffer blocks which have been
   cached to write_buf */
-  std::vector<Buf_page *> m_bpages{};
+  std::vector<BufPage *> m_bpages{};
 };
 
 /** Doublewrite system */
-extern DBLWR *srv_dblwr;
+extern Dblwr *srv_dblwr;

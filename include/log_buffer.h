@@ -27,15 +27,15 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 #include <span>
 #include <vector>
 
-using Log_phy_blocks = std::vector<Log_phy_block, IO_allocator<Log_phy_block>>;
+using Log_phy_blocks = std::vector<LogPhyBlock, IO_allocator<LogPhyBlock>>;
 
 inline auto make_log_write_view(Log_phy_blocks &blocks) noexcept {
-  auto spans = blocks | std::views::transform([](Log_phy_block &block) { return std::span<byte>(block.m_data); });
+  auto spans = blocks | std::views::transform([](LogPhyBlock &block) { return std::span<byte>(block.m_data); });
   return spans | std::views::join;
 }
 
 inline auto make_log_read_view(const Log_phy_blocks &blocks) noexcept {
-  auto spans = blocks | std::views::transform([](const Log_phy_block &block) {
+  auto spans = blocks | std::views::transform([](const LogPhyBlock &block) {
                  return std::span<const byte>(block.m_data, block.get_data_len());
                });
   return spans | std::views::join;
@@ -44,7 +44,7 @@ inline auto make_log_read_view(const Log_phy_blocks &blocks) noexcept {
 /**
  * Log buffer for managing physical log blocks
  */
-struct Log_buffer {
+struct LogBuffer {
   using Phy_blocks = Log_phy_blocks;
 
   using write_view_t = decltype(make_log_write_view(std::declval<Phy_blocks &>()));
@@ -59,16 +59,16 @@ struct Log_buffer {
    *
    * @param[in] size The size of the log buffer in bytes.
    */
-  explicit Log_buffer(size_t size) noexcept {
-    m_phy_blocks.reserve(size / sizeof(Log_phy_block));
+  explicit LogBuffer(size_t size) noexcept {
+    m_phy_blocks.reserve(size / sizeof(LogPhyBlock));
 
-    const auto total_size = m_phy_blocks.size() * sizeof(Log_phy_block);
+    const auto total_size = m_phy_blocks.size() * sizeof(LogPhyBlock);
 
     m_read_state = std::make_tuple(make_log_read_view(m_phy_blocks), size_t{0}, total_size);
     m_write_state = std::make_tuple(make_log_write_view(m_phy_blocks), size_t{0}, total_size);
   }
 
-  ~Log_buffer() noexcept;
+  ~LogBuffer() noexcept;
 
   /**
    * Acquire the log buffer mutex.
@@ -78,7 +78,7 @@ struct Log_buffer {
     mutex_enter(&m_mutex);
   }
 
-  [[nodiscard]] size_t size() const noexcept { return m_phy_blocks.size() * sizeof(Log_phy_block); }
+  [[nodiscard]] size_t size() const noexcept { return m_phy_blocks.size() * sizeof(LogPhyBlock); }
 
   /**
    * Appends data to the log buffer.
@@ -118,13 +118,13 @@ struct Log_buffer {
     return false;
   }
 
-  Log_phy_block &back() noexcept {
+  LogPhyBlock &back() noexcept {
     // FIXME: We need to return the current log block being written to.
     ut_error;
     return m_phy_blocks.back();
   }
 
-  const Log_phy_block &back() const noexcept {
+  const LogPhyBlock &back() const noexcept {
     // FIXME: We need to return the current log block being written to.
     ut_error;
     return m_phy_blocks.back();
@@ -138,7 +138,7 @@ struct Log_buffer {
     mutex_exit(&m_mutex);
   }
 
-  mutable mutex_t m_mutex{};
+  mutable Mutex m_mutex{};
 
   /** Log buffer physical blocks */
   Phy_blocks m_phy_blocks{};

@@ -17,4 +17,4 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 #include "log_buffer.h"
 
-Log_buffer::~Log_buffer() noexcept = default;
+LogBuffer::~LogBuffer() noexcept = default;

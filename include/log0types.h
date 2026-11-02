@@ -17,30 +17,30 @@ extern bool log_debug_writes;
 // Forward declarations
 struct Log;
 struct Checkpoint;
-struct Log_buffer;
+struct LogBuffer;
 
-struct Log_file {
-  Log_file() = default;
+struct LogFile {
+  LogFile() = default;
 
   /** Constructor
    * @param path Path to the log file
    * @param max_size Maximum size of the log file in bytes
   */
-  Log_file(const std::string &path, off_t max_size) noexcept;
+  LogFile(const std::string &path, off_t max_size) noexcept;
 
   /** Move constructor */
-  Log_file(Log_file &&other) noexcept;
+  LogFile(LogFile &&other) noexcept;
 
   /** Move assignment */
-  Log_file &operator=(Log_file &&other) noexcept;
+  LogFile &operator=(LogFile &&other) noexcept;
 
   /** Copy constructor - deleted */
-  Log_file(const Log_file &) = delete;
+  LogFile(const LogFile &) = delete;
 
   /** Copy assignment - deleted */
-  Log_file &operator=(const Log_file &) = delete;
+  LogFile &operator=(const LogFile &) = delete;
 
-  ~Log_file() noexcept;
+  ~LogFile() noexcept;
 
   /** Convert the log file to a string.
    *
@@ -61,7 +61,7 @@ struct Log_file {
   std::atomic<uint32_t> m_pending_ops{0};
 
   /** Every file has a header. */
-  alignas(LOG_METADATA_PAGE_SIZE) Log_phy_file_header m_header{};
+  alignas(LOG_METADATA_PAGE_SIZE) LogPhyFileHeader m_header{};
 };
 
 /**
@@ -73,16 +73,16 @@ struct Log_file {
  * It maps the virtual offset and LSN to a physical file and offset for both
  * read and write.
  */
-struct Log_vfile {
+struct LogVfile {
   enum class State : ulint { OK = 301, CORRUPTED = 302 };
 
   /* Forbidden copy and move constructors and operators. */
-  Log_vfile(Log_vfile &&) = delete;
-  Log_vfile(const Log_vfile &) = delete;
-  Log_vfile &operator=(Log_vfile &&) = delete;
-  Log_vfile &operator=(const Log_vfile &) = delete;
+  LogVfile(LogVfile &&) = delete;
+  LogVfile(const LogVfile &) = delete;
+  LogVfile &operator=(LogVfile &&) = delete;
+  LogVfile &operator=(const LogVfile &) = delete;
 
-  Log_vfile() = default;
+  LogVfile() = default;
 
   /** Constructor
    * @param directory Directory to store the log files
@@ -91,9 +91,9 @@ struct Log_vfile {
    *
    * @throws std::invalid_argument if the arguments are invalid.
   */
-  Log_vfile(std::string directory, size_t n_files, off_t max_file_size);
+  LogVfile(std::string directory, size_t n_files, off_t max_file_size);
 
-  ~Log_vfile() noexcept;
+  ~LogVfile() noexcept;
 
   /** Convert to a string.
    *
@@ -175,7 +175,7 @@ struct Log_vfile {
    * @param[in] off The offset to write the checkpoint information to.
    *
    * @return True if the checkpoint information is written successfully, false otherwise. */
-  [[nodiscard]] bool write_checkpoint(Log_phy_checkpoint *checkpoint, off_t off) noexcept;
+  [[nodiscard]] bool write_checkpoint(LogPhyCheckpoint *checkpoint, off_t off) noexcept;
 
   /**
    * Reads the checkpoint information from the files.
@@ -184,7 +184,7 @@ struct Log_vfile {
    * @param[in] off The offset to read the checkpoint information from.
    *
    * @return True if the checkpoint information is read successfully, false otherwise. */
-  [[nodiscard]] bool read(Log_phy_checkpoint &phy_checkpoint, off_t off) const noexcept;
+  [[nodiscard]] bool read(LogPhyCheckpoint &phy_checkpoint, off_t off) const noexcept;
 
   /**
    * Reads the checkpoint information from the files.
@@ -203,7 +203,7 @@ struct Log_vfile {
    * @param[in] end_lsn The end lsn of the log buffer to read.
    *
    * @return True if the log buffer is read successfully, false otherwise. */
-  [[nodiscard]] bool read(Log_buffer &buffer, lsn_t start_lsn, lsn_t end_lsn) noexcept;
+  [[nodiscard]] bool read(LogBuffer &buffer, lsn_t start_lsn, lsn_t end_lsn) noexcept;
 
   /**
    * Writes the log buffer to the files.
@@ -213,7 +213,7 @@ struct Log_vfile {
    *
    * @return True if the log buffer is written successfully, false otherwise.
    */
-  [[nodiscard]] bool write(Log_buffer &buffer, lsn_t write_lsn) noexcept;
+  [[nodiscard]] bool write(LogBuffer &buffer, lsn_t write_lsn) noexcept;
 
   /**
    * Flushes the header of the files.
@@ -272,7 +272,7 @@ struct Log_vfile {
    *
    * @return <file number, offset to write to within file number>.
    */
-  [[nodiscard]] std::pair<const Log_file *, off_t> get_io_coordinates(lsn_t first_header_lsn, lsn_t lsn) const noexcept;
+  [[nodiscard]] std::pair<const LogFile *, off_t> get_io_coordinates(lsn_t first_header_lsn, lsn_t lsn) const noexcept;
 
   /**
    * Converts a lsn to a log block number.
@@ -308,7 +308,7 @@ struct Log_vfile {
   std::string m_directory{};
 
   /** Number of files in the vfile */
-  std::vector<Log_file> m_files{};
+  std::vector<LogFile> m_files{};
 
   /** LOG_VFILE_OK or LOG_VFILE_CORRUPTED */
   State m_state{State::OK};
@@ -317,7 +317,7 @@ struct Log_vfile {
   lsn_t m_lsn{LOG_START_LSN};
 
   /** The offset of the above lsn */
-  ulint m_lsn_offset{Log_phy_file_header::HEADER_SIZE};
+  ulint m_lsn_offset{LogPhyFileHeader::HEADER_SIZE};
 
   /** Number of currently pending flush writes for this vfile */
   ulint m_n_pending_writes{};
@@ -333,17 +333,17 @@ struct Log_vfile {
   bool m_created_directory{false};
 };
 
-struct Log_checkpoint {
+struct LogCheckpoint {
 
-  Log_checkpoint() = default;
+  LogCheckpoint() = default;
 
   /* Forbidden copy and move constructors and operators. */
-  Log_checkpoint(Log_checkpoint &&) = delete;
-  Log_checkpoint(const Log_checkpoint &) = delete;
-  Log_checkpoint &operator=(Log_checkpoint &&) = delete;
-  Log_checkpoint &operator=(const Log_checkpoint &) = delete;
+  LogCheckpoint(LogCheckpoint &&) = delete;
+  LogCheckpoint(const LogCheckpoint &) = delete;
+  LogCheckpoint &operator=(LogCheckpoint &&) = delete;
+  LogCheckpoint &operator=(const LogCheckpoint &) = delete;
 
-  ~Log_checkpoint() noexcept;
+  ~LogCheckpoint() noexcept;
 
   /** Prepare the checkpoint buffer.
    *
@@ -360,7 +360,7 @@ struct Log_checkpoint {
    *
    * @return True if the checkpoint buffer is persisted successfully, false otherwise.
   */
-  [[nodiscard]] bool persist(Log_vfile &vfile, off_t write_offset) noexcept;
+  [[nodiscard]] bool persist(LogVfile &vfile, off_t write_offset) noexcept;
 
   /** Check if the checkpoint is consistent.
    *
@@ -424,8 +424,8 @@ struct Log_checkpoint {
   ulint m_n_pending_writes{};
 
   /** This latch is x-locked when a checkpoint write is running; a thread should wait for this without owning the log mutex */
-  rw_lock_t m_lock{};
+  RwLock m_lock{};
 
   /** Checkpoint data. */
-  alignas(LOG_METADATA_PAGE_SIZE) Log_phy_checkpoint m_phy_checkpoint{};
+  alignas(LOG_METADATA_PAGE_SIZE) LogPhyCheckpoint m_phy_checkpoint{};
 };

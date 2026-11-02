@@ -20,7 +20,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 
 /** NOTE: This test is currently Unix centric and will not compile on Windows.
 
-This module is a driver framework for running arbitrary DML and DDL
+This module is a driver framework for running arbitrary DML and Ddl
 statements on arbitrary number of tables using configurable number
 of threads.
 The DML statements that can be triggered are:
@@ -29,7 +29,7 @@ INSERT
 UPDATE
 DELETE
 
-The DDL statements that can be triggered are:
+The Ddl statements that can be triggered are:
 CREATE TABLE
 ALTER TABLE
 DROP TABLE
@@ -37,7 +37,7 @@ TRUNCATE TABLE
 
 How it works:
 =============
-This is just a driver. You have to implement the DML and DDL
+This is just a driver. You have to implement the DML and Ddl
 functionality for each table (see mt_base.c and mt_t1.c for examples)
 
 Once a derived table class is implemented it can be plugged into this
@@ -49,15 +49,15 @@ This driver goes through following sequence:
 3) Create each registered table
 4) Seed each table with n_rows
 5) Create n_ddl_threads and n_dml_threads
-6) Each DDL thread does following:
+6) Each Ddl thread does following:
         a) Choose one of the table randomly
-        b) Choose a DDL operation randomly
-        c) Execute the DDL operation and update the stats struct
+        b) Choose a Ddl operation randomly
+        c) Execute the Ddl operation and update the stats struct
         d) Wait for ddl_interval before going back to (a)
 7) Each DML thread does following:
         a) Choose one of the table randomly
         b) Choose a DML operation randomly
-        c) Execute the DDL operation and update the stats struct
+        c) Execute the Ddl operation and update the stats struct
         d) Return to (a)
 8) The test continues for test_time
 9) Waits for all worker threads to finish
@@ -108,7 +108,7 @@ static const int isolation_level = IB_TRX_REPEATABLE_READ;
 /* Test duration in seconds */
 static int test_time = 100;
 
-/* Interval between DDL statements in seconds */
+/* Interval between Ddl statements in seconds */
 static int ddl_interval = 1;
 
 /* To be incremented every time we do a DROP or TRUNCATE.
@@ -144,7 +144,7 @@ creation */
 static constexpr ib_tbl_fmt_t tbl_format = IB_TBL_V1;
 static ulint page_size = 0;
 
-/* Datastructure to hold error statistics for DML and DDL operations */
+/* Datastructure to hold error statistics for DML and Ddl operations */
 static op_err_t dml_op_errs[DML_OP_TYPE_MAX];
 static op_err_t ddl_op_errs[DDL_OP_TYPE_MAX];
 
@@ -329,7 +329,7 @@ static void *dml_worker(void *dummy) /*!< in: unused */
   return (nullptr);
 }
 
-/** A DDL worker thread that performs a randomly chosen DDL operation on a
+/** A Ddl worker thread that performs a randomly chosen Ddl operation on a
 randomly chosen table */
 static void *ddl_worker(void *dummy) /*!< in: unused */
 {
@@ -345,14 +345,14 @@ static void *ddl_worker(void *dummy) /*!< in: unused */
     ib_err_t err;
     tbl_class_t *tbl;
 
-    /* wait for DDL interval */
+    /* wait for Ddl interval */
     sleep(ddl_interval);
 
     /* choose a table randomly */
     tbl = &tbl_array[random() % num_tables];
     args.tbl = tbl;
 
-    /* choose a DDL operation randomly */
+    /* choose a Ddl operation randomly */
     j = random() % DDL_OP_TYPE_MAX;
 
     /* When doing DROP or TRUNCATE we increment the

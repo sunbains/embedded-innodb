@@ -57,7 +57,7 @@ has more fields than the other. */
  * @param[in] dtuple data tuple
  * @param[in] rec physical record which differs from dtuple in some of the common fields,
  *                or which has an equal number or more fields than dtuple
- * @param[in] offsets array returned by Phy_rec::get_col_offsets()
+ * @param[in] offsets array returned by PhyRec::get_col_offsets()
  * @param[in/out] matched_fields number of already completely matched fields; when function
  *                returns, contains the value for current comparison
  *
@@ -67,7 +67,7 @@ has more fields than the other. */
 #endif /* UNIV_DEBUG */
 
 static int cmp_debug_dtuple_rec_with_match(
-  void *cmp_ctx, const DTuple *dtuple, const Rec rec, const Rec_offs &offsets, ulint *matched_fields
+  void *cmp_ctx, const DTuple *dtuple, const Rec rec, const RecOffs &offsets, ulint *matched_fields
 ) noexcept;
 
 /**
@@ -371,9 +371,9 @@ int cmp_data_data_slow(
 }
 
 int cmp_dtuple_rec_with_match(
-  void *cmp_ctx, const DTuple *dtuple, const Rec rec, const Rec_offs &offsets, ulint *matched_fields, ulint *matched_bytes
+  void *cmp_ctx, const DTuple *dtuple, const Rec rec, const RecOffs &offsets, ulint *matched_fields, ulint *matched_bytes
 ) noexcept {
-  const dfield_t *dtuple_field;
+  const Dfield *dtuple_field;
   ulint dtuple_f_len;
   const byte *dtuple_b_ptr;
   ulint dtuple_byte;
@@ -575,7 +575,7 @@ int cmp_dtuple_rec(void *cmp_ctx, const DTuple *dtuple, const Rec rec, const uli
   return cmp_dtuple_rec_with_match(cmp_ctx, dtuple, rec, offsets, &matched_fields, &matched_bytes);
 }
 
-bool cmp_dtuple_is_prefix_of_rec(void *cmp_ctx, const DTuple *dtuple, const Rec rec, const Rec_offs &offsets) noexcept {
+bool cmp_dtuple_is_prefix_of_rec(void *cmp_ctx, const DTuple *dtuple, const Rec rec, const RecOffs &offsets) noexcept {
   ulint n_fields;
   ulint matched_fields = 0;
   ulint matched_bytes = 0;
@@ -603,7 +603,7 @@ bool cmp_dtuple_is_prefix_of_rec(void *cmp_ctx, const DTuple *dtuple, const Rec 
 }
 
 int cmp_rec_rec_simple(
-  const Rec rec1, const Rec rec2, const Rec_offs &offsets1, const Rec_offs &offsets2, const Index *index
+  const Rec rec1, const Rec rec2, const RecOffs &offsets1, const RecOffs &offsets2, const Index *index
 ) noexcept {
   ulint rec1_f_len;
   const byte *rec1_b_ptr;
@@ -728,7 +728,7 @@ int cmp_rec_rec_simple(
 }
 
 int cmp_rec_rec_with_match(
-  const Rec rec1, const Rec rec2, const Rec_offs &offsets1, const Rec_offs &offsets2, const Index *index, ulint *matched_fields,
+  const Rec rec1, const Rec rec2, const RecOffs &offsets1, const RecOffs &offsets2, const Index *index, ulint *matched_fields,
   ulint *matched_bytes
 ) noexcept {
   ulint rec1_f_len;
@@ -918,16 +918,16 @@ order_resolved:
  * @param[in] dtuple data tuple
  * @param[in] rec physical record which differs from dtuple in some of the common fields,
  *                or which has an equal number or more fields than dtuple
- * @param[in] offsets array returned by Phy_rec::get_col_offsets()
+ * @param[in] offsets array returned by PhyRec::get_col_offsets()
  * @param[in/out] matched_fields number of already completely matched fields; when function
  *                returns, contains the value for current comparison
  *
  * @return 1, 0, -1, if dtuple is greater, equal, less than rec,
  *  respectively, when only the common first fields are compared */
 static int cmp_debug_dtuple_rec_with_match(
-  void *cmp_ctx, const DTuple *dtuple, const Rec rec, const Rec_offs &offsets, ulint *matched_fields
+  void *cmp_ctx, const DTuple *dtuple, const Rec rec, const RecOffs &offsets, ulint *matched_fields
 ) noexcept {
-  const dfield_t *dtuple_field;
+  const Dfield *dtuple_field;
   ulint dtuple_f_len;
   const byte *dtuple_f_data;
   ulint rec_f_len;
@@ -967,7 +967,7 @@ static int cmp_debug_dtuple_rec_with_match(
 
     dtuple_field = dtuple_get_nth_field(dtuple, cur_field);
     {
-      const dtype_t *type = dfield_get_type(dtuple_field);
+      const Dtype *type = dfield_get_type(dtuple_field);
 
       mtype = type->mtype;
       prtype = type->prtype;

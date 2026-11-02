@@ -32,21 +32,21 @@ Created 4/24/1996 Heikki Tuuri
 #include "srv0srv.h"
 #include "trx0sys.h"
 
-bool Dict_load::name_of_col_is(const Table *table, const Index *index, ulint i, const char *name) const noexcept {
+bool DictLoad::name_of_col_is(const Table *table, const Index *index, ulint i, const char *name) const noexcept {
   ulint tmp = index->get_nth_field(i)->get_col()->get_no();
 
   return strcmp(name, table->get_col_name(tmp)) == 0;
 }
 
-char *Dict_load::get_first_table_name_in_db(const char *name) noexcept {
+char *DictLoad::get_first_table_name_in_db(const char *name) noexcept {
   ut_ad(mutex_own(&m_dict->m_mutex));
   auto fsp = m_dict->m_store.m_fsp;
   auto btree = m_dict->m_store.m_btree;
-  Btree_pcursor pcur(fsp, btree);
+  BtreePcursor pcur(fsp, btree);
 
   auto heap = mem_heap_create(1000);
 
-  mtr_t mtr;
+  Mtr mtr;
 
   mtr.start();
 
@@ -77,7 +77,7 @@ char *Dict_load::get_first_table_name_in_db(const char *name) noexcept {
     }
 
     ulint len;
-    Phy_rec record(sys_index, rec);
+    PhyRec record(sys_index, rec);
     auto offsets = record.get_col_offsets(nullptr, 1, &heap, Current_location());
     const auto field = rec.get_nth_field(offsets, 0, &len);
 
@@ -110,11 +110,11 @@ char *Dict_load::get_first_table_name_in_db(const char *name) noexcept {
   }
 }
 
-std::string Dict_load::to_string() noexcept {
+std::string DictLoad::to_string() noexcept {
   std::string str;
   auto fsp = m_dict->m_store.m_fsp;
   auto btree = m_dict->m_store.m_btree;
-  Btree_pcursor pcur(fsp, btree);
+  BtreePcursor pcur(fsp, btree);
 
   /* Enlarge the fatal semaphore wait timeout during the InnoDB table
   monitor printout */
@@ -125,7 +125,7 @@ std::string Dict_load::to_string() noexcept {
 
   m_dict->mutex_acquire();
 
-  mtr_t mtr;
+  Mtr mtr;
   auto heap = mem_heap_create(1000);
 
   mtr.start();
@@ -159,7 +159,7 @@ std::string Dict_load::to_string() noexcept {
     }
 
     ulint len;
-    Phy_rec record(sys_index, rec);
+    PhyRec record(sys_index, rec);
     auto offsets = record.get_col_offsets(nullptr, sys_index->get_n_fields(), &heap, Current_location());
     const auto field = rec.get_nth_field(offsets, 0, &len);
 
@@ -197,7 +197,7 @@ std::string Dict_load::to_string() noexcept {
   ut_a(false);
 }
 
-ulint Dict_load::sys_tables_get_flags(const Rec rec, const ulint *offsets) const noexcept {
+ulint DictLoad::sys_tables_get_flags(const Rec rec, const ulint *offsets) const noexcept {
   ulint len;
 
   auto field = rec.get_nth_field(offsets, 5, &len);
@@ -227,17 +227,17 @@ ulint Dict_load::sys_tables_get_flags(const Rec rec, const ulint *offsets) const
   }
 }
 
-db_err Dict_load::open(bool in_crash_recovery) noexcept {
+DbErr DictLoad::open(bool in_crash_recovery) noexcept {
   space_id_t max_space_id{};
   auto fsp = m_dict->m_store.m_fsp;
   auto btree = m_dict->m_store.m_btree;
-  Btree_pcursor pcur(fsp, btree);
+  BtreePcursor pcur(fsp, btree);
 
   m_dict->mutex_acquire();
 
   load_system_tables();
 
-  mtr_t mtr;
+  Mtr mtr;
   auto heap = mem_heap_create(1000);
 
   mtr.start();
@@ -270,7 +270,7 @@ db_err Dict_load::open(bool in_crash_recovery) noexcept {
     } else if (!rec.get_deleted_flag()) {
       /* We found one */
       ulint len;
-      Phy_rec record(sys_index, rec);
+      PhyRec record(sys_index, rec);
       auto offsets = record.get_col_offsets(nullptr, sys_index->get_n_fields(), &heap, Current_location());
       auto field = rec.get_nth_field(offsets, 0, &len);
       auto name = mem_strdupl(const_cast<char *>(reinterpret_cast<const char *>(field.get())), len);
@@ -334,14 +334,14 @@ db_err Dict_load::open(bool in_crash_recovery) noexcept {
   }
 }
 
-db_err Dict_load::load_columns(Table *table, mem_heap_t *heap) noexcept {
+DbErr DictLoad::load_columns(Table *table, MemHeap *heap) noexcept {
   auto fsp = m_dict->m_store.m_fsp;
   auto btree = m_dict->m_store.m_btree;
-  Btree_pcursor pcur(fsp, btree);
+  BtreePcursor pcur(fsp, btree);
 
   ut_ad(mutex_own(&m_dict->m_mutex));
 
-  mtr_t mtr;
+  Mtr mtr;
 
   mtr.start();
 
@@ -369,7 +369,7 @@ db_err Dict_load::load_columns(Table *table, mem_heap_t *heap) noexcept {
     ut_a(!rec.get_deleted_flag());
 
     ulint len;
-    Phy_rec record(sys_index, rec);
+    PhyRec record(sys_index, rec);
     auto offsets = record.get_col_offsets(nullptr, sys_index->get_n_fields(), &heap, Current_location());
     auto field = rec.get_nth_field(offsets, 0, &len);
     ut_ad(len == 8);
@@ -423,15 +423,15 @@ db_err Dict_load::load_columns(Table *table, mem_heap_t *heap) noexcept {
   return DB_SUCCESS;
 }
 
-db_err Dict_load::load_fields(Index *index, mem_heap_t *heap) noexcept {
+DbErr DictLoad::load_fields(Index *index, MemHeap *heap) noexcept {
   ulint len;
   auto fsp = m_dict->m_store.m_fsp;
   auto btree = m_dict->m_store.m_btree;
-  Btree_pcursor pcur(fsp, btree);
+  BtreePcursor pcur(fsp, btree);
 
   ut_ad(mutex_own(&m_dict->m_mutex));
 
-  mtr_t mtr;
+  Mtr mtr;
 
   mtr.start();
 
@@ -464,7 +464,7 @@ db_err Dict_load::load_fields(Index *index, mem_heap_t *heap) noexcept {
       continue;
     }
 
-    Phy_rec record(sys_index, rec);
+    PhyRec record(sys_index, rec);
     auto offsets = record.get_col_offsets(nullptr, sys_index->get_n_fields(), &heap, Current_location());
     auto field = rec.get_nth_field(offsets, 0, &len);
     ut_ad(len == 8);
@@ -508,17 +508,17 @@ db_err Dict_load::load_fields(Index *index, mem_heap_t *heap) noexcept {
   return DB_SUCCESS;
 }
 
-db_err Dict_load::load_indexes(Table *table, mem_heap_t *heap) noexcept {
+DbErr DictLoad::load_indexes(Table *table, MemHeap *heap) noexcept {
   auto err{DB_SUCCESS};
   auto fsp = m_dict->m_store.m_fsp;
   auto btree = m_dict->m_store.m_btree;
-  Btree_pcursor pcur(fsp, btree);
+  BtreePcursor pcur(fsp, btree);
 
   ut_ad(mutex_own(&m_dict->m_mutex));
 
   const auto is_sys_table = table->m_id < DICT_HDR_FIRST_ID;
 
-  mtr_t mtr;
+  Mtr mtr;
 
   mtr.start();
 
@@ -549,7 +549,7 @@ db_err Dict_load::load_indexes(Table *table, mem_heap_t *heap) noexcept {
     const auto rec = pcur.get_rec();
 
     ulint len;
-    Phy_rec record(sys_index, rec);
+    PhyRec record(sys_index, rec);
     auto offsets = record.get_col_offsets(nullptr, sys_index->get_n_fields(), &heap, Current_location());
     auto field = rec.get_nth_field(offsets, 0, &len);
     ut_ad(len == 8);
@@ -619,7 +619,7 @@ db_err Dict_load::load_indexes(Table *table, mem_heap_t *heap) noexcept {
       /* The index was created in memory already at booting of the database server */
 
     } else {
-      auto index = Index::create(table, name_buf, Page_id{space, NULL_PAGE_NO}, type, n_fields);
+      auto index = Index::create(table, name_buf, PageId{space, NULL_PAGE_NO}, type, n_fields);
 
       index->m_id = id;
 
@@ -650,12 +650,12 @@ db_err Dict_load::load_indexes(Table *table, mem_heap_t *heap) noexcept {
   return err;
 }
 
-Table *Dict_load::load_table(ib_recovery_t recovery, const char *name) noexcept {
+Table *DictLoad::load_table(IbRecovery recovery, const char *name) noexcept {
   ut_ad(mutex_own(&m_dict->m_mutex));
 
   auto heap = mem_heap_create(32000);
 
-  mtr_t mtr;
+  Mtr mtr;
 
   mtr.start();
 
@@ -668,7 +668,7 @@ Table *Dict_load::load_table(ib_recovery_t recovery, const char *name) noexcept 
   dfield_set_data(dfield, name, strlen(name));
   sys_index->copy_types(tuple, 1);
 
-  Btree_pcursor pcur(m_dict->m_store.m_fsp, m_dict->m_store.m_btree);
+  BtreePcursor pcur(m_dict->m_store.m_fsp, m_dict->m_store.m_btree);
 
   pcur.open_on_user_rec(sys_index, tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF, &mtr, Current_location());
 
@@ -687,7 +687,7 @@ Table *Dict_load::load_table(ib_recovery_t recovery, const char *name) noexcept 
   }
 
   ulint len;
-  Phy_rec record(sys_index, rec);
+  PhyRec record(sys_index, rec);
   auto offsets = record.get_col_offsets(nullptr, sys_index->get_n_fields(), &heap, Current_location());
   auto field = rec.get_nth_field(offsets, 0, &len);
 
@@ -804,18 +804,18 @@ Table *Dict_load::load_table(ib_recovery_t recovery, const char *name) noexcept 
   return table;
 }
 
-Table *Dict_load::load_table_on_id(ib_recovery_t recovery, Dict_id table_id) noexcept {
+Table *DictLoad::load_table_on_id(IbRecovery recovery, Dict_id table_id) noexcept {
   ut_ad(mutex_own(&m_dict->m_mutex));
 
   auto fsp = m_dict->m_store.m_fsp;
   auto btree = m_dict->m_store.m_btree;
-  Btree_pcursor pcur(fsp, btree);
+  BtreePcursor pcur(fsp, btree);
 
   /* NOTE that the operation of this function is protected by
   the dictionary mutex, and therefore no deadlocks can occur
   with other dictionary operations. */
 
-  mtr_t mtr;
+  Mtr mtr;
 
   mtr.start();
 
@@ -857,7 +857,7 @@ Table *Dict_load::load_table_on_id(ib_recovery_t recovery, Dict_id table_id) noe
   rec = pcur.get_rec();
 
   ulint len;
-  Phy_rec record(sys_table_ids, rec);
+  PhyRec record(sys_table_ids, rec);
   auto offsets = record.get_col_offsets(nullptr, sys_table_ids->get_n_fields(), &heap, Current_location());
   auto field = rec.get_nth_field(offsets, 0, &len);
   ut_ad(len == 8);
@@ -878,7 +878,7 @@ Table *Dict_load::load_table_on_id(ib_recovery_t recovery, Dict_id table_id) noe
   return table;
 }
 
-db_err Dict_load::load_system_table(Table *table) noexcept {
+DbErr DictLoad::load_system_table(Table *table) noexcept {
   ut_ad(mutex_own(&m_dict->m_mutex));
 
   auto heap = mem_heap_create(1000);
@@ -897,19 +897,19 @@ db_err Dict_load::load_system_table(Table *table) noexcept {
   return err;
 }
 
-db_err Dict_load::load_foreign_cols(const char *id, Foreign *foreign) noexcept {
+DbErr DictLoad::load_foreign_cols(const char *id, Foreign *foreign) noexcept {
   ut_ad(mutex_own(&m_dict->m_mutex));
 
   auto fsp = m_dict->m_store.m_fsp;
   auto btree = m_dict->m_store.m_btree;
-  Btree_pcursor pcur(fsp, btree);
+  BtreePcursor pcur(fsp, btree);
 
   foreign->m_foreign_col_names =
     reinterpret_cast<const char **>(mem_heap_alloc(foreign->m_heap, foreign->m_n_fields * sizeof(void *)));
   foreign->m_referenced_col_names =
     reinterpret_cast<const char **>(mem_heap_alloc(foreign->m_heap, foreign->m_n_fields * sizeof(void *)));
 
-  mtr_t mtr;
+  Mtr mtr;
 
   mtr.start();
 
@@ -931,7 +931,7 @@ db_err Dict_load::load_foreign_cols(const char *id, Foreign *foreign) noexcept {
     ut_a(!rec.get_deleted_flag());
 
     ulint len;
-    Phy_rec record(sys_index, rec);
+    PhyRec record(sys_index, rec);
     auto offsets = record.get_col_offsets(nullptr, sys_index->get_n_fields(), &foreign->m_heap, Current_location());
 
     auto field = rec.get_nth_field(offsets, 0, &len);
@@ -958,15 +958,15 @@ db_err Dict_load::load_foreign_cols(const char *id, Foreign *foreign) noexcept {
   return DB_SUCCESS;
 }
 
-db_err Dict_load::load_foreign(const char *id, bool check_charsets) noexcept {
+DbErr DictLoad::load_foreign(const char *id, bool check_charsets) noexcept {
   ut_ad(mutex_own(&m_dict->m_mutex));
 
   auto heap2 = mem_heap_create(1000);
   auto fsp = m_dict->m_store.m_fsp;
   auto btree = m_dict->m_store.m_btree;
-  Btree_pcursor pcur(fsp, btree);
+  BtreePcursor pcur(fsp, btree);
 
-  mtr_t mtr;
+  Mtr mtr;
 
   mtr.start();
 
@@ -999,7 +999,7 @@ db_err Dict_load::load_foreign(const char *id, bool check_charsets) noexcept {
   }
 
   ulint len;
-  Phy_rec record(sys_index, rec);
+  PhyRec record(sys_index, rec);
   auto offsets = record.get_col_offsets(nullptr, sys_index->get_n_fields(), &heap2, Current_location());
   auto field = rec.get_nth_field(offsets, 0, &len);
 
@@ -1063,10 +1063,10 @@ db_err Dict_load::load_foreign(const char *id, bool check_charsets) noexcept {
   return m_dict->foreign_add_to_cache(foreign, check_charsets);
 }
 
-db_err Dict_load::load_foreigns(const char *table_name, bool check_charsets) noexcept {
+DbErr DictLoad::load_foreigns(const char *table_name, bool check_charsets) noexcept {
   ut_ad(mutex_own(&m_dict->m_mutex));
 
-  Btree_pcursor pcur(m_dict->m_store.m_fsp, m_dict->m_store.m_btree);
+  BtreePcursor pcur(m_dict->m_store.m_fsp, m_dict->m_store.m_btree);
 
   auto sys_foreign = m_dict->table_get("SYS_FOREIGN");
 
@@ -1076,7 +1076,7 @@ db_err Dict_load::load_foreigns(const char *table_name, bool check_charsets) noe
     return DB_NOT_FOUND;
   }
 
-  mtr_t mtr;
+  Mtr mtr;
 
   /* Get the secondary index based on FOR_NAME from table SYS_FOREIGN */
 
@@ -1098,7 +1098,7 @@ db_err Dict_load::load_foreigns(const char *table_name, bool check_charsets) noe
       /* Now we have the record in the secondary index containing a table
       name and a foreign constraint ID */
 
-      Phy_rec record(sec_index, rec);
+      PhyRec record(sec_index, rec);
       auto offsets = record.get_col_offsets(nullptr, sec_index->get_n_fields(), &heap, Current_location());
       ulint len;
       auto field = rec.get_nth_field(offsets, 0, &len);
@@ -1160,10 +1160,10 @@ db_err Dict_load::load_foreigns(const char *table_name, bool check_charsets) noe
   return DB_SUCCESS;
 }
 
-db_err Dict_load::load_system_tables() noexcept {
+DbErr DictLoad::load_system_tables() noexcept {
   ut_ad(mutex_own(&m_dict->m_mutex));
 
-  mtr_t mtr;
+  Mtr mtr;
 
   mtr.start();
 
@@ -1210,7 +1210,7 @@ db_err Dict_load::load_system_tables() noexcept {
 
   m_dict->m_sys_tables = table;
 
-  auto index = Index::create(table, "CLUST_IND", Page_id{DICT_HDR_SPACE, NULL_PAGE_NO}, DICT_UNIQUE | DICT_CLUSTERED, 1);
+  auto index = Index::create(table, "CLUST_IND", PageId{DICT_HDR_SPACE, NULL_PAGE_NO}, DICT_UNIQUE | DICT_CLUSTERED, 1);
 
   (void)index->add_field("NAME", 0);
 
@@ -1220,7 +1220,7 @@ db_err Dict_load::load_system_tables() noexcept {
   ut_a(err == DB_SUCCESS);
 
   /*-------------------------*/
-  index = Index::create(table, "ID_IND", Page_id{DICT_HDR_SPACE, NULL_PAGE_NO}, DICT_UNIQUE, 1);
+  index = Index::create(table, "ID_IND", PageId{DICT_HDR_SPACE, NULL_PAGE_NO}, DICT_UNIQUE, 1);
 
   (void)index->add_field("ID", 0);
 
@@ -1246,7 +1246,7 @@ db_err Dict_load::load_system_tables() noexcept {
 
   m_dict->m_sys_columns = table;
 
-  index = Index::create(table, "CLUST_IND", Page_id{DICT_HDR_SPACE, NULL_PAGE_NO}, DICT_UNIQUE | DICT_CLUSTERED, 2);
+  index = Index::create(table, "CLUST_IND", PageId{DICT_HDR_SPACE, NULL_PAGE_NO}, DICT_UNIQUE | DICT_CLUSTERED, 2);
 
   (void)index->add_field("TABLE_ID", 0);
   (void)index->add_field("POS", 0);
@@ -1283,7 +1283,7 @@ db_err Dict_load::load_system_tables() noexcept {
 
   m_dict->m_sys_indexes = table;
 
-  index = Index::create(table, "CLUST_IND", Page_id{DICT_HDR_SPACE, NULL_PAGE_NO}, DICT_UNIQUE | DICT_CLUSTERED, 2);
+  index = Index::create(table, "CLUST_IND", PageId{DICT_HDR_SPACE, NULL_PAGE_NO}, DICT_UNIQUE | DICT_CLUSTERED, 2);
 
   (void)index->add_field("TABLE_ID", 0);
   (void)index->add_field("ID", 0);
@@ -1306,7 +1306,7 @@ db_err Dict_load::load_system_tables() noexcept {
 
   m_dict->m_sys_fields = table;
 
-  index = Index::create(table, "CLUST_IND", Page_id{DICT_HDR_SPACE, NULL_PAGE_NO}, DICT_UNIQUE | DICT_CLUSTERED, 2);
+  index = Index::create(table, "CLUST_IND", PageId{DICT_HDR_SPACE, NULL_PAGE_NO}, DICT_UNIQUE | DICT_CLUSTERED, 2);
 
   (void)index->add_field("INDEX_ID", 0);
   (void)index->add_field("POS", 0);

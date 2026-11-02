@@ -6,7 +6,7 @@
 #include "trx0types.h"
 
 /** Read view types */
-enum class Read_view_type : ulint {
+enum class ReadViewType : ulint {
   /** Normal consistent read view where transaction does not see
   changes made by active transactions except creating transaction. */
   NORMAL = 1,
@@ -19,16 +19,16 @@ enum class Read_view_type : ulint {
 /* @} */
 
 // Forward declaration
-struct Read_view;
+struct ReadView;
 
 /** Support consistent read views in cursors. This struct holds both
  * heap where consistent read view is allocated and pointer to a read view. */
-struct Cursor_view {
+struct CursorView {
   /** Memory heap for the cursor view */
-  mem_heap_t *heap;
+  MemHeap *heap;
 
   /** Consistent read view of the cursor*/
-  Read_view *read_view;
+  ReadView *read_view;
 
   /** number of Innobase tables used in the processing of this cursor */
   ulint n_client_tables_in_use;

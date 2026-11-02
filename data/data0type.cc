@@ -151,7 +151,7 @@ ulint dtype_form_prtype(
 /** Validates a data type structure.
 @return	true if ok */
 
-bool dtype_validate(const dtype_t *type) /*!< in: type struct to validate */
+bool dtype_validate(const Dtype *type) /*!< in: type struct to validate */
 {
   ut_a(type);
   ut_a(type->mtype >= DATA_VARCHAR);
@@ -168,7 +168,7 @@ bool dtype_validate(const dtype_t *type) /*!< in: type struct to validate */
 
 /** Prints a data type structure. */
 
-void dtype_print(const dtype_t *type) /*!< in: type */
+void dtype_print(const Dtype *type) /*!< in: type */
 {
   ulint mtype;
   ulint prtype;

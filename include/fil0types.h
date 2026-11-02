@@ -13,7 +13,7 @@ struct Fil;
 
 /** File space address
 An address stored in a file page is a string of bytes */
-struct Fil_addr {
+struct FilAddr {
   /** page number within a space */
   page_no_t m_page_no;
 
@@ -41,7 +41,7 @@ constexpr ulint FIL_ADDR_BYTE = 4;
 constexpr ulint FIL_ADDR_SIZE = 6;
 
 /** The null file address */
-extern const Fil_addr fil_addr_null;
+extern const FilAddr fil_addr_null;
 
 /** The byte offsets on a file page for various variables @{ */
 
@@ -95,7 +95,7 @@ constexpr ulint FIL_PAGE_DATA_END = 8;
 /** File page types (values of FIL_PAGE_TYPE) @{ */
 
 /** B-tree node */
-enum Fil_page_type {
+enum FilPageType {
   /** Freshly allocated page */
   FIL_PAGE_TYPE_ALLOCATED = 0,
 
@@ -126,7 +126,7 @@ enum Fil_page_type {
 
 /* @} */
 
-enum Fil_type {
+enum FilType {
   /** Tablespace */
   FIL_TABLESPACE = 501,
 
@@ -134,18 +134,18 @@ enum Fil_type {
   FIL_LOG = 502
 };
 
-/** Value of fil_space_t::magic_n */
+/** Value of FilSpace::magic_n */
 constexpr uint32_t FIL_SPACE_MAGIC_N = 89472;
 
-/** Value of fil_node_t::magic_n */
+/** Value of FilNode::magic_n */
 constexpr uint32_t FIL_NODE_MAGIC_N = 89389;
 
-struct fil_space_t;
+struct FilSpace;
 
 /** File node of a tablespace or the log data space */
-struct fil_node_t {
+struct FilNode {
   /** backpointer to the space where this node belongs */
-  fil_space_t *m_space;
+  FilSpace *m_space;
 
   /** path to the file */
   char *m_file_name;
@@ -180,17 +180,17 @@ struct fil_node_t {
   int64_t m_flush_counter;
 
   /** Link field for the file chain */
-  UT_LIST_NODE_T(fil_node_t) m_chain;
+  UT_LIST_NODE_T(FilNode) m_chain;
 
   /** Link field for the LRU list */
-  UT_LIST_NODE_T(fil_node_t) m_LRU;
+  UT_LIST_NODE_T(FilNode) m_LRU;
 
   /** FIL_NODE_MAGIC_N */
   uint32_t m_magic_n;
 };
 
 /** Tablespace or log data space: let us call them by a common name space */
-struct fil_space_t {
+struct FilSpace {
   /** space name = the path to the first file in it */
   char *m_name;
 
@@ -218,10 +218,10 @@ struct fil_space_t {
   bool m_is_being_deleted;
 
   /** FIL_TABLESPACE or FIL_LOG */
-  Fil_type m_type;
+  FilType m_type;
 
   /** base node for the file chain */
-  UT_LIST_BASE_NODE_T(fil_node_t, m_chain) m_chain;
+  UT_LIST_BASE_NODE_T(FilNode, m_chain) m_chain;
 
   /** space size in pages; 0 if a single-table tablespace whose size we do
   not know yet; last incomplete megabytes in data files may be ignored if
@@ -240,16 +240,16 @@ struct fil_space_t {
   uint32_t m_n_pending_flushes;
 
   /** latch protecting the file space storage allocation */
-  rw_lock_t m_latch;
+  RwLock m_latch;
 
   /** list of spaces with at least one unflushed file we have written to */
-  UT_LIST_NODE_T(fil_space_t) m_unflushed_spaces;
+  UT_LIST_NODE_T(FilSpace) m_unflushed_spaces;
 
   /** true if this space is currently in unflushed_spaces */
   bool m_is_in_unflushed_spaces;
 
   /** list of all spaces */
-  UT_LIST_NODE_T(fil_space_t) m_space_list;
+  UT_LIST_NODE_T(FilSpace) m_space_list;
 
   /** FIL_SPACE_MAGIC_N */
   uint32_t m_magic_n;

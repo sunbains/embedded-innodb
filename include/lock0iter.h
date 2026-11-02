@@ -27,7 +27,7 @@ Created July 16, 2007 Vasil Dimov
 #include "innodb0types.h"
 #include "lock0types.h"
 
-struct Lock_sys;
+struct LockSys;
 
 /**
  * @brief Iterator for traversing lock queues.
@@ -36,8 +36,8 @@ struct Lock_sys;
  * locks or table locks. The iterator maintains the current position in the queue and
  * provides methods to move forward or backward in the queue.
  */
-struct Lock_iterator {
-  explicit Lock_iterator(Lock_sys *lock_sys) noexcept : m_lock_sys(lock_sys) {}
+struct LockIterator {
+  explicit LockIterator(LockSys *lock_sys) noexcept : m_lock_sys(lock_sys) {}
 
   /**
    * @brief Initialize lock queue iterator.
@@ -76,5 +76,5 @@ struct Lock_iterator {
   const Lock *m_current_lock{nullptr};
 
   /** The lock system. */
-  Lock_sys *m_lock_sys{};
+  LockSys *m_lock_sys{};
 };

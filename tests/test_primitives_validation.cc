@@ -60,7 +60,7 @@ int main() {
   assert(LOG_BUFFER_SIZE == 1024 * UNIV_PAGE_SIZE);
 
   // Test event system
-  Cond_var *event = test_event_create("test_event");
+  CondVar *event = test_event_create("test_event");
   assert(event != nullptr);
   test_event_set(event);
   test_event_free(event);

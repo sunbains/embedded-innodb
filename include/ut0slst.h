@@ -36,11 +36,11 @@ Created 2025-04-14 Sunny Bains
  * @tparam Type The list node type name.
  */
 template <typename Type>
-struct ut_slist_node {
+struct UtSlistNode {
   Type *m_next{nullptr};
 };
 
-#define UT_SLIST_NODE_T(t) ut_slist_node<t>
+#define UT_SLIST_NODE_T(t) UtSlistNode<t>
 
 /** TODO: Fix concept - temporarily disabled for compatibility */
 template <typename NodeGetter, typename Type>
@@ -53,13 +53,13 @@ concept SNodeGetterFor = true;
  *
  * @tparam Type The type of the list element.
  * @tparam NodeGetter A class which has a static member function
- *         ut_slist_node<Type> get_node(const Type &e) which knows how to extract a node from an element.
+ *         UtSlistNode<Type> get_node(const Type &e) which knows how to extract a node from an element.
  */
 template <typename Type, typename NodeGetter>
   requires SNodeGetterFor<NodeGetter, Type>
-struct ut_slist_base {
+struct UtSlistBase {
   using elem_type = Type;
-  using node_type = ut_slist_node<Type>;
+  using node_type = UtSlistNode<Type>;
 
   static const node_type &get_node(const elem_type &e) noexcept { return NodeGetter::get_node(e); }
 
@@ -67,10 +67,10 @@ struct ut_slist_base {
 
   static elem_type *next(elem_type &e) noexcept { return get_node(e).m_next; }
 
-  ut_slist_base() = default;
+  UtSlistBase() = default;
 
-  ut_slist_base(const ut_slist_base &) = delete;
-  ut_slist_base &operator=(const ut_slist_base &) = delete;
+  UtSlistBase(const UtSlistBase &) = delete;
+  UtSlistBase &operator=(const UtSlistBase &) = delete;
 
   size_t size() const noexcept { return m_count.load(std::memory_order_acquire); }
 
@@ -162,9 +162,9 @@ struct ut_slist_base {
 
 #define UT_SLIST_NODE_GETTER_DEF(t, m)                          \
   struct UT_SLIST_NODE_GETTER(t, m) {                           \
-    static const ut_slist_node<t> &get_node(const t &element) { \
+    static const UtSlistNode<t> &get_node(const t &element) { \
       return element.m;                                         \
     }                                                           \
   };
 
-#define UT_SLIST_BASE_NODE_T(t, m) ut_slist_base<t, UT_SLIST_NODE_GETTER(t, m)>
+#define UT_SLIST_BASE_NODE_T(t, m) UtSlistBase<t, UT_SLIST_NODE_GETTER(t, m)>

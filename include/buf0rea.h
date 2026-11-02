@@ -38,7 +38,7 @@ Created 11/5/1995 Heikki Tuuri
  * @param page_id The page ID containing space and page number.
  * @return true if the page has been read in, false in case of failure.
  */
-bool buf_read_page(const Page_id &page_id);
+bool buf_read_page(const PageId &page_id);
 
 /**
  * @brief Applies linear read-ahead if the specified page is a border
@@ -66,7 +66,7 @@ bool buf_read_page(const Page_id &page_id);
  *  want access to this page (see NOTE 3 above).
  * @return The number of page read requests issued.
  */
-ulint buf_read_ahead_linear(Buf_pool *buf_pool, const Page_id &page_id);
+ulint buf_read_ahead_linear(BufPool *buf_pool, const PageId &page_id);
 
 /**
  * @brief Issues read requests for pages which recovery wants to read in.
@@ -78,6 +78,6 @@ ulint buf_read_ahead_linear(Buf_pool *buf_pool, const Page_id &page_id);
  * @param page_nos array of page numbers to read, with the highest page number the last in the array
  * @param n_stored number of page numbers in the array
  */
-void buf_read_recv_pages(bool sync, const Page_id &page_id, const page_no_t *page_nos, ulint n_stored);
+void buf_read_recv_pages(bool sync, const PageId &page_id, const page_no_t *page_nos, ulint n_stored);
 
 /* @} */

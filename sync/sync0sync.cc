@@ -176,48 +176,48 @@ counter_t mutex_exit_count{};
 
 /** The global array of wait cells for implementation of the database's own
 mutexes and read-write locks */
-Sync_check *sync_primary_wait_array;
+SyncCheck *sync_primary_wait_array;
 
 /** This variable is set to true when sync_init is called */
 bool sync_initialized = false;
 
 /** An acquired mutex or rw-lock and its level in the latching order */
-typedef struct sync_level_struct sync_level_t;
+struct SyncLevel;
 /** Mutexes or rw-locks held by a thread */
-typedef struct sync_thread_struct sync_thread_t;
+struct SyncThread;
 
 #ifdef UNIV_SYNC_DEBUG
 /** The latch levels currently owned by threads are stored in this data
 structure; the size of this array is OS_THREAD_MAX_N */
 
-sync_thread_t *sync_thread_level_arrays;
+SyncThread *sync_thread_level_arrays;
 
 /** Mutex protecting sync_thread_level_arrays */
-static mutex_t sync_thread_mutex;
+static Mutex sync_thread_mutex;
 #endif /* UNIV_SYNC_DEBUG */
 
 /** Global list of database mutexes (not OS mutexes) created. */
 ut_mutex_list_base_node_t mutex_list{};
 
 /** Mutex protecting the mutex_list variable */
-mutex_t mutex_list_mutex;
+Mutex mutex_list_mutex;
 
 /** Latching order checks start when this is set true */
 IF_SYNC_DEBUG(bool sync_order_checks_on = false;)
 
-struct sync_thread_struct {
+struct SyncThread {
   /** OS thread id */
   os_thread_id_t id;
 
   /** Level array for this thread; if this is NULL this slot is unused */
-  sync_level_t *levels;
+  SyncLevel *levels;
 };
 
 /** Number of slots reserved for each OS thread in the sync level array */
 constexpr ulint SYNC_THREAD_N_LEVELS = 10000;
 
 /** An acquired mutex or rw-lock and its level in the latching order */
-struct sync_level_struct {
+struct SyncLevel {
   /** Pointer to a mutex or an rw-lock; NULL means that the slot is empty */
   void *latch;
 
@@ -236,8 +236,8 @@ void sync_var_init() {
   IF_SYNC_DEBUG(sync_thread_level_arrays = NULL; sync_order_checks_on = false;)
 }
 
-void mutex_create(mutex_t *mutex, IF_DEBUG(const char *cmutex_name, ) IF_SYNC_DEBUG(ulint level, ) Source_location loc) {
-  new (mutex) mutex_t;
+void mutex_create(Mutex *mutex, IF_DEBUG(const char *cmutex_name, ) IF_SYNC_DEBUG(ulint level, ) SourceLocation loc) {
+  new (mutex) Mutex;
 
   mutex->init();
 
@@ -266,7 +266,7 @@ void mutex_create(mutex_t *mutex, IF_DEBUG(const char *cmutex_name, ) IF_SYNC_DE
   mutex_exit(&mutex_list_mutex);
 }
 
-static void mutex_destroy(mutex_t *mutex) noexcept {
+static void mutex_destroy(Mutex *mutex) noexcept {
   if (mutex->event != nullptr) {
     os_event_free(mutex->event);
     mutex->event = nullptr;
@@ -279,7 +279,7 @@ static void mutex_destroy(mutex_t *mutex) noexcept {
   ut_d(mutex->magic_n = 0);
 }
 
-void mutex_free(mutex_t *mutex) {
+void mutex_free(Mutex *mutex) {
   ut_ad(mutex_validate(mutex));
   ut_a(mutex_get_lock_word(mutex) == 0);
   ut_a(mutex_get_waiters(mutex) == 0);
@@ -298,7 +298,7 @@ void mutex_free(mutex_t *mutex) {
   mutex_destroy(mutex);
 }
 
-ulint mutex_enter_nowait_func(mutex_t *mutex IF_SYNC_DEBUG(, const char *file_name, ulint line)) {
+ulint mutex_enter_nowait_func(Mutex *mutex IF_SYNC_DEBUG(, const char *file_name, ulint line)) {
   ut_ad(mutex_validate(mutex));
 
   if (!mutex_test_and_set(mutex)) {
@@ -314,24 +314,24 @@ ulint mutex_enter_nowait_func(mutex_t *mutex IF_SYNC_DEBUG(, const char *file_na
 }
 
 #ifdef UNIV_DEBUG
-bool mutex_validate(const mutex_t *mutex) {
+bool mutex_validate(const Mutex *mutex) {
   ut_a(mutex != nullptr);
   ut_a(mutex->magic_n == MUTEX_MAGIC_N);
   return true;
 }
 
-bool mutex_own(const mutex_t *mutex) {
+bool mutex_own(const Mutex *mutex) {
   ut_ad(mutex_validate(mutex));
 
   return mutex_get_lock_word(mutex) == 1 && os_thread_eq(mutex->thread_id, os_thread_get_curr_id());
 }
 #endif /* UNIV_DEBUG */
 
-void mutex_set_waiters(mutex_t *mutex, ulint n) {
+void mutex_set_waiters(Mutex *mutex, ulint n) {
   mutex->m_waiters.store(n);
 }
 
-void mutex_spin_wait(mutex_t *mutex, const char *file_name, ulint line) {
+void mutex_spin_wait(Mutex *mutex, const char *file_name, ulint line) {
   ulint i;     /* spin round count */
   ulint index; /* index of the reserved wait cell */
 
@@ -438,7 +438,7 @@ finish_timing:
   return;
 }
 
-void mutex_signal_object(mutex_t *mutex) {
+void mutex_signal_object(Mutex *mutex) {
   mutex_set_waiters(mutex, 0);
 
   /* The memory order of resetting the m_waiters field and
@@ -448,7 +448,7 @@ void mutex_signal_object(mutex_t *mutex) {
 }
 
 #ifdef UNIV_SYNC_DEBUG
-void mutex_set_debug_info(mutex_t *mutex, const char *file_name, ulint line) {
+void mutex_set_debug_info(Mutex *mutex, const char *file_name, ulint line) {
   ut_ad(mutex);
   ut_ad(file_name);
 
@@ -458,7 +458,7 @@ void mutex_set_debug_info(mutex_t *mutex, const char *file_name, ulint line) {
   mutex->line = line;
 }
 
-void mutex_get_debug_info(mutex_t *mutex, const char **file_name, ulint *line, os_thread_id_t *thread_id) {
+void mutex_get_debug_info(Mutex *mutex, const char **file_name, ulint *line, os_thread_id_t *thread_id) {
   ut_ad(mutex);
 
   *file_name = mutex->file_name;
@@ -469,7 +469,7 @@ void mutex_get_debug_info(mutex_t *mutex, const char **file_name, ulint *line, o
 /** Prints debug info of currently reserved mutexes. */
 static void mutex_list_print_info(ib_stream_t ib_stream) /*!< in: stream where to print */
 {
-  mutex_t *mutex;
+  Mutex *mutex;
   const char *file_name;
   ulint line;
   os_thread_id_t thread_id;
@@ -511,7 +511,7 @@ static void mutex_list_print_info(ib_stream_t ib_stream) /*!< in: stream where t
 }
 
 ulint mutex_n_reserved() {
-  mutex_t *mutex;
+  Mutex *mutex;
   ulint count = 0;
 
   mutex_enter(&mutex_list_mutex);
@@ -541,7 +541,7 @@ bool sync_all_freed(void) {
 
 /** Gets the value in the nth slot in the thread level arrays.
 @return	pointer to thread slot */
-static sync_thread_t *sync_thread_level_arrays_get_nth(ulint n) /*!< in: slot number */
+static SyncThread *sync_thread_level_arrays_get_nth(ulint n) /*!< in: slot number */
 {
   ut_ad(n < OS_THREAD_MAX_N);
 
@@ -550,10 +550,10 @@ static sync_thread_t *sync_thread_level_arrays_get_nth(ulint n) /*!< in: slot nu
 
 /** Looks for the thread slot for the calling thread.
 @return	pointer to thread slot, NULL if not found */
-static sync_thread_t *sync_thread_level_arrays_find_slot(void)
+static SyncThread *sync_thread_level_arrays_find_slot(void)
 
 {
-  sync_thread_t *slot;
+  SyncThread *slot;
   os_thread_id_t id;
   ulint i;
 
@@ -574,10 +574,10 @@ static sync_thread_t *sync_thread_level_arrays_find_slot(void)
 
 /** Looks for an unused thread slot.
 @return	pointer to thread slot */
-static sync_thread_t *sync_thread_level_arrays_find_free(void)
+static SyncThread *sync_thread_level_arrays_find_free(void)
 
 {
-  sync_thread_t *slot;
+  SyncThread *slot;
   ulint i;
 
   for (i = 0; i < OS_THREAD_MAX_N; i++) {
@@ -595,8 +595,8 @@ static sync_thread_t *sync_thread_level_arrays_find_free(void)
 
 /** Gets the value in the nth slot in the thread level array.
 @return	pointer to level slot */
-static sync_level_t *sync_thread_levels_get_nth(
-  sync_level_t *arr, /*!< in: pointer to level array
+static SyncLevel *sync_thread_levels_get_nth(
+  SyncLevel *arr, /*!< in: pointer to level array
                                               for an OS thread */
   ulint n
 ) /*!< in: slot number */
@@ -610,15 +610,15 @@ static sync_level_t *sync_thread_levels_get_nth(
 the given limit.
 @return	true if all greater */
 static bool sync_thread_levels_g(
-  sync_level_t *arr, /*!< in: pointer to level array for an
+  SyncLevel *arr, /*!< in: pointer to level array for an
                                         OS thread */
   ulint limit,       /*!< in: level limit */
   ulint warn
 ) /*!< in: true=display a diagnostic message */
 {
-  sync_level_t *slot;
-  rw_lock_t *lock;
-  mutex_t *mutex;
+  SyncLevel *slot;
+  RwLock *lock;
+  Mutex *mutex;
   ulint i;
 
   for (i = 0; i < SYNC_THREAD_N_LEVELS; i++) {
@@ -682,12 +682,12 @@ static bool sync_thread_levels_g(
 /** Checks if the level value is stored in the level array.
 @return	true if stored */
 static bool sync_thread_levels_contain(
-  sync_level_t *arr, /*!< in: pointer to level array
+  SyncLevel *arr, /*!< in: pointer to level array
                                               for an OS thread */
   ulint level
 ) /*!< in: level */
 {
-  sync_level_t *slot;
+  SyncLevel *slot;
   ulint i;
 
   for (i = 0; i < SYNC_THREAD_N_LEVELS; i++) {
@@ -706,9 +706,9 @@ static bool sync_thread_levels_contain(
 }
 
 void *sync_thread_levels_contains(ulint level) {
-  sync_level_t *arr;
-  sync_thread_t *thread_slot;
-  sync_level_t *slot;
+  SyncLevel *arr;
+  SyncThread *thread_slot;
+  SyncLevel *slot;
   ulint i;
 
   if (!sync_order_checks_on) {
@@ -746,9 +746,9 @@ void *sync_thread_levels_contains(ulint level) {
 }
 
 void *sync_thread_levels_nonempty_gen(bool dict_mutex_allowed) {
-  sync_level_t *arr;
-  sync_thread_t *thread_slot;
-  sync_level_t *slot;
+  SyncLevel *arr;
+  SyncThread *thread_slot;
+  SyncLevel *slot;
   ulint i;
 
   if (!sync_order_checks_on) {
@@ -795,9 +795,9 @@ bool sync_thread_levels_empty(void) {
 }
 
 void sync_thread_add_level(void *latch, ulint level) {
-  sync_level_t *array;
-  sync_level_t *slot;
-  sync_thread_t *thread_slot;
+  SyncLevel *array;
+  SyncLevel *slot;
+  SyncThread *thread_slot;
   ulint i;
 
   if (!sync_order_checks_on) {
@@ -822,7 +822,7 @@ void sync_thread_add_level(void *latch, ulint level) {
 
   if (thread_slot == NULL) {
     /* We have to allocate the level array for a new thread */
-    array = ut_new(sizeof(sync_level_t) * SYNC_THREAD_N_LEVELS);
+    array = ut_new(sizeof(SyncLevel) * SYNC_THREAD_N_LEVELS);
 
     thread_slot = sync_thread_level_arrays_find_free();
 
@@ -969,9 +969,9 @@ every latch reservation the program does */
 
 bool sync_thread_reset_level(void *latch) /*!< in: pointer to a mutex or an rw-lock */
 {
-  sync_level_t *array;
-  sync_level_t *slot;
-  sync_thread_t *thread_slot;
+  SyncLevel *array;
+  SyncLevel *slot;
+  SyncThread *thread_slot;
   ulint i;
 
   if (!sync_order_checks_on) {
@@ -1012,10 +1012,10 @@ bool sync_thread_reset_level(void *latch) /*!< in: pointer to a mutex or an rw-l
     }
   }
 
-  if (((mutex_t *)latch)->magic_n != MUTEX_MAGIC_N) {
-    rw_lock_t *rw_lock;
+  if (((Mutex *)latch)->magic_n != MUTEX_MAGIC_N) {
+    RwLock *rw_lock;
 
-    rw_lock = (rw_lock_t *)latch;
+    rw_lock = (RwLock *)latch;
 
     if (rw_lock->level == SYNC_LEVEL_VARYING) {
       mutex_exit(&sync_thread_mutex);
@@ -1047,7 +1047,7 @@ void sync_init() {
     /* Create the thread latch level array where the latch levels
     are stored for each OS thread */
 
-    sync_thread_level_arrays = new sync_thread_t[OS_THREAD_MAX_N];
+    sync_thread_level_arrays = new SyncThread[OS_THREAD_MAX_N];
 
     for (ulint i = 0; i < OS_THREAD_MAX_N; i++) {
       auto thread_slot = sync_thread_level_arrays_get_nth(i);

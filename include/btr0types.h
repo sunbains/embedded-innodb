@@ -30,10 +30,10 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 #include "sync0rw.h"
 
 /** Persistent cursor */
-struct Btree_pcursor;
+struct BtreePcursor;
 
 /** B-tree cursor */
-struct Btree_cursor;
+struct BtreeCursor;
 
 /** The size of a reference to data stored on a different page.
 The reference is stored at the end of the prefix of the field
@@ -55,11 +55,11 @@ constexpr ulint BTR_N_LEAF_PAGES = 1;
 
 /* BTR_INSERT, BTR_DELETE and BTR_DELETE_MARK are mutually exclusive. */
 
-/** If this is ORed to btr_latch_mode, it means that the search tuple
+/** If this is ORed to BtrLatchMode, it means that the search tuple
 will be inserted to the index, at the searched position. */
 constexpr size_t BTR_INSERT = 512;
 
-/** This flag ORed to btr_latch_mode says that we do the search in query
+/** This flag ORed to BtrLatchMode says that we do the search in query
 optimization */
 constexpr size_t BTR_ESTIMATE = 1024;
 
@@ -103,7 +103,7 @@ is acceptable for the program to die with a clear assert failure. */
 constexpr ulint BTR_MAX_DEPTH = 100;
 
 /** Latching modes for btr_cur_search_to_nth_level(). */
-enum btr_latch_mode {
+enum BtrLatchMode {
   /** Search a record on a leaf page and S-latch it. */
   BTR_SEARCH_LEAF = RW_S_LATCH,
 

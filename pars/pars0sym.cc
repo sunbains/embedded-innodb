@@ -33,9 +33,9 @@ Created 12/15/1997 Heikki Tuuri
 #include "eval0eval.h"
 #include "row0sel.h"
 
-sym_tab_t *sym_tab_create(mem_heap_t *heap) {
+SymTab *sym_tab_create(MemHeap *heap) {
   auto sym_tab =
-      reinterpret_cast<sym_tab_t *>(mem_heap_alloc(heap, sizeof(sym_tab_t)));
+      reinterpret_cast<SymTab *>(mem_heap_alloc(heap, sizeof(SymTab)));
 
   UT_LIST_INIT(sym_tab->sym_list);
   UT_LIST_INIT(sym_tab->func_node_list);
@@ -45,7 +45,7 @@ sym_tab_t *sym_tab_create(mem_heap_t *heap) {
   return (sym_tab);
 }
 
-void sym_tab_free_private(sym_tab_t *sym_tab) {
+void sym_tab_free_private(SymTab *sym_tab) {
   auto sym = UT_LIST_GET_FIRST(sym_tab->sym_list);
 
   while (sym) {
@@ -71,9 +71,9 @@ void sym_tab_free_private(sym_tab_t *sym_tab) {
   }
 }
 
-sym_node_t *sym_tab_add_int_lit(sym_tab_t *sym_tab, ulint val) {
-  auto node = reinterpret_cast<sym_node_t *>(
-      mem_heap_alloc(sym_tab->heap, sizeof(sym_node_t)));
+SymNode *sym_tab_add_int_lit(SymTab *sym_tab, ulint val) {
+  auto node = reinterpret_cast<SymNode *>(
+      mem_heap_alloc(sym_tab->heap, sizeof(SymNode)));
 
   node->common.type = QUE_NODE_SYMBOL;
 
@@ -100,9 +100,9 @@ sym_node_t *sym_tab_add_int_lit(sym_tab_t *sym_tab, ulint val) {
   return (node);
 }
 
-sym_node_t *sym_tab_add_str_lit(sym_tab_t *sym_tab, byte *str, ulint len) {
-  auto node = reinterpret_cast<sym_node_t *>(
-      mem_heap_alloc(sym_tab->heap, sizeof(sym_node_t)));
+SymNode *sym_tab_add_str_lit(SymTab *sym_tab, byte *str, ulint len) {
+  auto node = reinterpret_cast<SymNode *>(
+      mem_heap_alloc(sym_tab->heap, sizeof(SymNode)));
 
   node->common.type = QUE_NODE_SYMBOL;
 
@@ -135,13 +135,13 @@ sym_node_t *sym_tab_add_str_lit(sym_tab_t *sym_tab, byte *str, ulint len) {
   return (node);
 }
 
-sym_node_t *sym_tab_add_bound_lit(sym_tab_t *sym_tab, const char *name,
+SymNode *sym_tab_add_bound_lit(SymTab *sym_tab, const char *name,
                                   ulint *lit_type) {
   auto blit = pars_info_get_bound_lit(sym_tab->info, name);
   ut_a(blit != nullptr);
 
-  auto node = reinterpret_cast<sym_node_t *>(
-      mem_heap_alloc(sym_tab->heap, sizeof(sym_node_t)));
+  auto node = reinterpret_cast<SymNode *>(
+      mem_heap_alloc(sym_tab->heap, sizeof(SymNode)));
 
   node->common.type = QUE_NODE_SYMBOL;
 
@@ -200,9 +200,9 @@ sym_node_t *sym_tab_add_bound_lit(sym_tab_t *sym_tab, const char *name,
   return node;
 }
 
-sym_node_t *sym_tab_add_null_lit(sym_tab_t *sym_tab) {
-  auto node = reinterpret_cast<sym_node_t *>(
-      mem_heap_alloc(sym_tab->heap, sizeof(sym_node_t)));
+SymNode *sym_tab_add_null_lit(SymTab *sym_tab) {
+  auto node = reinterpret_cast<SymNode *>(
+      mem_heap_alloc(sym_tab->heap, sizeof(SymNode)));
 
   node->common.type = QUE_NODE_SYMBOL;
 
@@ -226,9 +226,9 @@ sym_node_t *sym_tab_add_null_lit(sym_tab_t *sym_tab) {
   return (node);
 }
 
-sym_node_t *sym_tab_add_id(sym_tab_t *sym_tab, byte *name, ulint len) {
-  auto node = reinterpret_cast<sym_node_t *>(
-      mem_heap_zalloc(sym_tab->heap, sizeof(sym_node_t)));
+SymNode *sym_tab_add_id(SymTab *sym_tab, byte *name, ulint len) {
+  auto node = reinterpret_cast<SymNode *>(
+      mem_heap_zalloc(sym_tab->heap, sizeof(SymNode)));
 
   node->common.type = QUE_NODE_SYMBOL;
 
@@ -251,12 +251,12 @@ sym_node_t *sym_tab_add_id(sym_tab_t *sym_tab, byte *name, ulint len) {
   return node;
 }
 
-sym_node_t *sym_tab_add_bound_id(sym_tab_t *sym_tab, const char *name) {
+SymNode *sym_tab_add_bound_id(SymTab *sym_tab, const char *name) {
   auto bid = pars_info_get_bound_id(sym_tab->info, name);
   ut_a(bid);
 
-  auto node = reinterpret_cast<sym_node_t *>(
-      mem_heap_alloc(sym_tab->heap, sizeof(sym_node_t)));
+  auto node = reinterpret_cast<SymNode *>(
+      mem_heap_alloc(sym_tab->heap, sizeof(SymNode)));
 
   node->common.type = QUE_NODE_SYMBOL;
 

@@ -120,10 +120,10 @@ consistent read semantics. Q. E. D.
 
 */
 
-std::string Read_view::to_string() const noexcept {
+std::string ReadView::to_string() const noexcept {
   std::string str{};
 
-  if (m_type == Read_view_type::HIGH_GRANULARITY) {
+  if (m_type == ReadViewType::HIGH_GRANULARITY) {
     str = std::format("High-granularity read view undo_n:o {} {}\n", m_undo_no, m_undo_no);
   } else {
     str = "Normal read view\n";

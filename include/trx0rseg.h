@@ -36,7 +36,7 @@ constexpr auto TRX_RSEG_N_SLOTS = UNIV_PAGE_SIZE / 16;
 /** Maximum number of transactions supported by a single rollback segment */
 constexpr auto TRX_RSEG_MAX_N_TRXS = TRX_RSEG_N_SLOTS / 2;
 
-struct Trx_rseg {
+struct TrxRseg {
   /**
    * Looks for a rollback segment, based on the rollback segment id.
    * 
@@ -44,7 +44,7 @@ struct Trx_rseg {
    * 
    * @return	rollback segment
    */
-  static Trx_rseg *get_on_id(ulint id);
+  static TrxRseg *get_on_id(ulint id);
 
   /**
    * Creates a rollback segment header. This function is called only when
@@ -57,7 +57,7 @@ struct Trx_rseg {
    * 
    * @return	page number of the created segment, FIL_NULL if fail
    */
-  static page_no_t header_create(space_id_t space, ulint max_size, ulint *slot_no, mtr_t *mtr);
+  static page_no_t header_create(space_id_t space, ulint max_size, ulint *slot_no, Mtr *mtr);
 
   /**
    * Creates the memory copies for rollback segments and initializes the
@@ -67,7 +67,7 @@ struct Trx_rseg {
    * @param[in] sys_header The trx system header.
    * @param[in] mtr The mini-transaction handle.
    */
-  static void list_and_array_init(ib_recovery_t recovery, trx_sysf_t *sys_header, mtr_t *mtr);
+  static void list_and_array_init(IbRecovery recovery, trx_sysf_t *sys_header, Mtr *mtr);
 
   /**
    * Free's an instance of the rollback segment in memory.
@@ -78,7 +78,7 @@ private:
   /**
    * Creates and initializes a rollback segment object.
    */
-  static Trx_rseg *mem_create(ib_recovery_t recovery, ulint id, ulint space, ulint page_no, mtr_t *mtr);
+  static TrxRseg *mem_create(IbRecovery recovery, ulint id, ulint space, ulint page_no, Mtr *mtr);
 
 public:
   /** Rollback segment id == the index of its slot in the trx
@@ -86,8 +86,8 @@ public:
   ulint m_id;
 
   /** mutex protecting the fields in this struct except id;
-   * NOTE that the latching order must always be Trx_sys mutex -> rseg mutex */
-  mutex_t m_mutex;
+   * NOTE that the latching order must always be TrxSys mutex -> rseg mutex */
+  Mutex m_mutex;
 
   /** Space where the rollback segment is header is placed */
   space_id_t m_space;
@@ -102,16 +102,16 @@ public:
   ulint m_curr_size;
 
   /** List of update undo logs */
-  UT_LIST_BASE_NODE_T_EXTERN(trx_undo_t, m_undo_list) m_update_undo_list;
+  UT_LIST_BASE_NODE_T_EXTERN(TrxUndo, m_undo_list) m_update_undo_list;
 
   /* List of update undo log segments cached for fast reuse */
-  UT_LIST_BASE_NODE_T_EXTERN(trx_undo_t, m_undo_list) m_update_undo_cached;
+  UT_LIST_BASE_NODE_T_EXTERN(TrxUndo, m_undo_list) m_update_undo_cached;
 
   /** List of insert undo logs */
-  UT_LIST_BASE_NODE_T_EXTERN(trx_undo_t, m_undo_list) m_insert_undo_list;
+  UT_LIST_BASE_NODE_T_EXTERN(TrxUndo, m_undo_list) m_insert_undo_list;
 
   /** List of insert undo log segments cached for fast reuse */
-  UT_LIST_BASE_NODE_T_EXTERN(trx_undo_t, m_undo_list) m_insert_undo_cached;
+  UT_LIST_BASE_NODE_T_EXTERN(TrxUndo, m_undo_list) m_insert_undo_cached;
 
   /* Fields for insert undo logs */
 
@@ -129,10 +129,10 @@ public:
   bool m_last_del_marks;
 
   /* the list of the rollback segment memory objects */
-  UT_LIST_NODE_T(Trx_rseg) m_rseg_list;
+  UT_LIST_NODE_T(TrxRseg) m_rseg_list;
 };
 
-UT_LIST_NODE_GETTER_DEFINITION(Trx_rseg, m_rseg_list);
+UT_LIST_NODE_GETTER_DEFINITION(TrxRseg, m_rseg_list);
 
 /** Page number of the header page of an undo log segment */
 constexpr page_no_t TRX_RSEG_SLOT_PAGE_NO = 0;
@@ -169,8 +169,8 @@ constexpr ulint TRX_RSEG_UNDO_SLOTS = 8 + FLST_BASE_NODE_SIZE + FSEG_HEADER_SIZE
  * 
  * @return	rollback segment header, page x-latched
  */
-inline trx_rsegf_t *trx_rsegf_get(space_id_t space_id, page_no_t page_no, mtr_t *mtr) noexcept {
-  Buf_pool::Request req{
+inline trx_rsegf_t *trx_rsegf_get(space_id_t space_id, page_no_t page_no, Mtr *mtr) noexcept {
+  BufPool::Request req{
     .m_rw_latch = RW_X_LATCH,
     .m_page_id = {space_id, page_no},
     .m_mode = BUF_GET,
@@ -196,8 +196,8 @@ inline trx_rsegf_t *trx_rsegf_get(space_id_t space_id, page_no_t page_no, mtr_t 
  * 
  * @return	rollback segment header, page x-latched
  */
-inline trx_rsegf_t *trx_rsegf_get_new(space_id_t space_id, page_no_t page_no, mtr_t *mtr) noexcept {
-  Buf_pool::Request req{
+inline trx_rsegf_t *trx_rsegf_get_new(space_id_t space_id, page_no_t page_no, Mtr *mtr) noexcept {
+  BufPool::Request req{
     .m_rw_latch = RW_X_LATCH,
     .m_page_id = {space_id, page_no},
     .m_mode = BUF_GET,
@@ -223,7 +223,7 @@ inline trx_rsegf_t *trx_rsegf_get_new(space_id_t space_id, page_no_t page_no, mt
  * 
  * @return	page number of the undo log segment
  */
-inline ulint trx_rsegf_get_nth_undo(trx_rsegf_t *rsegf, ulint n, mtr_t *mtr) noexcept {
+inline ulint trx_rsegf_get_nth_undo(trx_rsegf_t *rsegf, ulint n, Mtr *mtr) noexcept {
   if (unlikely(n >= TRX_RSEG_N_SLOTS)) {
     log_fatal(std::format("Trying to get slot {} of rseg", n));
   }
@@ -239,7 +239,7 @@ inline ulint trx_rsegf_get_nth_undo(trx_rsegf_t *rsegf, ulint n, mtr_t *mtr) noe
  * @param[in] page_no The page number of the undo log segment.
  * @param[in] mtr The mini-transaction handle.
  */
-inline void trx_rsegf_set_nth_undo(trx_rsegf_t *rsegf, ulint n, page_no_t page_no, mtr_t *mtr) noexcept {
+inline void trx_rsegf_set_nth_undo(trx_rsegf_t *rsegf, ulint n, page_no_t page_no, Mtr *mtr) noexcept {
   if (unlikely(n >= TRX_RSEG_N_SLOTS)) {
     log_fatal(std::format("Trying to set slot {} of rseg", n));
   }
@@ -255,7 +255,7 @@ inline void trx_rsegf_set_nth_undo(trx_rsegf_t *rsegf, ulint n, page_no_t page_n
  *
  * @return	slot index or ULINT_UNDEFINED if not found
  */
-inline ulint trx_rsegf_undo_find_free(trx_rsegf_t *rsegf, mtr_t *mtr) noexcept {
+inline ulint trx_rsegf_undo_find_free(trx_rsegf_t *rsegf, Mtr *mtr) noexcept {
   for (ulint i{}; i < TRX_RSEG_N_SLOTS; ++i) {
 
     const auto page_no = trx_rsegf_get_nth_undo(rsegf, i, mtr);

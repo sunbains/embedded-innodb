@@ -30,13 +30,13 @@ Created 2/6/1997 Heikki Tuuri
 #include "trx0types.h"
 
 struct Trx;
-struct mtr_t;
+struct Mtr;
 struct Index;
 struct DTuple;
-struct Read_view;
-struct Lock_sys;
+struct ReadView;
+struct LockSys;
 
-struct Row_vers {
+struct RowVers {
 
   /** A version of a clustered index record */
   struct Row {
@@ -44,22 +44,22 @@ struct Row_vers {
     const Rec m_cluster_rec{};
 
     /** Mtr holding the latch on m_cluster_rec */
-    mtr_t *m_mtr{};
+    Mtr *m_mtr{};
 
     /** The clustered index */
     Index *m_cluster_index{};
 
-    /** Offsets returned by Phy_rec::get_col_offsets(rec, index) */
-    Rec_offs &m_cluster_offsets;
+    /** Offsets returned by PhyRec::get_col_offsets(rec, index) */
+    RecOffs &m_cluster_offsets;
 
     /** The consistent read view */
-    Read_view *m_consistent_read_view{};
+    ReadView *m_consistent_read_view{};
 
     /** Memory heap from which the offsets are allocated */
-    mem_heap_t *&m_cluster_offset_heap;
+    MemHeap *&m_cluster_offset_heap;
 
     /** Memory heap from which the memory for *m_old_vers is allocated */
-    mem_heap_t *&m_old_row_heap;
+    MemHeap *&m_old_row_heap;
 
     /** Old version, or nullptr if the record does not exist in the view,
      * that is, it was freshly inserted afterwards */
@@ -72,22 +72,22 @@ struct Row_vers {
    * @param[in] trx_sys The transaction system.
    * @param[in] lock_sys The lock system.
    */
-  Row_vers(Trx_sys *trx_sys, Lock_sys *lock_sys) noexcept;
+  RowVers(TrxSys *trx_sys, LockSys *lock_sys) noexcept;
 
   /**
-   * @brief Creates a Row_vers.
+   * @brief Creates a RowVers.
    *
    * @param[in] trx_sys The transaction system.
    * @param[in] lock_sys The lock system.
    */
-  [[nodiscard]] static Row_vers *create(Trx_sys *trx_sys, Lock_sys *lock_sys) noexcept;
+  [[nodiscard]] static RowVers *create(TrxSys *trx_sys, LockSys *lock_sys) noexcept;
 
   /**
-   * @brief Destroys a Row_vers.
+   * @brief Destroys a RowVers.
    *
-   * @param[in,out] row_vers The Row_vers to destroy.
+   * @param[in,out] row_vers The RowVers to destroy.
    */
-  static void destroy(Row_vers *&row_vers) noexcept;
+  static void destroy(RowVers *&row_vers) noexcept;
 
   /**
    * @brief Finds out if an active transaction has inserted or modified a secondary index record.
@@ -96,7 +96,7 @@ struct Row_vers {
    *
    * @param[in] rec Record in a secondary index.
    * @param[in] index The secondary index.
-   * @param[in] offsets Phy_rec::get_col_offsets(rec, index).
+   * @param[in] offsets PhyRec::get_col_offsets(rec, index).
    *
    * @return nullptr if committed, else the active transaction.
    */
@@ -111,7 +111,7 @@ struct Row_vers {
    *
    * @return true if earlier version should be preserved.
    */
-  [[nodiscard]] bool must_preserve_del_marked(trx_id_t trx_id, mtr_t *mtr) noexcept;
+  [[nodiscard]] bool must_preserve_del_marked(trx_id_t trx_id, Mtr *mtr) noexcept;
 
   /**
    * @brief Finds out if a version of the record, where the version >= the current
@@ -128,7 +128,7 @@ struct Row_vers {
    *
    * @return true if earlier version should have ientry as its secondary index entry.
    */
-  [[nodiscard]] bool old_has_index_entry(bool also_curr, const Rec rec, mtr_t *mtr, Index *index, const DTuple *entry) noexcept;
+  [[nodiscard]] bool old_has_index_entry(bool also_curr, const Rec rec, Mtr *mtr, Index *index, const DTuple *entry) noexcept;
 
   /**
    * @brief Constructs the version of a clustered index record which a consistent
@@ -138,7 +138,7 @@ struct Row_vers {
    *
    * @return DB_SUCCESS or DB_MISSING_HISTORY
    */
-  [[nodiscard]] db_err build_for_consistent_read(Row &row) noexcept;
+  [[nodiscard]] DbErr build_for_consistent_read(Row &row) noexcept;
 
   /**
    * @brief Constructs the last committed version of a clustered index record,
@@ -148,15 +148,15 @@ struct Row_vers {
    *
    * @return DB_SUCCESS or DB_MISSING_HISTORY
    */
-  [[nodiscard]] db_err build_for_semi_consistent_read(Row &row) noexcept;
+  [[nodiscard]] DbErr build_for_semi_consistent_read(Row &row) noexcept;
 
 #ifndef UNIT_TEST
  private:
 #endif /* !UNIT_TEST */
 
   /** The transaction system */
-  Trx_sys *m_trx_sys{};
+  TrxSys *m_trx_sys{};
 
   /** The lock system */
-  Lock_sys *m_lock_sys{};
+  LockSys *m_lock_sys{};
 };

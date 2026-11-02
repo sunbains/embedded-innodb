@@ -1846,7 +1846,7 @@ yyreduce:
 
   case 67: /* stored_procedure_call: '{' PARS_ID_TOKEN '(' question_mark_list ')' '}'  */
 #line 240 "pars0grm.y"
-                                { yyval = pars_stored_procedure_call(static_cast<sym_node_t*>(yyvsp[-4])); }
+                                { yyval = pars_stored_procedure_call(static_cast<SymNode*>(yyvsp[-4])); }
 #line 1851 "pars0grm.cc"
     break;
 
@@ -1987,7 +1987,7 @@ yyreduce:
 
   case 89: /* select_list: select_item_list PARS_INTO_TOKEN variable_list  */
 #line 306 "pars0grm.y"
-                                { yyval = pars_select_list(yyvsp[-2], static_cast<sym_node_t*>(yyvsp[0])); }
+                                { yyval = pars_select_list(yyvsp[-2], static_cast<SymNode*>(yyvsp[0])); }
 #line 1992 "pars0grm.cc"
     break;
 
@@ -2060,20 +2060,20 @@ yyreduce:
   case 101: /* order_by_clause: PARS_ORDER_TOKEN PARS_BY_TOKEN PARS_ID_TOKEN order_direction  */
 #line 336 "pars0grm.y"
                                 { yyval = pars_order_by(
-                                          static_cast<sym_node_t*>(yyvsp[-1]),
-                                          static_cast<pars_res_word_t*>(yyvsp[0])); }
+                                          static_cast<SymNode*>(yyvsp[-1]),
+                                          static_cast<ParsResWord*>(yyvsp[0])); }
 #line 2066 "pars0grm.cc"
     break;
 
   case 102: /* select_statement: PARS_SELECT_TOKEN select_list PARS_FROM_TOKEN table_list search_condition for_update_clause lock_shared_clause order_by_clause  */
 #line 347 "pars0grm.y"
                                 { yyval = pars_select_statement(
-                                         static_cast<sel_node_t*>(yyvsp[-6]),
-                                         static_cast<sym_node_t*>(yyvsp[-4]),
+                                         static_cast<SelNode*>(yyvsp[-6]),
+                                         static_cast<SymNode*>(yyvsp[-4]),
                                          static_cast<que_node_t*>(yyvsp[-3]),
-                                         static_cast<pars_res_word_t*>(yyvsp[-2]),
-                                         static_cast<pars_res_word_t*>(yyvsp[-1]),
-                                         static_cast<order_node_t*>(yyvsp[0])); }
+                                         static_cast<ParsResWord*>(yyvsp[-2]),
+                                         static_cast<ParsResWord*>(yyvsp[-1]),
+                                         static_cast<OrderNode*>(yyvsp[0])); }
 #line 2078 "pars0grm.cc"
     break;
 
@@ -2086,23 +2086,23 @@ yyreduce:
   case 104: /* insert_statement: insert_statement_start PARS_VALUES_TOKEN '(' exp_list ')'  */
 #line 363 "pars0grm.y"
                                 { yyval = pars_insert_statement(
-                                         static_cast<sym_node_t*>(yyvsp[-4]), yyvsp[-1], nullptr); }
+                                         static_cast<SymNode*>(yyvsp[-4]), yyvsp[-1], nullptr); }
 #line 2091 "pars0grm.cc"
     break;
 
   case 105: /* insert_statement: insert_statement_start select_statement  */
 #line 366 "pars0grm.y"
                                 { yyval = pars_insert_statement(
-                                         static_cast<sym_node_t*>(yyvsp[-1]),
+                                         static_cast<SymNode*>(yyvsp[-1]),
                                          nullptr,
-                                         static_cast<sel_node_t*>(yyvsp[0])); }
+                                         static_cast<SelNode*>(yyvsp[0])); }
 #line 2100 "pars0grm.cc"
     break;
 
   case 106: /* column_assignment: PARS_ID_TOKEN '=' exp  */
 #line 373 "pars0grm.y"
                                 { yyval = pars_column_assignment(
-                                         static_cast<sym_node_t*>(yyvsp[-2]), yyvsp[0]); }
+                                         static_cast<SymNode*>(yyvsp[-2]), yyvsp[0]); }
 #line 2107 "pars0grm.cc"
     break;
 
@@ -2128,15 +2128,15 @@ yyreduce:
 #line 392 "pars0grm.y"
                                 { yyval = pars_update_statement_start(
                                          false,
-                                         static_cast<sym_node_t*>(yyvsp[-2]),
-                                         static_cast<col_assign_node_t*>(yyvsp[0])); }
+                                         static_cast<SymNode*>(yyvsp[-2]),
+                                         static_cast<ColAssignNode*>(yyvsp[0])); }
 #line 2134 "pars0grm.cc"
     break;
 
   case 111: /* update_statement_searched: update_statement_start search_condition  */
 #line 400 "pars0grm.y"
                                 { yyval = pars_update_statement(
-                                         static_cast<upd_node_t*>(yyvsp[-1]),
+                                         static_cast<UpdNode*>(yyvsp[-1]),
                                          nullptr,
                                          static_cast<que_node_t*>(yyvsp[0])); }
 #line 2143 "pars0grm.cc"
@@ -2145,8 +2145,8 @@ yyreduce:
   case 112: /* update_statement_positioned: update_statement_start cursor_positioned  */
 #line 408 "pars0grm.y"
                                 { yyval = pars_update_statement(
-                                         static_cast<upd_node_t*>(yyvsp[-1]), 
-                                         static_cast<sym_node_t*>(yyvsp[0]),
+                                         static_cast<UpdNode*>(yyvsp[-1]), 
+                                         static_cast<SymNode*>(yyvsp[0]),
                                          nullptr); }
 #line 2152 "pars0grm.cc"
     break;
@@ -2155,7 +2155,7 @@ yyreduce:
 #line 416 "pars0grm.y"
                                 { yyval = pars_update_statement_start(
                                          true,
-                                         static_cast<sym_node_t*>(yyvsp[0]),
+                                         static_cast<SymNode*>(yyvsp[0]),
                                          nullptr); }
 #line 2161 "pars0grm.cc"
     break;
@@ -2163,7 +2163,7 @@ yyreduce:
   case 114: /* delete_statement_searched: delete_statement_start search_condition  */
 #line 424 "pars0grm.y"
                                 { yyval = pars_update_statement(
-                                        static_cast<upd_node_t*>(yyvsp[-1]),
+                                        static_cast<UpdNode*>(yyvsp[-1]),
                                         nullptr,
                                         static_cast<que_node_t*>(yyvsp[0])); }
 #line 2170 "pars0grm.cc"
@@ -2172,8 +2172,8 @@ yyreduce:
   case 115: /* delete_statement_positioned: delete_statement_start cursor_positioned  */
 #line 432 "pars0grm.y"
                                 { yyval = pars_update_statement(
-                                        static_cast<upd_node_t*>(yyvsp[-1]),
-                                        static_cast<sym_node_t*>(yyvsp[0]),
+                                        static_cast<UpdNode*>(yyvsp[-1]),
+                                        static_cast<SymNode*>(yyvsp[0]),
                                         nullptr); }
 #line 2179 "pars0grm.cc"
     break;
@@ -2181,7 +2181,7 @@ yyreduce:
   case 116: /* assignment_statement: PARS_ID_TOKEN PARS_ASSIGN_TOKEN exp  */
 #line 440 "pars0grm.y"
                                 { yyval = pars_assignment_statement(
-                                        static_cast<sym_node_t*>(yyvsp[-2]),
+                                        static_cast<SymNode*>(yyvsp[-2]),
                                         static_cast<que_node_t*>(yyvsp[0])); }
 #line 2187 "pars0grm.cc"
     break;
@@ -2189,7 +2189,7 @@ yyreduce:
   case 117: /* row_printf_statement: PARS_ROW_PRINTF_TOKEN select_statement  */
 #line 446 "pars0grm.y"
                                 { yyval = pars_row_printf_statement(
-                                         static_cast<sel_node_t*>(yyvsp[0])); }
+                                         static_cast<SelNode*>(yyvsp[0])); }
 #line 2194 "pars0grm.cc"
     break;
 
@@ -2244,7 +2244,7 @@ yyreduce:
   case 126: /* for_statement: PARS_FOR_TOKEN PARS_ID_TOKEN PARS_IN_TOKEN exp PARS_DDOT_TOKEN exp PARS_LOOP_TOKEN statement_list PARS_END_TOKEN PARS_LOOP_TOKEN  */
 #line 487 "pars0grm.y"
                                 { yyval = pars_for_statement(
-                                         static_cast<sym_node_t*>(yyvsp[-8]),
+                                         static_cast<SymNode*>(yyvsp[-8]),
                                          yyvsp[-6], yyvsp[-4], yyvsp[-2]); }
 #line 2250 "pars0grm.cc"
     break;
@@ -2265,7 +2265,7 @@ yyreduce:
 #line 502 "pars0grm.y"
                                 { yyval = pars_open_statement(
 					ROW_SEL_OPEN_CURSOR,
-                                        static_cast<sym_node_t*>(yyvsp[0])); }
+                                        static_cast<SymNode*>(yyvsp[0])); }
 #line 2270 "pars0grm.cc"
     break;
 
@@ -2273,33 +2273,33 @@ yyreduce:
 #line 509 "pars0grm.y"
                                 { yyval = pars_open_statement(
 					ROW_SEL_CLOSE_CURSOR,
-                                        static_cast<sym_node_t*>(yyvsp[0])); }
+                                        static_cast<SymNode*>(yyvsp[0])); }
 #line 2278 "pars0grm.cc"
     break;
 
   case 131: /* fetch_statement: PARS_FETCH_TOKEN PARS_ID_TOKEN PARS_INTO_TOKEN variable_list  */
 #line 516 "pars0grm.y"
                                 { yyval = pars_fetch_statement(
-                                        static_cast<sym_node_t*>(yyvsp[-2]),
-                                        static_cast<sym_node_t*>(yyvsp[0]), nullptr); }
+                                        static_cast<SymNode*>(yyvsp[-2]),
+                                        static_cast<SymNode*>(yyvsp[0]), nullptr); }
 #line 2286 "pars0grm.cc"
     break;
 
   case 132: /* fetch_statement: PARS_FETCH_TOKEN PARS_ID_TOKEN PARS_INTO_TOKEN user_function_call  */
 #line 520 "pars0grm.y"
                                 { yyval = pars_fetch_statement(
-                                        static_cast<sym_node_t*>(yyvsp[-2]),
+                                        static_cast<SymNode*>(yyvsp[-2]),
                                         nullptr,
-                                        static_cast<sym_node_t*>(yyvsp[0])); }
+                                        static_cast<SymNode*>(yyvsp[0])); }
 #line 2295 "pars0grm.cc"
     break;
 
   case 133: /* column_def: PARS_ID_TOKEN type_name opt_column_len opt_unsigned opt_not_null  */
 #line 528 "pars0grm.y"
                                 { yyval = pars_column_def(
-                                        static_cast<sym_node_t*>(yyvsp[-4]),
-                                        static_cast<pars_res_word_t*>(yyvsp[-3]),
-                                        static_cast<sym_node_t*>(yyvsp[-2]),
+                                        static_cast<SymNode*>(yyvsp[-4]),
+                                        static_cast<ParsResWord*>(yyvsp[-3]),
+                                        static_cast<SymNode*>(yyvsp[-2]),
                                         yyvsp[-1], yyvsp[0]); }
 #line 2305 "pars0grm.cc"
     break;
@@ -2370,8 +2370,8 @@ yyreduce:
   case 144: /* create_table: PARS_CREATE_TOKEN PARS_TABLE_TOKEN PARS_ID_TOKEN '(' column_def_list ')' not_fit_in_memory  */
 #line 571 "pars0grm.y"
                                 { yyval = pars_create_table(
-                                         static_cast<sym_node_t*>(yyvsp[-4]),
-                                         static_cast<sym_node_t*>(yyvsp[-2]), yyvsp[0]); }
+                                         static_cast<SymNode*>(yyvsp[-4]),
+                                         static_cast<SymNode*>(yyvsp[-2]), yyvsp[0]); }
 #line 2376 "pars0grm.cc"
     break;
 
@@ -2414,11 +2414,11 @@ yyreduce:
   case 151: /* create_index: PARS_CREATE_TOKEN unique_def clustered_def PARS_INDEX_TOKEN PARS_ID_TOKEN PARS_ON_TOKEN PARS_ID_TOKEN '(' column_list ')'  */
 #line 597 "pars0grm.y"
                                 { yyval = pars_create_index(
-                                        static_cast<pars_res_word_t*>(yyvsp[-8]),
-                                        static_cast<pars_res_word_t*>(yyvsp[-7]),
-                                        static_cast<sym_node_t*>(yyvsp[-5]),
-                                        static_cast<sym_node_t*>(yyvsp[-3]),
-                                        static_cast<sym_node_t*>(yyvsp[-1])); }
+                                        static_cast<ParsResWord*>(yyvsp[-8]),
+                                        static_cast<ParsResWord*>(yyvsp[-7]),
+                                        static_cast<SymNode*>(yyvsp[-5]),
+                                        static_cast<SymNode*>(yyvsp[-3]),
+                                        static_cast<SymNode*>(yyvsp[-1])); }
 #line 2423 "pars0grm.cc"
     break;
 
@@ -2467,18 +2467,18 @@ yyreduce:
   case 159: /* parameter_declaration: PARS_ID_TOKEN PARS_IN_TOKEN type_name  */
 #line 625 "pars0grm.y"
                                 { yyval = pars_parameter_declaration(
-                                        static_cast<sym_node_t*>(yyvsp[-2]),
+                                        static_cast<SymNode*>(yyvsp[-2]),
                                         PARS_INPUT,
-                                        static_cast<pars_res_word_t*>(yyvsp[0])); }
+                                        static_cast<ParsResWord*>(yyvsp[0])); }
 #line 2474 "pars0grm.cc"
     break;
 
   case 160: /* parameter_declaration: PARS_ID_TOKEN PARS_OUT_TOKEN type_name  */
 #line 630 "pars0grm.y"
                                 { yyval = pars_parameter_declaration(
-                                        static_cast<sym_node_t*>(yyvsp[-2]),
+                                        static_cast<SymNode*>(yyvsp[-2]),
                                         PARS_OUTPUT,
-                                        static_cast<pars_res_word_t*>(yyvsp[0])); }
+                                        static_cast<ParsResWord*>(yyvsp[0])); }
 #line 2483 "pars0grm.cc"
     break;
 
@@ -2503,31 +2503,31 @@ yyreduce:
   case 164: /* variable_declaration: PARS_ID_TOKEN type_name ';'  */
 #line 645 "pars0grm.y"
                                 { yyval = pars_variable_declaration(
-                                        static_cast<sym_node_t*>(yyvsp[-2]),
-                                        static_cast<pars_res_word_t*>(yyvsp[-1])); }
+                                        static_cast<SymNode*>(yyvsp[-2]),
+                                        static_cast<ParsResWord*>(yyvsp[-1])); }
 #line 2509 "pars0grm.cc"
     break;
 
   case 168: /* cursor_declaration: PARS_DECLARE_TOKEN PARS_CURSOR_TOKEN PARS_ID_TOKEN PARS_IS_TOKEN select_statement ';'  */
 #line 659 "pars0grm.y"
                                 { yyval = pars_cursor_declaration(
-                                        static_cast<sym_node_t*>(yyvsp[-3]),
-                                        static_cast<sel_node_t*>(yyvsp[-1])); }
+                                        static_cast<SymNode*>(yyvsp[-3]),
+                                        static_cast<SelNode*>(yyvsp[-1])); }
 #line 2517 "pars0grm.cc"
     break;
 
   case 169: /* function_declaration: PARS_DECLARE_TOKEN PARS_FUNCTION_TOKEN PARS_ID_TOKEN ';'  */
 #line 666 "pars0grm.y"
                                 { yyval = pars_function_declaration(
-                                        static_cast<sym_node_t*>(yyvsp[-1])); }
+                                        static_cast<SymNode*>(yyvsp[-1])); }
 #line 2524 "pars0grm.cc"
     break;
 
   case 175: /* procedure_definition: PARS_PROCEDURE_TOKEN PARS_ID_TOKEN '(' parameter_declaration_list ')' PARS_IS_TOKEN variable_declaration_list declaration_list PARS_BEGIN_TOKEN statement_list PARS_END_TOKEN  */
 #line 688 "pars0grm.y"
                                 { yyval = pars_procedure_definition(
-                                        static_cast<sym_node_t*>(yyvsp[-9]),
-                                        static_cast<sym_node_t*>(yyvsp[-7]),
+                                        static_cast<SymNode*>(yyvsp[-9]),
+                                        static_cast<SymNode*>(yyvsp[-7]),
                                         yyvsp[-1]); }
 #line 2533 "pars0grm.cc"
     break;

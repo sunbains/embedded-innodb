@@ -34,11 +34,11 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
 /** @see http://www.1024cores.net/home/lock-free-algorithms/queues/bounded-mpmc-queue */
 template <typename T>
-struct Bounded_channel {
+struct BoundedChannel {
   using Type = T;
   using Pos = std::size_t;
 
-  explicit Bounded_channel(size_t n) noexcept : m_ptr(ut_new(sizeof(Cell) * n)), m_ring(new(m_ptr) Cell[n]), m_capacity(n - 1) {
+  explicit BoundedChannel(size_t n) noexcept : m_ptr(ut_new(sizeof(Cell) * n)), m_ring(new(m_ptr) Cell[n]), m_capacity(n - 1) {
     /* Should be a power of 2 */
     ut_a(n >= 2 && (n & (n - 1)) == 0);
 
@@ -50,7 +50,7 @@ struct Bounded_channel {
     m_dpos.store(0, std::memory_order_relaxed);
   }
 
-  ~Bounded_channel() noexcept {
+  ~BoundedChannel() noexcept {
     call_destructor(m_ring);
     ut_delete(m_ptr);
   }
@@ -80,7 +80,7 @@ struct Bounded_channel {
           break;
         }
       } else if (diff < 0) {
-        /* The Bounded_channel is full */
+        /* The BoundedChannel is full */
         return false;
       } else {
         pos = m_epos.load(std::memory_order_relaxed);
@@ -116,7 +116,7 @@ struct Bounded_channel {
         }
 
       } else if (diff < 0) {
-        /* The Bounded_channel is empty */
+        /* The BoundedChannel is empty */
         return false;
 
       } else {
@@ -133,10 +133,10 @@ struct Bounded_channel {
     return (true);
   }
 
-  /** @return the capacity of the Bounded_channel */
+  /** @return the capacity of the BoundedChannel */
   [[nodiscard]] auto capacity() const noexcept { return m_capacity + 1; }
 
-  /** @return true if the Bounded_channel is empty. */
+  /** @return true if the BoundedChannel is empty. */
   [[nodiscard]] bool empty() const noexcept {
     auto pos{m_dpos.load(std::memory_order_relaxed)};
 
@@ -158,7 +158,7 @@ struct Bounded_channel {
     return false;
   }
 
-  /** @return true if the Bounded_channel is full. */
+  /** @return true if the BoundedChannel is full. */
   [[nodiscard]] bool full() const noexcept {
     auto pos{m_epos.load(std::memory_order_relaxed)};
 
@@ -170,7 +170,7 @@ struct Bounded_channel {
       if (diff == 0) {
         return m_epos == pos;
       } else if (diff < 0) {
-        /* The Bounded_channel is full */
+        /* The BoundedChannel is full */
         return true;
       } else {
         pos = m_epos.load(std::memory_order_relaxed);
@@ -199,8 +199,8 @@ struct Bounded_channel {
   std::atomic<Pos> m_dpos{};
   Pad m_pad3;
 
-  Bounded_channel(Bounded_channel &&) = delete;
-  Bounded_channel(const Bounded_channel &) = delete;
-  Bounded_channel &operator=(Bounded_channel &&) = delete;
-  Bounded_channel &operator=(const Bounded_channel &) = delete;
+  BoundedChannel(BoundedChannel &&) = delete;
+  BoundedChannel(const BoundedChannel &) = delete;
+  BoundedChannel &operator=(BoundedChannel &&) = delete;
+  BoundedChannel &operator=(const BoundedChannel &) = delete;
 };

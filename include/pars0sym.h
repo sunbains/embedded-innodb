@@ -37,12 +37,12 @@ Created 12/15/1997 Heikki Tuuri
  * @param[in] heap Memory heap where to create the symbol table.
  * @return Pointer to the created symbol table.
  */
-sym_tab_t *sym_tab_create(mem_heap_t *heap);
+SymTab *sym_tab_create(MemHeap *heap);
 
 /** Frees the memory allocated dynamically AFTER parsing phase for variables
 etc. in the symbol table. Does not free the mem heap where the table was
 originally created. Frees also SQL explicit cursor definitions. */
-void sym_tab_free_private(sym_tab_t *sym_tab); /** in, own: symbol table */
+void sym_tab_free_private(SymTab *sym_tab); /** in, own: symbol table */
 
 /**
  * @brief Adds an integer literal to a symbol table.
@@ -52,7 +52,7 @@ void sym_tab_free_private(sym_tab_t *sym_tab); /** in, own: symbol table */
  * 
  * @return Pointer to the symbol table node.
  */
-sym_node_t *sym_tab_add_int_lit(sym_tab_t *sym_tab, ulint val);
+SymNode *sym_tab_add_int_lit(SymTab *sym_tab, ulint val);
 
 /**
  * @brief Adds an string literal to a symbol table.
@@ -63,7 +63,7 @@ sym_node_t *sym_tab_add_int_lit(sym_tab_t *sym_tab, ulint val);
  * 
  * @return Pointer to the symbol table node.
  */
-sym_node_t *sym_tab_add_int_lit(sym_tab_t *sym_tab, ulint val);
+SymNode *sym_tab_add_int_lit(SymTab *sym_tab, ulint val);
 
 /**
  * @brief Adds an string literal to a symbol table.
@@ -74,7 +74,7 @@ sym_node_t *sym_tab_add_int_lit(sym_tab_t *sym_tab, ulint val);
  * 
  * @return Pointer to the symbol table node.
  */
-sym_node_t *sym_tab_add_str_lit(sym_tab_t *sym_tab, byte *str, ulint len);
+SymNode *sym_tab_add_str_lit(SymTab *sym_tab, byte *str, ulint len);
 
 /**
  * Add a bound literal to a symbol table.
@@ -85,7 +85,7 @@ sym_node_t *sym_tab_add_str_lit(sym_tab_t *sym_tab, byte *str, ulint len);
  * 
  * @return Pointer to the symbol table node.
  */
-sym_node_t *sym_tab_add_bound_lit(sym_tab_t *sym_tab, const char *name, ulint *lit_type);
+SymNode *sym_tab_add_bound_lit(SymTab *sym_tab, const char *name, ulint *lit_type);
 
 /**
  * @brief Adds an SQL null literal to a symbol table.
@@ -94,7 +94,7 @@ sym_node_t *sym_tab_add_bound_lit(sym_tab_t *sym_tab, const char *name, ulint *l
  * 
  * @return Pointer to the symbol table node.
  */
-sym_node_t *sym_tab_add_null_lit(sym_tab_t *sym_tab);
+SymNode *sym_tab_add_null_lit(SymTab *sym_tab);
 
 /**
  * @brief Adds an identifier to a symbol table.
@@ -105,7 +105,7 @@ sym_node_t *sym_tab_add_null_lit(sym_tab_t *sym_tab);
  * 
  * @return Pointer to the symbol table node.
  */
-sym_node_t *sym_tab_add_id(sym_tab_t *sym_tab, byte *name, ulint len);
+SymNode *sym_tab_add_id(SymTab *sym_tab, byte *name, ulint len);
 
 /**
  * @brief Add a bound identifier to a symbol table.
@@ -115,16 +115,16 @@ sym_node_t *sym_tab_add_id(sym_tab_t *sym_tab, byte *name, ulint len);
  * 
  * @return Pointer to the symbol table node.
  */
-sym_node_t *sym_tab_add_bound_id(sym_tab_t *sym_tab, const char *name);
+SymNode *sym_tab_add_bound_id(SymTab *sym_tab, const char *name);
 
-/** Index of sym_node_struct::field_nos corresponding to the clustered index */
+/** Index of SymNode::field_nos corresponding to the clustered index */
 constexpr ulint SYM_CLUST_FIELD_NO = 0;
 
-/** Index of sym_node_struct::field_nos corresponding to a secondary index */
+/** Index of SymNode::field_nos corresponding to a secondary index */
 constexpr ulint SYM_SEC_FIELD_NO = 1;
 
 /** Types of a symbol table node */
-enum sym_tab_entry {
+enum SymTabEntry {
   /**
    * @brief Declared parameter or local variable of a procedure.
    */
@@ -172,7 +172,7 @@ enum sym_tab_entry {
 };
 
 /** Symbol table node */
-struct sym_node_struct {
+struct SymNode {
   /* NOTE: if the data field in 'common.val' is not nullptr and the symbol
   table node is not for a temporary column, the memory for the value has
   been allocated from dynamic memory and it should be freed when the
@@ -191,16 +191,16 @@ struct sym_node_struct {
   always use 'alias' to refer to the primary node. */
 
   /** Node type: QUE_NODE_SYMBOL */
-  que_common_t common;
+  QueCommon common;
 
   /** Pointer to another symbol table node which contains the value for this node, nullptr otherwise */
-  sym_node_t *indirection;
+  SymNode *indirection;
 
   /** Pointer to another symbol table node for which this node is an alias, nullptr otherwise */
-  sym_node_t *alias;
+  SymNode *alias;
 
   /** List of table columns or a list of input variables for an explicit cursor */
-  UT_LIST_NODE_T(sym_node_t) col_var_list;
+  UT_LIST_NODE_T(SymNode) col_var_list;
 
   /** True if a column and its value should be copied to dynamic memory when fetched */
   bool copy_val;
@@ -214,7 +214,7 @@ struct sym_node_struct {
   bool resolved;
 
   /** Type of the parsed token */
-  sym_tab_entry token_type;
+  SymTabEntry token_type;
 
   /** Name of an id */
   const char *name;
@@ -229,27 +229,27 @@ struct sym_node_struct {
   ulint col_no;
 
   /** nullptr, or a buffer for cached column values for prefetched rows */
-  sel_buf_t *prefetch_buf;
+  SelBuf *prefetch_buf;
 
   /** Cursor definition select node if a named cursor */
-  sel_node_t *cursor_def;
+  SelNode *cursor_def;
 
   /** PARS_INPUT, PARS_OUTPUT, or PARS_NOT_PARAM if not a procedure parameter */
   ulint param_type;
 
   /** Back pointer to the symbol table */
-  sym_tab_t *sym_table;
+  SymTab *sym_table;
 
   /** List of symbol nodes */
-  UT_LIST_NODE_T(sym_node_t) sym_list;
+  UT_LIST_NODE_T(SymNode) sym_list;
 };
 
-UT_LIST_NODE_GETTER_DEFINITION(sym_node_t, col_var_list);
-UT_LIST_NODE_GETTER_DEFINITION(sym_node_t, sym_list);
+UT_LIST_NODE_GETTER_DEFINITION(SymNode, col_var_list);
+UT_LIST_NODE_GETTER_DEFINITION(SymNode, sym_list);
 
 /** Symbol table */
-struct sym_tab_t {
-  que_t *query_graph;
+struct SymTab {
+  QueFork *query_graph;
   /** query graph generated by the
   parser */
   const char *sql_string;
@@ -260,14 +260,14 @@ struct sym_tab_t {
   /** position of the next character in
   sql_string to give to the lexical
   analyzer */
-  pars_info_t *info; /** extra information, or nullptr */
+  ParsInfo *info; /** extra information, or nullptr */
 
   /** List of symbol nodes in the symbol table */
-  UT_LIST_BASE_NODE_T_EXTERN(sym_node_t, sym_list) sym_list;
+  UT_LIST_BASE_NODE_T_EXTERN(SymNode, sym_list) sym_list;
 
   /** List of function nodes in the parsed query graph */
   func_node_list_t func_node_list;
 
   /** memory heap from which we can allocate space */
-  mem_heap_t *heap;
+  MemHeap *heap;
 };

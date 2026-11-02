@@ -100,7 +100,7 @@ dictionary cache in main memory, if the stored charset-collation is 0, and
 the type is a non-binary string, replace that 0 by the default
 charset-collation code of the installation. In short, in old tables, the
 charset-collation code in the system tables on disk can be 0, but in
-in-memory data structures (dtype_t), the charset-collation code is
+in-memory data structures (Dtype), the charset-collation code is
 always != 0 for non-binary string types.
 
 In new tables, in binary string types, the charset-collation code is the
@@ -183,7 +183,7 @@ dtype_read_for_order_and_null_size()
 dtype_new_read_for_order_and_null_size()
 sym_tab_add_null_lit() */
 
-/* The following are used in two places, dtype_t and  Field, we
+/* The following are used in two places, Dtype and  Field, we
 want to ensure that they are identical and also want to ensure that
 all bit-fields can be packed tightly in both structs. */
 #define DTYPE_FIELDS                                                  \
@@ -200,13 +200,13 @@ all bit-fields can be packed tightly in both structs. */
   /** Maximum length of bytes to store the string length) */          \
   unsigned mbmaxlen : 3;
 
-struct dtype_t {
+struct Dtype {
   DTYPE_FIELDS
 };
 
 /** Structure for an SQL data field */
-struct dfield_t {
-  /** Print the dfield_t object into the given output stream.
+struct Dfield {
+  /** Print the Dfield object into the given output stream.
   @param[in]    out     the output stream.
   @return       the ouput stream. */
   std::ostream &print(std::ostream &out) const;
@@ -221,7 +221,7 @@ struct dfield_t {
   uint8_t ext;
 
   /** Type of data */
-  dtype_t type;
+  Dtype type;
 };
 
 /** Structure for an SQL data tuple of fields (logical record) */
@@ -243,7 +243,7 @@ struct DTuple {
   /** Compare a data tuple to a physical record.
   @param[in]    rec             record
   @param[in]    index           index
-  @param[in]    offsets         Phy_rec::get_col_offsets(rec)
+  @param[in]    offsets         PhyRec::get_col_offsets(rec)
   @param[in,out]        matched_fields  number of completely matched fields
   @return the comparison result of dtuple and rec
   @retval 0 if dtuple is equal to rec
@@ -254,7 +254,7 @@ struct DTuple {
   /** Compare a data tuple to a physical record.
   @param[in]    rec             record
   @param[in]    index           index
-  @param[in]    offsets         Phy_rec::get_col_offsets(rec)
+  @param[in]    offsets         PhyRec::get_col_offsets(rec)
   @return the comparison result of dtuple and rec
   @retval 0 if dtuple is equal to rec
   @retval negative if dtuple is less than rec
@@ -287,7 +287,7 @@ struct DTuple {
   ulint n_fields_cmp;
 
   /** Fields */
-  dfield_t *fields;
+  Dfield *fields;
 
   /** data tuples can be linked into a list using this field */
   UT_LIST_NODE_T(DTuple) tuple_list;
@@ -297,7 +297,7 @@ struct DTuple {
 };
 
 /** A slot for a field in a big rec vector */
-struct big_rec_field_t {
+struct BigRecField {
   /** Field number in record */
   ulint field_no;
 
@@ -310,14 +310,14 @@ struct big_rec_field_t {
 
 /** Storage format for overflow data in a big record, that is, a
 clustered index record which needs external storage of data fields */
-struct big_rec_t {
+struct BigRec {
   /** Memory heap from which allocated */
-  mem_heap_t *heap;
+  MemHeap *heap;
 
   /** Number of stored fields */
   ulint n_fields;
 
   /** Stored fields */
-  big_rec_field_t *fields;
+  BigRecField *fields;
 };
 

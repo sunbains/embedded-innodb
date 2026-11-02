@@ -105,55 +105,55 @@ constexpr ulint TRX_SYS_TRX_ID_WRITE_MARGIN = 256;
 
 /** The transaction system central memory data structure; protected by the
 kernel mutex */
-struct Trx_sys {
+struct TrxSys {
 
   /**
    * Constructor
    *
    * @param[in] fsp               File space management instance
    */
-  explicit Trx_sys(FSP *fsp) noexcept;
+  explicit TrxSys(Fsp *fsp) noexcept;
 
   /**
    * Destructor
    */
-  ~Trx_sys() noexcept;
+  ~TrxSys() noexcept;
 
   /**
    * Create an instance of the transaction system.
    *
    * @param[in] fsp             File management instance to use
    *
-   * @return new Trx_sys instance.
+   * @return new TrxSys instance.
    */
-  [[nodiscard]] static Trx_sys *create(FSP *fsp) noexcept;
+  [[nodiscard]] static TrxSys *create(Fsp *fsp) noexcept;
 
   /**
    * Destroy a transaction system instance.
    *
    * @param[in] recovery        Recovery flag
    */
-  static void destroy(Trx_sys *&srv_trx_sys) noexcept;
+  static void destroy(TrxSys *&srv_trx_sys) noexcept;
 
   /** Start the transaction system.
    *
    * @return DB_SUCCESS or error code.
   */
-  [[nodiscard]] dberr_t start(ib_recovery_t recovery) noexcept;
+  [[nodiscard]] DbErr start(IbRecovery recovery) noexcept;
 
   /**
    * Create a new system tablespace.
    *
    * @return DB_SUCCESS or error code.
    */
-  [[nodiscard]] db_err create_system_tablespace() noexcept;
+  [[nodiscard]] DbErr create_system_tablespace() noexcept;
 
   /**
    * Open an existing database instance.
    *
    * @return DB_SUCCESS or error code.
    */
-  [[nodiscard]] db_err open_system_tablespace() noexcept;
+  [[nodiscard]] DbErr open_system_tablespace() noexcept;
 
   /**
    * Looks for a free slot for a rollback segment in the trx system file copy.
@@ -162,7 +162,7 @@ struct Trx_sys {
    *
    * @return	slot index or ULINT_UNDEFINED if not found
    */
-  [[nodiscard]] ulint frseg_find_free(mtr_t *mtr) noexcept;
+  [[nodiscard]] ulint frseg_find_free(Mtr *mtr) noexcept;
 
   /**
    * Checks that trx is in the trx list.
@@ -202,7 +202,7 @@ struct Trx_sys {
    * find out if the minimum trx id transaction itself is active, or already
    * committed.)
    *
-   * @return	the minimum trx id, or Trx_sys::max_trx_id if the trx list is empty
+   * @return	the minimum trx id, or TrxSys::max_trx_id if the trx list is empty
    */
   [[nodiscard]] trx_id_t get_min_trx_id() const noexcept {
     ut_ad(mutex_own(&m_mutex));
@@ -290,7 +290,7 @@ struct Trx_sys {
      *
      * @return Number of prepared transactions.
      */
-  [[nodiscard]] int recover(XID *xid_list, ulint len) noexcept;
+  [[nodiscard]] int recover(Xid *xid_list, ulint len) noexcept;
 
   /**
    * Gets a pointer to the transaction system header and x-latches its page.
@@ -299,10 +299,10 @@ struct Trx_sys {
    *
    * @return	pointer to system header, page x-latched.
    */
-  [[nodiscard]] trx_sysf_t *read_header(mtr_t *mtr) noexcept {
+  [[nodiscard]] trx_sysf_t *read_header(Mtr *mtr) noexcept {
     ut_ad(mtr != nullptr);
 
-    Buf_pool::Request req{
+    BufPool::Request req{
       .m_rw_latch = RW_X_LATCH,
       .m_page_id = {TRX_SYS_SPACE, TRX_SYS_PAGE_NO},
       .m_mode = BUF_GET,
@@ -324,7 +324,7 @@ struct Trx_sys {
    *
    * @return	pointer to rseg object, NULL if slot not in use
    */
-  [[nodiscard]] Trx_rseg *get_nth_rseg(ulint n) noexcept {
+  [[nodiscard]] TrxRseg *get_nth_rseg(ulint n) noexcept {
     ut_ad(mutex_own(&m_mutex));
     ut_ad(n < m_rsegs.size());
 
@@ -338,7 +338,7 @@ struct Trx_sys {
    * @param[in] n	Index of slot
    * @param[in] rseg	Pointer to rseg object, NULL if slot not in use
    */
-  void set_nth_rseg(ulint n, Trx_rseg *rseg) noexcept {
+  void set_nth_rseg(ulint n, TrxRseg *rseg) noexcept {
     ut_ad(n < m_rsegs.size());
 
     m_rsegs[n] = rseg;
@@ -361,7 +361,7 @@ struct Trx_sys {
    *
    * @param[in] recovery The recovery flag.
    */
-  void trx_lists_init_at_db_start(ib_recovery_t recovery) noexcept;
+  void trx_lists_init_at_db_start(IbRecovery recovery) noexcept;
 
   /**
    * Assigns a rollback segment to a transaction in a round-robin fashion.
@@ -423,7 +423,7 @@ struct Trx_sys {
    *
    * @return	space id
    */
-  [[nodiscard]] static space_id_t frseg_get_space(trx_sysf_t *sys_header, ulint i, mtr_t *mtr) noexcept {
+  [[nodiscard]] static space_id_t frseg_get_space(trx_sysf_t *sys_header, ulint i, Mtr *mtr) noexcept {
     ut_ad(i < TRX_SYS_N_RSEGS);
     // TODO: Remove this once we have a proper mutex for the trx system.
     // ut_ad(mutex_own(&m_mutex));
@@ -440,7 +440,7 @@ struct Trx_sys {
    *
    * @return	page number, FIL_NULL if slot unused
    */
-  [[nodiscard]] static page_no_t frseg_get_page_no(trx_sysf_t *sys_header, ulint i, mtr_t *mtr) noexcept {
+  [[nodiscard]] static page_no_t frseg_get_page_no(trx_sysf_t *sys_header, ulint i, Mtr *mtr) noexcept {
     ut_ad(i < TRX_SYS_N_RSEGS);
     // TODO: Remove this once we have a proper mutex for the trx system.
     // ut_ad(mutex_own(&m_mutex));
@@ -457,7 +457,7 @@ struct Trx_sys {
    * @param[in]	space	Space id
    * @param[in]	mtr	mtr
    */
-  static void frseg_set_space(trx_sysf_t *sys_header, ulint i, space_id_t space, mtr_t *mtr) noexcept {
+  static void frseg_set_space(trx_sysf_t *sys_header, ulint i, space_id_t space, Mtr *mtr) noexcept {
     ut_ad(i < TRX_SYS_N_RSEGS);
     // TODO: Remove this once we have a proper mutex for the trx system.
     // ut_ad(mutex_own(&m_mutex));
@@ -474,7 +474,7 @@ struct Trx_sys {
    * @param[in]	mtr	mtr
    */
 
-  static void frseg_set_page_no(trx_sysf_t *sys_header, ulint i, page_no_t page_no, mtr_t *mtr) noexcept {
+  static void frseg_set_page_no(trx_sysf_t *sys_header, ulint i, page_no_t page_no, Mtr *mtr) noexcept {
     ut_ad(i < TRX_SYS_N_RSEGS);
     // TODO: Remove this once we have a proper mutex for the trx system.
     // ut_ad(mutex_own(&m_mutex));
@@ -520,13 +520,13 @@ struct Trx_sys {
    *
    * @return trx or nullptr
    */
-  [[nodiscard]] Trx *get_trx_by_xid(XID *xid) noexcept;
+  [[nodiscard]] Trx *get_trx_by_xid(Xid *xid) noexcept;
 #endif /* WITH_XOPEN */
 
   /** Closes a read view.
    * @param view read view
    */
-  void close_read_view(Read_view *view);
+  void close_read_view(ReadView *view);
 
   /** Closes a consistent read view for client. This function is called at an SQL
    * statement end if the trx isolation level is <= TRX_ISO_READ_COMMITTED.
@@ -542,7 +542,7 @@ struct Trx_sys {
    * @param trx in: transaction where cursor is set
    * @param cursor_view in: consistent cursor view to be set
    */
-  void set_cursor_view(Trx *trx, Cursor_view *cursor_view);
+  void set_cursor_view(Trx *trx, CursorView *cursor_view);
 
   /** Create a consistent cursor view to be used in cursors. In this
    * consistent read view modifications done by the creating transaction or future
@@ -550,20 +550,20 @@ struct Trx_sys {
    * @param cr_trx trx where cursor view is created
    * @return cursor view
    */
-  Cursor_view *create_cursor_view(Trx *cr_trx);
+  CursorView *create_cursor_view(Trx *cr_trx);
 
   /** Close a given consistent cursor view and restore global read view
    * back to a transaction read view.
    * @param trx trx
    * @param curview cursor view to be closed
    */
-  void close_cursor_view(Trx *trx, Cursor_view *curview);
+  void close_cursor_view(Trx *trx, CursorView *curview);
 
   /** Creates a read view object.
   @param[in] n                    Number of cells in the trx_ids array.
   @param[in,out] heap             Memory heap to use for allocation.
   @return	own: read view struct */
-  Read_view *create_read_view_low(ulint n, mem_heap_t *heap);
+  ReadView *create_read_view_low(ulint n, MemHeap *heap);
 
   /**
    * Makes a copy of the oldest existing read view, or opens a new. The view
@@ -573,7 +573,7 @@ struct Trx_sys {
    * @param heap memory heap from which allocated
    * @return own: read view struct
    */
-  Read_view *oldest_copy_or_open_new(trx_id_t cr_trx_id, mem_heap_t *heap);
+  ReadView *oldest_copy_or_open_new(trx_id_t cr_trx_id, MemHeap *heap);
 
   /**
    * Opens a read view where exactly the transactions serialized before this
@@ -583,7 +583,7 @@ struct Trx_sys {
    * @param heap memory heap from which allocated
    * @return own: read view struct
    */
-  Read_view *open_read_view_now(trx_id_t cr_trx_id, mem_heap_t *heap);
+  ReadView *open_read_view_now(trx_id_t cr_trx_id, MemHeap *heap);
 
 #ifdef UNIT_TEST
  private:
@@ -595,7 +595,7 @@ struct Trx_sys {
    *
    * @param[in,out] mtr              Mini-transaction covering the operation.
    */
-  void create_new_instance(mtr_t *mtr) noexcept;
+  void create_new_instance(Mtr *mtr) noexcept;
 
   /**
    * Creates trx objects for transactions and initializes the trx list of srv_trx_sys at database start.
@@ -604,7 +604,7 @@ struct Trx_sys {
    *
    * @param[in] recovery The recovery flag.
    */
-  void init_at_db_start(ib_recovery_t recovery) noexcept;
+  void init_at_db_start(IbRecovery recovery) noexcept;
 
   /**
    * Creates a transaction instance.
@@ -626,14 +626,14 @@ struct Trx_sys {
   /** Currently serves the purpose of the old kernel mutex.
    * TODO: Split it over a few patches.
    */
-  mutex_t m_mutex{};
+  Mutex m_mutex{};
 
   /** The smallest number not yet assigned as a transaction
   id or transaction number */
   trx_id_t m_max_trx_id{};
 
   /** List of read views sorted on trx no, biggest first */
-  UT_LIST_BASE_NODE_T_EXTERN(Read_view, m_view_list) m_view_list {};
+  UT_LIST_BASE_NODE_T_EXTERN(ReadView, m_view_list) m_view_list {};
 
   /** List of active and committed in memory transactions,
   sorted on trx id, biggest first */
@@ -643,14 +643,14 @@ struct Trx_sys {
   UT_LIST_BASE_NODE_T_EXTERN(Trx, m_client_trx_list) m_client_trx_list {};
 
   /** List of rollback segment objects */
-  UT_LIST_BASE_NODE_T_EXTERN(Trx_rseg, m_rseg_list) m_rseg_list {};
+  UT_LIST_BASE_NODE_T_EXTERN(TrxRseg, m_rseg_list) m_rseg_list {};
 
   /** Latest rollback segment in the round-robin assignment
   of rollback segments to transactions */
-  Trx_rseg *m_latest_rseg{};
+  TrxRseg *m_latest_rseg{};
 
   /** Pointer array to rollback segments; NULL if slot not in use */
-  std::array<Trx_rseg *, TRX_SYS_N_RSEGS> m_rsegs{};
+  std::array<TrxRseg *, TRX_SYS_N_RSEGS> m_rsegs{};
 
   /** Length of the TRX_RSEG_HISTORY list (update undo logs for
   committed transactions), protected by rseg->mutex */
@@ -669,9 +669,9 @@ struct Trx_sys {
   ulint m_n_background_trx{};
 
   /** File space management instance. */
-  FSP *m_fsp{};
+  Fsp *m_fsp{};
 
   /** Purge system. */
-  Purge_sys *m_purge{};
+  PurgeSys *m_purge{};
 };
 

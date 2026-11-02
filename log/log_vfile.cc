@@ -18,7 +18,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 /** @file log/log_vfile.cc
 Log virtual file management and LSN calculations
 
-This file implements the Log_vfile class which manages multiple log files
+This file implements the LogVfile class which manages multiple log files
 and provides LSN (Log Sequence Number) to physical file/offset mapping.
 
 LSN CALCULATION ALGORITHMS
@@ -33,7 +33,7 @@ locations across multiple log files. The key calculations are:
 
    Where:
    - file_size: Maximum size of each log file (e.g., 1MB)
-   - header_size: Size of Log_phy_file_header
+   - header_size: Size of LogPhyFileHeader
    - checkpoint_area_size: Size of checkpoint area in first file (2 * checkpoint_size)
    - num_files: Number of log files in the group
 
@@ -126,7 +126,7 @@ For data LSN 0x200000 (beyond first file):
 THREAD SAFETY
 =============
 
-The Log_vfile class is designed for single-threaded access during normal
+The LogVfile class is designed for single-threaded access during normal
 operation. The LSN calculation functions are const and thread-safe for
 read operations, but file I/O operations require proper synchronization.
 
@@ -147,15 +147,15 @@ read operations, but file I/O operations require proper synchronization.
 
 constexpr ulint LOG_UNLOCK_NONE_FLUSHED_LOCK = 1;
 
-Log_file::Log_file(const std::string &path, off_t max_size) noexcept : m_fd(-1), m_max_size(max_size), m_path(path) {}
+LogFile::LogFile(const std::string &path, off_t max_size) noexcept : m_fd(-1), m_max_size(max_size), m_path(path) {}
 
-Log_file::Log_file(Log_file &&rhs) noexcept
+LogFile::LogFile(LogFile &&rhs) noexcept
     : m_fd(rhs.m_fd), m_max_size(rhs.m_max_size), m_path(std::move(rhs.m_path)), m_pending_ops(rhs.m_pending_ops.load()) {
   rhs.m_fd = -1;
   rhs.m_pending_ops = 0;
 }
 
-Log_file &Log_file::operator=(Log_file &&rhs) noexcept {
+LogFile &LogFile::operator=(LogFile &&rhs) noexcept {
   if (this != &rhs) {
     if (m_fd != -1) {
       auto ret = ::close(m_fd);
@@ -171,7 +171,7 @@ Log_file &Log_file::operator=(Log_file &&rhs) noexcept {
   return *this;
 }
 
-Log_file::~Log_file() noexcept {
+LogFile::~LogFile() noexcept {
   if (m_fd != -1) {
     auto ret = ::close(m_fd);
     ut_a(ret != -1);
@@ -179,11 +179,11 @@ Log_file::~Log_file() noexcept {
   }
 }
 
-std::string Log_file::to_string() const noexcept {
+std::string LogFile::to_string() const noexcept {
   return std::format("Log file: path: {}, max_size: {}, fd: {}, pending_ops: {}", m_path, m_max_size, m_fd, m_pending_ops.load());
 }
 
-Log_vfile::Log_vfile(std::string directory, size_t n_files, off_t max_file_size)
+LogVfile::LogVfile(std::string directory, size_t n_files, off_t max_file_size)
     : m_directory(directory), m_max_file_size(max_file_size) {
 
   if (n_files < 2) {
@@ -196,11 +196,11 @@ Log_vfile::Log_vfile(std::string directory, size_t n_files, off_t max_file_size)
   }
 }
 
-Log_vfile::~Log_vfile() noexcept {
+LogVfile::~LogVfile() noexcept {
   m_files.clear();
 }
 
-std::string Log_vfile::to_string() const noexcept {
+std::string LogVfile::to_string() const noexcept {
   std::string str{};
 
   for (auto &file : m_files) {
@@ -224,12 +224,12 @@ std::string Log_vfile::to_string() const noexcept {
   );
 }
 
-void Log_vfile::set_fields(lsn_t lsn) noexcept {
+void LogVfile::set_fields(lsn_t lsn) noexcept {
   m_lsn = lsn;
   m_lsn_offset = calc_lsn_offset(lsn);
 }
 
-off_t Log_vfile::get_capacity() const noexcept {
+off_t LogVfile::get_capacity() const noexcept {
   ut_ad(m_files.size() > 0);
   ut_ad(m_max_file_size > LOG_FIRST_FILE_DATA_START);
 
@@ -244,7 +244,7 @@ off_t Log_vfile::get_capacity() const noexcept {
   return capacity;
 }
 
-off_t Log_vfile::calc_size_offset(off_t offset) const noexcept {
+off_t LogVfile::calc_size_offset(off_t offset) const noexcept {
   /* For first file: subtract header and checkpoint area */
   if (offset < m_max_file_size) {
     return offset - LOG_FIRST_FILE_DATA_START;
@@ -253,7 +253,7 @@ off_t Log_vfile::calc_size_offset(off_t offset) const noexcept {
   return offset;
 }
 
-off_t Log_vfile::calc_real_offset(off_t offset) noexcept {
+off_t LogVfile::calc_real_offset(off_t offset) noexcept {
   /* For first file: add header and checkpoint area */
   if (offset < m_max_file_size) {
     return offset + LOG_FIRST_FILE_DATA_START;
@@ -262,7 +262,7 @@ off_t Log_vfile::calc_real_offset(off_t offset) noexcept {
   return offset;
 }
 
-off_t Log_vfile::calc_lsn_offset(lsn_t lsn) noexcept {
+off_t LogVfile::calc_lsn_offset(lsn_t lsn) noexcept {
   auto group_size = get_capacity();
   auto lsn_size_offset = calc_size_offset(m_lsn_offset);
 
@@ -283,7 +283,7 @@ off_t Log_vfile::calc_lsn_offset(lsn_t lsn) noexcept {
   return calc_real_offset(offset);
 }
 
-std::pair<const Log_file *, off_t> Log_vfile::get_io_coordinates(lsn_t first_header_lsn, lsn_t lsn) const noexcept {
+std::pair<const LogFile *, off_t> LogVfile::get_io_coordinates(lsn_t first_header_lsn, lsn_t lsn) const noexcept {
   const int64_t first_file_data_capacity = m_max_file_size - LOG_FIRST_FILE_DATA_START;
   const int64_t other_files_capacity = m_max_file_size;
   const int64_t total_capacity = first_file_data_capacity + other_files_capacity * (m_files.size() - 1);
@@ -309,7 +309,7 @@ std::pair<const Log_file *, off_t> Log_vfile::get_io_coordinates(lsn_t first_hea
   }
 }
 
-bool Log_vfile::open() noexcept {
+bool LogVfile::open() noexcept {
   try {
     std::filesystem::path dir_path{m_directory};
 
@@ -381,7 +381,7 @@ bool Log_vfile::open() noexcept {
   return true;
 }
 
-bool Log_vfile::close() noexcept {
+bool LogVfile::close() noexcept {
   for (auto &file : m_files) {
     if (file.m_fd != -1) {
       auto ret = ::close(file.m_fd);
@@ -392,23 +392,23 @@ bool Log_vfile::close() noexcept {
   return true;
 }
 
-bool Log_vfile::sync_read(void *buf, size_t len, off_t off) const noexcept {
+bool LogVfile::sync_read(void *buf, size_t len, off_t off) const noexcept {
   return true;
 }
 
-bool Log_vfile::sync_write(const void *buf, size_t len, off_t off) noexcept {
+bool LogVfile::sync_write(const void *buf, size_t len, off_t off) noexcept {
   return true;
 }
 
-bool Log_vfile::async_write(const void *buf, size_t len, off_t offset) noexcept {
+bool LogVfile::async_write(const void *buf, size_t len, off_t offset) noexcept {
   return true;
 }
 
-bool Log_vfile::read(Log_phy_checkpoint &phy_checkpoint, off_t off) const noexcept {
+bool LogVfile::read(LogPhyCheckpoint &phy_checkpoint, off_t off) const noexcept {
   return sync_read(&phy_checkpoint, sizeof(phy_checkpoint), off);
 }
 
-bool Log_vfile::flush_header(byte *header, off_t offset, lsn_t start_lsn) noexcept {
+bool LogVfile::flush_header(byte *header, off_t offset, lsn_t start_lsn) noexcept {
   // auto io_coordinates = get_write_coordinates(LOG_START_LSN, start_lsn);
 
   // mach_write_to_4(m_header + LOG_GROUP_ID, m_id);
@@ -427,14 +427,14 @@ bool Log_vfile::flush_header(byte *header, off_t offset, lsn_t start_lsn) noexce
   return false;
 }
 
-bool Log_vfile::read(Log_buffer &buffer, lsn_t start_lsn, lsn_t end_lsn) noexcept {
+bool LogVfile::read(LogBuffer &buffer, lsn_t start_lsn, lsn_t end_lsn) noexcept {
   // FIXME: Implement this.
   return false;
 }
 
-bool Log_vfile::write(Log_buffer &buffer, lsn_t write_lsn) noexcept {
-  ut_a(buffer.size() % sizeof(Log_phy_block) == 0);
-  ut_a(write_lsn % lsn_t(sizeof(Log_phy_block)) == 0);
+bool LogVfile::write(LogBuffer &buffer, lsn_t write_lsn) noexcept {
+  ut_a(buffer.size() % sizeof(LogPhyBlock) == 0);
+  ut_a(write_lsn % lsn_t(sizeof(LogPhyBlock)) == 0);
 
   // FIXME: Calculate the length of the buffer to write.
   ulint len = {};
@@ -442,11 +442,11 @@ bool Log_vfile::write(Log_buffer &buffer, lsn_t write_lsn) noexcept {
   while (len > 0) {
     // auto offset = calc_lsn_offset(write_lsn);
 
-    //if ((offset % m_max_file_size == sizeof(Log_phy_file_header)) && write_header) {
+    //if ((offset % m_max_file_size == sizeof(LogPhyFileHeader)) && write_header) {
     // flush_header(offset / m_max_file_size, start_lsn);
 
     // FIXME: This needs to be part of the log_io system
-    // m_written_to_all_lsn += sizeof(Log_phy_block);
+    // m_written_to_all_lsn += sizeof(LogPhyBlock);
     // ++m_n_writes;
     //}
 
@@ -468,7 +468,7 @@ bool Log_vfile::write(Log_buffer &buffer, lsn_t write_lsn) noexcept {
   return true;
 }
 
-bool Log_vfile::sync() noexcept {
+bool LogVfile::sync() noexcept {
   // FIXME: Determine which file to sync
   auto fd = m_files[0].m_fd;
   auto ret = ::fsync(fd);
@@ -480,20 +480,20 @@ bool Log_vfile::sync() noexcept {
   return true;
 }
 
-void Log_vfile::checkpoint_set(ulint file_no, off_t offset) noexcept {
+void LogVfile::checkpoint_set(ulint file_no, off_t offset) noexcept {
   // auto buf = m_checkpoint_buf;
 
   //mach_write_to_4(buf + LOG_CHECKPOINT_GROUP_ARRAY + 8 * m_id + LOG_CHECKPOINT_UNUSED_FILE_NO, file_no);
   //mach_write_to_4(buf + LOG_CHECKPOINT_GROUP_ARRAY + 8 * m_id + LOG_CHECKPOINT_UNUSED_OFFSET, offset);
 }
 
-std::pair<ulint, ulint> Log_vfile::checkpoint_get() const noexcept {
+std::pair<ulint, ulint> LogVfile::checkpoint_get() const noexcept {
   std::pair<ulint, ulint> result;
 
   return result;
 }
 
-void Log_vfile::prepare_checkpoint(ulint checkpoint_no, lsn_t checkpoint_lsn) noexcept {
+void LogVfile::prepare_checkpoint(ulint checkpoint_no, lsn_t checkpoint_lsn) noexcept {
   // static_assert(LOG_CHECKPOINT_SIZE <= IB_FILE_BLOCK_SIZE, "error LOG_CHECKPOINT_SIZE > IB_FILE_BLOCK_SIZE");
 
   // auto buf = m_checkpoint_buf;
@@ -521,6 +521,6 @@ void Log_vfile::prepare_checkpoint(ulint checkpoint_no, lsn_t checkpoint_lsn) no
   // mach_write_to_4(buf + LOG_CHECKPOINT_FSP_MAGIC_N, LOG_CHECKPOINT_FSP_MAGIC_N_VAL);
 }
 
-bool Log_vfile::write_checkpoint([[maybe_unused]] Log_phy_checkpoint *checkpoint, [[maybe_unused]] off_t off) noexcept {
+bool LogVfile::write_checkpoint([[maybe_unused]] LogPhyCheckpoint *checkpoint, [[maybe_unused]] off_t off) noexcept {
   return true;
 }

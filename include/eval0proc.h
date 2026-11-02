@@ -35,38 +35,38 @@ Created 1/20/1998 Heikki Tuuri
 /** Performs an execution step of an if-statement node.
 @param[in,out] thr              Query thread.
 @return        query thread to run next or nullptr */
-que_thr_t *if_step(que_thr_t *thr);
+QueThr *if_step(QueThr *thr);
 
 /** Performs an execution step of a while-statement node.
 @param[in,out] thr              Query thread.
 @return        query thread to run next or nullptr */
-que_thr_t *while_step(que_thr_t *thr);
+QueThr *while_step(QueThr *thr);
 
 /** Performs an execution step of a for-loop node.
 @param[in,out] thr              Query thread.
 @return        query thread to run next or nullptr */
-que_thr_t *for_step(que_thr_t *thr);
+QueThr *for_step(QueThr *thr);
 
 /** Performs an execution step of an assignment statement node.
 @param[in,out] thr              Query thread.
 @return        query thread to run next or nullptr */
-que_thr_t *assign_step(que_thr_t *thr);
+QueThr *assign_step(QueThr *thr);
 
 /** Performs an execution step of an exit statement node.
 @param[in,out] thr              Query thread.
 @return        query thread to run next or nullptr */
-que_thr_t *exit_step(que_thr_t *thr);
+QueThr *exit_step(QueThr *thr);
 
 /** Performs an execution step of a return-statement node.
 @param[in,out] thr              Query thread.
 @return        query thread to run next or nullptr */
-que_thr_t *return_step(que_thr_t *thr);
+QueThr *return_step(QueThr *thr);
 
 /** Performs an execution step of a procedure node.
 @param[in,out] thr              Query thread.
 @return        query thread to run next or nullptr */
-inline que_thr_t *proc_step(que_thr_t *thr) {
-  auto node = reinterpret_cast<proc_node_t *>(thr->run_node);
+inline QueThr *proc_step(QueThr *thr) {
+  auto node = reinterpret_cast<ProcNode *>(thr->run_node);
 
   ut_ad(que_node_get_type(node) == QUE_NODE_PROC);
 
@@ -91,9 +91,9 @@ inline que_thr_t *proc_step(que_thr_t *thr) {
 /** Performs an execution step of a procedure call node.
 @param[in,out] thr              Query thread.
 @return        query thread to run next or nullptr */
-inline que_thr_t *proc_eval_step(que_thr_t *thr) /*!< in: query thread */
+inline QueThr *proc_eval_step(QueThr *thr) /*!< in: query thread */
 {
-  auto node = reinterpret_cast<func_node_t *>(thr->run_node);
+  auto node = reinterpret_cast<FuncNode *>(thr->run_node);
 
   ut_ad(que_node_get_type(node) == QUE_NODE_FUNC);
 

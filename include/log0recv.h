@@ -44,7 +44,7 @@ Created 9/20/1997 Heikki Tuuri
                                 freshly read page
  * @param[in,out] block         buffer block
 */
-void recv_recover_page(bool just_read_in, Buf_block *block) noexcept;
+void recv_recover_page(bool just_read_in, BufBlock *block) noexcept;
 
 /**
  * Recovers from a checkpoint. When this function returns, the database is able
@@ -58,7 +58,7 @@ void recv_recover_page(bool just_read_in, Buf_block *block) noexcept;
  *
  * @return	error code or DB_SUCCESS
  */
-db_err recv_recovery_from_checkpoint_start(DBLWR *dblwr, ib_recovery_t recovery, lsn_t max_flushed_lsn) noexcept;
+DbErr recv_recovery_from_checkpoint_start(Dblwr *dblwr, IbRecovery recovery, lsn_t max_flushed_lsn) noexcept;
 
 /**
  * Completes recovery from a checkpoint.
@@ -66,7 +66,7 @@ db_err recv_recovery_from_checkpoint_start(DBLWR *dblwr, ib_recovery_t recovery,
  * @param[in,out] dblwr         Doublewrite buffer to use
  * @param[in] recovery          Recovery flag
  */
-void recv_recovery_from_checkpoint_finish(DBLWR *dblwr, ib_recovery_t recovery) noexcept;
+void recv_recovery_from_checkpoint_finish(Dblwr *dblwr, IbRecovery recovery) noexcept;
 
 /**
  * Initiates the rollback of active transactions.
@@ -99,31 +99,31 @@ void recv_sys_var_init() noexcept;
  * means that no new log records can be generated during the application;
  * the caller must in this case own the log mutex;
 */
-void recv_apply_log_recs(DBLWR *dblwr, bool flush_and_free_pages) noexcept;
+void recv_apply_log_recs(Dblwr *dblwr, bool flush_and_free_pages) noexcept;
 
 /**
  * Block of log record data, variable size struct, see note.
  */
-struct Log_record_data {
+struct LogRecordData {
 
   /** @return string representation of the data.  */
   std::string to_string() const noexcept;
 
   /** Pointer to the next block or nullptr */
-  Log_record_data *m_next;
+  LogRecordData *m_next;
 
   /* Note: the log record data is stored physically immediately after this
   struct, max amount RECV_DATA_BLOCK_SIZE bytes of it */
 };
 
 /** Parsed log log record */
-struct Log_record {
+struct LogRecord {
 
   /** @return string representation of the data.  */
   std::string to_string() const noexcept;
 
   /** Log record type */
-  mlog_type_t m_type{MLOG_UNKNOWN};
+  MlogType m_type{MLOG_UNKNOWN};
 
   /** Log record body length in bytes */
   uint32_t m_len{};
@@ -139,14 +139,14 @@ struct Log_record {
   lsn_t m_end_lsn{};
 
   /** Pointer to the next log record in the singly linked list */
-  Log_record *m_next{};
+  LogRecord *m_next{};
 
   /** Chain of blocks containing the log record body */
-  Log_record_data *m_data{};
+  LogRecordData *m_data{};
 };
 
 /** States of recv_addr_struct */
-enum Recv_addr_state {
+enum RecvAddrState {
   RECV_UNKNOWN = 0,
 
   /** Not yet processed */
@@ -163,33 +163,33 @@ enum Recv_addr_state {
   RECV_PROCESSED
 };
 
-/** @return string presentation of Recv_addr_state */
-std::string to_string(Recv_addr_state s) noexcept;
+/** @return string presentation of RecvAddrState */
+std::string to_string(RecvAddrState s) noexcept;
 
-struct Page_log_records {
+struct PageLogRecords {
   /** @return string representation of the data.  */
   std::string to_string() const noexcept;
 
   /** Recovery state of the page */
-  Recv_addr_state m_state{RECV_NOT_PROCESSED};
+  RecvAddrState m_state{RECV_NOT_PROCESSED};
 
   /** Head of the singly linked list */
-  Log_record *m_rec_head{};
+  LogRecord *m_rec_head{};
 
   /** Tail of the singly linked list. */
-  Log_record *m_rec_tail{};
+  LogRecord *m_rec_tail{};
 };
 
 /** Recovery system data structure */
-struct Recv_sys {
-  using Page_log_records_map = std::unordered_map<page_no_t, Page_log_records *>;
+struct RecvSys {
+  using Page_log_records_map = std::unordered_map<page_no_t, PageLogRecords *>;
   using Tablespace_map = std::unordered_map<space_id_t, Page_log_records_map>;
 
   /** Constructor */
-  Recv_sys() noexcept;
+  RecvSys() noexcept;
 
   /** Destructor.  */
-  ~Recv_sys() noexcept;
+  ~RecvSys() noexcept;
 
   /**
   * Inits the recovery system for a recovery operation
@@ -230,7 +230,7 @@ struct Recv_sys {
   * @param end_lsn The end LSN of the mtr.
   */
   void add_log_record(
-    mlog_type_t type, space_id_t space, page_no_t page_no, byte *body, byte *rec_end, lsn_t start_lsn, lsn_t end_lsn
+    MlogType type, space_id_t space, page_no_t page_no, byte *body, byte *rec_end, lsn_t start_lsn, lsn_t end_lsn
   ) noexcept;
 
   /** @return string representation of the data.  */
@@ -238,7 +238,7 @@ struct Recv_sys {
 
   /** mutex protecting the fields apply_log_recs, n_addrs, and
   the state field in each recv_addr struct */
-  mutable mutex_t m_mutex{};
+  mutable Mutex m_mutex{};
 
   /** this is true when log rec application to pages is allowed;
   this flag tells the i/o-handler if it should do log record application */
@@ -290,7 +290,7 @@ struct Recv_sys {
   bool m_found_corrupt_log{};
 
   /** memory heap of log records and file addresses*/
-  mem_heap_t *m_heap{};
+  MemHeap *m_heap{};
 
   /** Parsed log records that need to be applied to the tablepsace pages. */
   Tablespace_map m_log_records{};
@@ -300,7 +300,7 @@ struct Recv_sys {
 };
 
 /** The recovery system */
-extern Recv_sys *recv_sys;
+extern RecvSys *recv_sys;
 
 /** true when applying redo log records during crash recovery; false
 otherwise.  Note that this is false while a background thread is
@@ -349,10 +349,10 @@ bool recv_parse_log_recs(bool store_to_hash) noexcept;
  * @param[in] mtr  Mini-transaction for applying (nullptr for parsing only)
  * @return next position in buffer or nullptr on error
  */
-byte *recv_parse_or_apply_log_rec_body(mlog_type_t type, byte *ptr, byte *end_ptr, Buf_block *block, mtr_t *mtr) noexcept;
+byte *recv_parse_or_apply_log_rec_body(MlogType type, byte *ptr, byte *end_ptr, BufBlock *block, Mtr *mtr) noexcept;
 
 /** Start crash recovery
  * @param[in,out] dblwr Doublewrite instance to use for recovery
  * @param[in] recovery The recovery flag
  */
-void recv_start_crash_recovery(DBLWR *dblwr, ib_recovery_t recovery) noexcept;
+void recv_start_crash_recovery(Dblwr *dblwr, IbRecovery recovery) noexcept;

@@ -129,16 +129,16 @@ delete marked clustered index record was delete unmarked and possibly also
 some of its fields were changed. Now, it is possible that the delete marked
 version has become obsolete at the time the undo is started. */
 
-Row_undo *srv_row_undo;
+RowUndo *srv_row_undo;
 
-db_err Undo_node::remove_secondary_index_entry(ulint mode, Index *index, DTuple *entry) noexcept {
+DbErr UndoNode::remove_secondary_index_entry(ulint mode, Index *index, DTuple *entry) noexcept {
   ut_ad(mode == BTR_MODIFY_LEAF || mode == BTR_MODIFY_TREE);
 
   m_dict->m_store.m_fsp->m_log->free_check();
 
-  Btree_pcursor pcur(m_dict->m_store.m_fsp, m_dict->m_store.m_btree);
+  BtreePcursor pcur(m_dict->m_store.m_fsp, m_dict->m_store.m_btree);
 
-  mtr_t mtr;
+  Mtr mtr;
 
   mtr.start();
 
@@ -154,7 +154,7 @@ db_err Undo_node::remove_secondary_index_entry(ulint mode, Index *index, DTuple 
     return DB_SUCCESS;
   }
 
-  db_err err;
+  DbErr err;
 
   if (mode == BTR_MODIFY_LEAF) {
     auto success = btr_cur->optimistic_delete(&mtr);
@@ -173,7 +173,7 @@ db_err Undo_node::remove_secondary_index_entry(ulint mode, Index *index, DTuple 
   return err;
 }
 
-db_err Undo_node::remove_secondary_index_entry(Index *index, DTuple *entry) noexcept {
+DbErr UndoNode::remove_secondary_index_entry(Index *index, DTuple *entry) noexcept {
   /* Try first optimistic descent to the B-tree */
   auto err = remove_secondary_index_entry(BTR_MODIFY_LEAF, index, entry);
 
@@ -200,17 +200,17 @@ db_err Undo_node::remove_secondary_index_entry(Index *index, DTuple *entry) noex
   }
 }
 
-Row_undo *Row_undo::create(Dict *dict) noexcept {
-  auto ptr = ut_new(sizeof(Row_undo));
-  return new (ptr) Row_undo(dict);
+RowUndo *RowUndo::create(Dict *dict) noexcept {
+  auto ptr = ut_new(sizeof(RowUndo));
+  return new (ptr) RowUndo(dict);
 }
 
-void Row_undo::destroy(Row_undo *&row_undo) noexcept {
+void RowUndo::destroy(RowUndo *&row_undo) noexcept {
   ut_delete(row_undo);
   row_undo = nullptr;
 }
 
-Undo_node::Undo_node(Dict *dict, Trx *trx, que_thr_t *parent) noexcept
+UndoNode::UndoNode(Dict *dict, Trx *trx, QueThr *parent) noexcept
     : m_trx{}, m_pcur(dict->m_store.m_fsp, dict->m_store.m_btree), m_dict(dict) {
 
   m_common.parent = parent;
@@ -224,17 +224,17 @@ Undo_node::Undo_node(Dict *dict, Trx *trx, que_thr_t *parent) noexcept
   m_heap = mem_heap_create(256);
 }
 
-Undo_node *Undo_node::create(Dict *dict, Trx *trx, que_thr_t *parent, mem_heap_t *heap) noexcept {
-  auto ptr = mem_heap_alloc(heap, sizeof(Undo_node));
-  return new (ptr) Undo_node(dict, trx, parent);
+UndoNode *UndoNode::create(Dict *dict, Trx *trx, QueThr *parent, MemHeap *heap) noexcept {
+  auto ptr = mem_heap_alloc(heap, sizeof(UndoNode));
+  return new (ptr) UndoNode(dict, trx, parent);
 }
 
-bool Undo_node::search_cluster_index_and_persist_position() noexcept {
+bool UndoNode::search_cluster_index_and_persist_position() noexcept {
   std::array<ulint, REC_OFFS_NORMAL_SIZE> rec_offsets_;
-  Rec_offs rec_offsets(rec_offsets_.data());
+  RecOffs rec_offsets(rec_offsets_.data());
   rec_offsets.set_n_alloc(rec_offsets_.size());
 
-  mtr_t mtr;
+  Mtr mtr;
 
   mtr.start();
 
@@ -243,10 +243,10 @@ bool Undo_node::search_cluster_index_and_persist_position() noexcept {
   auto rec = m_pcur.get_rec();
 
   ulint *offsets{};
-  mem_heap_t *offs_heap{};
+  MemHeap *offs_heap{};
 
   {
-    Phy_rec record{clust_index, rec};
+    PhyRec record{clust_index, rec};
 
     offsets = record.get_col_offsets(rec_offsets.get(), ULINT_UNDEFINED, &offs_heap, Current_location());
   }
@@ -265,7 +265,7 @@ bool Undo_node::search_cluster_index_and_persist_position() noexcept {
 
     if (m_update != nullptr) {
       m_undo_row = dtuple_copy(m_row, m_heap);
-      Row_update::replace(m_undo_row, &m_undo_ext, clust_index, m_update, m_heap);
+      RowUpdate::replace(m_undo_row, &m_undo_ext, clust_index, m_update, m_heap);
     } else {
       m_undo_row = nullptr;
       m_undo_ext = nullptr;
@@ -285,8 +285,8 @@ bool Undo_node::search_cluster_index_and_persist_position() noexcept {
   return success;
 }
 
-db_err Undo_node::remove_cluster_rec() noexcept {
-  mtr_t mtr;
+DbErr UndoNode::remove_cluster_rec() noexcept {
+  Mtr mtr;
   mtr.start();
 
   {
@@ -323,7 +323,7 @@ db_err Undo_node::remove_cluster_rec() noexcept {
     }
   }
 
-  db_err err;
+  DbErr err;
 
   for (ulint n_tries{}; /* nop  */; ++n_tries) {
     /* If did not succeed, try pessimistic descent to tree */
@@ -358,7 +358,7 @@ db_err Undo_node::remove_cluster_rec() noexcept {
   return err;
 }
 
-db_err Undo_node::fetch_undo_log_and_undo(que_thr_t *thr) noexcept {
+DbErr UndoNode::fetch_undo_log_and_undo(QueThr *thr) noexcept {
   auto trx = m_trx;
 
   if (m_state == UNDO_NODE_FETCH_NEXT) {
@@ -375,7 +375,7 @@ db_err Undo_node::fetch_undo_log_and_undo(que_thr_t *thr) noexcept {
     }
 
     m_roll_ptr = roll_ptr;
-    m_undo_no = Trx_undo_record::get_undo_no(m_undo_rec);
+    m_undo_no = TrxUndoRecord::get_undo_no(m_undo_rec);
 
     m_state = trx_undo_roll_ptr_is_insert(roll_ptr) ? UNDO_NODE_INSERT : UNDO_NODE_MODIFY;
 
@@ -386,9 +386,9 @@ db_err Undo_node::fetch_undo_log_and_undo(que_thr_t *thr) noexcept {
 
     auto roll_ptr = m_new_roll_ptr;
 
-    m_undo_rec = Trx_undo_record::get_undo_rec_low(roll_ptr, m_heap);
+    m_undo_rec = TrxUndoRecord::get_undo_rec_low(roll_ptr, m_heap);
     m_roll_ptr = roll_ptr;
-    m_undo_no = Trx_undo_record::get_undo_no(m_undo_rec);
+    m_undo_no = TrxUndoRecord::get_undo_no(m_undo_rec);
 
     m_state = trx_undo_roll_ptr_is_insert(roll_ptr) ? UNDO_NODE_INSERT : UNDO_NODE_MODIFY;
   }
@@ -406,7 +406,7 @@ db_err Undo_node::fetch_undo_log_and_undo(que_thr_t *thr) noexcept {
     ut_a(trx->m_dict_operation_lock_mode != 0);
   }
 
-  db_err err{};
+  DbErr err{};
 
   if (m_state == UNDO_NODE_INSERT) {
 
@@ -434,7 +434,7 @@ db_err Undo_node::fetch_undo_log_and_undo(que_thr_t *thr) noexcept {
   return err;
 }
 
-db_err Undo_node::undo_insert() noexcept {
+DbErr UndoNode::undo_insert() noexcept {
   ut_ad(m_state == UNDO_NODE_INSERT);
 
   parse_insert_undo_rec(srv_config.m_force_recovery);
@@ -475,7 +475,7 @@ db_err Undo_node::undo_insert() noexcept {
   return remove_cluster_rec();
 }
 
-inline bool Undo_node::undo_previous_version(undo_no_t *undo_no) noexcept {
+inline bool UndoNode::undo_previous_version(undo_no_t *undo_no) noexcept {
   auto trx = m_trx;
 
   if (m_new_trx_id != trx->m_id) {
@@ -486,21 +486,21 @@ inline bool Undo_node::undo_previous_version(undo_no_t *undo_no) noexcept {
 
   } else {
 
-    auto undo_rec = Trx_undo_record::get_undo_rec_low(m_new_roll_ptr, m_heap);
+    auto undo_rec = TrxUndoRecord::get_undo_rec_low(m_new_roll_ptr, m_heap);
 
-    *undo_no = Trx_undo_record::get_undo_no(undo_rec);
+    *undo_no = TrxUndoRecord::get_undo_no(undo_rec);
 
     return trx->m_roll_limit <= *undo_no;
   }
 }
 
-db_err Undo_node::undo_clustered_index_modification(que_thr_t *thr, mtr_t *mtr, ulint mode) noexcept {
+DbErr UndoNode::undo_clustered_index_modification(QueThr *thr, Mtr *mtr, ulint mode) noexcept {
   auto btr_cur = m_pcur.get_btr_cur();
   auto success = m_pcur.restore_position(mode, mtr, Current_location());
 
   ut_a(success);
 
-  db_err err;
+  DbErr err;
   const auto flags = BTR_NO_LOCKING_FLAG | BTR_NO_UNDO_LOG_FLAG | BTR_KEEP_SYS_FLAG;
 
   if (mode == BTR_MODIFY_LEAF) {
@@ -509,8 +509,8 @@ db_err Undo_node::undo_clustered_index_modification(que_thr_t *thr, mtr_t *mtr, 
 
   } else {
 
-    mem_heap_t *heap{};
-    big_rec_t dummy_big_rec;
+    MemHeap *heap{};
+    BigRec dummy_big_rec;
 
     ut_ad(mode == BTR_MODIFY_TREE);
 
@@ -526,7 +526,7 @@ db_err Undo_node::undo_clustered_index_modification(que_thr_t *thr, mtr_t *mtr, 
   return err;
 }
 
-db_err Undo_node::remove_clustered_index_record(que_thr_t *thr, mtr_t *mtr, ulint mode) noexcept {
+DbErr UndoNode::remove_clustered_index_record(QueThr *thr, Mtr *mtr, ulint mode) noexcept {
   ut_ad(m_rec_type == TRX_UNDO_UPD_DEL_REC);
 
   auto btr_cur = m_pcur.get_btr_cur();
@@ -554,7 +554,7 @@ db_err Undo_node::remove_clustered_index_record(que_thr_t *thr, mtr_t *mtr, ulin
 
   } else {
 
-    db_err err;
+    DbErr err;
 
     ut_ad(mode == BTR_MODIFY_TREE);
 
@@ -570,7 +570,7 @@ db_err Undo_node::remove_clustered_index_record(que_thr_t *thr, mtr_t *mtr, ulin
   }
 }
 
-db_err Undo_node::remove_clustered_index_record_low(que_thr_t *thr, mtr_t *mtr, ulint mode) noexcept {
+DbErr UndoNode::remove_clustered_index_record_low(QueThr *thr, Mtr *mtr, ulint mode) noexcept {
   ut_ad(m_rec_type == TRX_UNDO_UPD_DEL_REC);
   ut_ad(mode == BTR_MODIFY_LEAF || mode == BTR_MODIFY_TREE);
 
@@ -602,7 +602,7 @@ db_err Undo_node::remove_clustered_index_record_low(que_thr_t *thr, mtr_t *mtr, 
   }
 }
 
-db_err Undo_node::undo_clustered_index_modification(que_thr_t *thr) noexcept {
+DbErr UndoNode::undo_clustered_index_modification(QueThr *thr) noexcept {
 
   /* Check if also the previous version of the clustered index record
   should be undone in this same rollback operation */
@@ -611,7 +611,7 @@ db_err Undo_node::undo_clustered_index_modification(que_thr_t *thr) noexcept {
 
   auto more_vers = undo_previous_version(&new_undo_no);
 
-  mtr_t mtr;
+  Mtr mtr;
 
   mtr.start();
 
@@ -669,15 +669,15 @@ db_err Undo_node::undo_clustered_index_modification(que_thr_t *thr) noexcept {
   return err;
 }
 
-db_err Undo_node::delete_mark_or_remove_secondary_index_entry(que_thr_t *thr, Index *index, DTuple *entry, ulint mode) noexcept {
+DbErr UndoNode::delete_mark_or_remove_secondary_index_entry(QueThr *thr, Index *index, DTuple *entry, ulint mode) noexcept {
   ut_ad(mode == BTR_MODIFY_LEAF || mode == BTR_MODIFY_TREE);
 
-  Btree_pcursor pcur(m_dict->m_store.m_fsp, m_dict->m_store.m_btree);
+  BtreePcursor pcur(m_dict->m_store.m_fsp, m_dict->m_store.m_btree);
 
   m_dict->m_store.m_fsp->m_log->free_check();
 
-  mtr_t mtr;
-  db_err err;
+  Mtr mtr;
+  DbErr err;
 
   mtr.start();
 
@@ -685,7 +685,7 @@ db_err Undo_node::delete_mark_or_remove_secondary_index_entry(que_thr_t *thr, In
     /* We should remove the index record if no prior version of the row, which cannot be purged yet, requires
     its existence. If some requires, we should delete mark the record. */
 
-    mtr_t mtr_vers;
+    Mtr mtr_vers;
     auto btr_cur = pcur.get_btr_cur();
 
     mtr_vers.start();
@@ -739,7 +739,7 @@ db_err Undo_node::delete_mark_or_remove_secondary_index_entry(que_thr_t *thr, In
   return err;
 }
 
-db_err Undo_node::delete_mark_or_remove_secondary_index_entry(que_thr_t *thr, Index *index, DTuple *entry) noexcept {
+DbErr UndoNode::delete_mark_or_remove_secondary_index_entry(QueThr *thr, Index *index, DTuple *entry) noexcept {
   if (auto err = delete_mark_or_remove_secondary_index_entry(thr, index, entry, BTR_MODIFY_LEAF); err == DB_SUCCESS) {
     return err;
   } else {
@@ -747,13 +747,13 @@ db_err Undo_node::delete_mark_or_remove_secondary_index_entry(que_thr_t *thr, In
   }
 }
 
-db_err Undo_node::del_unmark_secondary_index_and_undo_update(
-  ulint mode, que_thr_t *thr, Index *index, const DTuple *entry
+DbErr UndoNode::del_unmark_secondary_index_and_undo_update(
+  ulint mode, QueThr *thr, Index *index, const DTuple *entry
 ) noexcept {
   ut_ad(mode == BTR_MODIFY_LEAF || mode == BTR_MODIFY_TREE);
 
   auto trx = thr_get_trx(thr);
-  Btree_pcursor pcur(m_dict->m_store.m_fsp, m_dict->m_store.m_btree);
+  BtreePcursor pcur(m_dict->m_store.m_fsp, m_dict->m_store.m_btree);
 
   /* Ignore indexes that are being created. */
   if (unlikely(*index->m_name == TEMP_INDEX_PREFIX)) {
@@ -763,8 +763,8 @@ db_err Undo_node::del_unmark_secondary_index_and_undo_update(
 
   m_dict->m_store.m_fsp->m_log->free_check();
 
-  mtr_t mtr;
-  db_err err;
+  Mtr mtr;
+  DbErr err;
 
   mtr.start();
 
@@ -787,9 +787,9 @@ db_err Undo_node::del_unmark_secondary_index_and_undo_update(
     ut_a(err == DB_SUCCESS);
 
     auto heap = mem_heap_create(100);
-    auto update = Row_update::build_sec_rec_difference_binary(index, entry, btr_cur->get_rec(), trx, heap);
+    auto update = RowUpdate::build_sec_rec_difference_binary(index, entry, btr_cur->get_rec(), trx, heap);
 
-    if (Row_update::upd_get_n_fields(update) == 0) {
+    if (RowUpdate::upd_get_n_fields(update) == 0) {
 
       /* Do nothing */
 
@@ -808,7 +808,7 @@ db_err Undo_node::del_unmark_secondary_index_and_undo_update(
           break;
       }
     } else {
-      big_rec_t dummy_big_rec{};
+      BigRec dummy_big_rec{};
 
       err = btr_cur->pessimistic_update(flags, &heap, &dummy_big_rec, update, 0, thr, &mtr);
       ut_a(dummy_big_rec.n_fields == 0);
@@ -824,8 +824,8 @@ db_err Undo_node::del_unmark_secondary_index_and_undo_update(
   return err;
 }
 
-db_err Undo_node::undo_delete_in_secondary_indexes(que_thr_t *thr) noexcept {
-  db_err err{DB_SUCCESS};
+DbErr UndoNode::undo_delete_in_secondary_indexes(QueThr *thr) noexcept {
+  DbErr err{DB_SUCCESS};
 
   ut_ad(m_rec_type == TRX_UNDO_UPD_DEL_REC);
   auto heap = mem_heap_create(1024);
@@ -860,7 +860,7 @@ db_err Undo_node::undo_delete_in_secondary_indexes(que_thr_t *thr) noexcept {
   return err;
 }
 
-db_err Undo_node::undo_del_mark_secondary_indexes(que_thr_t *thr) noexcept {
+DbErr UndoNode::undo_del_mark_secondary_indexes(QueThr *thr) noexcept {
   auto heap = mem_heap_create(1024);
 
   for (; m_index != nullptr; m_index = m_index->get_next()) {
@@ -887,20 +887,20 @@ db_err Undo_node::undo_del_mark_secondary_indexes(que_thr_t *thr) noexcept {
   return DB_SUCCESS;
 }
 
-db_err Undo_node::undo_update_of_secondary_indexes(que_thr_t *thr) noexcept {
+DbErr UndoNode::undo_update_of_secondary_indexes(QueThr *thr) noexcept {
   if (m_cmpl_info & UPD_NODE_NO_ORD_CHANGE) {
     /* No change in secondary indexes */
 
     return DB_SUCCESS;
   }
 
-  db_err err{DB_SUCCESS};
+  DbErr err{DB_SUCCESS};
   auto heap = mem_heap_create(1024);
 
   for (; m_index != nullptr; m_index = m_index->get_next()) {
     auto index = m_index;
 
-    if (Row_update::changes_ord_field_binary(m_row, m_index, m_update)) {
+    if (RowUpdate::changes_ord_field_binary(m_row, m_index, m_update)) {
 
       /* Build the newest version of the index entry */
       auto entry = row_build_index_entry(m_row, m_ext, index, heap);
@@ -945,9 +945,9 @@ db_err Undo_node::undo_update_of_secondary_indexes(que_thr_t *thr) noexcept {
   return err;
 }
 
-void Undo_node::parse_insert_undo_rec(ib_recovery_t recovery) noexcept {
-  Trx_undo_record::Parsed pars;
-  auto ptr = Trx_undo_record::get_pars(m_undo_rec, pars);
+void UndoNode::parse_insert_undo_rec(IbRecovery recovery) noexcept {
+  TrxUndoRecord::Parsed pars;
+  auto ptr = TrxUndoRecord::get_pars(m_undo_rec, pars);
 
   ut_ad(pars.m_type == TRX_UNDO_INSERT_REC);
   m_rec_type = pars.m_type;
@@ -965,7 +965,7 @@ void Undo_node::parse_insert_undo_rec(ib_recovery_t recovery) noexcept {
     auto clust_index = m_table->get_clustered_index();
 
     if (clust_index != nullptr) {
-      ptr = Trx_undo_record::get_row_ref(ptr, clust_index, &m_ref, m_heap);
+      ptr = TrxUndoRecord::get_row_ref(ptr, clust_index, &m_ref, m_heap);
     } else {
       log_err("  table ", m_table->m_name, " has no indexes, ignoring the table");
 
@@ -974,10 +974,10 @@ void Undo_node::parse_insert_undo_rec(ib_recovery_t recovery) noexcept {
   }
 }
 
-void Undo_node::parse_update_undo_rec(ib_recovery_t recovery, que_thr_t *thr) noexcept {
-  Trx_undo_record::Parsed pars;
+void UndoNode::parse_update_undo_rec(IbRecovery recovery, QueThr *thr) noexcept {
+  TrxUndoRecord::Parsed pars;
   auto trx = thr_get_trx(thr);
-  auto ptr = Trx_undo_record::get_pars(m_undo_rec, pars);
+  auto ptr = TrxUndoRecord::get_pars(m_undo_rec, pars);
 
   m_rec_type = pars.m_type;
 
@@ -1003,19 +1003,19 @@ void Undo_node::parse_update_undo_rec(ib_recovery_t recovery, que_thr_t *thr) no
   ulint info_bits;
   roll_ptr_t roll_ptr;
 
-  ptr = Trx_undo_record::update_rec_get_sys_cols(ptr, &trx_id, &roll_ptr, &info_bits);
+  ptr = TrxUndoRecord::update_rec_get_sys_cols(ptr, &trx_id, &roll_ptr, &info_bits);
 
-  ptr = Trx_undo_record::get_row_ref(ptr, clust_index, &m_ref, m_heap);
+  ptr = TrxUndoRecord::get_row_ref(ptr, clust_index, &m_ref, m_heap);
 
-  Trx_undo_record::update_rec_get_update(ptr, clust_index, pars.m_type, trx_id, roll_ptr, info_bits, trx, m_heap, &m_update);
+  TrxUndoRecord::update_rec_get_update(ptr, clust_index, pars.m_type, trx_id, roll_ptr, info_bits, trx, m_heap, &m_update);
 
   m_new_trx_id = trx_id;
   m_new_roll_ptr = roll_ptr;
   m_cmpl_info = pars.m_cmpl_info;
 }
 
-db_err Undo_node::undo_update(que_thr_t *thr) noexcept {
-  db_err err;
+DbErr UndoNode::undo_update(QueThr *thr) noexcept {
+  DbErr err;
   ut_a(m_rec_type == TRX_UNDO_UPD_EXIST_REC || m_rec_type == TRX_UNDO_DEL_MARK_REC || m_rec_type == TRX_UNDO_UPD_DEL_REC);
 
   ut_ad(m_state == UNDO_NODE_MODIFY);
@@ -1060,11 +1060,11 @@ db_err Undo_node::undo_update(que_thr_t *thr) noexcept {
   }
 }
 
-que_thr_t *Row_undo::step(que_thr_t *thr) noexcept {
+QueThr *RowUndo::step(QueThr *thr) noexcept {
   ++srv_activity_count;
 
   auto trx = thr_get_trx(thr);
-  auto undo_node = static_cast<Undo_node *>(thr->run_node);
+  auto undo_node = static_cast<UndoNode *>(thr->run_node);
 
   ut_ad(que_node_get_type(undo_node) == QUE_NODE_UNDO);
 
@@ -1080,6 +1080,6 @@ que_thr_t *Row_undo::step(que_thr_t *thr) noexcept {
   return thr;
 }
 
-Undo_node *Row_undo::create_undo_node(Trx *trx, que_thr_t *parent, mem_heap_t *heap) noexcept {
-  return Undo_node::create(m_dict, trx, parent, heap);
+UndoNode *RowUndo::create_undo_node(Trx *trx, QueThr *parent, MemHeap *heap) noexcept {
+  return UndoNode::create(m_dict, trx, parent, heap);
 }

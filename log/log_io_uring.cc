@@ -40,7 +40,7 @@ static const int CREATE_FILE_MASK = 0644;
 // FIXME: This file_index and context map is a bad idea. We can do without both.
 
 // FIXME: Global WAL I/O system instance
-WAL_IO_System *g_wal_io_system = nullptr;
+WalIoSystem *g_wal_io_system = nullptr;
 
 /* Custom deleter function for io_uring that ensures proper cleanup */
 void log_aio_deleter(io_uring *ring) noexcept {
@@ -67,7 +67,7 @@ io_uring *log_aio_allocator() noexcept {
   return ring;
 }
 
-WAL_IO_System::WAL_IO_System(size_t n_io_ctxs, size_t n_files) noexcept
+WalIoSystem::WalIoSystem(size_t n_io_ctxs, size_t n_files) noexcept
     : m_ring(log_aio_allocator(), log_aio_deleter),
       m_files(n_files),
       m_free_files(n_files),
@@ -86,13 +86,13 @@ WAL_IO_System::WAL_IO_System(size_t n_io_ctxs, size_t n_files) noexcept
   }
 }
 
-WAL_IO_System::~WAL_IO_System() noexcept {
+WalIoSystem::~WalIoSystem() noexcept {
   if (m_initialized.load()) {
     shutdown();
   }
 }
 
-bool WAL_IO_System::initialize(uint32_t queue_depth) noexcept {
+bool WalIoSystem::initialize(uint32_t queue_depth) noexcept {
   ut_a(!m_shutdown.load());
   ut_a(!m_initialized.load());
 
@@ -112,7 +112,7 @@ bool WAL_IO_System::initialize(uint32_t queue_depth) noexcept {
   return true;
 }
 
-void WAL_IO_System::shutdown() noexcept {
+void WalIoSystem::shutdown() noexcept {
   ut_a(m_initialized.load());
   ut_a(!m_shutdown.load());
 
@@ -141,7 +141,7 @@ void WAL_IO_System::shutdown() noexcept {
   IF_DEBUG(
     {
       /* Check that there are no free contexts left */
-      WAL_io_ctx_t *io_ctx = nullptr;
+      WalIoCtx *io_ctx = nullptr;
       size_t free_contexts_count = 0;
 
       while (m_free_contexts.dequeue(io_ctx)) {
@@ -157,7 +157,7 @@ void WAL_IO_System::shutdown() noexcept {
 
     {
       /* Check that there are no free files left */
-      WAL_file *file = nullptr;
+      WalFile *file = nullptr;
       size_t free_files_count = 0;
 
       while (m_free_files.dequeue(file)) {
@@ -182,8 +182,8 @@ void WAL_IO_System::shutdown() noexcept {
   log_info("WAL I/O system shutdown complete");
 }
 
-WAL_file *WAL_IO_System::allocate_file() noexcept {
-  WAL_file *file = nullptr;
+WalFile *WalIoSystem::allocate_file() noexcept {
+  WalFile *file = nullptr;
 
   while (!m_free_files.dequeue(file)) {
     usleep(1000);
@@ -192,7 +192,7 @@ WAL_file *WAL_IO_System::allocate_file() noexcept {
   return file;
 }
 
-void WAL_IO_System::release_file(WAL_file *&file) noexcept {
+void WalIoSystem::release_file(WalFile *&file) noexcept {
   ut_a(file != nullptr);
 
   while (!m_free_files.enqueue(file)) {
@@ -202,17 +202,17 @@ void WAL_IO_System::release_file(WAL_file *&file) noexcept {
   file = nullptr;
 }
 
-uint64_t WAL_IO_System::get_timestamp() const noexcept {
+uint64_t WalIoSystem::get_timestamp() const noexcept {
   return std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
 }
 
-bool WAL_IO_System::file_exists(std::string_view file_path) noexcept {
+bool WalIoSystem::file_exists(std::string_view file_path) noexcept {
   struct stat st;
 
   return ::stat(file_path.data(), &st) == 0;
 }
 
-bool WAL_IO_System::is_file_rw_compatible(std::string_view file_path) noexcept {
+bool WalIoSystem::is_file_rw_compatible(std::string_view file_path) noexcept {
   // Check if a file exists and can be read and written to
   struct stat st;
 
@@ -229,7 +229,7 @@ bool WAL_IO_System::is_file_rw_compatible(std::string_view file_path) noexcept {
   return false;
 }
 
-off_t WAL_IO_System::get_file_size(std::string_view file_path) noexcept {
+off_t WalIoSystem::get_file_size(std::string_view file_path) noexcept {
   struct stat st;
 
   if (::stat(file_path.data(), &st) != 0) {
@@ -239,9 +239,9 @@ off_t WAL_IO_System::get_file_size(std::string_view file_path) noexcept {
   return st.st_size;
 }
 
-WAL_file *WAL_IO_System::create_wal_file(const std::string &file_path, off_t file_size) noexcept {
+WalFile *WalIoSystem::create_wal_file(const std::string &file_path, off_t file_size) noexcept {
   ut_a(!file_path.empty());
-  ut_a(file_size >= 0 && (file_size % sizeof(Log_phy_block) == 0));
+  ut_a(file_size >= 0 && (file_size % sizeof(LogPhyBlock) == 0));
 
   ut_a(m_initialized.load());
   ut_a(!m_shutdown.load());
@@ -287,9 +287,9 @@ WAL_file *WAL_IO_System::create_wal_file(const std::string &file_path, off_t fil
   return success ? open_wal_file(file_path, file_size) : nullptr;
 }
 
-WAL_file *WAL_IO_System::open_wal_file(const std::string &file_path, off_t file_size) noexcept {
+WalFile *WalIoSystem::open_wal_file(const std::string &file_path, off_t file_size) noexcept {
   ut_a(!file_path.empty());
-  ut_a(file_size >= 0 && (file_size % sizeof(Log_phy_block) == 0));
+  ut_a(file_size >= 0 && (file_size % sizeof(LogPhyBlock) == 0));
 
   ut_a(m_initialized.load());
   ut_a(!m_shutdown.load());
@@ -350,7 +350,7 @@ WAL_file *WAL_IO_System::open_wal_file(const std::string &file_path, off_t file_
   return file;
 }
 
-bool WAL_IO_System::close_wal_file(WAL_file *file) noexcept {
+bool WalIoSystem::close_wal_file(WalFile *file) noexcept {
   /* Wait for pending operations to complete */
   while (file->m_pending_ops.load() > 0) {
     /* Sleep for 10ms */
@@ -377,7 +377,7 @@ bool WAL_IO_System::close_wal_file(WAL_file *file) noexcept {
   return true;
 }
 
-ssize_t WAL_IO_System::sync_read(WAL_file *file, void *buffer, size_t length, off_t offset) noexcept {
+ssize_t WalIoSystem::sync_read(WalFile *file, void *buffer, size_t length, off_t offset) noexcept {
   ut_a(length > 0);
   ut_a(offset >= 0);
   ut_a(buffer != nullptr);
@@ -427,7 +427,7 @@ ssize_t WAL_IO_System::sync_read(WAL_file *file, void *buffer, size_t length, of
   return total_read;
 }
 
-ssize_t WAL_IO_System::sync_write(WAL_file *file, const void *buffer, size_t length, off_t offset) noexcept {
+ssize_t WalIoSystem::sync_write(WalFile *file, const void *buffer, size_t length, off_t offset) noexcept {
   ut_a(length > 0);
   ut_a(offset >= 0);
   ut_a(buffer != nullptr);
@@ -478,10 +478,10 @@ ssize_t WAL_IO_System::sync_write(WAL_file *file, const void *buffer, size_t len
   return total_written;
 }
 
-WAL_io_ctx_t *WAL_IO_System::create_io_context(
-  IO_request req_type, WAL_file *file, std::function<void(WAL_io_ctx_t *)> callback
+WalIoCtx *WalIoSystem::create_io_context(
+  IoRequest req_type, WalFile *file, std::function<void(WalIoCtx *)> callback
 ) noexcept {
-  WAL_io_ctx_t *ctx;
+  WalIoCtx *ctx;
 
   while (!m_free_contexts.dequeue(ctx)) {
     usleep(1000);
@@ -498,7 +498,7 @@ WAL_io_ctx_t *WAL_IO_System::create_io_context(
   return ctx;
 }
 
-void WAL_IO_System::release_io_context(WAL_io_ctx_t *&ctx) noexcept {
+void WalIoSystem::release_io_context(WalIoCtx *&ctx) noexcept {
   while (!m_free_contexts.enqueue(ctx)) {
     usleep(1000);
   }
@@ -506,7 +506,7 @@ void WAL_IO_System::release_io_context(WAL_io_ctx_t *&ctx) noexcept {
   ctx = nullptr;
 }
 
-void WAL_IO_System::complete_io_context(WAL_io_ctx_t *&ctx, int result) noexcept {
+void WalIoSystem::complete_io_context(WalIoCtx *&ctx, int result) noexcept {
   ctx->m_result.store(result);
   ctx->m_completed.store(true);
 
@@ -520,19 +520,19 @@ void WAL_IO_System::complete_io_context(WAL_io_ctx_t *&ctx, int result) noexcept
 
   if (result >= 0) {
     switch (req_type) {
-      case IO_request::Async_log_read:
+      case IoRequest::Async_log_read:
         stats.m_total_reads.fetch_add(1);
         if (result > 0) {
           stats.m_total_bytes_read.fetch_add(result);
         }
         break;
-      case IO_request::Async_log_write:
+      case IoRequest::Async_log_write:
         stats.m_total_writes.fetch_add(1);
         if (result > 0) {
           stats.m_total_bytes_written.fetch_add(result);
         }
         break;
-      case IO_request::Async_log_flush:
+      case IoRequest::Async_log_flush:
         // Flush operations return 0 on success, no bytes transferred
         break;
       default:
@@ -544,11 +544,11 @@ void WAL_IO_System::complete_io_context(WAL_io_ctx_t *&ctx, int result) noexcept
   }
 }
 
-WAL_io_ctx_t *WAL_IO_System::async_read(
-  WAL_file *file, void *buffer, size_t length, off_t offset, std::function<void(WAL_io_ctx_t *)> callback
+WalIoCtx *WalIoSystem::async_read(
+  WalFile *file, void *buffer, size_t length, off_t offset, std::function<void(WalIoCtx *)> callback
 ) noexcept {
 
-  auto ctx = create_io_context(IO_request::Async_log_read, file, callback);
+  auto ctx = create_io_context(IoRequest::Async_log_read, file, callback);
 
   if (ctx == nullptr) {
     return nullptr;
@@ -581,10 +581,10 @@ WAL_io_ctx_t *WAL_IO_System::async_read(
   return ctx;
 }
 
-WAL_io_ctx_t *WAL_IO_System::async_write(
-  WAL_file *file, const void *buffer, size_t length, off_t offset, std::function<void(WAL_io_ctx_t *)> callback
+WalIoCtx *WalIoSystem::async_write(
+  WalFile *file, const void *buffer, size_t length, off_t offset, std::function<void(WalIoCtx *)> callback
 ) noexcept {
-  auto ctx = create_io_context(IO_request::Async_log_write, file, callback);
+  auto ctx = create_io_context(IoRequest::Async_log_write, file, callback);
 
   if (ctx == nullptr) {
     return nullptr;
@@ -617,10 +617,10 @@ WAL_io_ctx_t *WAL_IO_System::async_write(
   return ctx;
 }
 
-WAL_io_ctx_t *WAL_IO_System::async_scatter_read(
-  WAL_file *file, const WAL_io_vecs &iovecs, off_t offset, std::function<void(WAL_io_ctx_t *)> callback
+WalIoCtx *WalIoSystem::async_scatter_read(
+  WalFile *file, const WAL_io_vecs &iovecs, off_t offset, std::function<void(WalIoCtx *)> callback
 ) noexcept {
-  auto ctx = create_io_context(IO_request::Async_log_read, file, callback);
+  auto ctx = create_io_context(IoRequest::Async_log_read, file, callback);
 
   if (ctx == nullptr) {
     return nullptr;
@@ -659,11 +659,11 @@ WAL_io_ctx_t *WAL_IO_System::async_scatter_read(
   return ctx;
 }
 
-WAL_io_ctx_t *WAL_IO_System::async_gather_write(
-  WAL_file *file, const WAL_io_vecs &iovecs, off_t offset, std::function<void(WAL_io_ctx_t *)> callback
+WalIoCtx *WalIoSystem::async_gather_write(
+  WalFile *file, const WAL_io_vecs &iovecs, off_t offset, std::function<void(WalIoCtx *)> callback
 ) noexcept {
 
-  auto ctx = create_io_context(IO_request::Async_log_read, file, callback);
+  auto ctx = create_io_context(IoRequest::Async_log_read, file, callback);
 
   if (ctx == nullptr) {
     return nullptr;
@@ -702,7 +702,7 @@ WAL_io_ctx_t *WAL_IO_System::async_gather_write(
   return ctx;
 }
 
-bool WAL_IO_System::flush_file(WAL_file *file) noexcept {
+bool WalIoSystem::flush_file(WalFile *file) noexcept {
   file->m_pending_ops.fetch_add(1);
 
   auto ret = ::fdatasync(file->m_fd);
@@ -719,8 +719,8 @@ bool WAL_IO_System::flush_file(WAL_file *file) noexcept {
   return true;
 }
 
-WAL_io_ctx_t *WAL_IO_System::async_flush(WAL_file *file, std::function<void(WAL_io_ctx_t *)> callback) noexcept {
-  auto ctx = create_io_context(IO_request::Async_log_flush, file, callback);
+WalIoCtx *WalIoSystem::async_flush(WalFile *file, std::function<void(WalIoCtx *)> callback) noexcept {
+  auto ctx = create_io_context(IoRequest::Async_log_flush, file, callback);
 
   if (ctx == nullptr) {
     return nullptr;
@@ -753,7 +753,7 @@ WAL_io_ctx_t *WAL_IO_System::async_flush(WAL_file *file, std::function<void(WAL_
   return ctx;
 }
 
-int WAL_IO_System::process_completions(WAL_io_ctx_t *&in_ctx, uint32_t max_events, uint32_t timeout_ms) noexcept {
+int WalIoSystem::process_completions(WalIoCtx *&in_ctx, uint32_t max_events, uint32_t timeout_ms) noexcept {
   ut_a(m_initialized.load());
 
   int processed{};
@@ -783,7 +783,7 @@ int WAL_IO_System::process_completions(WAL_io_ctx_t *&in_ctx, uint32_t max_event
 
     ut_a(cqe != nullptr);
 
-    auto ctx = static_cast<WAL_io_ctx_t *>(io_uring_cqe_get_data(cqe));
+    auto ctx = static_cast<WalIoCtx *>(io_uring_cqe_get_data(cqe));
 
     if (ctx != nullptr) {
       ut_a(ctx->m_file != nullptr);
@@ -804,7 +804,7 @@ int WAL_IO_System::process_completions(WAL_io_ctx_t *&in_ctx, uint32_t max_event
   return processed;
 }
 
-bool WAL_IO_System::wait_for_completion(WAL_io_ctx_t *&ctx, uint32_t timeout_ms) noexcept {
+bool WalIoSystem::wait_for_completion(WalIoCtx *&ctx, uint32_t timeout_ms) noexcept {
   ut_a(ctx != nullptr);
 
   auto start_time = get_timestamp();
@@ -828,7 +828,7 @@ bool WAL_IO_System::wait_for_completion(WAL_io_ctx_t *&ctx, uint32_t timeout_ms)
 bool wal_io_system_init() noexcept {
   ut_a(g_wal_io_system == nullptr);
 
-  g_wal_io_system = new (std::nothrow) WAL_IO_System(32, 32);
+  g_wal_io_system = new (std::nothrow) WalIoSystem(32, 32);
 
   if (g_wal_io_system == nullptr) {
     return false;

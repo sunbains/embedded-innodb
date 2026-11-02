@@ -37,13 +37,13 @@ Created 10/25/1995 Heikki Tuuri
 #include <unordered_map>
 
 // Forward declaration
-struct mtr_t;
+struct Mtr;
 
 struct Fil {
 
   // Friend function for log I/O operations
-  friend db_err log_io(
-    IO_request io_request, bool batched, const Page_id &page_id, ulint byte_offset, ulint len, void *buf, void *message
+  friend DbErr log_io(
+    IoRequest io_request, bool batched, const PageId &page_id, ulint byte_offset, ulint len, void *buf, void *message
   );
 
   /** Constructor
@@ -63,7 +63,7 @@ struct Fil {
   /** Returns the latch of a file space.
   @param[in] space_id             Tablespace ID
   @return	latch protecting storage allocation */
-  rw_lock_t *space_get_latch(space_id_t space_id);
+  RwLock *space_get_latch(space_id_t space_id);
 
   /** Returns the type of a file space.
   @param[in] space_id             Tablespace ID
@@ -85,7 +85,7 @@ struct Fil {
   @param[in] flags                Tablespace flags
   @param[in] purpose              FIL_TABLESPACE, or FIL_LOG if log
   @return	true if success */
-  bool space_create(const char *name, space_id_t space_id, ulint flags, Fil_type type);
+  bool space_create(const char *name, space_id_t space_id, ulint flags, FilType type);
 
   /** Returns the size of the space in pages. The tablespace must be cached in the
   memory cache.
@@ -126,7 +126,7 @@ struct Fil {
   header of the first page of each data file in the system tablespace.
   @param[in] lsn                  LSN to write.
   @return	DB_SUCCESS or error number */
-  db_err write_flushed_lsn_to_data_files(lsn_t lsn);
+  DbErr write_flushed_lsn_to_data_files(lsn_t lsn);
 
   /** Reads the flushed lsn and arch no fields from a data file at database
   startup.
@@ -209,7 +209,7 @@ struct Fil {
   @param[in] size);             The initial size of the tablespace file
                                 in pages, must be >= FIL_IBD_FILE_INITIAL_SIZE
   @return	DB_SUCCESS or error code */
-  db_err create_new_single_table_tablespace(space_id_t *space_id, const char *tablename, bool is_temp, ulint flags, ulint size);
+  DbErr create_new_single_table_tablespace(space_id_t *space_id, const char *tablename, bool is_temp, ulint flags, ulint size);
 
   /**
    * Tries to open a single-table tablespace and optionally checks the space id
@@ -247,7 +247,7 @@ struct Fil {
    *
    * @return  DB_SUCCESS or error number
    */
-  db_err load_single_table_tablespaces(const std::string &path, ib_recovery_t recovery, size_t max_depth);
+  DbErr load_single_table_tablespaces(const std::string &path, IbRecovery recovery, size_t max_depth);
 
   /** If we need crash recovery, and we have called
   load_single_table_tablespaces() and dict_load_single_table_tablespaces(),
@@ -345,7 +345,7 @@ struct Fil {
 
   /**
    * Reads or writes data. This operation is asynchronous (aio).
-   * @param io_request            in: IO_request type.
+   * @param io_request            in: IoRequest type.
    * @param batched               in: if simulated aio and we want to post a
    *                              batch of i/os; NOTE that a simulated batch
    *                              may introduce hidden chances of deadlocks,
@@ -366,8 +366,8 @@ struct Fil {
    * @return DB_SUCCESS, or DB_T ABLESPACE_DELETED if we are trying to do
    *         i/o on a tablespace which does not exist
    */
-  db_err data_io(
-    IO_request io_request, bool batched, const Page_id &page_id, ulint byte_offset, ulint len, void *buf, void *message
+  DbErr data_io(
+    IoRequest io_request, bool batched, const PageId &page_id, ulint byte_offset, ulint len, void *buf, void *message
   );
 
   /**
@@ -377,7 +377,7 @@ struct Fil {
    * segment it wants to wait for.
    *
    * @param[in] segment           The number of the segmentto wait for
-   * @return false if AIO reaper was shutdown
+   * @return false if Aio reaper was shutdown
    */
   bool aio_wait(ulint segment);
 
@@ -411,7 +411,7 @@ struct Fil {
    * @param[in] addr              Address
    * @return true if undefined
    */
-  bool addr_is_null(const Fil_addr &addr);
+  bool addr_is_null(const FilAddr &addr);
 
   /**
    * Get the predecessor of a file page.
@@ -443,7 +443,7 @@ struct Fil {
    * @return type; NOTE that if the type has not been written to page, the
    *         return value not defined
    */
-  static Fil_page_type page_get_type(const byte *page);
+  static FilPageType page_get_type(const byte *page);
 
   /**
    * Reset variables.
@@ -513,10 +513,10 @@ struct Fil {
    *
    * @param node - file node
    * @param system - tablespace memory cache
-   * @param io_request - IO_request::Write or IO_request::Read; marks the node as
-   *  modified if type == IO_request::Write
+   * @param io_request - IoRequest::Write or IoRequest::Read; marks the node as
+   *  modified if type == IoRequest::Write
    */
-  void node_complete_io(fil_node_t *node, IO_request io_request);
+  void node_complete_io(FilNode *node, IoRequest io_request);
 
   /**
    * @brief Checks if a single-table tablespace for a given table name
@@ -531,17 +531,17 @@ struct Fil {
    * @brief Returns the table space by a given id, nullptr if not found.
    *
    * @param space_id space id
-   * @return Fil::fil_space_t* table space, nullptr if not found
+   * @return Fil::FilSpace* table space, nullptr if not found
    */
-  fil_space_t *space_get_by_id(space_id_t space_id);
+  FilSpace *space_get_by_id(space_id_t space_id);
 
   /**
    * @brief Returns the table space by a given name, nullptr if not found.
    *
    * @param name in: space name
-   * @return Fil::fil_space_t* table space, nullptr if not found
+   * @return Fil::FilSpace* table space, nullptr if not found
    */
-  fil_space_t *space_get_by_name(const char *name);
+  FilSpace *space_get_by_name(const char *name);
 
   /**
   * @brief Checks if all the file nodes in a space are flushed.
@@ -549,7 +549,7 @@ struct Fil {
   * @param space in: space
   * @return true if all are flushed
   */
-  bool space_is_flushed(fil_space_t *space);
+  bool space_is_flushed(FilSpace *space);
 
   /**
    * Opens a the file of a node of a tablespace.
@@ -559,7 +559,7 @@ struct Fil {
    * @param space The space.
    * @param[in] startup true if the server is starting up
    */
-  void node_open_file(fil_node_t *node, fil_space_t *space, bool startup);
+  void node_open_file(FilNode *node, FilSpace *space, bool startup);
 
   /**
    * @brief Closes a file.
@@ -567,7 +567,7 @@ struct Fil {
    * @param node in: file node
    * @param system in: tablespace memory cache
    */
-  void node_close_file(fil_node_t *node);
+  void node_close_file(FilNode *node);
 
   /**
    * @brief Reserves the Fil::system mutex and tries to make sure we can open at least
@@ -584,7 +584,7 @@ struct Fil {
   * @param node in, own: file node
   * @param space in: space where the file node is chained
   */
-  void node_free(fil_node_t *node, fil_space_t *space);
+  void node_free(FilNode *node, FilSpace *space);
 
   /** Assigns a new space id for a new single-table tablespace. This works simply
   by incrementing the global counter. If 4 billion id's is not enough, we may need
@@ -600,9 +600,9 @@ struct Fil {
   * @param sum_of_sizes in: combined size of previous files in space, in database pages
   * @param lsn in: lsn to write
   *
-  * @return db_err
+  * @return DbErr
   */
-  db_err write_lsn_and_arch_no_to_file(ulint sum_of_sizes, lsn_t lsn);
+  DbErr write_lsn_and_arch_no_to_file(ulint sum_of_sizes, lsn_t lsn);
 
   /**
   * @brief Creates the database directory for a table if it does not exist yet.
@@ -623,7 +623,7 @@ struct Fil {
   * @param mtr       in: mini-transaction handle
   */
   void op_write_log(
-    mlog_type_t type, space_id_t space_id, ulint log_flags, ulint flags, const char *name, const char *new_name, mtr_t *mtr
+    MlogType type, space_id_t space_id, ulint log_flags, ulint flags, const char *name, const char *new_name, Mtr *mtr
   );
 
   /**
@@ -638,7 +638,7 @@ struct Fil {
    * @param path The new name for the tablespace.
    * @return true if the tablespace was successfully renamed, false otherwise.
    */
-  bool rename_tablespace_in_mem(fil_space_t *space, fil_node_t *node, const char *path);
+  bool rename_tablespace_in_mem(FilSpace *space, FilNode *node, const char *path);
 
   /**
   * @brief Allocates a file name for a single-table tablespace.
@@ -655,7 +655,7 @@ struct Fil {
   * @param dbname database (or directory) name
   * @param filename file name (not a path), including the .ibd extension
   */
-  void load_single_table_tablespace(ib_recovery_t recovery, const char *dbname, const char *filename);
+  void load_single_table_tablespace(IbRecovery recovery, const char *dbname, const char *filename);
 
   /** Scan the given directory and load the tablespaces. So that we can map the physical files back
    * to their names that are stored in the data dictionary.
@@ -665,7 +665,7 @@ struct Fil {
    * @param max_depth The maximum depth of the directory tree to scan
    * @param depth The current depth of the directory tree
    */
-  db_err scan_and_load_tablespaces(const std::string &dir, ib_recovery_t recovery, ulint max_depth, ulint depth);
+  DbErr scan_and_load_tablespaces(const std::string &dir, IbRecovery recovery, ulint max_depth, ulint depth);
 
   /**
   * @brief Prepares a file node for i/o. Opens the file if it is closed. Updates the
@@ -676,7 +676,7 @@ struct Fil {
   * @param node in: file node
   * @param space in: space
   */
-  void node_prepare_for_io(fil_node_t *node, fil_space_t *space);
+  void node_prepare_for_io(FilNode *node, FilSpace *space);
 
   /**
    * @brief Report information about an invalid page access.
@@ -688,7 +688,7 @@ struct Fil {
    * @param io_request     in: I/O request type
    */
   [[noreturn]] void report_invalid_page_access(
-    const Page_id &page_id, const char *space_name, ulint byte_offset, ulint len, IO_request io_request
+    const PageId &page_id, const char *space_name, ulint byte_offset, ulint len, IoRequest io_request
   );
 
  private:
@@ -707,13 +707,13 @@ struct Fil {
   const char *m_path_to_client_datadir{};
 
   /** The mutex protecting the cache */
-  mutable mutex_t m_mutex{};
+  mutable Mutex m_mutex{};
 
   /** Map from space id to tablespace instance. */
-  std::unordered_map<space_id_t, fil_space_t *> m_space_by_id{};
+  std::unordered_map<space_id_t, FilSpace *> m_space_by_id{};
 
   /** Map from space name to the tablespace instance */
-  std::unordered_map<std::string_view, fil_space_t *> m_space_by_name{};
+  std::unordered_map<std::string_view, FilSpace *> m_space_by_name{};
 
   /** Number of files currently open */
   ulint m_n_open{};
@@ -737,10 +737,10 @@ struct Fil {
   /** Base node for the list of those tablespaces whose files contain unflushed
   writes; those spaces have at least one file node where m_modification_counter
   > m_flush_counter */
-  UT_LIST_BASE_NODE_T(fil_space_t, m_unflushed_spaces) m_unflushed_spaces;
+  UT_LIST_BASE_NODE_T(FilSpace, m_unflushed_spaces) m_unflushed_spaces;
 
   /** List of all file spaces */
-  UT_LIST_BASE_NODE_T(fil_space_t, m_space_list) m_space_list;
+  UT_LIST_BASE_NODE_T(FilSpace, m_space_list) m_space_list;
 };
 
 extern Fil *sys_fil;

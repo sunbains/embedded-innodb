@@ -15,7 +15,7 @@ enum dml_op_type_t {
   DML_OP_TYPE_MAX,
 };
 
-/* Type of DDL operations */
+/* Type of Ddl operations */
 enum ddl_op_type_t {
   DDL_OP_TYPE_CREATE = 0,
   DDL_OP_TYPE_DROP,
@@ -24,7 +24,7 @@ enum ddl_op_type_t {
   DDL_OP_TYPE_MAX,
 };
 
-/* Call back function definition for various DML and DDL operations */
+/* Call back function definition for various DML and Ddl operations */
 typedef ib_err_t fn(void *);
 
 /* to hold statistics of a particular type of operation */
@@ -41,7 +41,7 @@ struct op_err_t {
   /** Total errors */
   int n_errs{};
 
-  /** This is taken from db_err.h and it is going to be a very sparse
+  /** This is taken from DbErr.h and it is going to be a very sparse
   array but we can live with it for testing. */
   int errs[DB_SCHEMA_NOT_LOCKED];
 

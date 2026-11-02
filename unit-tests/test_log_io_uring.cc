@@ -18,7 +18,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 /** @file unit-tests/test_log_io_uring.cc
 Unit tests for WAL I/O system using io_uring
 
-This file contains unit tests for the WAL_IO_System infrastructure,
+This file contains unit tests for the WalIoSystem infrastructure,
 testing basic functionality with minimal dependencies.
 *****************************************************************************/
 
@@ -47,12 +47,12 @@ testing basic functionality with minimal dependencies.
   } while (0)
 
 bool test_WAL_file_construction(const std::string &test_dir) {
-  log_info("Testing WAL_file construction...");
+  log_info("Testing WalFile construction...");
   auto test_file = test_dir + "/test.log";
 
   try {
     // Test default constructor
-    WAL_file file1;
+    WalFile file1;
     TEST_ASSERT(file1.m_fd == -1);
     TEST_ASSERT(file1.m_path.empty());
     TEST_ASSERT(file1.m_size == 0);
@@ -66,7 +66,7 @@ bool test_WAL_file_construction(const std::string &test_dir) {
     file1.m_mtime = 12345;
 
     // Test copy constructor
-    WAL_file file2 = file1;
+    WalFile file2 = file1;
     TEST_ASSERT(file2.m_fd == 42);
     TEST_ASSERT(file2.m_path == test_file);
     TEST_ASSERT(file2.m_size == 1024);
@@ -74,7 +74,7 @@ bool test_WAL_file_construction(const std::string &test_dir) {
     TEST_ASSERT(file2.m_mtime == 12345);
 
     // Test assignment operators
-    WAL_file file4;
+    WalFile file4;
     file4 = file1;
     TEST_ASSERT(file4.m_fd == 42);
     TEST_ASSERT(file4.m_path == test_file);
@@ -82,7 +82,7 @@ bool test_WAL_file_construction(const std::string &test_dir) {
     TEST_ASSERT(file4.m_pending_ops.load() == 1);
     TEST_ASSERT(file4.m_mtime == 12345);
 
-    WAL_file file5;
+    WalFile file5;
     file5 = std::move(file1);
     TEST_ASSERT(file5.m_fd == 42);
     TEST_ASSERT(file5.m_path == test_file);
@@ -92,7 +92,7 @@ bool test_WAL_file_construction(const std::string &test_dir) {
     TEST_ASSERT(file1.m_path.empty());
 
   } catch (const std::exception &e) {
-    log_err("WAL_file construction test failed: ", e.what());
+    log_err("WalFile construction test failed: ", e.what());
     return false;
   }
 
@@ -100,12 +100,12 @@ bool test_WAL_file_construction(const std::string &test_dir) {
 }
 
 bool test_WAL_io_ctx_construction(const std::string &) {
-  log_info("Testing WAL_io_ctx_t operations...");
+  log_info("Testing WalIoCtx operations...");
 
   try {
     // Test default constructor
-    WAL_io_ctx_t ctx1;
-    TEST_ASSERT(ctx1.m_req_type == IO_request::None);
+    WalIoCtx ctx1;
+    TEST_ASSERT(ctx1.m_req_type == IoRequest::None);
     TEST_ASSERT(ctx1.m_callback == nullptr);
     TEST_ASSERT(ctx1.m_file == nullptr);
     TEST_ASSERT(ctx1.m_start_time == 0);
@@ -113,18 +113,18 @@ bool test_WAL_io_ctx_construction(const std::string &) {
     TEST_ASSERT(ctx1.m_result.load() == 0);
     TEST_ASSERT(ctx1.m_completed.load() == false);
 
-    WAL_file file1;
+    WalFile file1;
 
     // Test with data
-    WAL_io_ctx_t ctx2;
-    ctx2.m_req_type = IO_request::Sync_read;
+    WalIoCtx ctx2;
+    ctx2.m_req_type = IoRequest::Sync_read;
     ctx2.m_file = &file1;
     ctx2.m_start_time = 1000;
     ctx2.m_bytes_requested = 1024;
     ctx2.m_result.store(0);
     ctx2.m_completed.store(false);
 
-    TEST_ASSERT(ctx2.m_req_type == IO_request::Sync_read);
+    TEST_ASSERT(ctx2.m_req_type == IoRequest::Sync_read);
     TEST_ASSERT(ctx2.m_callback == nullptr);
     TEST_ASSERT(ctx2.m_file == &file1);
     TEST_ASSERT(ctx2.m_start_time == 1000);
@@ -133,7 +133,7 @@ bool test_WAL_io_ctx_construction(const std::string &) {
     TEST_ASSERT(ctx2.m_completed.load() == false);
 
     // Test copy constructor
-    WAL_io_ctx_t ctx3 = ctx2;
+    WalIoCtx ctx3 = ctx2;
     TEST_ASSERT(ctx3.m_req_type == ctx2.m_req_type);
     TEST_ASSERT(ctx3.m_file == ctx2.m_file);
     TEST_ASSERT(ctx3.m_start_time == ctx2.m_start_time);
@@ -142,7 +142,7 @@ bool test_WAL_io_ctx_construction(const std::string &) {
     TEST_ASSERT(ctx3.m_completed.load() == ctx2.m_completed.load());
 
     // Test move constructor
-    WAL_io_ctx_t ctx4 = std::move(ctx3);
+    WalIoCtx ctx4 = std::move(ctx3);
     TEST_ASSERT(ctx4.m_req_type == ctx2.m_req_type);
     TEST_ASSERT(ctx4.m_file == ctx2.m_file);
     TEST_ASSERT(ctx4.m_start_time == ctx2.m_start_time);
@@ -151,7 +151,7 @@ bool test_WAL_io_ctx_construction(const std::string &) {
     TEST_ASSERT(ctx4.m_completed.load() == ctx2.m_completed.load());
 
   } catch (const std::exception &e) {
-    log_err("WAL_io_ctx_t operations test failed: ", e.what());
+    log_err("WalIoCtx operations test failed: ", e.what());
     return false;
   }
 
@@ -161,7 +161,7 @@ bool test_WAL_io_ctx_construction(const std::string &) {
 static const char *test_data = "Async WAL scatter-gather I/O test";
 static size_t data_len = strlen(test_data);
 
-bool test_async_scatter_reads(WAL_IO_System &wal_io_system, std::vector<WAL_file *> &test_files) {
+bool test_async_scatter_reads(WalIoSystem &wal_io_system, std::vector<WalFile *> &test_files) {
   log_info("Testing scatter reads...");
 
   char *test_read = new char[data_len];
@@ -172,7 +172,7 @@ bool test_async_scatter_reads(WAL_IO_System &wal_io_system, std::vector<WAL_file
   iovecs[1].iov_base = test_read + data_len / 2;
   iovecs[1].iov_len = data_len - (data_len / 2);
 
-  auto ctx = wal_io_system.async_scatter_read(test_files[0], iovecs, 0, [](WAL_io_ctx_t *ctx) {
+  auto ctx = wal_io_system.async_scatter_read(test_files[0], iovecs, 0, [](WalIoCtx *ctx) {
     log_info("  Scatter-read completed : result = ", ctx->m_result.load());
     ut_a(ctx->m_result.load() == int(data_len));
   });
@@ -196,7 +196,7 @@ bool test_async_scatter_reads(WAL_IO_System &wal_io_system, std::vector<WAL_file
   return true;
 }
 
-bool test_async_gather_writes(WAL_IO_System &wal_io_system, std::vector<WAL_file *> &test_files) {
+bool test_async_gather_writes(WalIoSystem &wal_io_system, std::vector<WalFile *> &test_files) {
   log_info("Testing gather writes...");
 
   std::vector<WAL_iovec_t> iovecs(2);
@@ -206,7 +206,7 @@ bool test_async_gather_writes(WAL_IO_System &wal_io_system, std::vector<WAL_file
   iovecs[1].iov_base = const_cast<void *>(static_cast<const void *>(test_data + data_len / 2));
   iovecs[1].iov_len = data_len - (data_len / 2);
 
-  auto ctx = wal_io_system.async_gather_write(test_files[0], iovecs, 0, [](WAL_io_ctx_t *ctx) {
+  auto ctx = wal_io_system.async_gather_write(test_files[0], iovecs, 0, [](WalIoCtx *ctx) {
     log_info("  Gather-write completed : result = ", ctx->m_result.load());
     ut_a(ctx->m_result.load() == int(data_len));
   });
@@ -225,7 +225,7 @@ bool test_async_gather_writes(WAL_IO_System &wal_io_system, std::vector<WAL_file
   return true;
 }
 
-bool test_sync_read_operations(WAL_IO_System &wal_io_system, std::vector<WAL_file *> &test_files) {
+bool test_sync_read_operations(WalIoSystem &wal_io_system, std::vector<WalFile *> &test_files) {
   log_info("Testing synchronous read...");
 
   char *test_read = new char[data_len];
@@ -239,7 +239,7 @@ bool test_sync_read_operations(WAL_IO_System &wal_io_system, std::vector<WAL_fil
   return true;
 }
 
-bool test_sync_write_operations(WAL_IO_System &wal_io_system, std::vector<WAL_file *> &test_files) {
+bool test_sync_write_operations(WalIoSystem &wal_io_system, std::vector<WalFile *> &test_files) {
   log_info("Testing synchronous write...");
 
   auto ret = wal_io_system.sync_write(test_files[1], test_data, data_len, 0);
@@ -248,10 +248,10 @@ bool test_sync_write_operations(WAL_IO_System &wal_io_system, std::vector<WAL_fi
   return true;
 }
 
-bool test_async_write_operations(WAL_IO_System &wal_io_system, std::vector<WAL_file *> &test_files) {
+bool test_async_write_operations(WalIoSystem &wal_io_system, std::vector<WalFile *> &test_files) {
   log_info("Testing asynchronous write...");
 
-  auto ctx = wal_io_system.async_write(test_files[2], test_data, data_len, 0, [](WAL_io_ctx_t *ctx) {
+  auto ctx = wal_io_system.async_write(test_files[2], test_data, data_len, 0, [](WalIoCtx *ctx) {
     log_info("  Write completed : result = ", ctx->m_result.load());
     ut_a(ctx->m_result.load() == int(data_len));
   });
@@ -270,12 +270,12 @@ bool test_async_write_operations(WAL_IO_System &wal_io_system, std::vector<WAL_f
   return true;
 }
 
-bool test_async_read_operations(WAL_IO_System &wal_io_system, std::vector<WAL_file *> &test_files) {
+bool test_async_read_operations(WalIoSystem &wal_io_system, std::vector<WalFile *> &test_files) {
   log_info("Testing asynchronous read...");
 
   char *test_read = new char[data_len];
 
-  auto ctx = wal_io_system.async_read(test_files[2], test_read, data_len, 0, [](WAL_io_ctx_t *ctx) {
+  auto ctx = wal_io_system.async_read(test_files[2], test_read, data_len, 0, [](WalIoCtx *ctx) {
     log_info("  Read completed : result = ", ctx->m_result.load());
   });
 
@@ -299,10 +299,10 @@ bool test_async_read_operations(WAL_IO_System &wal_io_system, std::vector<WAL_fi
 }
 
 bool test_wal_io_file_operations(const std::string &test_dir) {
-  log_info("Testing WAL_IO_System structure...");
-  std::vector<WAL_file *> test_files;
+  log_info("Testing WalIoSystem structure...");
+  std::vector<WalFile *> test_files;
 
-  auto cleanup = [](WAL_IO_System &wal_io_system, std::vector<WAL_file *> &test_files) -> bool {
+  auto cleanup = [](WalIoSystem &wal_io_system, std::vector<WalFile *> &test_files) -> bool {
     bool success = true;
     for (auto &test_file : test_files) {
       if (!wal_io_system.close_wal_file(test_file)) {
@@ -318,21 +318,21 @@ bool test_wal_io_file_operations(const std::string &test_dir) {
 
   try {
     {
-      WAL_IO_System wal_io_system(4, 4);
+      WalIoSystem wal_io_system(4, 4);
 
       if (!wal_io_system.initialize(16)) {
-        log_err("Failed to initialize WAL_IO_System");
+        log_err("Failed to initialize WalIoSystem");
         return false;
       }
 
-      log_info("  WAL_IO_System initialized successfully");
+      log_info("  WalIoSystem initialized successfully");
 
       for (int index = 0; index < 4; ++index) {
         const auto test_file_path = test_dir + "/test_file_" + std::to_string(index) + ".log";
 
         log_info("  Creating test file ", test_file_path);
 
-        if (!WAL_IO_System::file_exists(test_file_path)) {
+        if (!WalIoSystem::file_exists(test_file_path)) {
           log_dbg("Test file ", test_file_path, " does not exist, new to be created.");
         } else {
           log_dbg("Test file ", test_file_path, " already exists.");
@@ -348,7 +348,7 @@ bool test_wal_io_file_operations(const std::string &test_dir) {
           break;
         }
 
-        ut_a(WAL_IO_System::get_file_size(test_file_path) == 1024 * 1024);
+        ut_a(WalIoSystem::get_file_size(test_file_path) == 1024 * 1024);
 
         test_files.push_back(file);
       }
@@ -366,7 +366,7 @@ bool test_wal_io_file_operations(const std::string &test_dir) {
     }
 
   } catch (const std::exception &e) {
-    log_err("WAL_IO_System structure test failed: ", e.what());
+    log_err("WalIoSystem structure test failed: ", e.what());
     return false;
   }
 

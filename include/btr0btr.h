@@ -43,7 +43,7 @@ struct Btree {
    * @param[in] fsp             File space.
    * @param[in] buf_pool        Buffer pool.
    */
-  Btree(Lock_sys *lock_sys, FSP *fsp, Buf_pool *buf_pool) noexcept : m_lock_sys{lock_sys}, m_fsp{fsp}, m_buf_pool{buf_pool} {}
+  Btree(LockSys *lock_sys, Fsp *fsp, BufPool *buf_pool) noexcept : m_lock_sys{lock_sys}, m_fsp{fsp}, m_buf_pool{buf_pool} {}
 
   /**
    * Destructor.
@@ -58,7 +58,7 @@ struct Btree {
    *
    * @return	root page, x-latched
    */
-  [[nodiscard]] page_t *root_get(Page_id page_id, mtr_t *mtr) noexcept;
+  [[nodiscard]] page_t *root_get(PageId page_id, Mtr *mtr) noexcept;
 
   /**
    * Gets pointer to the previous user record in the tree. It is assumed
@@ -69,7 +69,7 @@ struct Btree {
    *
    * @return	previous user record, nullptr if there is none
    */
-  [[nodiscard]] Rec get_prev_user_rec(Rec rec, mtr_t *mtr) noexcept;
+  [[nodiscard]] Rec get_prev_user_rec(Rec rec, Mtr *mtr) noexcept;
 
   /**
    * Gets pointer to the next user record in the tree. It is assumed
@@ -81,7 +81,7 @@ struct Btree {
    *
    * @return	next user record, nullptr if there is none
    */
-  [[nodiscard]] Rec get_next_user_rec(Rec rec, mtr_t *mtr) noexcept;
+  [[nodiscard]] Rec get_next_user_rec(Rec rec, Mtr *mtr) noexcept;
 
   /**
    * Creates the root node for a new index tree.
@@ -94,7 +94,7 @@ struct Btree {
    *
    * @return	page number of the created root, FIL_NULL if did not succeed
    */
-  [[nodiscard]] page_no_t create(ulint type, space_id_t space, uint64_t index_id, Index *index, mtr_t *mtr) noexcept;
+  [[nodiscard]] page_no_t create(ulint type, space_id_t space, uint64_t index_id, Index *index, Mtr *mtr) noexcept;
 
   /**
    * Frees a B-tree except the root page, which MUST be freed after this
@@ -112,7 +112,7 @@ struct Btree {
    * @param[in] root_page_no    Root page number
    * @param[in,out] mtr         A mini-transaction which has already been started
    */
-  void free_root(space_id_t space, page_no_t root_page_no, mtr_t *mtr) noexcept;
+  void free_root(space_id_t space, page_no_t root_page_no, Mtr *mtr) noexcept;
 
   /**
    * Makes tree one level higher by splitting the root, and inserts
@@ -131,7 +131,7 @@ struct Btree {
    *
    * @return	inserted record
    */
-  [[nodiscard]] Rec root_raise_and_insert(Btree_cursor *cursor, const DTuple *tuple, ulint n_ext, mtr_t *mtr) noexcept;
+  [[nodiscard]] Rec root_raise_and_insert(BtreeCursor *cursor, const DTuple *tuple, ulint n_ext, Mtr *mtr) noexcept;
 
   /**
    * Reorganizes an index page.
@@ -147,7 +147,7 @@ struct Btree {
    *
    * @return	true on success, false on failure
    */
-  [[nodiscard]] bool page_reorganize(Buf_block *block, const Index *index, mtr_t *mtr) noexcept;
+  [[nodiscard]] bool page_reorganize(BufBlock *block, const Index *index, Mtr *mtr) noexcept;
 
   /**
    * Decides if the page should be split at the convergence point of
@@ -159,7 +159,7 @@ struct Btree {
    *
    * @return	true if split recommended
    */
-  [[nodiscard]] bool page_get_split_rec_left(Btree_cursor *cursor, Rec &split_rec) noexcept;
+  [[nodiscard]] bool page_get_split_rec_left(BtreeCursor *cursor, Rec &split_rec) noexcept;
 
   /**
    * Decides if the page should be split at the convergence point of
@@ -172,7 +172,7 @@ struct Btree {
    *
    * @return	true if split recommended
    */
-  [[nodiscard]] bool page_get_split_rec_right(Btree_cursor *cursor, Rec &split_rec) noexcept;
+  [[nodiscard]] bool page_get_split_rec_right(BtreeCursor *cursor, Rec &split_rec) noexcept;
 
   /**
    * Splits an index page to halves and inserts the tuple. It is assumed
@@ -191,7 +191,7 @@ struct Btree {
    *
    * @return inserted record
    */
-  [[nodiscard]] Rec page_split_and_insert(Btree_cursor *cursor, const DTuple *tuple, ulint n_ext, mtr_t *mtr) noexcept;
+  [[nodiscard]] Rec page_split_and_insert(BtreeCursor *cursor, const DTuple *tuple, ulint n_ext, Mtr *mtr) noexcept;
 
   /**
    * Inserts a data tuple to a tree on a non-leaf level. It is assumed
@@ -204,7 +204,7 @@ struct Btree {
    * @param[in] line            Line where called
    * @param[in,out] mtr         Mini-transaction.
    */
-  void insert_on_non_leaf_level(Index *index, ulint level, DTuple *tuple, mtr_t *mtr, Source_location location) noexcept;
+  void insert_on_non_leaf_level(Index *index, ulint level, DTuple *tuple, Mtr *mtr, SourceLocation location) noexcept;
 
   /**
    * Sets a record as the predefined minimum record.
@@ -212,7 +212,7 @@ struct Btree {
    * @param[in,out] rec         Record
    * @param[in,out] mtr         Mini-transaction.
    */
-  void set_min_rec_mark(Rec rec, mtr_t *mtr) noexcept;
+  void set_min_rec_mark(Rec rec, Mtr *mtr) noexcept;
 
   /**
    * Deletes on the upper level the node pointer to a page.
@@ -221,7 +221,7 @@ struct Btree {
    * @param[in,out] block       Page whose node pointer is deleted
    * @param[in,out] mtr         Mini-transaction.
    */
-  void node_ptr_delete(Index *index, Buf_block *block, mtr_t *mtr) noexcept;
+  void node_ptr_delete(Index *index, BufBlock *block, Mtr *mtr) noexcept;
 
 #ifdef UNIV_DEBUG
   /**
@@ -231,7 +231,7 @@ struct Btree {
    * @param[in,out] mtr         Mini-transaction
    * @return	true
    */
-  [[nodiscard]] bool check_node_ptr(Index *index, Buf_block *block, mtr_t *mtr) noexcept;
+  [[nodiscard]] bool check_node_ptr(Index *index, BufBlock *block, Mtr *mtr) noexcept;
 #endif /* UNIV_DEBUG */
 
   /**
@@ -252,7 +252,7 @@ struct Btree {
    *
    * @return	true on success
    */
-  [[nodiscard]] bool compress(Btree_cursor *cursor, mtr_t *mtr) noexcept;
+  [[nodiscard]] bool compress(BtreeCursor *cursor, Mtr *mtr) noexcept;
 
   /**
    * Discards a page from a B-tree. This is used to remove the last record from
@@ -262,7 +262,7 @@ struct Btree {
    * @param[in,out] cursor      Cursor on the page to discard: not on the root page
    * @param[in,out] mtr         Mini-transaction.
    */
-  void discard_page(Btree_cursor *cursor, mtr_t *mtr) noexcept;
+  void discard_page(BtreeCursor *cursor, Mtr *mtr) noexcept;
 
   /**
    * Parses the redo log record for setting an index record as the predefined
@@ -275,7 +275,7 @@ struct Btree {
    *
    * @return	end of log record or nullptr
    */
-  [[nodiscard]] byte *parse_set_min_rec_mark(byte *ptr, byte *end_ptr, page_t *page, mtr_t *mtr) noexcept;
+  [[nodiscard]] byte *parse_set_min_rec_mark(byte *ptr, byte *end_ptr, page_t *page, Mtr *mtr) noexcept;
 
   /**
    * Parses a redo log record of reorganizing a page.
@@ -288,7 +288,7 @@ struct Btree {
    *
    * @return	end of log record or nullptr
    */
-  [[nodiscard]] byte *parse_page_reorganize(byte *ptr, byte *end_ptr, Index *index, Buf_block *block, mtr_t *mtr) noexcept;
+  [[nodiscard]] byte *parse_page_reorganize(byte *ptr, byte *end_ptr, Index *index, BufBlock *block, Mtr *mtr) noexcept;
 
   /**
    * Gets the number of pages in a B-tree.
@@ -312,8 +312,8 @@ struct Btree {
    *
    * @return	new allocated block, x-latched; nullptr if out of space
    */
-  [[nodiscard]] Buf_block *page_alloc(
-    const Index *index, page_no_t hint_page_no, byte file_direction, ulint level, mtr_t *mtr
+  [[nodiscard]] BufBlock *page_alloc(
+    const Index *index, page_no_t hint_page_no, byte file_direction, ulint level, Mtr *mtr
   ) noexcept;
 
   /**
@@ -324,7 +324,7 @@ struct Btree {
    * @param[in,out] block       Block to be freed, x-latched
    * @param[in,out] mtr         Mini-transaction.
    */
-  void page_free(const Index *index, Buf_block *block, mtr_t *mtr) noexcept;
+  void page_free(const Index *index, BufBlock *block, Mtr *mtr) noexcept;
 
   /**
    * Frees a file page used in an index tree. Can be used also to BLOB
@@ -336,7 +336,7 @@ struct Btree {
    * @param[in] level           Page level
    * @param[in,out] mtr         Mini-transaction
    */
-  void page_free_low(const Index *index, Buf_block *block, ulint level, mtr_t *mtr) noexcept;
+  void page_free_low(const Index *index, BufBlock *block, ulint level, Mtr *mtr) noexcept;
 
   /**
    * Checks the size and number of fields in a record based on the definition of
@@ -369,8 +369,8 @@ struct Btree {
    *
    * @return	buffer block
    */
-  [[nodiscard]] inline Buf_block *block_get(space_id_t space_id, page_no_t page_no, ulint rw_latch, mtr_t *mtr) noexcept {
-    Buf_pool::Request req{
+  [[nodiscard]] inline BufBlock *block_get(space_id_t space_id, page_no_t page_no, ulint rw_latch, Mtr *mtr) noexcept {
+    BufPool::Request req{
       .m_rw_latch = rw_latch,
       .m_page_id = {space_id, page_no},
       .m_mode = BUF_GET,
@@ -399,7 +399,7 @@ struct Btree {
    *
    * @return	page
    */
-  [[nodiscard]] inline page_t *page_get(space_id_t space, page_no_t page_no, ulint rw_latch, mtr_t *mtr) noexcept {
+  [[nodiscard]] inline page_t *page_get(space_id_t space, page_no_t page_no, ulint rw_latch, Mtr *mtr) noexcept {
     return block_get(space, page_no, rw_latch, mtr)->get_frame();
   }
 
@@ -410,7 +410,7 @@ struct Btree {
    * @param[in] id              Index id
    * @param[in,out] mtr         Mini-transaction.
    */
-  inline void page_set_index_id(page_t *page, uint64_t id, mtr_t *mtr) noexcept {
+  inline void page_set_index_id(page_t *page, uint64_t id, Mtr *mtr) noexcept {
     mlog_write_uint64(page + (PAGE_HEADER + PAGE_INDEX_ID), id, mtr);
   }
 
@@ -444,7 +444,7 @@ struct Btree {
    *
    * @return	level, leaf level == 0
    */
-  [[nodiscard]] inline ulint page_get_level(const page_t *page, mtr_t *) noexcept { return page_get_level_low(page); }
+  [[nodiscard]] inline ulint page_get_level(const page_t *page, Mtr *) noexcept { return page_get_level_low(page); }
 
   /**
    * Sets the node level field in an index page.
@@ -453,7 +453,7 @@ struct Btree {
    * @param[in] level                leaf level == 0
    * @param[in,out] mtr              Mini-transaction
    */
-  inline void page_set_level(page_t *page, ulint level, mtr_t *mtr) noexcept {
+  inline void page_set_level(page_t *page, ulint level, Mtr *mtr) noexcept {
     ut_ad(level <= BTR_MAX_DEPTH);
 
     /** 16 levels is a very big tree. */
@@ -468,7 +468,7 @@ struct Btree {
    *
    * @return	next page number
    */
-  [[nodiscard]] static inline page_no_t page_get_next(const page_t *page, mtr_t *mtr) noexcept {
+  [[nodiscard]] static inline page_no_t page_get_next(const page_t *page, Mtr *mtr) noexcept {
     ut_ad(mtr->memo_contains_page(page, MTR_MEMO_PAGE_X_FIX) || mtr->memo_contains_page(page, MTR_MEMO_PAGE_S_FIX));
 
     return mach_read_from_4(page + FIL_PAGE_NEXT);
@@ -481,7 +481,7 @@ struct Btree {
    * @param[in] next                 Next page number
    * @param[in,out]                  Mini-transaction.
    */
-  inline void static page_set_next(page_t *page, page_no_t next, mtr_t *mtr) noexcept {
+  inline void static page_set_next(page_t *page, page_no_t next, Mtr *mtr) noexcept {
     mlog_write_ulint(page + FIL_PAGE_NEXT, next, MLOG_4BYTES, mtr);
   }
 
@@ -491,7 +491,7 @@ struct Btree {
    *
    * @return	prev page number
    */
-  [[nodiscard]] static inline page_no_t page_get_prev(const page_t *page, mtr_t *) noexcept {
+  [[nodiscard]] static inline page_no_t page_get_prev(const page_t *page, Mtr *) noexcept {
     return mach_read_from_4(page + FIL_PAGE_PREV);
   }
 
@@ -502,7 +502,7 @@ struct Btree {
    * @param[in] prev                 Prev page number
    * @param[in,out]                  Mini-transaction.
    */
-  inline void static page_set_prev(page_t *page, page_no_t prev, mtr_t *mtr) noexcept {
+  inline void static page_set_prev(page_t *page, page_no_t prev, Mtr *mtr) noexcept {
     mlog_write_ulint(page + FIL_PAGE_PREV, prev, MLOG_4BYTES, mtr);
   }
 
@@ -511,13 +511,13 @@ struct Btree {
    * NOTE: the offsets array must contain all offsets for the record since
    * we read the last field according to offsets and assume that it contains
    * the child page number. In other words offsets must have been retrieved
-   * with Phy_rec::get_col_offsets(n_fields=ULINT_UNDEFINED).
+   * with PhyRec::get_col_offsets(n_fields=ULINT_UNDEFINED).
    *
    * @param[in] rec                Node pointer record
-   * @param[in] offsets            Array returned by Phy_rec::get_col_offsets()
+   * @param[in] offsets            Array returned by PhyRec::get_col_offsets()
    * @return	child node address
    */
-  [[nodiscard]] inline ulint node_ptr_get_child_page_no(const Rec rec, const Rec_offs &offsets) noexcept {
+  [[nodiscard]] inline ulint node_ptr_get_child_page_no(const Rec rec, const RecOffs &offsets) noexcept {
     ulint len;
 
     /* The child address is in the last field */
@@ -542,7 +542,7 @@ struct Btree {
    * @param[in] latch_mode           BTR_SEARCH_LEAF or BTR_MODIFY_LEAF
    * @param[in,out] mtr              Mini-transaction
    */
-  inline void leaf_page_release(Buf_block *block, ulint latch_mode, mtr_t *mtr) noexcept {
+  inline void leaf_page_release(BufBlock *block, ulint latch_mode, Mtr *mtr) noexcept {
     ut_ad(!mtr->memo_contains(block, MTR_MEMO_MODIFY));
     ut_ad(latch_mode == BTR_SEARCH_LEAF || latch_mode == BTR_MODIFY_LEAF);
 
@@ -558,7 +558,7 @@ struct Btree {
    *
    * @return Newly created B-tree instance
    */
-  static Btree *create(Lock_sys *lock_sys, FSP *fsp, Buf_pool *buf_pool) noexcept;
+  static Btree *create(LockSys *lock_sys, Fsp *fsp, BufPool *buf_pool) noexcept;
 
   /**
    * Destroys a B-tree instance.
@@ -593,7 +593,7 @@ struct Btree {
    * @param[in,out] mtr         Mini-tranaction covering the operation.
    * @return root page, x-latched
    */
-  [[nodiscard]] Buf_block *root_block_get(Page_id page_id, mtr_t *mtr) noexcept;
+  [[nodiscard]] BufBlock *root_block_get(PageId page_id, Mtr *mtr) noexcept;
 
   /**
    * Creates a new index page (not the root, and also not
@@ -604,29 +604,29 @@ struct Btree {
    * @param[in] level           Btree level of the page
    * @param[in,out] mtr         Mini-transaction coverring the operation.
    */
-  void page_create(Buf_block *block, Index *index, ulint level, mtr_t *mtr) noexcept;
+  void page_create(BufBlock *block, Index *index, ulint level, Mtr *mtr) noexcept;
 
   /**
    * Sets the child node file address in a node pointer.
    *
    * @param[in,out] rec         Node pointer record
-   * @param[in] offsets         Array returned by Phy_rec::get_col_offsets()
+   * @param[in] offsets         Array returned by PhyRec::get_col_offsets()
    * @param[in] page_no         child node address
    * @param[in,out] mtr         Mini-transaction covering the operation.
    */
-  void node_ptr_set_child_page_no(Rec rec, const Rec_offs &offsets, ulint page_no, mtr_t *mtr) noexcept;
+  void node_ptr_set_child_page_no(Rec rec, const RecOffs &offsets, ulint page_no, Mtr *mtr) noexcept;
 
   /**
    * Returns the child page of a node pointer and x-latches it.
    *
    * @param[in] node_ptr        Node pointer
    * @param[in,out] index       Dict index tree
-   * @param[in] offsets         returned by Phy_rec::get_col_offsets()
+   * @param[in] offsets         returned by PhyRec::get_col_offsets()
    * @param[in,out] mtr         Mini-transaction covering the operation.
    *
    * @return child page, x-latched
    */
-  [[nodiscard]] Buf_block *node_ptr_get_child(const Rec node_ptr, Index *index, const Rec_offs &offsets, mtr_t *mtr) noexcept;
+  [[nodiscard]] BufBlock *node_ptr_get_child(const Rec node_ptr, Index *index, const RecOffs &offsets, Mtr *mtr) noexcept;
 
   /**
    * Returns the upper level node pointer to a page. It is assumed that mtr holds
@@ -634,13 +634,13 @@ struct Btree {
    *
    * @param[in] node_ptr        Node pointer
    * @param[in,out] index       Dict index tree
-   * @param[in] offsets         Array returned by Phy_rec::get_col_offsets()
+   * @param[in] offsets         Array returned by PhyRec::get_col_offsets()
    * @param[in,out] mtr         Mini-transaction covering the operation.
    *
    * @return The father node pointer as an array of offsets.
    */
   [[nodiscard]] ulint *page_get_father_node_ptr(
-    ulint *offsets, mem_heap_t *heap, Btree_cursor *cursor, mtr_t *mtr, Source_location location
+    ulint *offsets, MemHeap *heap, BtreeCursor *cursor, Mtr *mtr, SourceLocation location
   ) noexcept;
 
   /**
@@ -657,7 +657,7 @@ struct Btree {
    * @return Rec::get_col_offsets() of the node pointer record.
    */
   [[nodiscard]] ulint *page_get_father_block(
-    ulint *offsets, mem_heap_t *heap, Index *index, Buf_block *block, mtr_t *mtr, Btree_cursor *cursor
+    ulint *offsets, MemHeap *heap, Index *index, BufBlock *block, Mtr *mtr, BtreeCursor *cursor
   ) noexcept;
 
   /**
@@ -669,7 +669,7 @@ struct Btree {
    * @param[in] mtr             Mini-transaction handle
    * @param[out] cursor         Cursor on node pointer record, its page x-latched
    */
-  void page_get_father(Index *index, Buf_block *block, mtr_t *mtr, Btree_cursor *cursor) noexcept;
+  void page_get_father(Index *index, BufBlock *block, Mtr *mtr, BtreeCursor *cursor) noexcept;
 
   /**
    * Reorganizes an index page.
@@ -683,7 +683,7 @@ struct Btree {
    *
    * @return True on success, false on failure.
    */
-  [[nodiscard]] bool page_reorganize_low(bool recovery, Buf_block *block, const Index *index, mtr_t *mtr) noexcept;
+  [[nodiscard]] bool page_reorganize_low(bool recovery, BufBlock *block, const Index *index, Mtr *mtr) noexcept;
 
   /**
    * Empties an index page.
@@ -692,7 +692,7 @@ struct Btree {
    * @param[in] level           Btree level of the page
    * @param[in,out] mtr         Min-transaction covering the operation.
    */
-  void page_empty(Buf_block *block, Index *index, ulint level, mtr_t *mtr) noexcept;
+  void page_empty(BufBlock *block, Index *index, ulint level, Mtr *mtr) noexcept;
 
   /**
    * Calculates a split record such that the tuple will certainly fit on
@@ -706,7 +706,7 @@ struct Btree {
    * @return split record, or nullptr if tuple will be the first record on
    *  the lower or upper half-page (determined by btr_page_tuple_smaller())
    */
-  [[nodiscard]] Rec page_get_split_rec(Btree_cursor *cursor, const DTuple *tuple, ulint n_ext) noexcept;
+  [[nodiscard]] Rec page_get_split_rec(BtreeCursor *cursor, const DTuple *tuple, ulint n_ext) noexcept;
 
   /**
    * Returns true if the insert fits on the appropriate half-page with the
@@ -722,7 +722,7 @@ struct Btree {
    * @return	true if fits
    */
   [[nodiscard]] bool page_insert_fits(
-    Btree_cursor *cursor, const Rec split_rec, const ulint *offsets, const DTuple *tuple, ulint n_ext, mem_heap_t *heap
+    BtreeCursor *cursor, const Rec split_rec, const ulint *offsets, const DTuple *tuple, ulint n_ext, MemHeap *heap
   ) noexcept;
 
   /**
@@ -736,7 +736,7 @@ struct Btree {
    * @param[in] direction       FSP_UP or FSP_DOWN.
    * @param[in] mtr             Mini-transaction handle.
    */
-  void attach_half_pages(Index *index, Buf_block *block, Rec split_rec, Buf_block *new_block, ulint direction, mtr_t *mtr) noexcept;
+  void attach_half_pages(Index *index, BufBlock *block, Rec split_rec, BufBlock *new_block, ulint direction, Mtr *mtr) noexcept;
 
   /**
    * Determine if a tuple is smaller than any record on the page.
@@ -750,7 +750,7 @@ struct Btree {
    * @return true if smaller
    */
   [[nodiscard]] bool page_tuple_smaller(
-    Btree_cursor *cursor, const DTuple *tuple, ulint *offsets, ulint n_uniq, mem_heap_t **heap
+    BtreeCursor *cursor, const DTuple *tuple, ulint *offsets, ulint n_uniq, MemHeap **heap
   ) noexcept;
 
   /**
@@ -760,7 +760,7 @@ struct Btree {
    * @param[in] page             The page to remove.
    * @param[in,out] mtr          The mini-transaction handle.
    */
-  void level_list_remove(space_id_t space, page_t *page, mtr_t *mtr) noexcept;
+  void level_list_remove(space_id_t space, page_t *page, Mtr *mtr) noexcept;
 
   /**
    * Writes the redo log record for setting an index record as the predefined
@@ -770,7 +770,7 @@ struct Btree {
    * @param[in] type             The type of log record, either MLOG_COMP_REC_MIN_MARK or MLOG_REC_MIN_MARK.
    * @param[in] mtr              The mini-transaction handle.
    */
-  void set_min_rec_mark_log(Rec rec, mlog_type_t type, mtr_t *mtr) noexcept;
+  void set_min_rec_mark_log(Rec rec, MlogType type, Mtr *mtr) noexcept;
 
   /**
    * If page is the only on its level, this function moves its records to the
@@ -781,7 +781,7 @@ struct Btree {
    *                              use btr_discard_only_page_on_level if the last record from the page should be removed
    * @param[in] mtr               The mini-transaction handle.
    */
-  void lift_page_up(Index *index, Buf_block *block, mtr_t *mtr) noexcept;
+  void lift_page_up(Index *index, BufBlock *block, Mtr *mtr) noexcept;
 
   /**
    * Discards a page that is the only page on its level. This will empty
@@ -793,7 +793,7 @@ struct Btree {
    * @param[in] block           The page which is the only on its level.
    * @param[in] mtr             The mini-transaction handle.
    */
-  void discard_only_page_on_level(Index *index, Buf_block *block, mtr_t *mtr) noexcept;
+  void discard_only_page_on_level(Index *index, BufBlock *block, Mtr *mtr) noexcept;
 
 #ifdef UNIV_BTR_PRINT
   /**
@@ -809,11 +809,11 @@ struct Btree {
    * @param[in] index           The index tree.
    * @param[in] block           The index page.
    * @param[in] width           Print this many entries from start and end.
-   * @param[in,out] heap        Heap for Phy_rec::get_col_offsets().
-   * @param[in,out] offsets     Buffer for Phy_rec::get_col_offsets().
+   * @param[in,out] heap        Heap for PhyRec::get_col_offsets().
+   * @param[in,out] offsets     Buffer for PhyRec::get_col_offsets().
    * @param[in] mtr             The mini-transaction handle.
    */
-  void print_recursive(Index *index, Buf_block *block, ulint width, mem_heap_t **heap, ulint **offsets, mtr_t *mtr) noexcept;
+  void print_recursive(Index *index, BufBlock *block, ulint width, MemHeap **heap, ulint **offsets, Mtr *mtr) noexcept;
 
   /**
    * Prints the index tree.
@@ -842,7 +842,7 @@ struct Btree {
    *
    * @return true if ok
    */
-  [[nodiscard]] bool index_page_validate(Buf_block *block, Index *index) noexcept;
+  [[nodiscard]] bool index_page_validate(BufBlock *block, Index *index) noexcept;
 
   /**
    * Report an error on a single page of an index tree.
@@ -851,7 +851,7 @@ struct Btree {
    * @param[in] level           The B-tree level.
    * @param[in] block           The index page.
    */
-  void validate_report1(Index *index, ulint level, const Buf_block *block) noexcept;
+  void validate_report1(Index *index, ulint level, const BufBlock *block) noexcept;
 
   /**
    * Report an error on two pages of an index tree.
@@ -861,7 +861,7 @@ struct Btree {
    * @param[in] block1          The first index page.
    * @param[in] block2          The second index page.
    */
-  void validate_report2(const Index *index, ulint level, const Buf_block *block1, const Buf_block *block2) noexcept;
+  void validate_report2(const Index *index, ulint level, const BufBlock *block1, const BufBlock *block2) noexcept;
 
   /**
    * Validates index tree level.
@@ -875,12 +875,12 @@ struct Btree {
   [[nodiscard]] bool validate_level(Index *index, Trx *trx, ulint level) noexcept;
 
   /** Lock manager to use */
-  Lock_sys *m_lock_sys{};
+  LockSys *m_lock_sys{};
 
   /** File segment manager to use */
 
-  FSP *m_fsp{};
+  Fsp *m_fsp{};
 
   /** Buffer pool to use */
-  Buf_pool *m_buf_pool{};
+  BufPool *m_buf_pool{};
 };

@@ -38,11 +38,11 @@ memory corruption. */
 constexpr uint32_t UT_MEM_MAGIC_N = 1601650166;
 
 /** Dynamically allocated memory block */
-struct Mem_block {
-  Mem_block(uint32_t size) : m_size(size), m_magic_n(UT_MEM_MAGIC_N) {}
+struct MemBlock {
+  MemBlock(uint32_t size) : m_size(size), m_magic_n(UT_MEM_MAGIC_N) {}
 
   /** mem block list node */
-  UT_LIST_NODE_T(Mem_block) m_mem_block_list;
+  UT_LIST_NODE_T(MemBlock) m_mem_block_list;
 
   /** Size of allocated memory */
   uint32_t m_size;
@@ -52,7 +52,7 @@ struct Mem_block {
 
   /** List of all memory blocks allocated from the operating system
   with malloc.  Protected by s_mutex. */
-  using Blocks = UT_LIST_BASE_NODE_T(Mem_block, m_mem_block_list);
+  using Blocks = UT_LIST_BASE_NODE_T(MemBlock, m_mem_block_list);
 
   /** Mutex protecting ut_total_allocated_memory and ut_mem_block_list */
   static std::mutex s_mutex;
@@ -64,18 +64,18 @@ struct Mem_block {
   static std::atomic<ulint> s_total_memory;
 };
 
-/** We need this to alias a Buf_block from a Buf_page. */
-static_assert(std::is_standard_layout<Mem_block>::value, "Mem_block must have a standard layout");
+/** We need this to alias a BufBlock from a BufPage. */
+static_assert(std::is_standard_layout<MemBlock>::value, "MemBlock must have a standard layout");
 
-std::mutex Mem_block::s_mutex{};
-std::atomic<ulint> Mem_block::s_total_memory{};
-Mem_block::Blocks Mem_block::s_blocks{};
+std::mutex MemBlock::s_mutex{};
+std::atomic<ulint> MemBlock::s_total_memory{};
+MemBlock::Blocks MemBlock::s_blocks{};
 
 /** Flag: has ut_mem_block_list been initialized? */
 static bool ut_mem_block_list_inited = false;
 
 void ut_mem_var_init() {
-  Mem_block::s_total_memory.store(0, std::memory_order_release);
+  MemBlock::s_total_memory.store(0, std::memory_order_release);
 
   ut_mem_block_list_inited = false;
 }
@@ -84,7 +84,7 @@ void ut_mem_init() {
   ut_a(!srv_was_started);
 
   if (!ut_mem_block_list_inited) {
-    UT_LIST_INIT(Mem_block::s_blocks);
+    UT_LIST_INIT(MemBlock::s_blocks);
     ut_mem_block_list_inited = true;
   }
 }
@@ -97,14 +97,14 @@ static void *allocate(ulint n, bool set_to_zero, bool assert_on_error) {
   }
 
   /* check alignment ok */
-  ut_ad((sizeof(Mem_block) % 8) == 0);
+  ut_ad((sizeof(MemBlock) % 8) == 0);
   ut_a(ut_mem_block_list_inited);
 
   ulint retry_count{};
-  const auto size = sizeof(Mem_block) + n;
+  const auto size = sizeof(MemBlock) + n;
 
   for (;;) {
-    Mem_block::s_mutex.lock();
+    MemBlock::s_mutex.lock();
 
     auto ptr = new (std::nothrow) char[size];
 
@@ -115,7 +115,7 @@ static void *allocate(ulint n, bool set_to_zero, bool assert_on_error) {
           n,
           " bytes of memory with malloc!"
           " Total allocated memory by InnoDB ",
-          Mem_block::s_total_memory.load(std::memory_order_acquire),
+          MemBlock::s_total_memory.load(std::memory_order_acquire),
           " bytes. Operating system errno:",
           errno,
           " '",
@@ -124,7 +124,7 @@ static void *allocate(ulint n, bool set_to_zero, bool assert_on_error) {
         );
       }
 
-      Mem_block::s_mutex.unlock();
+      MemBlock::s_mutex.unlock();
 
       /* Sleep for a second and retry the allocation; maybe this is
       just a temporary shortage of memory */
@@ -137,7 +137,7 @@ static void *allocate(ulint n, bool set_to_zero, bool assert_on_error) {
 
     } else if (ptr == nullptr) {
 
-      Mem_block::s_mutex.unlock();
+      MemBlock::s_mutex.unlock();
 
       /* Make an intentional seg fault so that we get a stack trace */
       /* Intentional segfault on NetWare causes an abend. Avoid this
@@ -150,15 +150,15 @@ static void *allocate(ulint n, bool set_to_zero, bool assert_on_error) {
       }
     }
 
-    auto mem_block = new (ptr) Mem_block(size);
+    auto mem_block = new (ptr) MemBlock(size);
 
-    UNIV_MEM_ALLOC(ret, n + sizeof(Mem_block));
+    UNIV_MEM_ALLOC(ret, n + sizeof(MemBlock));
 
-    Mem_block::s_total_memory += size;
+    MemBlock::s_total_memory += size;
 
-    UT_LIST_ADD_FIRST(Mem_block::s_blocks, mem_block);
+    UT_LIST_ADD_FIRST(MemBlock::s_blocks, mem_block);
 
-    Mem_block::s_mutex.unlock();
+    MemBlock::s_mutex.unlock();
 
     ptr = reinterpret_cast<char *>(mem_block + 1);
 
@@ -170,12 +170,12 @@ static void *allocate(ulint n, bool set_to_zero, bool assert_on_error) {
   }
 }
 
-void *ut_new_func(ulint n, Source_location location) {
+void *ut_new_func(ulint n, SourceLocation location) {
   auto ptr = allocate(n, true, true);
   return ptr;
 }
 
-void ut_delete_func(void *p, Source_location location) {
+void ut_delete_func(void *p, SourceLocation location) {
   auto ptr = reinterpret_cast<char *>(p);
 
   if (ptr == nullptr) {
@@ -185,21 +185,21 @@ void ut_delete_func(void *p, Source_location location) {
     return;
   }
 
-  auto block = reinterpret_cast<Mem_block *>(ptr - sizeof(Mem_block));
+  auto block = reinterpret_cast<MemBlock *>(ptr - sizeof(MemBlock));
 
-  ut_a(Mem_block::s_total_memory.load(std::memory_order_acquire) >= block->m_size + sizeof(Mem_block));
+  ut_a(MemBlock::s_total_memory.load(std::memory_order_acquire) >= block->m_size + sizeof(MemBlock));
 
-  Mem_block::s_total_memory.fetch_sub(block->m_size, std::memory_order_relaxed);
+  MemBlock::s_total_memory.fetch_sub(block->m_size, std::memory_order_relaxed);
 
-  std::lock_guard<std::mutex> lock(Mem_block::s_mutex);
+  std::lock_guard<std::mutex> lock(MemBlock::s_mutex);
 
-  UT_LIST_REMOVE(Mem_block::s_blocks, block);
+  UT_LIST_REMOVE(MemBlock::s_blocks, block);
 
   call_destructor(block);
   delete[] reinterpret_cast<char *>(block);
 }
 
-void *ut_realloc_func(void *p, ulint n, Source_location location) {
+void *ut_realloc_func(void *p, ulint n, SourceLocation location) {
   auto ptr = reinterpret_cast<char *>(p);
 
   if (ptr == nullptr) {
@@ -214,11 +214,11 @@ void *ut_realloc_func(void *p, ulint n, Source_location location) {
     return ut_new_func(n, location);
   }
 
-  auto block = reinterpret_cast<Mem_block *>(ptr - sizeof(Mem_block));
+  auto block = reinterpret_cast<MemBlock *>(ptr - sizeof(MemBlock));
 
   ut_a(block->m_magic_n == UT_MEM_MAGIC_N);
 
-  auto old_size = block->m_size - sizeof(Mem_block);
+  auto old_size = block->m_size - sizeof(MemBlock);
   auto min_size = n < old_size ? n : old_size;
 
   auto new_ptr = ut_new(n);
@@ -241,32 +241,32 @@ void ut_delete_all_mem() {
     return;
   }
 
-  while (auto block = UT_LIST_GET_FIRST(Mem_block::s_blocks)) {
+  while (auto block = UT_LIST_GET_FIRST(MemBlock::s_blocks)) {
     ut_a(block->m_magic_n == UT_MEM_MAGIC_N);
-    ut_a(Mem_block::s_total_memory.load(std::memory_order_acquire) >= block->m_size);
+    ut_a(MemBlock::s_total_memory.load(std::memory_order_acquire) >= block->m_size);
 
-    Mem_block::s_total_memory.fetch_sub(block->m_size, std::memory_order_relaxed);
+    MemBlock::s_total_memory.fetch_sub(block->m_size, std::memory_order_relaxed);
 
-    UT_LIST_REMOVE(Mem_block::s_blocks, block);
+    UT_LIST_REMOVE(MemBlock::s_blocks, block);
 
     call_destructor(block);
 
     delete[] reinterpret_cast<char *>(block);
   }
 
-  if (Mem_block::s_total_memory != 0) {
-    log_warn("After shutdown total allocated memory is ", Mem_block::s_total_memory.load(std::memory_order_acquire), " bytes");
+  if (MemBlock::s_total_memory != 0) {
+    log_warn("After shutdown total allocated memory is ", MemBlock::s_total_memory.load(std::memory_order_acquire), " bytes");
   }
 
   ut_mem_block_list_inited = false;
 }
 
 void ut_allocated_memory(ulint size) {
-  Mem_block::s_total_memory.fetch_add(size, std::memory_order_relaxed);
+  MemBlock::s_total_memory.fetch_add(size, std::memory_order_relaxed);
 }
 
 void ut_deallocated_memory(ulint size) {
-  Mem_block::s_total_memory.fetch_sub(size, std::memory_order_relaxed);
+  MemBlock::s_total_memory.fetch_sub(size, std::memory_order_relaxed);
 }
 
 ulint ut_strlcpy(char *dst, const char *src, ulint size) noexcept {
@@ -295,5 +295,5 @@ ulint ut_strlcpy_rev(char *dst, const char *src, ulint size) {
 }
 
 ulint ut_total_allocated_memory() {
-  return Mem_block::s_total_memory.load(std::memory_order_acquire);
+  return MemBlock::s_total_memory.load(std::memory_order_acquire);
 }

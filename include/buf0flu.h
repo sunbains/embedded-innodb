@@ -33,11 +33,11 @@ Created 11/5/1995 Heikki Tuuri
 
 #include <array>
 
-struct DBLWR;
-struct Buf_page;
-struct Buf_block;
+struct Dblwr;
+struct BufPage;
+struct BufBlock;
 
-struct Buf_flush {
+struct BufFlush {
   /** Number of intervals for which we keep the history of these stats.
   Each interval is 1 second, defined by the rate at which
   srv_error_monitor_thread() calls buf_pool->m_flusher->stat_update(). */
@@ -47,14 +47,14 @@ struct Buf_flush {
    * 
    * @param buf_pool The buffer pool.
    */
-  explicit Buf_flush(Buf_pool *buf_pool) : m_buf_pool(buf_pool) {}
+  explicit BufFlush(BufPool *buf_pool) : m_buf_pool(buf_pool) {}
 
   /**
   * Remove a block from the flush list of modified blocks.
   *
   * @param bpage Pointer to the block in question.
   */
-  void remove(Buf_page *bpage);
+  void remove(BufPage *bpage);
 
   /**
   * Relocates a buffer control block on the flush_list.
@@ -63,14 +63,14 @@ struct Buf_flush {
   * @param bpage Pointer to the control block being moved.
   * @param dpage Pointer to the destination block.
   */
-  void relocate_on_flush_list(Buf_page *bpage, Buf_page *dpage);
+  void relocate_on_flush_list(BufPage *bpage, BufPage *dpage);
 
   /**
   * Updates the flush system data structures when a write is completed.
   *
   * @param bpage Pointer to the block in question.
   */
-  void write_complete(Buf_page *bpage);
+  void write_complete(BufPage *bpage);
 
   /**
    * Flushes pages from the end of the LRU list if there is too small
@@ -78,7 +78,7 @@ struct Buf_flush {
    * 
    * @param[in,out] dblwr The doublewrite buffer to use
    */
-  void free_margin(DBLWR *dblwr);
+  void free_margin(Dblwr *dblwr);
 
   /**
    * Initializes a page for writing to the tablespace.
@@ -113,14 +113,14 @@ struct Buf_flush {
    * @return number of blocks for which the write request was queued; ULINT_UNDEFINED if
    *         there was a flush of the same type already running
    */
-  ulint batch(DBLWR *dblwr, buf_flush flush_type, ulint min_n, uint64_t lsn_limit);
+  ulint batch(Dblwr *dblwr, BufFlushType flush_type, ulint min_n, uint64_t lsn_limit);
 
   /**
    * Waits until a flush batch of the given type ends.
    *
    * @param type The type of flush batch to wait for (BUF_FLUSH_LRU or BUF_FLUSH_LIST).
    */
-  void wait_batch_end(buf_flush type);
+  void wait_batch_end(BufFlushType type);
 
   /**
    * @brief Returns true if the file page block is immediately suitable for replacement,
@@ -129,7 +129,7 @@ struct Buf_flush {
    * @param bpage The buffer control block, must be bpage->in_file() and in the LRU list.
    * @return True if the block can be replaced immediately.
    */
-  bool ready_for_replace(Buf_page *bpage);
+  bool ready_for_replace(BufPage *bpage);
 
   /**
    * @brief Update the historical stats that we are collecting for flush rate
@@ -170,7 +170,7 @@ struct Buf_flush {
    *
    * @param block The block which is modified.
    */
-  void insert_into_flush_list(Buf_block *block);
+  void insert_into_flush_list(BufBlock *block);
 
   /**
    * @brief Inserts a modified block into the flush list in the right sorted position.
@@ -179,7 +179,7 @@ struct Buf_flush {
    *
    * @param block The block which is modified.
    */
-  void insert_sorted_into_flush_list(Buf_block *block);
+  void insert_sorted_into_flush_list(BufBlock *block);
 
   /**
    * @brief This function should be called at a mini-transaction commit, if a page was
@@ -189,7 +189,7 @@ struct Buf_flush {
    * @param block The block which is modified.
    * @param mtr The mini-transaction.
    */
-  void note_modification(Buf_block *block, mtr_t *mtr) {
+  void note_modification(BufBlock *block, Mtr *mtr) {
     ut_ad(block->get_state() == BUF_BLOCK_FILE_PAGE);
     ut_ad(block->m_page.m_buf_fix_count > 0);
 #ifdef UNIV_SYNC_DEBUG
@@ -223,7 +223,7 @@ struct Buf_flush {
    * @param start_lsn The start LSN of the first MTR in a set of MTRs.
    * @param end_lsn The end LSN of the last MTR in the set of MTRs.
    */
-  void recv_note_modification(Buf_block *block, uint64_t start_lsn, uint64_t end_lsn) {
+  void recv_note_modification(BufBlock *block, uint64_t start_lsn, uint64_t end_lsn) {
     ut_ad(block);
     ut_ad(block->get_state() == BUF_BLOCK_FILE_PAGE);
     ut_ad(block->m_page.m_buf_fix_count > 0);
@@ -289,13 +289,13 @@ struct Buf_flush {
    * @param bpage The bpage to be inserted.
    * @return Pointer to the predecessor or nullptr if no predecessor.
    */
-  Buf_page *insert_in_flush_rbt(Buf_page *bpage);
+  BufPage *insert_in_flush_rbt(BufPage *bpage);
 
   /**
    * @brief Delete a bpage from the m_recovery_flush_list.
    * @param bpage The bpage to be removed.
    */
-  void delete_from_flush_rbt(Buf_page *bpage);
+  void delete_from_flush_rbt(BufPage *bpage);
 
   /**
    * @brief Compare two modified blocks in the buffer pool. The key for comparison is: key = <oldest_modification, space, offset>
@@ -309,7 +309,7 @@ struct Buf_flush {
    *
    * @return < 0 if b2 < b1, 0 if b2 == b1, > 0 if b2 > b1
    */
-  static bool block_cmp(const Buf_page *b1, const Buf_page *b2);
+  static bool block_cmp(const BufPage *b1, const BufPage *b2);
 
   /**
    * @brief Flush a batch of writes to the datafiles that have already been written by the OS.
@@ -324,7 +324,7 @@ struct Buf_flush {
    * 
    * @param[in,out] dblwr 
    */
-  void buffered_writes(DBLWR *dblwr);
+  void buffered_writes(Dblwr *dblwr);
 
   /**
    * @brief Posts a buffer page for writing. If the doublewrite memory buffer is full,
@@ -332,7 +332,7 @@ struct Buf_flush {
    *
    * @param bpage The buffer block to write.
    */
-  void post_to_doublewrite_buf(DBLWR *dblwr, Buf_page *bpage);
+  void post_to_doublewrite_buf(Dblwr *dblwr, BufPage *bpage);
 
   /**
    * @brief Does an asynchronous write of a buffer page.
@@ -341,7 +341,7 @@ struct Buf_flush {
    * @param[in,out] dblwr The doublewrite buffer to use
    * @param bpage The buffer block to write.
    */
-  void write_block_low(DBLWR *dblwr, Buf_page *bpage);
+  void write_block_low(Dblwr *dblwr, BufPage *bpage);
 
   /**
    * @brief Writes a flushable page asynchronously from the buffer pool to a file.
@@ -352,7 +352,7 @@ struct Buf_flush {
    * @param bpage The buffer control block.
    * @param flush_type The flush type.
    */
-  void page(DBLWR *dblwr, Buf_page *bpage, buf_flush flush_type);
+  void page(Dblwr *dblwr, BufPage *bpage, BufFlushType flush_type);
 
   /**
    * @brief Flushes to disk all flushable pages within the flush area.
@@ -363,7 +363,7 @@ struct Buf_flush {
    * @param flush_type The flush type (BUF_FLUSH_LRU or BUF_FLUSH_LIST).
    * @return Number of pages flushed.
    */
-  ulint try_neighbors(DBLWR *dblwr, page_no_t space, page_no_t offset, buf_flush flush_type);
+  ulint try_neighbors(Dblwr *dblwr, page_no_t space, page_no_t offset, BufFlushType flush_type);
 
   /**
    * @brief Gives a recommendation of how many blocks should be flushed to establish
@@ -379,13 +379,13 @@ struct Buf_flush {
    * @param flush_type Flush type (BUF_FLUSH_LRU or BUF_FLUSH_LIST)
    * @return True if can flush immediately
    */
-  bool ready_for_flush(Buf_page *bpage, buf_flush flush_type);
+  bool ready_for_flush(BufPage *bpage, BufFlushType flush_type);
 
  private:
   /**
    * @brief The buffer pool.
    */
-  Buf_pool *m_buf_pool{};
+  BufPool *m_buf_pool{};
 
   /** Sampled values buf_pool->m_flusher->stat_cur.
   Not protected by any mutex.  Updated by buf_pool->m_flusher->stat_update(). */

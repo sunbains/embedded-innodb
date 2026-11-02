@@ -37,14 +37,14 @@ Modified 2024-Oct-15 Sunny Bains
 #include "srv0srv.h"
 #include "trx0trx.h"
 
-Dict_store::Dict_store(Dict *dict, Btree *btree) noexcept : m_dict{dict}, m_fsp{btree->m_fsp}, m_btree{btree} {}
+DictStore::DictStore(Dict *dict, Btree *btree) noexcept : m_dict{dict}, m_fsp{btree->m_fsp}, m_btree{btree} {}
 
-void Dict_store::destroy(Dict_store *dict_store) noexcept {
+void DictStore::destroy(DictStore *dict_store) noexcept {
   ut_delete(dict_store);
 }
 
-Dict_store::hdr_t *Dict_store::hdr_get(mtr_t *mtr) noexcept {
-  Buf_pool::Request req{
+DictStore::hdr_t *DictStore::hdr_get(Mtr *mtr) noexcept {
+  BufPool::Request req{
     .m_rw_latch = RW_X_LATCH,
     .m_page_id = {DICT_HDR_SPACE, DICT_HDR_PAGE_NO},
     .m_mode = BUF_GET,
@@ -61,10 +61,10 @@ Dict_store::hdr_t *Dict_store::hdr_get(mtr_t *mtr) noexcept {
   return header;
 }
 
-Dict_id Dict_store::hdr_get_new_id(Dict_id_type type) noexcept {
-  ut_ad(type == Dict_id_type::TABLE_ID || type == Dict_id_type::INDEX_ID);
+Dict_id DictStore::hdr_get_new_id(DictIdType type) noexcept {
+  ut_ad(type == DictIdType::TABLE_ID || type == DictIdType::INDEX_ID);
 
-  mtr_t mtr;
+  Mtr mtr;
 
   mtr.start();
 
@@ -79,12 +79,12 @@ Dict_id Dict_store::hdr_get_new_id(Dict_id_type type) noexcept {
   return id;
 }
 
-void Dict_store::hdr_flush_row_id() noexcept {
+void DictStore::hdr_flush_row_id() noexcept {
   ut_ad(mutex_own(&m_dict->m_mutex));
 
   const auto id = m_row_id;
 
-  mtr_t mtr;
+  Mtr mtr;
 
   mtr.start();
 
@@ -95,7 +95,7 @@ void Dict_store::hdr_flush_row_id() noexcept {
   mtr.commit();
 }
 
-bool Dict_store::bootstrap_system_tables(mtr_t *mtr) noexcept {
+bool DictStore::bootstrap_system_tables(Mtr *mtr) noexcept {
 
   /* Create the dictionary header file block in a new, allocated file
   segment in the system tablespace */
@@ -108,9 +108,9 @@ bool Dict_store::bootstrap_system_tables(mtr_t *mtr) noexcept {
   /* Start counting row, table, index, and tree ids from DICT_HDR_FIRST_ID */
   mlog_write_uint64(hdr + DICT_HDR_ROW_ID, DICT_HDR_FIRST_ID, mtr);
 
-  mlog_write_uint64(hdr + ulint(Dict_id_type::TABLE_ID), DICT_HDR_FIRST_ID, mtr);
+  mlog_write_uint64(hdr + ulint(DictIdType::TABLE_ID), DICT_HDR_FIRST_ID, mtr);
 
-  mlog_write_uint64(hdr + ulint(Dict_id_type::INDEX_ID), DICT_HDR_FIRST_ID, mtr);
+  mlog_write_uint64(hdr + ulint(DictIdType::INDEX_ID), DICT_HDR_FIRST_ID, mtr);
 
   /* Obsolete, but we must initialize it to 0 anyway. */
   mlog_write_uint64(hdr + DICT_HDR_MIX_ID, DICT_HDR_FIRST_ID, mtr);
@@ -165,7 +165,7 @@ bool Dict_store::bootstrap_system_tables(mtr_t *mtr) noexcept {
   return true;
 }
 
-Dict_id Dict_store::sys_get_new_row_id() noexcept {
+Dict_id DictStore::sys_get_new_row_id() noexcept {
   m_dict->mutex_acquire();
 
   const auto id = m_row_id;
@@ -182,7 +182,7 @@ Dict_id Dict_store::sys_get_new_row_id() noexcept {
   return id;
 }
 
-DTuple *Dict_store::create_sys_tables_tuple(const Table *table, mem_heap_t *heap) noexcept {
+DTuple *DictStore::create_sys_tables_tuple(const Table *table, MemHeap *heap) noexcept {
   auto sys_tables = m_dict->m_sys_tables;
   auto entry = dtuple_create(heap, 8 + DATA_N_SYS_COLS);
 
@@ -250,7 +250,7 @@ DTuple *Dict_store::create_sys_tables_tuple(const Table *table, mem_heap_t *heap
   return entry;
 }
 
-DTuple *Dict_store::create_sys_columns_tuple(const Table *table, ulint i, mem_heap_t *heap) noexcept {
+DTuple *DictStore::create_sys_columns_tuple(const Table *table, ulint i, MemHeap *heap) noexcept {
   const char *col_name;
 
   auto column = table->get_nth_col(i);
@@ -313,14 +313,14 @@ DTuple *Dict_store::create_sys_columns_tuple(const Table *table, ulint i, mem_he
   return entry;
 }
 
-db_err Dict_store::build_table_def_step(que_thr_t *thr, Table_node *node) noexcept {
-  mtr_t mtr;
+DbErr DictStore::build_table_def_step(QueThr *thr, TableNode *node) noexcept {
+  Mtr mtr;
 
   ut_ad(mutex_own(&m_dict->m_mutex));
 
   auto table = node->m_table;
 
-  table->m_id = hdr_get_new_id(Dict_id_type::TABLE_ID);
+  table->m_id = hdr_get_new_id(DictIdType::TABLE_ID);
 
   thr_get_trx(thr)->m_table_id = table->m_id;
 
@@ -375,14 +375,14 @@ db_err Dict_store::build_table_def_step(que_thr_t *thr, Table_node *node) noexce
   return DB_SUCCESS;
 }
 
-db_err Dict_store::build_col_def_step(Table_node *node) noexcept {
+DbErr DictStore::build_col_def_step(TableNode *node) noexcept {
   auto row = create_sys_columns_tuple(node->m_table, node->m_col_no, node->m_heap);
   srv_row_ins->set_new_row(node->m_col_def, row);
 
   return DB_SUCCESS;
 }
 
-DTuple *Dict_store::create_sys_indexes_tuple(const Index *index, mem_heap_t *heap) noexcept {
+DTuple *DictStore::create_sys_indexes_tuple(const Index *index, MemHeap *heap) noexcept {
   ut_ad(mutex_own(&m_dict->m_mutex));
 
   auto sys_indexes = m_dict->m_sys_indexes;
@@ -451,7 +451,7 @@ DTuple *Dict_store::create_sys_indexes_tuple(const Index *index, mem_heap_t *hea
   return entry;
 }
 
-DTuple *Dict_store::create_sys_fields_tuple(const Index *index, ulint i, mem_heap_t *heap) noexcept {
+DTuple *DictStore::create_sys_fields_tuple(const Index *index, ulint i, MemHeap *heap) noexcept {
   bool index_contains_column_prefix_field{};
 
   for (ulint i{}; i < index->m_n_fields; ++i) {
@@ -505,7 +505,7 @@ DTuple *Dict_store::create_sys_fields_tuple(const Index *index, ulint i, mem_hea
   return entry;
 }
 
-DTuple *Dict_store::create_search_tuple(const DTuple *tuple, mem_heap_t *heap) noexcept {
+DTuple *DictStore::create_search_tuple(const DTuple *tuple, MemHeap *heap) noexcept {
   auto search_tuple = dtuple_create(heap, 2);
   auto field1 = dtuple_get_nth_field(tuple, 0);
   auto field2 = dtuple_get_nth_field(search_tuple, 0);
@@ -522,7 +522,7 @@ DTuple *Dict_store::create_search_tuple(const DTuple *tuple, mem_heap_t *heap) n
   return search_tuple;
 }
 
-db_err Dict_store::build_index_def_step(que_thr_t *thr, Index_node *node) noexcept {
+DbErr DictStore::build_index_def_step(QueThr *thr, IndexNode *node) noexcept {
   ut_ad(mutex_own(&m_dict->m_mutex));
 
   auto trx = thr_get_trx(thr);
@@ -550,7 +550,7 @@ db_err Dict_store::build_index_def_step(que_thr_t *thr, Index_node *node) noexce
 
   ut_ad(!index->m_table->m_indexes.empty() || index->is_clustered());
 
-  index->m_id = hdr_get_new_id(Dict_id_type::INDEX_ID);
+  index->m_id = hdr_get_new_id(DictIdType::INDEX_ID);
 
   /* Inherit the space id from the table; we store all indexes of a
   table in the same tablespace */
@@ -570,7 +570,7 @@ db_err Dict_store::build_index_def_step(que_thr_t *thr, Index_node *node) noexce
   return DB_SUCCESS;
 }
 
-db_err Dict_store::build_field_def_step(Index_node *node) noexcept {
+DbErr DictStore::build_field_def_step(IndexNode *node) noexcept {
   auto index = node->m_index;
 
   auto row = create_sys_fields_tuple(index, node->m_field_no, node->m_heap);
@@ -580,10 +580,10 @@ db_err Dict_store::build_field_def_step(Index_node *node) noexcept {
   return DB_SUCCESS;
 }
 
-db_err Dict_store::create_index_tree_step(Index_node *node) noexcept {
+DbErr DictStore::create_index_tree_step(IndexNode *node) noexcept {
   ut_ad(mutex_own(&m_dict->m_mutex));
 
-  Btree_pcursor pcur(m_fsp, m_btree);
+  BtreePcursor pcur(m_fsp, m_btree);
 
   auto index = node->m_index;
   auto sys_indexes = m_dict->m_sys_indexes;
@@ -592,7 +592,7 @@ db_err Dict_store::create_index_tree_step(Index_node *node) noexcept {
   the index and its root address is written to the index entry in
   sys_indexes */
 
-  mtr_t mtr;
+  Mtr mtr;
 
   mtr.start();
 
@@ -618,13 +618,13 @@ db_err Dict_store::create_index_tree_step(Index_node *node) noexcept {
   return DB_SUCCESS;
 }
 
-void Dict_store::drop_index_tree(Rec rec, mtr_t *mtr) noexcept {
+void DictStore::drop_index_tree(Rec rec, Mtr *mtr) noexcept {
   ut_ad(mutex_own(&m_dict->m_mutex));
 
   auto sys_indexes = m_dict->table_get("SYS_INDEXES");
   auto sys_index = sys_indexes->m_indexes.front();
   auto heap = mem_heap_create(1000);
-  Phy_rec record(sys_index, rec);
+  PhyRec record(sys_index, rec);
   auto offsets = record.get_col_offsets(nullptr, sys_index->get_n_fields(), &heap, Current_location());
   ulint len;
 
@@ -665,7 +665,7 @@ void Dict_store::drop_index_tree(Rec rec, mtr_t *mtr) noexcept {
   page_rec_write_index_page_no(rec, DICT_SYS_INDEXES_PAGE_NO_FIELD, FIL_NULL, mtr);
 }
 
-page_no_t Dict_store::truncate_index_tree(Table *table, space_id_t space_id, Btree_pcursor *pcur, mtr_t *mtr) noexcept {
+page_no_t DictStore::truncate_index_tree(Table *table, space_id_t space_id, BtreePcursor *pcur, Mtr *mtr) noexcept {
   ut_ad(mutex_own(&m_dict->m_mutex));
 
   /* We never drop the system tablespace. */
@@ -675,7 +675,7 @@ page_no_t Dict_store::truncate_index_tree(Table *table, space_id_t space_id, Btr
   auto sys_index = sys_indexes->m_indexes.front();
   auto heap = mem_heap_create(1000);
   auto rec = pcur->get_rec();
-  Phy_rec record(sys_index, rec);
+  PhyRec record(sys_index, rec);
   auto offsets = record.get_col_offsets(nullptr, sys_index->get_n_fields(), &heap, Current_location());
   ulint len;
   auto field = rec.get_nth_field(offsets, DICT_SYS_INDEXES_PAGE_NO_FIELD, &len);
@@ -766,11 +766,11 @@ page_no_t Dict_store::truncate_index_tree(Table *table, space_id_t space_id, Btr
   return FIL_NULL;
 }
 
-que_thr_t *Dict_store::create_table_step(que_thr_t *thr) noexcept {
+QueThr *DictStore::create_table_step(QueThr *thr) noexcept {
   ut_ad(mutex_own(&m_dict->m_mutex));
 
   auto trx = thr_get_trx(thr);
-  auto node = static_cast<Table_node *>(thr->run_node);
+  auto node = static_cast<TableNode *>(thr->run_node);
 
   ut_ad(que_node_get_type(node) == QUE_NODE_CREATE_TABLE);
 
@@ -778,7 +778,7 @@ que_thr_t *Dict_store::create_table_step(que_thr_t *thr) noexcept {
     node->m_state = TABLE_BUILD_TABLE_DEF;
   }
 
-  auto clean_up = [&](db_err err) -> que_thr_t * {
+  auto clean_up = [&](DbErr err) -> QueThr * {
     trx->m_error_state = err;
 
     if (err == DB_SUCCESS) {
@@ -860,11 +860,11 @@ que_thr_t *Dict_store::create_table_step(que_thr_t *thr) noexcept {
   }
 }
 
-que_thr_t *Dict_store::create_index_step(que_thr_t *thr) noexcept {
+QueThr *DictStore::create_index_step(QueThr *thr) noexcept {
   ut_ad(mutex_own(&m_dict->m_mutex));
 
   auto trx = thr_get_trx(thr);
-  auto node = static_cast<Index_node *>(thr->run_node);
+  auto node = static_cast<IndexNode *>(thr->run_node);
 
   ut_ad(que_node_get_type(node) == QUE_NODE_CREATE_INDEX);
 
@@ -872,7 +872,7 @@ que_thr_t *Dict_store::create_index_step(que_thr_t *thr) noexcept {
     node->m_state = INDEX_BUILD_INDEX_DEF;
   }
 
-  auto clean_up = [&](db_err err) -> que_thr_t * {
+  auto clean_up = [&](DbErr err) -> QueThr * {
     trx->m_error_state = err;
 
     if (err == DB_SUCCESS) {
@@ -984,7 +984,7 @@ que_thr_t *Dict_store::create_index_step(que_thr_t *thr) noexcept {
   return clean_up(DB_SUCCESS);
 }
 
-db_err Dict_store::create_or_check_foreign_constraint_tables() noexcept {
+DbErr DictStore::create_or_check_foreign_constraint_tables() noexcept {
   m_dict->mutex_acquire();
 
   auto sys_foreign = m_dict->table_get("SYS_FOREIGN");
@@ -1086,7 +1086,7 @@ db_err Dict_store::create_or_check_foreign_constraint_tables() noexcept {
   return err;
 }
 
-db_err Dict_store::foreign_eval_sql(pars_info_t *info, const char *sql, Table *table, Foreign *foreign, Trx *trx) noexcept {
+DbErr DictStore::foreign_eval_sql(ParsInfo *info, const char *sql, Table *table, Foreign *foreign, Trx *trx) noexcept {
   (void)trx->start_if_not_started();
 
   auto err = que_eval_sql(info, sql, false, trx);
@@ -1120,7 +1120,7 @@ db_err Dict_store::foreign_eval_sql(pars_info_t *info, const char *sql, Table *t
   }
 }
 
-db_err Dict_store::add_foreign_field_to_dictionary(ulint field_nr, Table *table, Foreign *foreign, Trx *trx) noexcept {
+DbErr DictStore::add_foreign_field_to_dictionary(ulint field_nr, Table *table, Foreign *foreign, Trx *trx) noexcept {
   auto info = pars_info_create();
 
   pars_info_add_str_literal(info, "id", foreign->m_id);
@@ -1143,7 +1143,7 @@ db_err Dict_store::add_foreign_field_to_dictionary(ulint field_nr, Table *table,
   );
 }
 
-db_err Dict_store::add_foreign_to_dictionary(ulint *id_nr, Table *table, Foreign *foreign, Trx *trx) noexcept {
+DbErr DictStore::add_foreign_to_dictionary(ulint *id_nr, Table *table, Foreign *foreign, Trx *trx) noexcept {
   auto info = pars_info_create();
 
   if (foreign->m_id == nullptr) {
@@ -1204,7 +1204,7 @@ db_err Dict_store::add_foreign_to_dictionary(ulint *id_nr, Table *table, Foreign
   return err;
 }
 
-db_err Dict_store::add_foreigns_to_dictionary(ulint start_id, Table *table, Trx *trx) noexcept {
+DbErr DictStore::add_foreigns_to_dictionary(ulint start_id, Table *table, Trx *trx) noexcept {
   ut_ad(mutex_own(&m_dict->m_mutex));
 
   if (m_dict->table_get("SYS_FOREIGN") == nullptr) {
@@ -1227,9 +1227,9 @@ db_err Dict_store::add_foreigns_to_dictionary(ulint start_id, Table *table, Trx 
   return DB_SUCCESS;
 }
 
-Table_node *Table_node::create(Dict *dict, Table *table, mem_heap_t *heap, bool commit) noexcept {
-  auto ptr = mem_heap_alloc(heap, sizeof(Table_node));
-  auto node = new (ptr) Table_node();
+TableNode *TableNode::create(Dict *dict, Table *table, MemHeap *heap, bool commit) noexcept {
+  auto ptr = mem_heap_alloc(heap, sizeof(TableNode));
+  auto node = new (ptr) TableNode();
 
   node->m_common->type = QUE_NODE_CREATE_TABLE;
 
@@ -1254,9 +1254,9 @@ Table_node *Table_node::create(Dict *dict, Table *table, mem_heap_t *heap, bool 
   return node;
 }
 
-Index_node *Index_node::create(Dict *dict, Index *index, mem_heap_t *heap, bool commit) noexcept {
-  auto ptr = mem_heap_alloc(heap, sizeof(Index_node));
-  auto node = new (ptr) Index_node();
+IndexNode *IndexNode::create(Dict *dict, Index *index, MemHeap *heap, bool commit) noexcept {
+  auto ptr = mem_heap_alloc(heap, sizeof(IndexNode));
+  auto node = new (ptr) IndexNode();
 
   node->m_common->type = QUE_NODE_CREATE_INDEX;
 
@@ -1282,8 +1282,8 @@ Index_node *Index_node::create(Dict *dict, Index *index, mem_heap_t *heap, bool 
   return node;
 }
 
-db_err Dict_store::create_instance() noexcept {
-  mtr_t mtr;
+DbErr DictStore::create_instance() noexcept {
+  Mtr mtr;
 
   mtr.start();
 

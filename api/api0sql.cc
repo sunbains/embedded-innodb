@@ -43,7 +43,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
  *
  * @return        own: info struct
  */
-static pars_info_t *ib_exec_vsql(int n_args, va_list ap) {
+static ParsInfo *ib_exec_vsql(int n_args, va_list ap) {
   auto info = pars_info_create();
 
   for (int i = 0; i < n_args; ++i) {

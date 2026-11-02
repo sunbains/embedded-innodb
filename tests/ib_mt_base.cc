@@ -19,7 +19,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 ************************************************************************/
 
 /** This is the base table class. In C++ terminology you can consider this
-an abstract class that implements the generic functionality. The DDL
+an abstract class that implements the generic functionality. The Ddl
 and DML functions implemented in this class are:
 1) SELECT
 

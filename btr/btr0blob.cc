@@ -27,7 +27,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 const byte field_ref_zero[BTR_EXTERN_FIELD_REF_SIZE] = {};
 
-ulint Blob::get_externally_stored_len(Rec rec, const Rec_offs &offsets) noexcept {
+ulint Blob::get_externally_stored_len(Rec rec, const RecOffs &offsets) noexcept {
   ulint local_len{};
   ulint total_extern_len{};
 
@@ -50,7 +50,7 @@ ulint Blob::get_externally_stored_len(Rec rec, const Rec_offs &offsets) noexcept
 }
 
 void Blob::set_ownership_of_extern_field(
-  Rec rec, const Index *index, const ulint *offsets, ulint i, bool val, mtr_t *mtr
+  Rec rec, const Index *index, const ulint *offsets, ulint i, bool val, Mtr *mtr
 ) noexcept {
   ulint local_len;
 
@@ -75,7 +75,7 @@ void Blob::set_ownership_of_extern_field(
   }
 }
 
-void Blob::mark_extern_inherited_fields(Rec rec, Index *index, const Rec_offs &offsets, const upd_t *update, mtr_t *mtr) noexcept {
+void Blob::mark_extern_inherited_fields(Rec rec, Index *index, const RecOffs &offsets, const Upd *update, Mtr *mtr) noexcept {
   ut_ad(rec.offs_validate(nullptr, offsets));
 
   if (!offsets.any_extern()) {
@@ -91,7 +91,7 @@ void Blob::mark_extern_inherited_fields(Rec rec, Index *index, const Rec_offs &o
       /* Check it is not in updated fields */
 
       if (update) {
-        for (ulint j = 0; j < Row_update::upd_get_n_fields(update); j++) {
+        for (ulint j = 0; j < RowUpdate::upd_get_n_fields(update); j++) {
           if (update->get_nth_field(j)->m_field_no == i) {
 
             continue;
@@ -104,7 +104,7 @@ void Blob::mark_extern_inherited_fields(Rec rec, Index *index, const Rec_offs &o
   }
 }
 
-void Blob::mark_dtuple_inherited_extern(DTuple *entry, const upd_t *update) noexcept {
+void Blob::mark_dtuple_inherited_extern(DTuple *entry, const Upd *update) noexcept {
   for (ulint i = 0; i < dtuple_get_n_fields(entry); i++) {
     auto dfield = dtuple_get_nth_field(entry, i);
 
@@ -114,7 +114,7 @@ void Blob::mark_dtuple_inherited_extern(DTuple *entry, const upd_t *update) noex
 
     /* Check if it is in updated fields */
 
-    for (ulint j = 0; j < Row_update::upd_get_n_fields(update); j++) {
+    for (ulint j = 0; j < RowUpdate::upd_get_n_fields(update); j++) {
       if (update->get_nth_field(j)->m_field_no == i) {
 
         continue;
@@ -128,7 +128,7 @@ void Blob::mark_dtuple_inherited_extern(DTuple *entry, const upd_t *update) noex
   }
 }
 
-void Blob::unmark_extern_fields(Rec rec, const Index *index, const Rec_offs &offsets, mtr_t *mtr) noexcept {
+void Blob::unmark_extern_fields(Rec rec, const Index *index, const RecOffs &offsets, Mtr *mtr) noexcept {
   const auto n = offsets.n_fields();
 
   if (!offsets.any_extern()) {
@@ -156,12 +156,12 @@ void Blob::unmark_dtuple_extern_fields(DTuple *entry) noexcept {
   }
 }
 
-ulint Blob::push_update_extern_fields(DTuple *tuple, const upd_t *update, mem_heap_t *heap) noexcept {
+ulint Blob::push_update_extern_fields(DTuple *tuple, const Upd *update, MemHeap *heap) noexcept {
   ulint n;
   ulint n_pushed = 0;
-  const upd_field_t *uf;
+  const UpdField *uf;
 
-  n = Row_update::upd_get_n_fields(update);
+  n = RowUpdate::upd_get_n_fields(update);
 
   for (uf = update->m_fields; n--; ++uf) {
     if (dfield_is_ext(&uf->m_new_val)) {
@@ -221,7 +221,7 @@ ulint Blob::blob_get_next_page_no(const byte *blob_header) noexcept {
   return mach_read_from_4(blob_header + BTR_BLOB_HDR_NEXT_PAGE_NO);
 }
 
-void Blob::blob_free(Buf_block *block, mtr_t *mtr) noexcept {
+void Blob::blob_free(BufBlock *block, Mtr *mtr) noexcept {
   const auto space = block->get_space();
   const auto page_no = block->get_page_no();
 
@@ -237,16 +237,16 @@ void Blob::blob_free(Buf_block *block, mtr_t *mtr) noexcept {
   if (block->get_state() == BUF_BLOCK_FILE_PAGE && block->get_space() == space && block->get_page_no() == page_no) {
 
     auto block_status = m_fsp->m_buf_pool->m_LRU->free_block(&block->m_page, nullptr);
-    ut_a(block_status == Buf_LRU::Block_status::FREED);
+    ut_a(block_status == BufLru::BlockStatus::FREED);
   }
 
   mutex_exit(&m_fsp->m_buf_pool->m_mutex);
   mutex_exit(&block->m_mutex);
 }
 
-db_err Blob::store_big_rec_extern_fields(
-  const Index *index, Buf_block *rec_block, Rec rec, const Rec_offs &offsets, big_rec_t big_rec_vec,
-  mtr_t *local_mtr __attribute__((unused))
+DbErr Blob::store_big_rec_extern_fields(
+  const Index *index, BufBlock *rec_block, Rec rec, const RecOffs &offsets, BigRec big_rec_vec,
+  Mtr *local_mtr __attribute__((unused))
 ) noexcept {
 
   ut_ad(rec.offs_validate(index, offsets));
@@ -289,7 +289,7 @@ db_err Blob::store_big_rec_extern_fields(
     page_no_t prev_page_no = FIL_NULL;
 
     for (;;) {
-      mtr_t mtr;
+      Mtr mtr;
       page_no_t hint_page_no;
 
       mtr.start();
@@ -314,7 +314,7 @@ db_err Blob::store_big_rec_extern_fields(
 
       if (prev_page_no != FIL_NULL) {
 
-        Buf_pool::Request req{
+        BufPool::Request req{
           .m_rw_latch = RW_X_LATCH,
           .m_page_id = {space_id, prev_page_no},
           .m_mode = BUF_GET,
@@ -355,7 +355,7 @@ db_err Blob::store_big_rec_extern_fields(
 
       extern_len -= store_len;
 
-      Buf_pool::Request req{
+      BufPool::Request req{
         .m_rw_latch = RW_X_LATCH,
         .m_page_id = {space_id, rec_page_no},
         .m_mode = BUF_GET,
@@ -417,8 +417,8 @@ void Blob::check_blob_fil_page_type(space_id_t space_id, page_no_t page_no, cons
 }
 
 void Blob::free_externally_stored_field(
-  const Index *index, byte *field_ref, const Rec rec, const ulint *offsets, ulint i, trx_rb_ctx rb_ctx,
-  mtr_t *local_mtr __attribute__((unused))
+  const Index *index, byte *field_ref, const Rec rec, const ulint *offsets, ulint i, TrxRbCtx rb_ctx,
+  Mtr *local_mtr __attribute__((unused))
 ) noexcept {
 
 #ifdef UNIV_DEBUG
@@ -459,14 +459,14 @@ void Blob::free_externally_stored_field(
     ut_ad(!rec);
   }
 
-  mtr_t mtr;
+  Mtr mtr;
 
   for (;;) {
     mtr.start();
 
     auto ptr{Rec(field_ref).page_align()};
 
-    Buf_pool::Request req{
+    BufPool::Request req{
       .m_rw_latch = RW_X_LATCH,
       .m_page_id = {page_get_space_id(ptr), page_get_page_no(ptr)},
       .m_mode = BUF_GET,
@@ -529,7 +529,7 @@ void Blob::free_externally_stored_field(
   }
 }
 
-void Blob::free_externally_stored_fields(Index *index, Rec rec, const Rec_offs &offsets, trx_rb_ctx rb_ctx, mtr_t *mtr) noexcept {
+void Blob::free_externally_stored_fields(Index *index, Rec rec, const RecOffs &offsets, TrxRbCtx rb_ctx, Mtr *mtr) noexcept {
   ut_ad(rec.offs_validate(index, offsets));
   ut_ad(mtr->memo_contains_page(rec, MTR_MEMO_PAGE_X_FIX));
   /* Free possible externally stored fields in the record */
@@ -549,14 +549,14 @@ void Blob::free_externally_stored_fields(Index *index, Rec rec, const Rec_offs &
 }
 
 void Blob::free_updated_extern_fields(
-  const Index *index, Rec rec, const Rec_offs &offsets, const upd_t *update, trx_rb_ctx rb_ctx, mtr_t *mtr
+  const Index *index, Rec rec, const RecOffs &offsets, const Upd *update, TrxRbCtx rb_ctx, Mtr *mtr
 ) noexcept {
   ut_ad(rec.offs_validate(index, offsets));
   ut_ad(mtr->memo_contains_page(rec, MTR_MEMO_PAGE_X_FIX));
 
   /* Free possible externally stored fields in the record */
 
-  const auto n_fields = Row_update::upd_get_n_fields(update);
+  const auto n_fields = RowUpdate::upd_get_n_fields(update);
 
   for (ulint i = 0; i < n_fields; i++) {
     auto ufield = update->get_nth_field(i);
@@ -575,11 +575,11 @@ ulint Blob::copy_blob_prefix(byte *buf, ulint len, space_id_t space_id, page_no_
   ulint copied_len = 0;
 
   for (;;) {
-    mtr_t mtr;
+    Mtr mtr;
 
     mtr.start();
 
-    Buf_pool::Request req{
+    BufPool::Request req{
       .m_rw_latch = RW_S_LATCH,
       .m_page_id = {space_id, page_no},
       .m_mode = BUF_GET,
@@ -660,7 +660,7 @@ ulint Blob::copy_externally_stored_field_prefix(byte *buf, ulint len, const byte
   }
 }
 
-byte *Blob::copy_externally_stored_field(ulint *len, const byte *data, ulint local_len, mem_heap_t *heap) noexcept {
+byte *Blob::copy_externally_stored_field(ulint *len, const byte *data, ulint local_len, MemHeap *heap) noexcept {
   ut_a(local_len >= BTR_EXTERN_FIELD_REF_SIZE);
 
   local_len -= BTR_EXTERN_FIELD_REF_SIZE;
@@ -683,7 +683,7 @@ byte *Blob::copy_externally_stored_field(ulint *len, const byte *data, ulint loc
   return buf;
 }
 
-byte *Blob::copy_externally_stored_field(const Rec rec, const Rec_offs &offsets, ulint no, ulint *len, mem_heap_t *heap) noexcept {
+byte *Blob::copy_externally_stored_field(const Rec rec, const RecOffs &offsets, ulint no, ulint *len, MemHeap *heap) noexcept {
   ut_a(offsets.nth_extern(no));
 
   /* An externally stored field can contain some initial

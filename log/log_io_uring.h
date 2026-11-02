@@ -44,17 +44,17 @@ using Log_aio_deleter_func = void (*)(io_uring *) noexcept;
 using Log_aio = std::unique_ptr<io_uring, Log_aio_deleter_func>;
 
 /** WAL file descriptor structure */
-struct WAL_file {
+struct WalFile {
   /** Default constructor */
-  WAL_file() = default;
+  WalFile() = default;
 
   /** Copy constructor */
-  WAL_file(const WAL_file &rhs) noexcept : m_fd(rhs.m_fd), m_path(rhs.m_path), m_size(rhs.m_size), m_mtime(rhs.m_mtime) {
+  WalFile(const WalFile &rhs) noexcept : m_fd(rhs.m_fd), m_path(rhs.m_path), m_size(rhs.m_size), m_mtime(rhs.m_mtime) {
     m_pending_ops.store(rhs.m_pending_ops.load());
   }
 
   /** Move constructor */
-  WAL_file(WAL_file &&rhs) noexcept : m_fd(rhs.m_fd), m_path(rhs.m_path), m_size(rhs.m_size), m_mtime(rhs.m_mtime) {
+  WalFile(WalFile &&rhs) noexcept : m_fd(rhs.m_fd), m_path(rhs.m_path), m_size(rhs.m_size), m_mtime(rhs.m_mtime) {
     m_pending_ops.store(rhs.m_pending_ops.load());
     rhs.m_fd = -1;
     rhs.m_size = 0;
@@ -64,7 +64,7 @@ struct WAL_file {
   }
 
   /** Copy assignment operator */
-  WAL_file &operator=(const WAL_file &rhs) noexcept {
+  WalFile &operator=(const WalFile &rhs) noexcept {
     if (this != &rhs) {
       m_fd = rhs.m_fd;
       m_path = rhs.m_path;
@@ -76,7 +76,7 @@ struct WAL_file {
   }
 
   /** Move assignment operator */
-  WAL_file &operator=(WAL_file &&rhs) noexcept {
+  WalFile &operator=(WalFile &&rhs) noexcept {
     if (this != &rhs) {
       m_fd = rhs.m_fd;
       m_path = rhs.m_path;
@@ -115,12 +115,12 @@ struct WAL_file {
 using WAL_iovec_t = struct iovec;
 
 /** WAL I/O completion context */
-struct WAL_io_ctx_t {
+struct WalIoCtx {
   /** Default constructor */
-  WAL_io_ctx_t() = default;
+  WalIoCtx() = default;
 
   /** Copy constructor */
-  WAL_io_ctx_t(const WAL_io_ctx_t &rhs) noexcept
+  WalIoCtx(const WalIoCtx &rhs) noexcept
       : m_req_type(rhs.m_req_type),
         m_callback(rhs.m_callback),
         m_file(rhs.m_file),
@@ -131,7 +131,7 @@ struct WAL_io_ctx_t {
   }
 
   /** Move constructor */
-  WAL_io_ctx_t(WAL_io_ctx_t &&rhs) noexcept
+  WalIoCtx(WalIoCtx &&rhs) noexcept
       : m_req_type(rhs.m_req_type),
         m_callback(rhs.m_callback),
         m_file(rhs.m_file),
@@ -143,7 +143,7 @@ struct WAL_io_ctx_t {
   }
 
   /** Copy assignment operator */
-  WAL_io_ctx_t &operator=(const WAL_io_ctx_t &rhs) noexcept {
+  WalIoCtx &operator=(const WalIoCtx &rhs) noexcept {
     if (this != &rhs) {
       m_req_type = rhs.m_req_type;
       m_callback = rhs.m_callback;
@@ -157,7 +157,7 @@ struct WAL_io_ctx_t {
   }
 
   /** Move assignment operator */
-  WAL_io_ctx_t &operator=(WAL_io_ctx_t &&rhs) noexcept {
+  WalIoCtx &operator=(WalIoCtx &&rhs) noexcept {
     if (this != &rhs) {
       m_req_type = rhs.m_req_type;
       m_callback = rhs.m_callback;
@@ -172,13 +172,13 @@ struct WAL_io_ctx_t {
   }
 
   /** I/O request type */
-  IO_request m_req_type{IO_request::None};
+  IoRequest m_req_type{IoRequest::None};
 
   /** Completion callback, the argument is the result code */
-  std::function<void(WAL_io_ctx_t *)> m_callback;
+  std::function<void(WalIoCtx *)> m_callback;
 
   /** File */
-  WAL_file *m_file{nullptr};
+  WalFile *m_file{nullptr};
 
   /** Number of bytes requested */
   uint32_t m_bytes_requested{0};
@@ -194,9 +194,9 @@ struct WAL_io_ctx_t {
 };
 
 /** Simplified WAL I/O system using io_uring */
-struct WAL_IO_System {
-  using File_pool = Bounded_channel<WAL_file *>;
-  using Context_pool = Bounded_channel<WAL_io_ctx_t *>;
+struct WalIoSystem {
+  using File_pool = BoundedChannel<WalFile *>;
+  using Context_pool = BoundedChannel<WalIoCtx *>;
   using WAL_io_vecs = std::vector<WAL_iovec_t>;
 
   /** Constructor
@@ -206,10 +206,10 @@ struct WAL_IO_System {
    * @param[in] n_files number of WAL files to use
    * @param[in] n_io_ctxs number of I/O contexts to use
    */
-  explicit WAL_IO_System(size_t n_files, size_t n_io_ctxs) noexcept;
+  explicit WalIoSystem(size_t n_files, size_t n_io_ctxs) noexcept;
 
   /** Destructor */
-  ~WAL_IO_System() noexcept;
+  ~WalIoSystem() noexcept;
 
   /** Initialize the WAL I/O system
    * @param[in] queue_depth io_uring queue depth
@@ -225,20 +225,20 @@ struct WAL_IO_System {
    * @param[in] file_size expected file size (0 for auto-detect)
    * @return file on success, nullptr on error
    */
-  [[nodiscard]] WAL_file *open_wal_file(const std::string &file_path, off_t file_size) noexcept;
+  [[nodiscard]] WalFile *open_wal_file(const std::string &file_path, off_t file_size) noexcept;
 
   /** Create a new WAL file
    * @param[in] file_path path to the WAL file
    * @param[in] file_size expected file size (0 for auto-detect)
    * @return file on success, nullptr on error
    */
-  [[nodiscard]] WAL_file *create_wal_file(const std::string &file_path, off_t file_size) noexcept;
+  [[nodiscard]] WalFile *create_wal_file(const std::string &file_path, off_t file_size) noexcept;
 
   /** Close a WAL file
    * @param[in] file file returned by open_wal_file
    * @return true on success
    */
-  [[nodiscard]] bool close_wal_file(WAL_file *file) noexcept;
+  [[nodiscard]] bool close_wal_file(WalFile *file) noexcept;
 
   /** Submit synchronous read operation
    * @param[in] file file returned by open_wal_file
@@ -247,7 +247,7 @@ struct WAL_IO_System {
    * @param[in] offset file offset
    * @return number of bytes read, -1 on error
    */
-  [[nodiscard]] ssize_t sync_read(WAL_file *file, void *buffer, size_t length, off_t offset) noexcept;
+  [[nodiscard]] ssize_t sync_read(WalFile *file, void *buffer, size_t length, off_t offset) noexcept;
 
   /** Submit synchronous write operation
    * @param[in] file file returned by open_wal_file
@@ -256,7 +256,7 @@ struct WAL_IO_System {
    * @param[in] offset file offset
    * @return number of bytes written, -1 on error
    */
-  [[nodiscard]] ssize_t sync_write(WAL_file *file, const void *buffer, size_t length, off_t offset) noexcept;
+  [[nodiscard]] ssize_t sync_write(WalFile *file, const void *buffer, size_t length, off_t offset) noexcept;
 
   /** Submit asynchronous read operation
    * @param[in] file file returned by open_wal_file
@@ -267,8 +267,8 @@ struct WAL_IO_System {
    *
    * @return I/O context on success, nullptr on error
    */
-  [[nodiscard]] WAL_io_ctx_t *async_read(
-    WAL_file *file, void *buffer, size_t length, off_t offset, std::function<void(WAL_io_ctx_t *)> callback
+  [[nodiscard]] WalIoCtx *async_read(
+    WalFile *file, void *buffer, size_t length, off_t offset, std::function<void(WalIoCtx *)> callback
   ) noexcept;
 
   /** Submit asynchronous write operation
@@ -280,8 +280,8 @@ struct WAL_IO_System {
    *
    * @return I/O context on success, nullptr on error
    */
-  [[nodiscard]] WAL_io_ctx_t *async_write(
-    WAL_file *file, const void *buffer, size_t length, off_t offset, std::function<void(WAL_io_ctx_t *)> callback
+  [[nodiscard]] WalIoCtx *async_write(
+    WalFile *file, const void *buffer, size_t length, off_t offset, std::function<void(WalIoCtx *)> callback
   ) noexcept;
 
   /** Submit scatter-gather read operation
@@ -292,8 +292,8 @@ struct WAL_IO_System {
    *
    * @return I/O context on success, nullptr on error
    */
-  [[nodiscard]] WAL_io_ctx_t *async_scatter_read(
-    WAL_file *file, const WAL_io_vecs &iovecs, off_t offset, std::function<void(WAL_io_ctx_t *)> callback
+  [[nodiscard]] WalIoCtx *async_scatter_read(
+    WalFile *file, const WAL_io_vecs &iovecs, off_t offset, std::function<void(WalIoCtx *)> callback
   ) noexcept;
 
   /** Submit scatter-gather write operation
@@ -304,8 +304,8 @@ struct WAL_IO_System {
    *
    * @return I/O context on success, nullptr on error
    */
-  [[nodiscard]] WAL_io_ctx_t *async_gather_write(
-    WAL_file *file, const WAL_io_vecs &iovecs, off_t offset, std::function<void(WAL_io_ctx_t *)> callback
+  [[nodiscard]] WalIoCtx *async_gather_write(
+    WalFile *file, const WAL_io_vecs &iovecs, off_t offset, std::function<void(WalIoCtx *)> callback
   ) noexcept;
 
   /** Flush/sync a WAL file to disk (synchronous)
@@ -313,7 +313,7 @@ struct WAL_IO_System {
    *
    * @return true on success
    */
-  [[nodiscard]] bool flush_file(WAL_file *file) noexcept;
+  [[nodiscard]] bool flush_file(WalFile *file) noexcept;
 
   /** Submit asynchronous flush/sync operation
    * @param[in] file file returned by open_wal_file
@@ -321,7 +321,7 @@ struct WAL_IO_System {
    *
    * @return I/O context on success, nullptr on error
    */
-  [[nodiscard]] WAL_io_ctx_t *async_flush(WAL_file *file, std::function<void(WAL_io_ctx_t *)> callback) noexcept;
+  [[nodiscard]] WalIoCtx *async_flush(WalFile *file, std::function<void(WalIoCtx *)> callback) noexcept;
 
   /** Process completion events
    * @param[in, out] ctx I/O context that was passed to wait_for_completion, you can pass nullptr.
@@ -330,7 +330,7 @@ struct WAL_IO_System {
    *
    * @return number of events processed, -1 on error
    */
-  [[nodiscard]] int process_completions(WAL_io_ctx_t *&ctx, uint32_t max_events = 32, uint32_t timeout_ms = 0) noexcept;
+  [[nodiscard]] int process_completions(WalIoCtx *&ctx, uint32_t max_events = 32, uint32_t timeout_ms = 0) noexcept;
 
   /** Wait for a specific operation to complete
    *
@@ -341,7 +341,7 @@ struct WAL_IO_System {
    *
    * @return true if operation completed successfully
    */
-  [[nodiscard]] bool wait_for_completion(WAL_io_ctx_t *&ctx, uint32_t timeout_ms = 5000) noexcept;
+  [[nodiscard]] bool wait_for_completion(WalIoCtx *&ctx, uint32_t timeout_ms = 5000) noexcept;
 
   /** Get the current timestamp */
   [[nodiscard]] uint64_t get_timestamp() const noexcept;
@@ -382,14 +382,14 @@ struct WAL_IO_System {
    *
    * @return allocated file, nullptr if no free files are available
   */
-  [[nodiscard]] WAL_file *allocate_file() noexcept;
+  [[nodiscard]] WalFile *allocate_file() noexcept;
 
   /** Release a file
    *
    * @param[in, out] file file to release
    * @note The file is set to nullptr after release
   */
-  void release_file(WAL_file *&file) noexcept;
+  void release_file(WalFile *&file) noexcept;
 
   /** Create an I/O context
    *
@@ -399,8 +399,8 @@ struct WAL_IO_System {
    *
    * @return I/O context on success, nullptr on error
   */
-  [[nodiscard]] WAL_io_ctx_t *create_io_context(
-    IO_request req_type, WAL_file *file, std::function<void(WAL_io_ctx_t *)> callback
+  [[nodiscard]] WalIoCtx *create_io_context(
+    IoRequest req_type, WalFile *file, std::function<void(WalIoCtx *)> callback
   ) noexcept;
 
   /** Complete an I/O context
@@ -410,14 +410,14 @@ struct WAL_IO_System {
    * @param[in, out] ctx I/O context that was passed to wait_for_completion, you can pass nullptr.
    * @param[in] result result code
    */
-  void complete_io_context(WAL_io_ctx_t *&ctx, int result) noexcept;
+  void complete_io_context(WalIoCtx *&ctx, int result) noexcept;
 
   /** Release an I/O context
    *
    * @param[in, out] ctx I/O context
    * @note The I/O context is set to nullptr after release
    */
-  void release_io_context(WAL_io_ctx_t *&ctx) noexcept;
+  void release_io_context(WalIoCtx *&ctx) noexcept;
 
  private:
   /** io_uring instance (managed by unique_ptr) */
@@ -430,13 +430,13 @@ struct WAL_IO_System {
   std::atomic<bool> m_shutdown{false};
 
   /** WAL files array */
-  std::vector<WAL_file> m_files;
+  std::vector<WalFile> m_files;
 
   /** Free file pool, the files are from m_files. */
   File_pool m_free_files;
 
   /** I/O contexts to use. */
-  std::vector<WAL_io_ctx_t> m_io_contexts;
+  std::vector<WalIoCtx> m_io_contexts;
 
   /** Free I/O context pool, the contexts are from m_io_contexts. */
   Context_pool m_free_contexts;
@@ -446,7 +446,7 @@ struct WAL_IO_System {
 };
 
 /** Global WAL I/O system instance */
-extern WAL_IO_System *g_wal_io_system;
+extern WalIoSystem *g_wal_io_system;
 
 /** Initialize global WAL I/O system */
 bool wal_io_system_init() noexcept;

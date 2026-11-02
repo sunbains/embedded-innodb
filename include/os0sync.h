@@ -44,7 +44,7 @@ Created 9/6/1995 Heikki Tuuri
 #include <mutex>
 
 /** An asynchronous signal sent between threads */
-struct Cond_var {
+struct CondVar {
   /**
    * Constructor
    * 
@@ -54,12 +54,12 @@ struct Cond_var {
    * does not * want to pass any signal_count value. To distinguish
    * between the two cases we initialize signal_count to 1 here.
    */
-  Cond_var() : m_is_set(), m_signal_count(1) {}
+  CondVar() : m_is_set(), m_signal_count(1) {}
 
   /**
    * Destructor
    */
-  ~Cond_var() = default;
+  ~CondVar() = default;
 
   /**
   * Sets an event semaphore to the signaled state: lets waiting threads proceed.
@@ -113,13 +113,13 @@ struct Cond_var {
    * @param[in] name the name of the event, if nullptr the event is created without a name
    * @return the event handle
    */
-  static Cond_var *create(const char *name);
+  static CondVar *create(const char *name);
 
   /**
    * Frees an event object.
    * @param[in] event event to free
    */
-  static void destroy(Cond_var *event);
+  static void destroy(CondVar *event);
 
   /** This mutex protects the next fields */
   std::mutex m_mutex{};
@@ -135,9 +135,9 @@ struct Cond_var {
   std::condition_variable m_cond_var{};
 
   /** List of all created events */
-  UT_LIST_NODE_T(Cond_var) m_os_event_list;
+  UT_LIST_NODE_T(CondVar) m_os_event_list;
 
-  using Events = UT_LIST_BASE_NODE_T(Cond_var, m_os_event_list);
+  using Events = UT_LIST_BASE_NODE_T(CondVar, m_os_event_list);
 
   /** Mutex protecting s_events && s_count */
   static std::mutex s_mutex;
@@ -150,7 +150,7 @@ struct Cond_var {
 };
 
 /** Operating system mutex */
-struct OS_mutex;
+struct OsMutex;
 
 /** Denotes an infinite delay for os_event_wait_time() */
 constexpr ulint OS_SYNC_INFINITE_TIME = ((ulint)(-1));
@@ -175,9 +175,9 @@ void os_sync_free();
  * @param[in] name the name of the event, if nullptr the event is created without a name
  * @return the event handle
  */
-#define os_event_create(n) Cond_var::create(n)
+#define os_event_create(n) CondVar::create(n)
 
-#define os_event_free(e) Cond_var::destroy(e)
+#define os_event_free(e) CondVar::destroy(e)
 
 #define os_event_set(e) (e)->set()
 
@@ -193,32 +193,32 @@ void os_sync_free();
 
 /**
  * Creates an operating system mutex semaphore. Because these are slow, the
- * mutex semaphore of InnoDB itself (mutex_t) should be used where possible.
+ * mutex semaphore of InnoDB itself (Mutex) should be used where possible.
  *
  * @return The mutex handle
  */
-OS_mutex *os_mutex_create(const char *);
+OsMutex *os_mutex_create(const char *);
 
 /**
  * Locks the mutex.
  *
  * @param[in] mutex Mutex to acquire
  */
-void os_mutex_enter(OS_mutex *mutex);
+void os_mutex_enter(OsMutex *mutex);
 
 /**
  * Unlocks the mutex
  *
  * @param[in] mutex Mutex to acquire
  */
-void os_mutex_exit(OS_mutex *mutex);
+void os_mutex_exit(OsMutex *mutex);
 
 /**
  * Frees an mutex object.
  *
  * @param[in] mutex Mutex to free
  */
-void os_mutex_destroy(OS_mutex *mutex);
+void os_mutex_destroy(OsMutex *mutex);
 
 /** @return the number of mutexes created. */
 ulint os_mutex_count();

@@ -139,7 +139,7 @@ void Dict::foreign_error_report(Foreign *fk, const char *msg) noexcept {
   mutex_exit(&m_foreign_err_mutex);
 }
 
-db_err Dict::foreign_add_to_cache(Foreign *foreign, bool check_charsets) noexcept {
+DbErr Dict::foreign_add_to_cache(Foreign *foreign, bool check_charsets) noexcept {
   Index *index;
 
   ut_ad(mutex_own(&m_mutex));
@@ -277,7 +277,7 @@ const char *Dict::accept(const charset_t *cs, const char *ptr, const char *strin
 }
 
 const char *Dict::scan_id(
-  const charset_t *cs, const char *ptr, mem_heap_t *heap, const char **id, bool table_id, bool accept_also_dot
+  const charset_t *cs, const char *ptr, MemHeap *heap, const char **id, bool table_id, bool accept_also_dot
 ) noexcept {
   ulint len{};
   char quote = '\0';
@@ -375,7 +375,7 @@ const char *Dict::scan_id(
 }
 
 const char *Dict::scan_col(
-  const charset_t *cs, const char *ptr, bool *success, Table *table, const Column **column, mem_heap_t *heap, const char **name
+  const charset_t *cs, const char *ptr, bool *success, Table *table, const Column **column, MemHeap *heap, const char **name
 ) noexcept {
 
   *success = false;
@@ -411,7 +411,7 @@ const char *Dict::scan_col(
 }
 
 const char *Dict::scan_table_name(
-  const charset_t *cs, const char *ptr, Table **table, const char *name, bool *success, mem_heap_t *heap, const char **ref_name
+  const charset_t *cs, const char *ptr, Table **table, const char *name, bool *success, MemHeap *heap, const char **ref_name
 ) noexcept {
   const char *scan_name;
   ulint database_name_len = 0;
@@ -609,8 +609,8 @@ void Dict::foreign_report_syntax_err(const char *name, const char *start_of_late
   mutex_exit(&m_foreign_err_mutex);
 }
 
-db_err Dict::create_foreign_constraints(
-  Trx *trx, mem_heap_t *heap, const charset_t *cs, const char *sql_string, const char *name, bool reject_fks
+DbErr Dict::create_foreign_constraints(
+  Trx *trx, MemHeap *heap, const charset_t *cs, const char *sql_string, const char *name, bool reject_fks
 ) noexcept {
   ulint i{};
   Table *referenced_table;
@@ -1127,7 +1127,7 @@ try_find_index:
   goto loop;
 }
 
-db_err Dict::create_foreign_constraints(Trx *trx, const char *sql_string, const char *name, bool reject_fks) noexcept {
+DbErr Dict::create_foreign_constraints(Trx *trx, const char *sql_string, const char *name, bool reject_fks) noexcept {
   auto str = strip_comments(sql_string);
   auto heap = mem_heap_create(10000);
   auto cs = ib_ucode_get_connection_charset();
@@ -1139,8 +1139,8 @@ db_err Dict::create_foreign_constraints(Trx *trx, const char *sql_string, const 
   return err;
 }
 
-db_err Dict::foreign_parse_drop_constraints(
-  mem_heap_t *heap, Trx *trx, Table *table, ulint *n, const char ***constraints_to_drop
+DbErr Dict::foreign_parse_drop_constraints(
+  MemHeap *heap, Trx *trx, Table *table, ulint *n, const char ***constraints_to_drop
 ) noexcept {
   bool success;
   const char *id;
@@ -1230,7 +1230,7 @@ db_err Dict::foreign_parse_drop_constraints(
   return DB_CANNOT_DROP_CONSTRAINT;
 }
 
-DTuple *Dict::index_build_node_ptr(const Index *index, const Rec rec, ulint page_no, mem_heap_t *heap, ulint level) noexcept {
+DTuple *Dict::index_build_node_ptr(const Index *index, const Rec rec, ulint page_no, MemHeap *heap, ulint level) noexcept {
   const auto n_unique = index->get_n_unique_in_tree();
   auto tuple = dtuple_create(heap, n_unique + 1);
 
@@ -1295,7 +1295,7 @@ void Dict::update_statistics(Table *table) noexcept {
   auto &stats = table->m_stats;
   auto btree = m_store.m_btree;
   ulint sum_of_index_sizes{};
-  Btree_cursor btr_cur(fsp, btree);
+  BtreeCursor btr_cur(fsp, btree);
 
   for (auto index : table->m_indexes) {
     auto size = btree->get_size(index, BTR_TOTAL_SIZE);
@@ -1422,7 +1422,7 @@ std::string Table::to_string(Dict *dict) noexcept {
 }
 
 void Dict::col_print(const Table *table, const Column *col) noexcept {
-  dtype_t type;
+  Dtype type;
 
   ut_ad(mutex_own(&m_mutex));
 

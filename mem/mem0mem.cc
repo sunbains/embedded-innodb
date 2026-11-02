@@ -84,15 +84,15 @@ After freeing, all the blocks in the heap are set to random bytes
 to help us discover errors which result from the use of
 buffers in an already freed heap. */
 
-char *mem_heap_strdup(mem_heap_t *heap, const char *str) {
+char *mem_heap_strdup(MemHeap *heap, const char *str) {
   return static_cast<char *>(mem_heap_dup(heap, str, strlen(str) + 1));
 }
 
-void *mem_heap_dup(mem_heap_t *heap, const void *data, ulint len) {
+void *mem_heap_dup(MemHeap *heap, const void *data, ulint len) {
   return (memcpy(mem_heap_alloc(heap, len), data, len));
 }
 
-char *mem_heap_strcat(mem_heap_t *heap, const char *s1, const char *s2) {
+char *mem_heap_strcat(MemHeap *heap, const char *s1, const char *s2) {
   auto s1_len = strlen(s1);
   auto s2_len = strlen(s2);
 
@@ -213,7 +213,7 @@ static ulint mem_heap_printf_low(char *buf, const char *format, va_list ap) noex
   return (len);
 }
 
-char *mem_heap_printf(mem_heap_t *heap, const char *format, ...) {
+char *mem_heap_printf(MemHeap *heap, const char *format, ...) {
   va_list ap;
   ulint len;
 
@@ -232,7 +232,7 @@ char *mem_heap_printf(mem_heap_t *heap, const char *format, ...) {
   return (str);
 }
 
-mem_block_t *mem_heap_create_block(mem_heap_t *heap, ulint n, ulint type, Source_location loc) {
+MemHeap *mem_heap_create_block(MemHeap *heap, ulint n, ulint type, SourceLocation loc) {
   ut_ad((type == MEM_HEAP_DYNAMIC) || (type == MEM_HEAP_BUFFER) || (type == MEM_HEAP_BUFFER + MEM_HEAP_BTR_SEARCH));
 
   if (heap && heap->magic_n != MEM_BLOCK_MAGIC_N) {
@@ -241,8 +241,8 @@ mem_block_t *mem_heap_create_block(mem_heap_t *heap, ulint n, ulint type, Source
 
   /* In dynamic allocation, calculate the size: block header + data. */
 
-  mem_block_t *block;
-  Buf_block *buf_block{};
+  MemHeap *block;
+  BufBlock *buf_block{};
 
   auto len = mem_block_header_size() + MEM_SPACE_NEEDED(n);
 
@@ -250,7 +250,7 @@ mem_block_t *mem_heap_create_block(mem_heap_t *heap, ulint n, ulint type, Source
 
     ut_a(type == MEM_HEAP_DYNAMIC || n <= MEM_MAX_ALLOC_IN_BUF);
 
-    block = (mem_block_t *)malloc(len);
+    block = (MemHeap *)malloc(len);
   } else {
 
     len = UNIV_PAGE_SIZE;
@@ -260,7 +260,7 @@ mem_block_t *mem_heap_create_block(mem_heap_t *heap, ulint n, ulint type, Source
       buffer pool, but must get the free block from
       the heap header free block field */
 
-      buf_block = reinterpret_cast<Buf_block *>(heap->free_block);
+      buf_block = reinterpret_cast<BufBlock *>(heap->free_block);
       heap->free_block = nullptr;
 
       if (unlikely(buf_block == nullptr)) {
@@ -271,7 +271,7 @@ mem_block_t *mem_heap_create_block(mem_heap_t *heap, ulint n, ulint type, Source
       buf_block = srv_buf_pool->block_alloc();
     }
 
-    block = reinterpret_cast<mem_block_t *>(buf_block->m_frame);
+    block = reinterpret_cast<MemHeap *>(buf_block->m_frame);
   }
 
   block->buf_block = buf_block;
@@ -303,7 +303,7 @@ mem_block_t *mem_heap_create_block(mem_heap_t *heap, ulint n, ulint type, Source
   return block;
 }
 
-mem_block_t *mem_heap_add_block(mem_heap_t *heap, ulint n) {
+MemHeap *mem_heap_add_block(MemHeap *heap, ulint n) {
   ut_ad(mem_heap_check(heap));
 
   auto block = UT_LIST_GET_LAST(heap->base);
@@ -344,8 +344,8 @@ mem_block_t *mem_heap_add_block(mem_heap_t *heap, ulint n) {
   return new_block;
 }
 
-void mem_heap_block_free(mem_heap_t *heap, mem_block_t *block) {
-  auto buf_block = reinterpret_cast<Buf_block *>(block->buf_block);
+void mem_heap_block_free(MemHeap *heap, MemHeap *block) {
+  auto buf_block = reinterpret_cast<BufBlock *>(block->buf_block);
 
   if (block->magic_n != MEM_BLOCK_MAGIC_N) {
     ut_error;
@@ -372,24 +372,24 @@ void mem_heap_block_free(mem_heap_t *heap, mem_block_t *block) {
   }
 }
 
-void mem_heap_free_block_free(mem_heap_t *heap) {
+void mem_heap_free_block_free(MemHeap *heap) {
   if (likely_null(heap->free_block)) {
-    srv_buf_pool->block_free(static_cast<Buf_block *>(heap->free_block));
+    srv_buf_pool->block_free(static_cast<BufBlock *>(heap->free_block));
     heap->free_block = nullptr;
   }
 }
 
 #ifdef UNIV_DEBUG
-bool mem_heap_check(mem_heap_t *heap) {
+bool mem_heap_check(MemHeap *heap) {
   ut_a(heap->magic_n == MEM_BLOCK_MAGIC_N);
 
   return (true);
 }
 
 void mem_heap_validate_or_print(
-  mem_heap_t *heap, byte *top __attribute__((unused)), bool print, bool *error, ulint *us_size, ulint *ph_size, ulint *n_blocks
+  MemHeap *heap, byte *top __attribute__((unused)), bool print, bool *error, ulint *us_size, ulint *ph_size, ulint *n_blocks
 ) {
-  mem_block_t *block;
+  MemHeap *block;
   ulint total_len = 0;
   ulint block_count = 0;
   ulint phys_len = 0;
@@ -449,7 +449,7 @@ void mem_heap_validate_or_print(
 }
 
 /** Prints the contents of a memory heap. */
-static void mem_heap_print(mem_heap_t *heap) /*!< in: memory heap */
+static void mem_heap_print(MemHeap *heap) /*!< in: memory heap */
 {
   bool error;
   ulint us_size;
@@ -471,7 +471,7 @@ static void mem_heap_print(mem_heap_t *heap) /*!< in: memory heap */
   ut_a(!error);
 }
 
-bool mem_heap_validate(mem_heap_t *heap) {
+bool mem_heap_validate(MemHeap *heap) {
   bool error;
   ulint us_size;
   ulint phys_size;
@@ -491,7 +491,7 @@ bool mem_heap_validate(mem_heap_t *heap) {
 #endif /* UNIV_DEBUG */
 
 #ifdef UNIV_DEBUG
-void mem_heap_verify(const mem_heap_t *heap) {
+void mem_heap_verify(const MemHeap *heap) {
   auto block = UT_LIST_GET_FIRST(heap->base);
 
   while (block != nullptr) {

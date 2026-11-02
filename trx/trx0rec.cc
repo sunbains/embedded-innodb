@@ -38,7 +38,7 @@ Created 3/26/1996 Heikki Tuuri
 #include "trx0undo.h"
 #include "ut0mem.h"
 
-void Undo_page::add_undo_rec_log(ulint old_free, ulint new_free, mtr_t *mtr) noexcept {
+void UndoPage::add_undo_rec_log(ulint old_free, ulint new_free, Mtr *mtr) noexcept {
   auto log_ptr = mlog_open(mtr, 11 + 13 + MLOG_BUF_MARGIN);
 
   if (log_ptr == nullptr) {
@@ -62,7 +62,7 @@ void Undo_page::add_undo_rec_log(ulint old_free, ulint new_free, mtr_t *mtr) noe
   }
 }
 
-byte *trx_undo_parse_add_undo_rec(byte *ptr, byte *end_ptr, Raw_page page) {
+byte *trx_undo_parse_add_undo_rec(byte *ptr, byte *end_ptr, RawPage page) {
   ulint len;
   byte *rec;
   ulint first_free;
@@ -105,14 +105,14 @@ byte *trx_undo_parse_add_undo_rec(byte *ptr, byte *end_ptr, Raw_page page) {
  *
  * @return ulint Bytes left
  */
-inline ulint trx_undo_left(const Raw_page page, const byte *ptr) noexcept {
+inline ulint trx_undo_left(const RawPage page, const byte *ptr) noexcept {
   /* The '- 10' is a safety margin, in case we have some small
   calculation error below */
 
   return UNIV_PAGE_SIZE - (ptr - page) - 10 - FIL_PAGE_DATA_END;
 }
 
-ulint Undo_page::set_next_prev_and_add(byte *ptr, mtr_t *mtr) noexcept {
+ulint UndoPage::set_next_prev_and_add(byte *ptr, Mtr *mtr) noexcept {
   ut_ad(ptr > *this);
   ut_ad(ptr < *this + UNIV_PAGE_SIZE);
 
@@ -146,7 +146,7 @@ ulint Undo_page::set_next_prev_and_add(byte *ptr, mtr_t *mtr) noexcept {
   return first_free;
 }
 
-ulint Undo_page::report_insert(Trx *trx, const Index *index, const DTuple *clust_entry, mtr_t *mtr) {
+ulint UndoPage::report_insert(Trx *trx, const Index *index, const DTuple *clust_entry, Mtr *mtr) {
   ulint first_free;
   byte *ptr;
   ulint i;
@@ -181,7 +181,7 @@ ulint Undo_page::report_insert(Trx *trx, const Index *index, const DTuple *clust
 
   for (i = 0; i < index->get_n_unique(); i++) {
 
-    const dfield_t *field = dtuple_get_nth_field(clust_entry, i);
+    const Dfield *field = dtuple_get_nth_field(clust_entry, i);
     ulint flen = dfield_get_len(field);
 
     if (trx_undo_left(*this, ptr) < 5) {
@@ -265,15 +265,15 @@ static byte *trx_undo_page_report_modify_ext(byte *ptr, byte *ext_buf, const byt
  * @param[in] trx Transaction
  * @param[in] index Clustered index where update or delete marking is done
  * @param[in] rec Clustered index record which has NOT yet been modified
- * @param[in] offsets Phy_rec::get_all_col_offsets(index, rec)
+ * @param[in] offsets PhyRec::get_all_col_offsets(index, rec)
  * @param[in] update Update vector which tells the columns to be updated; in the case of a delete, this should be set to nullptr
  * @param[in] cmpl_info Compiler info on secondary index updates
  * @param[in] mtr Mini-transaction
  *
  * @return byte offset of the inserted undo log entry on the page if succeed, 0 if fail
  */
-ulint Undo_page::report_modify(
-  Trx *trx, const Index *index, const Rec &rec, const Rec_offs &offsets, const upd_t *update, ulint cmpl_info, mtr_t *mtr
+ulint UndoPage::report_modify(
+  Trx *trx, const Index *index, const Rec &rec, const RecOffs &offsets, const Upd *update, ulint cmpl_info, Mtr *mtr
 ) {
   byte *ptr;
   ulint flen;
@@ -395,9 +395,9 @@ ulint Undo_page::report_modify(
       return 0;
     }
 
-    ptr += mach_write_compressed(ptr, Row_update::upd_get_n_fields(update));
+    ptr += mach_write_compressed(ptr, RowUpdate::upd_get_n_fields(update));
 
-    for (ulint i = 0; i < Row_update::upd_get_n_fields(update); i++) {
+    for (ulint i = 0; i < RowUpdate::upd_get_n_fields(update); i++) {
 
       auto pos = update->get_nth_field(i)->m_field_no;
 
@@ -573,7 +573,7 @@ inline byte *trx_undo_update_rec_get_field_no(
   return ptr;
 }
 
-void Undo_page::erase_page_end(mtr_t *mtr) {
+void UndoPage::erase_page_end(Mtr *mtr) {
   auto first_free = mach_read_from_2(*this + TRX_UNDO_PAGE_HDR + TRX_UNDO_PAGE_FREE);
 
   memset(*this + first_free, 0xff, (UNIV_PAGE_SIZE - FIL_PAGE_DATA_END) - first_free);
@@ -581,7 +581,7 @@ void Undo_page::erase_page_end(mtr_t *mtr) {
   mlog_write_initial_log_record(*this, MLOG_UNDO_ERASE_END, mtr);
 }
 
-byte *trx_undo_parse_erase_page_end(byte *ptr, byte *end_ptr __attribute__((unused)), Raw_page page, mtr_t *mtr) {
+byte *trx_undo_parse_erase_page_end(byte *ptr, byte *end_ptr __attribute__((unused)), RawPage page, Mtr *mtr) {
   ut_ad(ptr && end_ptr);
 
   if (page == nullptr) {
@@ -589,20 +589,20 @@ byte *trx_undo_parse_erase_page_end(byte *ptr, byte *end_ptr __attribute__((unus
     return ptr;
   }
 
-  Undo_page(page).erase_page_end(mtr);
+  UndoPage(page).erase_page_end(mtr);
 
   return ptr;
 }
 
-db_err trx_undo_report_row_operation(
-  ulint flags, ulint op_type, que_thr_t *thr, const Index *index, const DTuple *clust_entry, const upd_t *update, ulint cmpl_info,
+DbErr trx_undo_report_row_operation(
+  ulint flags, ulint op_type, QueThr *thr, const Index *index, const DTuple *clust_entry, const Upd *update, ulint cmpl_info,
   const Rec rec, roll_ptr_t *roll_ptr
 ) {
-  trx_undo_t *undo;
-  db_err err = DB_SUCCESS;
-  mem_heap_t *heap = nullptr;
+  TrxUndo *undo;
+  DbErr err = DB_SUCCESS;
+  MemHeap *heap = nullptr;
   std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
-  Rec_offs offsets(offsets_.data());
+  RecOffs offsets(offsets_.data());
 
   ut_a(index->is_clustered());
 
@@ -655,7 +655,7 @@ db_err trx_undo_report_row_operation(
     }
 
     {
-      Phy_rec record(index, rec);
+      PhyRec record(index, rec);
 
       offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
     }
@@ -663,13 +663,13 @@ db_err trx_undo_report_row_operation(
 
   auto page_no = undo->m_last_page_no;
 
-  mtr_t mtr;
+  Mtr mtr;
 
   mtr.start();
 
   for (;;) {
 
-    Buf_pool::Request req{
+    BufPool::Request req{
       .m_rw_latch = RW_X_LATCH,
       .m_page_id = {undo->m_space, page_no},
       .m_mode = BUF_GET,
@@ -682,7 +682,7 @@ db_err trx_undo_report_row_operation(
 
     buf_block_dbg_add_level(IF_SYNC_DEBUG(undo_block, SYNC_TRX_UNDO_PAGE));
 
-    Undo_page undo_page(undo_block->get_frame());
+    UndoPage undo_page(undo_block->get_frame());
 
     ulint offset;
 

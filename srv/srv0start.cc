@@ -109,7 +109,7 @@ bool srv_was_started = false;
 
 /** At a shutdown this value climbs from SRV_SHUTDOWN_NONE to
 SRV_SHUTDOWN_CLEANUP and then to SRV_SHUTDOWN_LAST_PHASE, and so on */
-enum srv_shutdown_state srv_shutdown_state = SRV_SHUTDOWN_NONE;
+enum SrvShutdownState srv_shutdown_state = SRV_SHUTDOWN_NONE;
 
 /** io_handler_thread parameters for thread identification */
 static std::array<ulint, SRV_MAX_N_IO_THREADS + 6> n;
@@ -135,7 +135,7 @@ constexpr ulint OS_AIO_N_PENDING_IOS_PER_THREAD = 256;
  * @param recovery The recovery flag.
  * @param shutdown The shutdown flag.
  */
-static void srv_prepare_for_shutdown(ib_recovery_t recovery, ib_shutdown_t shutdown) noexcept;
+static void srv_prepare_for_shutdown(IbRecovery recovery, ib_shutdown_t shutdown) noexcept;
 
 void *io_handler_thread(void *arg) {
   auto segment = *((ulint *)arg);
@@ -159,7 +159,7 @@ void *io_handler_thread(void *arg) {
  *
  * @return DB_SUCCESS or error code
  */
-static db_err create_log_file(const std::string &filename) noexcept {
+static DbErr create_log_file(const std::string &filename) noexcept {
   ut_a(!filename.empty());
 
   bool success{};
@@ -198,7 +198,7 @@ static db_err create_log_file(const std::string &filename) noexcept {
  *
  * @return DB_SUCCESS or error code
  */
-static db_err open_log_file(const std::string &filename) noexcept {
+static DbErr open_log_file(const std::string &filename) noexcept {
   ut_a(!filename.empty());
 
   bool success{};
@@ -236,7 +236,7 @@ static db_err open_log_file(const std::string &filename) noexcept {
  *
  * @return DB_SUCCESS or error code
  */
-static db_err create_system_tablespace(const std::string &path) noexcept {
+static DbErr create_system_tablespace(const std::string &path) noexcept {
   namespace fs = std::filesystem;
 
   ut_a(!path.empty());
@@ -290,7 +290,7 @@ static db_err create_system_tablespace(const std::string &path) noexcept {
  *
  * @return DB_SUCCESS or error code
  */
-static db_err open_system_tablespace(const std::string &path, lsn_t &flushed_lsn) noexcept {
+static DbErr open_system_tablespace(const std::string &path, lsn_t &flushed_lsn) noexcept {
   namespace fs = std::filesystem;
 
   ut_a(!path.empty());
@@ -342,7 +342,7 @@ static db_err open_system_tablespace(const std::string &path, lsn_t &flushed_lsn
  *
  * @param err Current error code
  */
-static void srv_startup_abort(db_err err) noexcept {
+static void srv_startup_abort(DbErr err) noexcept {
   /* This is currently required to inform the master thread only. Once
   we have contexts we can get rid of this global. */
   srv_config.m_fast_shutdown = IB_SHUTDOWN_NORMAL;
@@ -373,7 +373,7 @@ static void srv_startup_abort(db_err err) noexcept {
 
   Log::destroy(log_sys);
 
-  AIO::destroy(srv_aio);
+  Aio::destroy(srv_aio);
 
   delete srv_buf_pool;
 }
@@ -462,10 +462,10 @@ ib_err_t InnoDB::start() noexcept {
 
   os_file_init();
 
-  srv_aio = AIO::create(io_limit, srv_config.m_n_read_io_threads, srv_config.m_n_write_io_threads);
+  srv_aio = Aio::create(io_limit, srv_config.m_n_read_io_threads, srv_config.m_n_write_io_threads);
 
   if (srv_aio == nullptr) {
-    log_err("Failed to create an AIO instance.");
+    log_err("Failed to create an Aio instance.");
     os_file_free();
     return DB_OUT_OF_MEMORY;
   }
@@ -475,7 +475,7 @@ ib_err_t InnoDB::start() noexcept {
   srv_fil = new (std::nothrow) Fil(srv_config.m_max_n_open_files);
 
   if (srv_fil == nullptr) {
-    AIO::destroy(srv_aio);
+    Aio::destroy(srv_aio);
 
     os_file_free();
 
@@ -484,14 +484,14 @@ ib_err_t InnoDB::start() noexcept {
     return DB_OUT_OF_MEMORY;
   }
 
-  srv_buf_pool = new (std::nothrow) Buf_pool();
+  srv_buf_pool = new (std::nothrow) BufPool();
 
   if (!srv_buf_pool->open(srv_config.m_buf_pool_size)) {
     /* Shutdown all sub-systems that have been initialized. */
     delete srv_fil;
     srv_fil = nullptr;
 
-    AIO::destroy(srv_aio);
+    Aio::destroy(srv_aio);
 
     os_file_free();
 
@@ -509,15 +509,15 @@ ib_err_t InnoDB::start() noexcept {
   }
 
   ut_a(srv_fsp == nullptr);
-  srv_fsp = FSP::create(log_sys, srv_fil, srv_buf_pool);
+  srv_fsp = Fsp::create(log_sys, srv_fil, srv_buf_pool);
 
   ut_a(srv_trx_sys == nullptr);
-  srv_trx_sys = Trx_sys::create(srv_fsp);
+  srv_trx_sys = TrxSys::create(srv_fsp);
 
   srv_buf_pool->set_trx_sys(srv_trx_sys);
 
   ut_a(srv_lock_sys == nullptr);
-  srv_lock_sys = Lock_sys::create(srv_trx_sys, srv_config.m_lock_table_size);
+  srv_lock_sys = LockSys::create(srv_trx_sys, srv_config.m_lock_table_size);
 
   ut_a(srv_btree_sys == nullptr);
   srv_btree_sys = Btree::create(srv_lock_sys, srv_fsp, srv_buf_pool);
@@ -648,7 +648,7 @@ ib_err_t InnoDB::start() noexcept {
   }
 
   if (create_new_db) {
-    mtr_t mtr;
+    Mtr mtr;
 
     mtr.start();
 
@@ -678,7 +678,7 @@ ib_err_t InnoDB::start() noexcept {
     {
       // FIXME: These should be created in a separate DML related function
       ut_a(srv_row_upd == nullptr);
-      srv_row_upd = Row_update::create(srv_dict_sys, srv_lock_sys);
+      srv_row_upd = RowUpdate::create(srv_dict_sys, srv_lock_sys);
 
       if (srv_row_upd == nullptr) {
         srv_startup_abort(DB_OUT_OF_MEMORY);
@@ -686,7 +686,7 @@ ib_err_t InnoDB::start() noexcept {
       }
 
       ut_a(srv_row_ins == nullptr);
-      srv_row_ins = Row_insert::create(srv_dict_sys, srv_lock_sys, srv_row_upd);
+      srv_row_ins = RowInsert::create(srv_dict_sys, srv_lock_sys, srv_row_upd);
 
       if (srv_row_ins == nullptr) {
         srv_startup_abort(DB_OUT_OF_MEMORY);
@@ -694,7 +694,7 @@ ib_err_t InnoDB::start() noexcept {
       }
 
       ut_a(srv_row_sel == nullptr);
-      srv_row_sel = Row_sel::create(srv_dict_sys, srv_lock_sys);
+      srv_row_sel = RowSel::create(srv_dict_sys, srv_lock_sys);
 
       if (srv_row_sel == nullptr) {
         srv_startup_abort(DB_OUT_OF_MEMORY);
@@ -702,7 +702,7 @@ ib_err_t InnoDB::start() noexcept {
       }
 
       ut_a(srv_row_undo == nullptr);
-      srv_row_undo = Row_undo::create(srv_dict_sys);
+      srv_row_undo = RowUndo::create(srv_dict_sys);
 
       if (srv_row_undo == nullptr) {
         srv_startup_abort(DB_OUT_OF_MEMORY);
@@ -710,7 +710,7 @@ ib_err_t InnoDB::start() noexcept {
       }
 
       ut_a(srv_row_vers == nullptr);
-      srv_row_vers = Row_vers::create(srv_trx_sys, srv_lock_sys);
+      srv_row_vers = RowVers::create(srv_trx_sys, srv_lock_sys);
 
       if (srv_row_vers == nullptr) {
         srv_startup_abort(DB_OUT_OF_MEMORY);
@@ -733,7 +733,7 @@ ib_err_t InnoDB::start() noexcept {
     /* Create the doublewrite buffer for the system tablespace */
     {
       ut_a(srv_dblwr == nullptr);
-      srv_dblwr = DBLWR::create(srv_fsp);
+      srv_dblwr = Dblwr::create(srv_fsp);
 
       if (srv_dblwr == nullptr) {
         srv_startup_abort(DB_OUT_OF_MEMORY);
@@ -760,7 +760,7 @@ ib_err_t InnoDB::start() noexcept {
 
     /* Setup the doublewrite buffer, open and restore. */
     ut_a(srv_dblwr == nullptr);
-    srv_dblwr = DBLWR::create(srv_fsp);
+    srv_dblwr = Dblwr::create(srv_fsp);
 
     if (srv_dblwr == nullptr) {
       srv_startup_abort(DB_ERROR);
@@ -769,7 +769,7 @@ ib_err_t InnoDB::start() noexcept {
 
     std::pair<page_no_t, page_no_t> offsets{};
 
-    if (!DBLWR::check_if_exists(srv_fil, offsets)) {
+    if (!Dblwr::check_if_exists(srv_fil, offsets)) {
       err = srv_dblwr->initialize();
 
       if (err != DB_SUCCESS) {
@@ -787,7 +787,7 @@ ib_err_t InnoDB::start() noexcept {
     can't be accessed until recovery is done. So we have this simplistic scheme. */
     srv_fil->load_single_table_tablespaces(srv_config.m_data_home, srv_config.m_force_recovery, 2);
 
-    /* We always instantiate the DBLWR buffer. Restore the pages in data files,
+    /* We always instantiate the Dblwr buffer. Restore the pages in data files,
      * and restore them from the doublewrite buffer if possible */
     if (srv_config.m_force_recovery < IB_RECOVERY_NO_LOG_REDO) {
       log_warn("Restoring possible half-written data pages from the doublewrite buffer...");
@@ -829,7 +829,7 @@ ib_err_t InnoDB::start() noexcept {
 
     {
       ut_a(srv_row_upd == nullptr);
-      srv_row_upd = Row_update::create(srv_dict_sys, srv_lock_sys);
+      srv_row_upd = RowUpdate::create(srv_dict_sys, srv_lock_sys);
 
       if (srv_row_upd == nullptr) {
         srv_startup_abort(DB_OUT_OF_MEMORY);
@@ -837,7 +837,7 @@ ib_err_t InnoDB::start() noexcept {
       }
 
       ut_a(srv_row_ins == nullptr);
-      srv_row_ins = Row_insert::create(srv_dict_sys, srv_lock_sys, srv_row_upd);
+      srv_row_ins = RowInsert::create(srv_dict_sys, srv_lock_sys, srv_row_upd);
 
       if (srv_row_ins == nullptr) {
         srv_startup_abort(DB_OUT_OF_MEMORY);
@@ -845,7 +845,7 @@ ib_err_t InnoDB::start() noexcept {
       }
 
       ut_a(srv_row_sel == nullptr);
-      srv_row_sel = Row_sel::create(srv_dict_sys, srv_lock_sys);
+      srv_row_sel = RowSel::create(srv_dict_sys, srv_lock_sys);
 
       if (srv_row_sel == nullptr) {
         srv_startup_abort(DB_OUT_OF_MEMORY);
@@ -853,7 +853,7 @@ ib_err_t InnoDB::start() noexcept {
       }
 
       ut_a(srv_row_undo == nullptr);
-      srv_row_undo = Row_undo::create(srv_dict_sys);
+      srv_row_undo = RowUndo::create(srv_dict_sys);
 
       if (srv_row_undo == nullptr) {
         srv_startup_abort(DB_OUT_OF_MEMORY);
@@ -861,7 +861,7 @@ ib_err_t InnoDB::start() noexcept {
       }
 
       ut_a(srv_row_vers == nullptr);
-      srv_row_vers = Row_vers::create(srv_trx_sys, srv_lock_sys);
+      srv_row_vers = RowVers::create(srv_trx_sys, srv_lock_sys);
 
       if (srv_row_vers == nullptr) {
         srv_startup_abort(DB_OUT_OF_MEMORY);
@@ -939,7 +939,7 @@ ib_err_t InnoDB::start() noexcept {
  *
  * @return	true if all threads exited.
  */
-static bool srv_threads_try_shutdown(Cond_var *lock_timeout_thread_event) noexcept {
+static bool srv_threads_try_shutdown(CondVar *lock_timeout_thread_event) noexcept {
   /* Let the lock timeout thread exit */
   os_event_set(lock_timeout_thread_event);
 
@@ -986,7 +986,7 @@ static bool srv_threads_shutdown() noexcept {
   return false;
 }
 
-static void srv_prepare_for_shutdown(ib_recovery_t recovery, ib_shutdown_t shutdown) noexcept {
+static void srv_prepare_for_shutdown(IbRecovery recovery, ib_shutdown_t shutdown) noexcept {
   ut_a(log_sys != nullptr);
 
   if (srv_print_verbose_log) {
@@ -1134,7 +1134,7 @@ static void srv_prepare_for_shutdown(ib_recovery_t recovery, ib_shutdown_t shutd
   ut_a(lsn == log_sys->m_lsn);
 }
 
-db_err InnoDB::shutdown(ib_shutdown_t shutdown) noexcept {
+DbErr InnoDB::shutdown(ib_shutdown_t shutdown) noexcept {
   ut_a(srv_was_started);
 
   /* This is currently required to inform the master thread only. Once
@@ -1171,28 +1171,28 @@ db_err InnoDB::shutdown(ib_shutdown_t shutdown) noexcept {
 
   log_sys->shutdown();
 
-  Row_insert::destroy(srv_row_ins);
+  RowInsert::destroy(srv_row_ins);
 
-  Row_update::destroy(srv_row_upd);
+  RowUpdate::destroy(srv_row_upd);
 
-  Row_sel::destroy(srv_row_sel);
+  RowSel::destroy(srv_row_sel);
 
-  Row_undo::destroy(srv_row_undo);
+  RowUndo::destroy(srv_row_undo);
 
-  Row_vers::destroy(srv_row_vers);
+  RowVers::destroy(srv_row_vers);
 
-  /* Must be called before Buf_pool::close(). */
+  /* Must be called before BufPool::close(). */
   Dict::destroy(srv_dict_sys);
 
   Btree::destroy(srv_btree_sys);
 
-  Lock_sys::destroy(srv_lock_sys);
+  LockSys::destroy(srv_lock_sys);
 
-  Trx_sys::destroy(srv_trx_sys);
+  TrxSys::destroy(srv_trx_sys);
 
   srv_buf_pool->close();
 
-  FSP::destroy(srv_fsp);
+  Fsp::destroy(srv_fsp);
 
   srv_aio->shutdown();
 
@@ -1201,7 +1201,7 @@ db_err InnoDB::shutdown(ib_shutdown_t shutdown) noexcept {
 
   InnoDB::free();
 
-  AIO::destroy(srv_aio);
+  Aio::destroy(srv_aio);
 
   /* 3. Free all InnoDB's own mutexes and the os_fast_mutexes inside them */
   sync_close();
@@ -1228,12 +1228,12 @@ db_err InnoDB::shutdown(ib_shutdown_t shutdown) noexcept {
 
   ut_delete_all_mem();
 
-  if (os_thread_count != 0 || Cond_var::s_count != 0 || os_mutex_count() != 0) {
+  if (os_thread_count != 0 || CondVar::s_count != 0 || os_mutex_count() != 0) {
     log_warn(std::format(
       "Some resources were not cleaned up in shutdown:"
       " threads {}, events {}, os_mutexes {}",
       os_thread_count.load(),
-      Cond_var::s_count,
+      CondVar::s_count,
       os_mutex_count()
     ));
   }

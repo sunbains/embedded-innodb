@@ -180,26 +180,26 @@ inline constexpr uint64_t flip_at_32(uint32_t w) noexcept {
  * together in a type, so it's easier to swap their implementation by providing
  * algo_to_use template argument to higher level functions.
  */
-struct crc32_impl {
+struct Crc32Impl {
   static inline uint32_t update(uint32_t crc, unsigned char data) noexcept;
   static inline uint32_t update(uint32_t crc, uint16_t data) noexcept;
   static inline uint32_t update(uint32_t crc, uint32_t data) noexcept;
   static inline uint64_t update(uint64_t crc, uint64_t data) noexcept;
 };
 
-__attribute__((target("sse4.2"))) inline uint32_t crc32_impl::update(uint32_t crc, unsigned char data) noexcept {
+__attribute__((target("sse4.2"))) inline uint32_t Crc32Impl::update(uint32_t crc, unsigned char data) noexcept {
   return _mm_crc32_u8(crc, data);
 }
 
-__attribute__((target("sse4.2"))) inline uint32_t crc32_impl::update(uint32_t crc, uint16_t data) noexcept {
+__attribute__((target("sse4.2"))) inline uint32_t Crc32Impl::update(uint32_t crc, uint16_t data) noexcept {
   return _mm_crc32_u16(crc, data);
 }
 
-__attribute__((target("sse4.2"))) inline uint32_t crc32_impl::update(uint32_t crc, uint32_t data) noexcept {
+__attribute__((target("sse4.2"))) inline uint32_t Crc32Impl::update(uint32_t crc, uint32_t data) noexcept {
   return _mm_crc32_u32(crc, data);
 }
 
-__attribute__((target("sse4.2"))) inline uint64_t crc32_impl::update(uint64_t crc, uint64_t data) noexcept {
+__attribute__((target("sse4.2"))) inline uint64_t Crc32Impl::update(uint64_t crc, uint64_t data) noexcept {
   return _mm_crc32_u64(crc, data);
 }
 
@@ -210,13 +210,13 @@ __attribute__((target("sse4.2"))) inline uint64_t crc32_impl::update(uint64_t cr
  * 
  * @see flip_at_32 for an explanation why it works and why this is useful.
  */
-struct use_pclmul : crc32_impl {
+struct UsePclmul : Crc32Impl {
   template <uint32_t w>
   inline static uint64_t polynomial_mul_rev(uint32_t rev_u) noexcept;
 };
 
 template <uint32_t w>
-__attribute__((target("sse4.2,pclmul"))) uint64_t use_pclmul::polynomial_mul_rev(uint32_t rev_u) noexcept {
+__attribute__((target("sse4.2,pclmul"))) uint64_t UsePclmul::polynomial_mul_rev(uint32_t rev_u) noexcept {
   constexpr uint64_t flipped_w = flip_at_32(w);
   return _mm_cvtsi128_si64(_mm_clmulepi64_si128(_mm_set_epi64x(0, rev_u), _mm_set_epi64x(0, flipped_w), 0x00));
 }
@@ -228,15 +228,15 @@ __attribute__((target("sse4.2,pclmul"))) uint64_t use_pclmul::polynomial_mul_rev
  * 
  * @see flip_at_32 for explanation why this holds,
  * 
- * @see use_pclmul for explanation of what polynomial_mul_rev is computing.
+ * @see UsePclmul for explanation of what polynomial_mul_rev is computing.
  * 
  * This implementation is to be used when hardware accelerated polynomial
  * multiplication is not available. It tries to unroll the simple loop, so just
  * the few xors and shifts for non-zero bits of w are emitted.
  */
-struct use_unrolled_loop_poly_mul : crc32_impl {
+struct UseUnrolledLoopPolyMul : Crc32Impl {
   template <uint32_t x_to_len_8>
-  struct Polynomial_mul_rev_step_executor {
+  struct PolynomialMulRevStepExecutor {
     template <size_t i>
 
     static void run(uint64_t &acc, const uint32_t hash_1) noexcept {
@@ -249,7 +249,7 @@ struct use_unrolled_loop_poly_mul : crc32_impl {
   template <uint32_t w>
   inline static uint64_t polynomial_mul_rev(uint32_t rev_u) noexcept {
     uint64_t rev_w_times_u{0};
-    Loop<32>::run<Polynomial_mul_rev_step_executor<w>>(rev_w_times_u, rev_u);
+    Loop<32>::run<PolynomialMulRevStepExecutor<w>>(rev_w_times_u, rev_u);
     return rev_w_times_u;
   }
 };
@@ -295,7 +295,7 @@ static inline uint32_t fold_64_to_32(uint64_t big) {
  * slice_len bytes.
  */
 template <typename algo_to_use, size_t slice_len>
-struct Update_step_executor {
+struct UpdateStepExecutor {
   template <size_t i>
   static void run(uint64_t *crc, const uint64_t *data64) noexcept {
     crc[i] = algo_to_use::update(crc[i], *(data64 + i * (slice_len / 8)));
@@ -309,7 +309,7 @@ struct Update_step_executor {
  * are from the end of the i-th slice to the end of the chunk.
  */
 template <typename algo_to_use, size_t slice_len, size_t slices_count>
-struct Combination_step_executor {
+struct CombinationStepExecutor {
   template <size_t i>
   static void run(uint64_t &combined, const uint64_t *crc) noexcept {
     combined ^= roll<slice_len *(slices_count - 1 - i), algo_to_use>(crc[i]);
@@ -346,7 +346,7 @@ static inline uint32_t consume_chunk(uint32_t crc0, const unsigned char *data) n
   constexpr auto iters = slice_len / sizeof(uint64_t);
 
   for (size_t i = 0; i < iters; ++i) {
-    Loop<slices_count>::template run<Update_step_executor<algo_to_use, slice_len>>(crc, data64);
+    Loop<slices_count>::template run<UpdateStepExecutor<algo_to_use, slice_len>>(crc, data64);
     ++data64;
   }
 
@@ -377,7 +377,7 @@ static inline uint32_t consume_chunk(uint32_t crc0, const unsigned char *data) n
   conditionally, when slices_count > 1. */
   if (1 < slices_count) {
 
-    Loop<slices_count - 1>::template run<Combination_step_executor<algo_to_use, slice_len, slices_count>>(combined_crc, crc);
+    Loop<slices_count - 1>::template run<CombinationStepExecutor<algo_to_use, slice_len, slices_count>>(combined_crc, crc);
 
     combined_crc = fold_64_to_32<algo_to_use>(combined_crc);
   }
@@ -499,7 +499,7 @@ static inline uint32_t calculate_with(uint32_t crc, const byte *data, size_t len
   return ~crc;
 }
 
-/** The specialization of calculate<> template for use_pclmul and 0 as initial
+/** The specialization of calculate<> template for UsePclmul and 0 as initial
  * value of the hash. Used on platforms which support hardware accelerated
  * Polynomial multiplication.
  *
@@ -511,10 +511,10 @@ static inline uint32_t calculate_with(uint32_t crc, const byte *data, size_t len
  * @return CRC-32C (polynomial 0x11EDC6F41)
  */
 __attribute__((target("sse4.2,pclmul"), flatten)) static inline uint32_t pclmul(const byte *data, size_t len) noexcept {
-  return calculate_with<use_pclmul>(0, data, len);
+  return calculate_with<UsePclmul>(0, data, len);
 }
 
-/** The specialization of crc32<> template for use_unrolled_loop_poly_mul and 0
+/** The specialization of crc32<> template for UseUnrolledLoopPolyMul and 0
  * as initial value of the hash. Used on platforms which do not support hardware
  * accelerated polynomial multiplication.
  * 
@@ -526,7 +526,7 @@ __attribute__((target("sse4.2,pclmul"), flatten)) static inline uint32_t pclmul(
  * @return CRC-32C (polynomial 0x11EDC6F41)
  */
 __attribute__((target("sse4.2"), flatten)) static inline uint32_t unrolled_loop_poly_mul(const byte *data, size_t len) noexcept {
-  return calculate_with<use_unrolled_loop_poly_mul>(0, data, len);
+  return calculate_with<UseUnrolledLoopPolyMul>(0, data, len);
 }
 
 #endif

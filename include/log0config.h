@@ -44,7 +44,7 @@ constexpr ulint LOG_METADATA_PAGE_SIZE = 4096;
 
 /* Block and file header constants - will be defined after struct definitions */
 
-/* In a Log_vfile.  First file layout.
+/* In a LogVfile.  First file layout.
 
     LOG_START_LSN ---------------------------+
                                              |
@@ -86,7 +86,7 @@ constexpr ulint LOG_METADATA_PAGE_SIZE = 4096;
 
 #pragma pack(push, 1)
 
-struct Log_phy_file_header {
+struct LogPhyFileHeader {
   constexpr static ulint MAGIC = 1441231243;
 
   void set_ver(uint64_t ver) noexcept { mach_write_to_8(reinterpret_cast<byte *>(&m_ver), ver); }
@@ -102,7 +102,7 @@ struct Log_phy_file_header {
   [[nodiscard]] ulint get_checksum() noexcept { return mach_read_from_4(reinterpret_cast<byte *>(&m_checksum)); }
 
   [[nodiscard]] std::string to_string() const noexcept {
-    return std::format("Log_phy_file_header: magic: {}, ver: {}, lsn: {}, checksum: {}", m_magic, m_ver, m_lsn, m_checksum);
+    return std::format("LogPhyFileHeader: magic: {}, ver: {}, lsn: {}, checksum: {}", m_magic, m_ver, m_lsn, m_checksum);
   }
 
   uint32_t m_magic{MAGIC};
@@ -125,7 +125,7 @@ struct Log_phy_file_header {
   uint32_t m_checksum{0};
 };
 
-struct Log_phy_checkpoint {
+struct LogPhyCheckpoint {
   constexpr static ulint MAGIC = 1441271243;
 
   void set_no(uint32_t no) noexcept { mach_write_to_4(reinterpret_cast<byte *>(&m_no), no); }
@@ -146,7 +146,7 @@ struct Log_phy_checkpoint {
 
   [[nodiscard]] std::string to_string() const noexcept {
     return std::format(
-      "Log_phy_checkpoint: magic: {}, no: {}, lsn: {}, offset: {}, checksum: {}", m_magic, m_no, m_lsn, m_offset, m_checksum
+      "LogPhyCheckpoint: magic: {}, no: {}, lsn: {}, offset: {}, checksum: {}", m_magic, m_no, m_lsn, m_offset, m_checksum
     );
   }
 
@@ -175,15 +175,15 @@ struct Log_phy_checkpoint {
   uint32_t m_checksum{0};
 };
 
-struct Log_phy_block {
+struct LogPhyBlock {
 
-  Log_phy_block() = default;
+  LogPhyBlock() = default;
 
   /** Prepares the log block for writing. */
   void prepare(ulint block_no) noexcept {
     set_block_no(block_no);
     set_first_rec_group(0);
-    set_data_len(Log_phy_block::HEADER_SIZE);
+    set_data_len(LogPhyBlock::HEADER_SIZE);
   }
 
   /**
@@ -276,7 +276,7 @@ struct Log_phy_block {
    */
   [[nodiscard]] std::string to_string() const noexcept {
     return std::format(
-      "Log_phy_block: block_no: {}, data_len: {}, first_rec_group: {}, checkpoint_no: {}, checksum: {}",
+      "LogPhyBlock: block_no: {}, data_len: {}, first_rec_group: {}, checkpoint_no: {}, checksum: {}",
       m_block_no,
       m_data_len,
       m_first_rec_group,
@@ -316,24 +316,24 @@ struct Log_phy_block {
 
 #pragma pack(pop)
 
-static_assert(std::is_standard_layout<Log_phy_file_header>::value, "Log_phy_file_header must have a standard layout");
-static_assert(std::is_standard_layout<Log_phy_checkpoint>::value, "Log_phy_checkpoint must have a standard layout");
-static_assert(std::is_standard_layout<Log_phy_block>::value, "Log_phy_block must have a standard layout");
+static_assert(std::is_standard_layout<LogPhyFileHeader>::value, "LogPhyFileHeader must have a standard layout");
+static_assert(std::is_standard_layout<LogPhyCheckpoint>::value, "LogPhyCheckpoint must have a standard layout");
+static_assert(std::is_standard_layout<LogPhyBlock>::value, "LogPhyBlock must have a standard layout");
 
 /** The data pages start after the block header and the two checkpoint fields. */
-static_assert(sizeof(Log_phy_file_header) == LOG_METADATA_PAGE_SIZE, "Log_phy_file_header size != LOG_METADATA_PAGE_SIZE");
-static_assert(sizeof(Log_phy_checkpoint) == LOG_METADATA_PAGE_SIZE, "Log_phy_checkpoint size != LOG_METADATA_PAGE_SIZE");
-static_assert(sizeof(Log_phy_block) == LOG_DATA_PAGE_SIZE, "Log_phy_blocksize != LOG_DATA_PAGE_SIZE");
+static_assert(sizeof(LogPhyFileHeader) == LOG_METADATA_PAGE_SIZE, "LogPhyFileHeader size != LOG_METADATA_PAGE_SIZE");
+static_assert(sizeof(LogPhyCheckpoint) == LOG_METADATA_PAGE_SIZE, "LogPhyCheckpoint size != LOG_METADATA_PAGE_SIZE");
+static_assert(sizeof(LogPhyBlock) == LOG_DATA_PAGE_SIZE, "Log_phy_blocksize != LOG_DATA_PAGE_SIZE");
 
-constexpr off_t LOG_DATA_PAGE_START = sizeof(Log_phy_file_header) + sizeof(Log_phy_checkpoint) * 2;
+constexpr off_t LOG_DATA_PAGE_START = sizeof(LogPhyFileHeader) + sizeof(LogPhyCheckpoint) * 2;
 
 /* Checkpoint area constants for first file only */
-constexpr off_t LOG_CHECKPOINT_AREA_SIZE = sizeof(Log_phy_checkpoint) * 2;
+constexpr off_t LOG_CHECKPOINT_AREA_SIZE = sizeof(LogPhyCheckpoint) * 2;
 constexpr off_t LOG_FIRST_FILE_DATA_START = LOG_DATA_PAGE_START;
 
 /* Checkpoint constants */
-constexpr ulint LOG_CHECKPOINT_1 = sizeof(Log_phy_file_header);
-constexpr ulint LOG_CHECKPOINT_2 = LOG_CHECKPOINT_1 + sizeof(Log_phy_checkpoint);
+constexpr ulint LOG_CHECKPOINT_1 = sizeof(LogPhyFileHeader);
+constexpr ulint LOG_CHECKPOINT_2 = LOG_CHECKPOINT_1 + sizeof(LogPhyCheckpoint);
 
 /* The counting of LSN starts from this value: this must be non-zero */
-constexpr auto LOG_START_LSN = LOG_CHECKPOINT_2 + sizeof(Log_phy_checkpoint);
+constexpr auto LOG_START_LSN = LOG_CHECKPOINT_2 + sizeof(LogPhyCheckpoint);

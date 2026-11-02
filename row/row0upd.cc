@@ -81,25 +81,25 @@ the x-latch freed? The most efficient way for performing a
 searched delete is obviously to keep the x-latch for several
 steps of query graph execution. */
 
-Row_update *srv_row_upd{};
+RowUpdate *srv_row_upd{};
 
-Row_update::Row_update(Dict *dict, Lock_sys *lock_sys) noexcept : m_dict(dict), m_lock_sys(lock_sys) {}
+RowUpdate::RowUpdate(Dict *dict, LockSys *lock_sys) noexcept : m_dict(dict), m_lock_sys(lock_sys) {}
 
-Row_update::~Row_update() noexcept {}
+RowUpdate::~RowUpdate() noexcept {}
 
-Row_update *Row_update::create(Dict *dict, Lock_sys *lock_sys) noexcept {
-  auto ptr = ut_new(sizeof(Row_update));
+RowUpdate *RowUpdate::create(Dict *dict, LockSys *lock_sys) noexcept {
+  auto ptr = ut_new(sizeof(RowUpdate));
 
-  return new (ptr) Row_update(dict, lock_sys);
+  return new (ptr) RowUpdate(dict, lock_sys);
 }
 
-void Row_update::destroy(Row_update *&row_upd) noexcept {
+void RowUpdate::destroy(RowUpdate *&row_upd) noexcept {
   call_destructor(row_upd);
   ut_delete(row_upd);
   row_upd = nullptr;
 }
 
-bool Row_update::index_is_referenced(const Index *index, Trx *trx) noexcept {
+bool RowUpdate::index_is_referenced(const Index *index, Trx *trx) noexcept {
   auto table = index->m_table;
 
   if (table->m_referenced_list.empty()) {
@@ -130,10 +130,10 @@ bool Row_update::index_is_referenced(const Index *index, Trx *trx) noexcept {
   return is_referenced;
 }
 
-db_err Row_update::check_references_constraints(
-  upd_node_t *node, Btree_pcursor *pcur, Table *table, const Index *index, ulint *offsets, que_thr_t *thr, mtr_t *mtr
+DbErr RowUpdate::check_references_constraints(
+  UpdNode *node, BtreePcursor *pcur, Table *table, const Index *index, ulint *offsets, QueThr *thr, Mtr *mtr
 ) noexcept {
-  db_err err;
+  DbErr err;
   ulint n_ext;
   bool got_s_lock{};
 
@@ -216,9 +216,9 @@ func_exit:
   return err;
 }
 
-upd_node_t *Row_update::node_create(mem_heap_t *heap) noexcept {
-  auto ptr = mem_heap_alloc(heap, sizeof(upd_node_t));
-  auto node = new (ptr) upd_node_t();
+UpdNode *RowUpdate::node_create(MemHeap *heap) noexcept {
+  auto ptr = mem_heap_alloc(heap, sizeof(UpdNode));
+  auto node = new (ptr) UpdNode();
 
   node->m_heap = mem_heap_create(128);
   node->m_common.type = QUE_NODE_UPDATE;
@@ -227,8 +227,8 @@ upd_node_t *Row_update::node_create(mem_heap_t *heap) noexcept {
   return node;
 }
 
-void Row_update::rec_sys_fields_in_recovery(
-  Rec rec, const Rec_offs &offsets, ulint pos, trx_id_t trx_id, roll_ptr_t roll_ptr
+void RowUpdate::rec_sys_fields_in_recovery(
+  Rec rec, const RecOffs &offsets, ulint pos, trx_id_t trx_id, roll_ptr_t roll_ptr
 ) noexcept {
   ut_ad(rec.offs_validate(nullptr, offsets));
 
@@ -241,11 +241,11 @@ void Row_update::rec_sys_fields_in_recovery(
 
   static_assert(DATA_TRX_ID + 1 == DATA_ROLL_PTR, "error DATA_TRX_ID + 1 != DATA_ROLL_PTR");
 
-  Trx_sys::write_trx_id(field, trx_id);
+  TrxSys::write_trx_id(field, trx_id);
   trx_write_roll_ptr(field + DATA_TRX_ID_LEN, roll_ptr);
 }
 
-void Row_update::index_entry_sys_field(const DTuple *entry, const Index *index, ulint type, uint64_t val) noexcept {
+void RowUpdate::index_entry_sys_field(const DTuple *entry, const Index *index, ulint type, uint64_t val) noexcept {
   ut_ad(index->is_clustered());
 
   auto pos = index->get_sys_col_field_pos(type);
@@ -254,14 +254,14 @@ void Row_update::index_entry_sys_field(const DTuple *entry, const Index *index, 
   auto field = dfield_get_data(dfield);
 
   if (type == DATA_TRX_ID) {
-    Trx_sys::write_trx_id(reinterpret_cast<byte *>(field), val);
+    TrxSys::write_trx_id(reinterpret_cast<byte *>(field), val);
   } else {
     ut_ad(type == DATA_ROLL_PTR);
     trx_write_roll_ptr((byte *)field, val);
   }
 }
 
-bool Row_update::changes_field_size_or_external(const Index *index, const ulint *offsets, const upd_t *update) noexcept {
+bool RowUpdate::changes_field_size_or_external(const Index *index, const ulint *offsets, const Upd *update) noexcept {
   ut_ad(Rec{}.offs_validate(index, offsets));
   const auto n_fields = upd_get_n_fields(update);
 
@@ -286,7 +286,7 @@ bool Row_update::changes_field_size_or_external(const Index *index, const ulint 
   return false;
 }
 
-void Row_update::rec_in_place(Rec rec, const Index *index, const ulint *offsets, const upd_t *update) noexcept {
+void RowUpdate::rec_in_place(Rec rec, const Index *index, const ulint *offsets, const Upd *update) noexcept {
   ut_ad(rec.offs_validate(index, offsets));
 
   rec.set_info_bits(update->m_info_bits);
@@ -303,8 +303,8 @@ void Row_update::rec_in_place(Rec rec, const Index *index, const ulint *offsets,
   }
 }
 
-byte *Row_update::write_sys_vals_to_log(
-  const Index *index, Trx *trx, roll_ptr_t roll_ptr, byte *log_ptr, mtr_t *mtr __attribute__((unused))
+byte *RowUpdate::write_sys_vals_to_log(
+  const Index *index, Trx *trx, roll_ptr_t roll_ptr, byte *log_ptr, Mtr *mtr __attribute__((unused))
 ) noexcept {
   ut_ad(index->is_clustered());
 
@@ -318,7 +318,7 @@ byte *Row_update::write_sys_vals_to_log(
   return log_ptr;
 }
 
-byte *Row_update::parse_sys_vals(byte *ptr, byte *end_ptr, ulint *pos, trx_id_t *trx_id, roll_ptr_t *roll_ptr) noexcept {
+byte *RowUpdate::parse_sys_vals(byte *ptr, byte *end_ptr, ulint *pos, trx_id_t *trx_id, roll_ptr_t *roll_ptr) noexcept {
   *pos = static_cast<ulint>(mach_parse_compressed(ptr, end_ptr));
 
   if (ptr == nullptr) {
@@ -339,7 +339,7 @@ byte *Row_update::parse_sys_vals(byte *ptr, byte *end_ptr, ulint *pos, trx_id_t 
   return ptr;
 }
 
-void Row_update::index_write_log(const upd_t *update, byte *log_ptr, mtr_t *mtr) noexcept {
+void RowUpdate::index_write_log(const Upd *update, byte *log_ptr, Mtr *mtr) noexcept {
   auto buf_end = log_ptr + MLOG_BUF_MARGIN;
   const auto n_fields = upd_get_n_fields(update);
 
@@ -384,7 +384,7 @@ void Row_update::index_write_log(const upd_t *update, byte *log_ptr, mtr_t *mtr)
   mlog_close(mtr, log_ptr);
 }
 
-byte *Row_update::index_parse(byte *ptr, byte *end_ptr, mem_heap_t *heap, upd_t **update_out) noexcept {
+byte *RowUpdate::index_parse(byte *ptr, byte *end_ptr, MemHeap *heap, Upd **update_out) noexcept {
   if (end_ptr < ptr + 1) {
 
     return nullptr;
@@ -442,8 +442,8 @@ byte *Row_update::index_parse(byte *ptr, byte *end_ptr, mem_heap_t *heap, upd_t 
   return ptr;
 }
 
-upd_t *Row_update::build_sec_rec_difference_binary(
-  const Index *index, const DTuple *entry, const Rec rec, Trx *trx, mem_heap_t *heap
+Upd *RowUpdate::build_sec_rec_difference_binary(
+  const Index *index, const DTuple *entry, const Rec rec, Trx *trx, MemHeap *heap
 ) noexcept {
   /* This function is used only for a secondary index */
   ut_a(!index->is_clustered());
@@ -454,10 +454,10 @@ upd_t *Row_update::build_sec_rec_difference_binary(
   ulint *offsets;
   std::array<ulint, REC_OFFS_SMALL_SIZE> rec_offsets;
 
-  Rec_offs(rec_offsets.data()).set_n_alloc(rec_offsets.size());
+  RecOffs(rec_offsets.data()).set_n_alloc(rec_offsets.size());
 
   {
-    Phy_rec record{index, rec};
+    PhyRec record{index, rec};
 
     offsets = record.get_col_offsets(rec_offsets.data(), ULINT_UNDEFINED, &heap, Current_location());
   }
@@ -496,12 +496,12 @@ upd_t *Row_update::build_sec_rec_difference_binary(
   return update;
 }
 
-upd_t *Row_update::build_difference_binary(
-  const Index *index, const DTuple *entry, const Rec rec, Trx *trx, mem_heap_t *heap
+Upd *RowUpdate::build_difference_binary(
+  const Index *index, const DTuple *entry, const Rec rec, Trx *trx, MemHeap *heap
 ) noexcept {
   std::array<ulint, REC_OFFS_NORMAL_SIZE> rec_offsets;
 
-  Rec_offs(rec_offsets.data()).set_n_alloc(rec_offsets.size());
+  RecOffs(rec_offsets.data()).set_n_alloc(rec_offsets.size());
 
   /* This function is used only for a clustered index */
   ut_a(index->is_clustered());
@@ -515,7 +515,7 @@ upd_t *Row_update::build_difference_binary(
   ulint *offsets;
 
   {
-    Phy_rec record{index, rec};
+    PhyRec record{index, rec};
 
     offsets = record.get_col_offsets(rec_offsets.data(), ULINT_UNDEFINED, &heap, Current_location());
   }
@@ -552,7 +552,7 @@ upd_t *Row_update::build_difference_binary(
   return update;
 }
 
-byte *Row_update::ext_fetch(const byte *data, ulint local_len, ulint *len, mem_heap_t *heap) noexcept {
+byte *RowUpdate::ext_fetch(const byte *data, ulint local_len, ulint *len, MemHeap *heap) noexcept {
   auto buf = mem_heap_alloc(heap, *len);
   Blob blob(m_dict->m_store.m_fsp, m_dict->m_store.m_btree);
 
@@ -563,8 +563,8 @@ byte *Row_update::ext_fetch(const byte *data, ulint local_len, ulint *len, mem_h
   return buf;
 }
 
-void Row_update::index_replace_new_col_val(
-  dfield_t *dfield, const Field *field, const Column *col, const upd_field_t *uf, mem_heap_t *heap
+void RowUpdate::index_replace_new_col_val(
+  Dfield *dfield, const Field *field, const Column *col, const UpdField *uf, MemHeap *heap
 ) noexcept {
   dfield_copy_data(dfield, &uf->m_new_val);
 
@@ -626,8 +626,8 @@ void Row_update::index_replace_new_col_val(
   }
 }
 
-void Row_update::index_replace_new_col_vals_index_pos(
-  DTuple *entry, const Index *index, const upd_t *update, bool order_only, mem_heap_t *heap
+void RowUpdate::index_replace_new_col_vals_index_pos(
+  DTuple *entry, const Index *index, const Upd *update, bool order_only, MemHeap *heap
 ) noexcept {
   dtuple_set_info_bits(entry, update->m_info_bits);
 
@@ -644,7 +644,7 @@ void Row_update::index_replace_new_col_vals_index_pos(
   }
 }
 
-void Row_update::index_replace_new_col_vals(DTuple *entry, Index *index, const upd_t *update, mem_heap_t *heap) noexcept {
+void RowUpdate::index_replace_new_col_vals(DTuple *entry, Index *index, const Upd *update, MemHeap *heap) noexcept {
   const auto clust_index = index->m_table->get_first_index();
 
   dtuple_set_info_bits(entry, update->m_info_bits);
@@ -660,7 +660,7 @@ void Row_update::index_replace_new_col_vals(DTuple *entry, Index *index, const u
   }
 }
 
-void Row_update::replace(DTuple *row, row_ext_t **ext, const Index *index, const upd_t *update, mem_heap_t *heap) noexcept {
+void RowUpdate::replace(DTuple *row, RowExt **ext, const Index *index, const Upd *update, MemHeap *heap) noexcept {
   ut_ad(index->is_clustered());
 
   const auto table = index->m_table;
@@ -709,7 +709,7 @@ void Row_update::replace(DTuple *row, row_ext_t **ext, const Index *index, const
   }
 }
 
-bool Row_update::changes_ord_field_binary(const DTuple *row, Index *index, const upd_t *update) noexcept {
+bool RowUpdate::changes_ord_field_binary(const DTuple *row, Index *index, const Upd *update) noexcept {
   ut_ad(update);
 
   const auto n_unique = index->get_n_unique();
@@ -743,7 +743,7 @@ bool Row_update::changes_ord_field_binary(const DTuple *row, Index *index, const
   return false;
 }
 
-bool Row_update::changes_some_index_ord_field_binary(const Table *table, const upd_t *update) noexcept {
+bool RowUpdate::changes_some_index_ord_field_binary(const Table *table, const Upd *update) noexcept {
   const auto index = table->get_first_index();
 
   for (ulint i{}; i < upd_get_n_fields(update); i++) {
@@ -759,7 +759,7 @@ bool Row_update::changes_some_index_ord_field_binary(const Table *table, const u
   return false;
 }
 
-bool Row_update::changes_first_fields_binary(DTuple *entry, const Index *index, const upd_t *update, ulint n) noexcept {
+bool RowUpdate::changes_first_fields_binary(DTuple *entry, const Index *index, const Upd *update, ulint n) noexcept {
   ut_ad(n <= index->get_n_fields());
 
   const auto n_upd_fields = upd_get_n_fields(update);
@@ -787,7 +787,7 @@ bool Row_update::changes_first_fields_binary(DTuple *entry, const Index *index, 
   return false;
 }
 
-inline void Row_update::copy_columns(Rec rec, const ulint *offsets, sym_node_t *column) noexcept {
+inline void RowUpdate::copy_columns(Rec rec, const ulint *offsets, SymNode *column) noexcept {
   while (column != nullptr) {
     ulint len;
     auto col_offset = rec_offs_get_nth_field(offsets, column->field_nos[SYM_CLUST_FIELD_NO], &len);
@@ -799,7 +799,7 @@ inline void Row_update::copy_columns(Rec rec, const ulint *offsets, sym_node_t *
   }
 }
 
-inline void Row_update::eval_new_vals(upd_t *update) noexcept {
+inline void RowUpdate::eval_new_vals(Upd *update) noexcept {
   const auto n_fields = upd_get_n_fields(update);
 
   for (ulint i{}; i < n_fields; ++i) {
@@ -812,8 +812,8 @@ inline void Row_update::eval_new_vals(upd_t *update) noexcept {
   }
 }
 
-void Row_update::store_row(upd_node_t *node) noexcept {
-  mem_heap_t *heap{};
+void RowUpdate::store_row(UpdNode *node) noexcept {
+  MemHeap *heap{};
 
   ut_ad(node->m_pcur->m_latch_mode != BTR_NO_LATCHES);
 
@@ -827,14 +827,14 @@ void Row_update::store_row(upd_node_t *node) noexcept {
 
   std::array<ulint, REC_OFFS_NORMAL_SIZE> rec_offsets;
 
-  Rec_offs(rec_offsets.data()).set_n_alloc(rec_offsets.size());
+  RecOffs(rec_offsets.data()).set_n_alloc(rec_offsets.size());
 
   ulint *offsets;
 
-  Rec_offs(rec_offsets.data()).set_n_alloc(rec_offsets.size());
+  RecOffs(rec_offsets.data()).set_n_alloc(rec_offsets.size());
 
   {
-    Phy_rec record{clust_index, rec};
+    PhyRec record{clust_index, rec};
 
     offsets = record.get_col_offsets(rec_offsets.data(), ULINT_UNDEFINED, &heap, Current_location());
   }
@@ -854,10 +854,10 @@ void Row_update::store_row(upd_node_t *node) noexcept {
   }
 }
 
-db_err Row_update::sec_index_entry(upd_node_t *node, que_thr_t *thr) noexcept {
-  db_err err = DB_SUCCESS;
+DbErr RowUpdate::sec_index_entry(UpdNode *node, QueThr *thr) noexcept {
+  DbErr err = DB_SUCCESS;
   auto trx = thr_get_trx(thr);
-  Btree_pcursor pcur(m_dict->m_store.m_fsp, m_dict->m_store.m_btree);
+  BtreePcursor pcur(m_dict->m_store.m_fsp, m_dict->m_store.m_btree);
 
   auto index = node->m_index;
   auto heap = mem_heap_create(1024);
@@ -867,7 +867,7 @@ db_err Row_update::sec_index_entry(upd_node_t *node, que_thr_t *thr) noexcept {
 
   log_sys->free_check();
 
-  mtr_t mtr;
+  Mtr mtr;
 
   mtr.start();
 
@@ -896,7 +896,7 @@ db_err Row_update::sec_index_entry(upd_node_t *node, que_thr_t *thr) noexcept {
       err = btr_cur->del_mark_set_sec_rec(0, true, thr, &mtr);
 
       if (err == DB_SUCCESS && check_ref) {
-        Phy_rec record{index, rec};
+        PhyRec record{index, rec};
         auto offsets = record.get_col_offsets(nullptr, ULINT_UNDEFINED, &heap, Current_location());
 
         /* NOTE that the following call loses the position of pcur ! */
@@ -926,7 +926,7 @@ func_exit:
   return err;
 }
 
-inline db_err Row_update::sec_step(upd_node_t *node, que_thr_t *thr) noexcept {
+inline DbErr RowUpdate::sec_step(UpdNode *node, QueThr *thr) noexcept {
   ut_ad((node->m_state == UPD_NODE_UPDATE_ALL_SEC) || (node->m_state == UPD_NODE_UPDATE_SOME_SEC));
   ut_ad(!node->m_index->is_clustered());
 
@@ -937,12 +937,12 @@ inline db_err Row_update::sec_step(upd_node_t *node, que_thr_t *thr) noexcept {
   return DB_SUCCESS;
 }
 
-db_err Row_update::clust_rec_by_insert(
-  upd_node_t *upd_node, const Index *index, que_thr_t *thr, bool check_ref, mtr_t *mtr
+DbErr RowUpdate::clust_rec_by_insert(
+  UpdNode *upd_node, const Index *index, QueThr *thr, bool check_ref, Mtr *mtr
 ) noexcept {
-  db_err err;
+  DbErr err;
   DTuple *entry;
-  mem_heap_t *heap{};
+  MemHeap *heap{};
 
   ut_ad(index->is_clustered());
 
@@ -976,9 +976,9 @@ db_err Row_update::clust_rec_by_insert(
     std::array<ulint, REC_OFFS_NORMAL_SIZE> rec_offsets;
 
     {
-      Phy_rec record{index, rec};
+      PhyRec record{index, rec};
 
-      Rec_offs(rec_offsets.data()).set_n_alloc(rec_offsets.size());
+      RecOffs(rec_offsets.data()).set_n_alloc(rec_offsets.size());
       offsets = record.get_col_offsets(rec_offsets.data(), ULINT_UNDEFINED, &heap, Current_location());
     }
 
@@ -1031,10 +1031,10 @@ db_err Row_update::clust_rec_by_insert(
   return err;
 }
 
-db_err Row_update::clust_rec(upd_node_t *upd_node, const Index *index, que_thr_t *thr, mtr_t *mtr) noexcept {
-  mem_heap_t *heap = nullptr;
-  big_rec_t big_rec{};
-  db_err err;
+DbErr RowUpdate::clust_rec(UpdNode *upd_node, const Index *index, QueThr *thr, Mtr *mtr) noexcept {
+  MemHeap *heap = nullptr;
+  BigRec big_rec{};
+  DbErr err;
 
   ut_ad(index->is_clustered());
 
@@ -1096,7 +1096,7 @@ db_err Row_update::clust_rec(upd_node_t *upd_node, const Index *index, que_thr_t
     std::array<ulint, REC_OFFS_NORMAL_SIZE> rec_offsets;
 
     {
-      Phy_rec record{index, rec};
+      PhyRec record{index, rec};
 
       offsets = record.get_col_offsets(rec_offsets.data(), ULINT_UNDEFINED, &heap, Current_location());
     }
@@ -1119,10 +1119,10 @@ db_err Row_update::clust_rec(upd_node_t *upd_node, const Index *index, que_thr_t
   return err;
 }
 
-db_err Row_update::del_mark_clust_rec(
-  upd_node_t *node, const Index *index, ulint *offsets, que_thr_t *thr, bool check_ref, mtr_t *mtr
+DbErr RowUpdate::del_mark_clust_rec(
+  UpdNode *node, const Index *index, ulint *offsets, QueThr *thr, bool check_ref, Mtr *mtr
 ) noexcept {
-  db_err err;
+  DbErr err;
 
   ut_ad(node->m_is_delete);
   ut_ad(index->is_clustered());
@@ -1151,20 +1151,20 @@ db_err Row_update::del_mark_clust_rec(
   return err;
 }
 
-db_err Row_update::clust_step(upd_node_t *node, que_thr_t *thr) noexcept {
-  db_err err;
+DbErr RowUpdate::clust_step(UpdNode *node, QueThr *thr) noexcept {
+  DbErr err;
   Rec rec;
-  mem_heap_t *heap{};
+  MemHeap *heap{};
   std::array<ulint, REC_OFFS_NORMAL_SIZE> rec_offsets;
 
-  Rec_offs(rec_offsets.data()).set_n_alloc(rec_offsets.size());
+  RecOffs(rec_offsets.data()).set_n_alloc(rec_offsets.size());
 
   auto index = node->m_table->get_first_index();
   auto check_ref = index_is_referenced(index, thr_get_trx(thr));
   auto pcur = node->m_pcur;
 
   /* We have to restore the cursor to its position */
-  mtr_t mtr_local;
+  Mtr mtr_local;
   auto mtr = &mtr_local;
 
   mtr->start();
@@ -1177,7 +1177,7 @@ db_err Row_update::clust_step(upd_node_t *node, que_thr_t *thr) noexcept {
   that case we know that the transaction has at least an
   implicit x-lock on the record. */
 
-  ut_a(pcur->m_rel_pos == Btree_cursor_pos::ON);
+  ut_a(pcur->m_rel_pos == BtreeCursorPos::ON);
 
   auto success = pcur->restore_position(BTR_MODIFY_LEAF, mtr, Current_location());
 
@@ -1211,9 +1211,9 @@ db_err Row_update::clust_step(upd_node_t *node, que_thr_t *thr) noexcept {
   ulint *offsets;
 
   {
-    Phy_rec record{index, rec};
+    PhyRec record{index, rec};
 
-    Rec_offs(rec_offsets.data()).set_n_alloc(rec_offsets.size());
+    RecOffs(rec_offsets.data()).set_n_alloc(rec_offsets.size());
 
     offsets = record.get_col_offsets(rec_offsets.data(), ULINT_UNDEFINED, &heap, Current_location());
   }
@@ -1306,8 +1306,8 @@ db_err Row_update::clust_step(upd_node_t *node, que_thr_t *thr) noexcept {
   return err;
 }
 
-db_err Row_update::update(upd_node_t *node, que_thr_t *thr) noexcept {
-  db_err err = DB_SUCCESS;
+DbErr RowUpdate::update(UpdNode *node, QueThr *thr) noexcept {
+  DbErr err = DB_SUCCESS;
 
   if (likely(node->m_in_client_interface)) {
 
@@ -1365,13 +1365,13 @@ function_exit:
   return err;
 }
 
-que_thr_t *Row_update::step(que_thr_t *thr) noexcept {
-  db_err err = DB_SUCCESS;
+QueThr *RowUpdate::step(QueThr *thr) noexcept {
+  DbErr err = DB_SUCCESS;
 
   ut_ad(thr);
 
   auto trx = thr_get_trx(thr);
-  auto node = static_cast<upd_node_t *>(thr->run_node);
+  auto node = static_cast<UpdNode *>(thr->run_node);
   auto sel_node = node->m_select;
   auto parent = que_node_get_parent(node);
 
@@ -1462,12 +1462,12 @@ error_handling:
   return thr;
 }
 
-upd_node_t *Row_update::create_update_node(Table *table, mem_heap_t *heap) noexcept {
+UpdNode *RowUpdate::create_update_node(Table *table, MemHeap *heap) noexcept {
   auto node = node_create(heap);
 
   node->m_table = table;
   node->m_in_client_interface = true;
-  node->m_pcur = new Btree_pcursor(m_dict->m_store.m_fsp, m_dict->m_store.m_btree);
+  node->m_pcur = new BtreePcursor(m_dict->m_store.m_fsp, m_dict->m_store.m_btree);
 
   node->m_has_clust_rec_x_lock = true;
   node->m_update_n_fields = table->get_n_cols();

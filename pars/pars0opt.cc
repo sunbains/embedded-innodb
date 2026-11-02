@@ -87,12 +87,12 @@ static int opt_invert_cmp_op(int op) noexcept {
  * nth table is accessed.
  */
 static bool opt_check_exp_determined_before(que_node_t *exp,
-                                            sel_node_t *sel_node,
+                                            SelNode *sel_node,
                                             ulint nth_table) noexcept {
   ut_ad(exp != nullptr && sel_node != nullptr);
 
   if (que_node_get_type(exp) == QUE_NODE_FUNC) {
-    auto func_node = static_cast<func_node_t *>(exp);
+    auto func_node = static_cast<FuncNode *>(exp);
 
     for (auto arg = func_node->args; arg != nullptr;
          arg = que_node_get_next(arg)) {
@@ -106,7 +106,7 @@ static bool opt_check_exp_determined_before(que_node_t *exp,
 
   ut_a(que_node_get_type(exp) == QUE_NODE_SYMBOL);
 
-  auto sym_node = static_cast<sym_node_t *>(exp);
+  auto sym_node = static_cast<SymNode *>(exp);
 
   if (sym_node->token_type != SYM_COLUMN) {
 
@@ -146,8 +146,8 @@ static bool opt_check_exp_determined_before(que_node_t *exp,
  * @return Expression restricting the value of the column, or NULL if not known.
  */
 static que_node_t *opt_look_for_col_in_comparison_before(
-    ulint cmp_type, ulint col_no, func_node_t *search_cond,
-    sel_node_t *sel_node, ulint nth_table, ulint *op) noexcept {
+    ulint cmp_type, ulint col_no, FuncNode *search_cond,
+    SelNode *sel_node, ulint nth_table, ulint *op) noexcept {
   ut_ad(search_cond != nullptr);
 
   ut_a(search_cond->func == '<' || search_cond->func == '>' ||
@@ -171,7 +171,7 @@ static que_node_t *opt_look_for_col_in_comparison_before(
     auto arg = search_cond->args;
 
     if (que_node_get_type(arg) == QUE_NODE_SYMBOL) {
-      auto sym_node = static_cast<sym_node_t *>(arg);
+      auto sym_node = static_cast<SymNode *>(arg);
 
       if (sym_node->token_type == SYM_COLUMN && sym_node->table == table &&
           sym_node->col_no == col_no) {
@@ -197,7 +197,7 @@ static que_node_t *opt_look_for_col_in_comparison_before(
     auto arg = que_node_get_next(exp);
 
     if (que_node_get_type(arg) == QUE_NODE_SYMBOL) {
-      auto sym_node = static_cast<sym_node_t *>(arg);
+      auto sym_node = static_cast<SymNode *>(arg);
 
       if (sym_node->token_type == SYM_COLUMN && sym_node->table == table &&
           sym_node->col_no == col_no) {
@@ -231,8 +231,8 @@ static que_node_t *opt_look_for_col_in_comparison_before(
  * @return Expression restricting the value of the column, or NULL if not known.
  */
 static que_node_t *opt_look_for_col_in_cond_before(ulint cmp_type, ulint col_no,
-                                                   func_node_t *search_cond,
-                                                   sel_node_t *sel_node,
+                                                   FuncNode *search_cond,
+                                                   SelNode *sel_node,
                                                    ulint nth_table,
                                                    ulint *op) noexcept {
   if (search_cond == nullptr) {
@@ -245,7 +245,7 @@ static que_node_t *opt_look_for_col_in_cond_before(ulint cmp_type, ulint col_no,
   ut_a(search_cond->func != PARS_NOT_TOKEN);
 
   if (search_cond->func == PARS_AND_TOKEN) {
-    auto new_cond = static_cast<func_node_t *>(search_cond->args);
+    auto new_cond = static_cast<FuncNode *>(search_cond->args);
     auto exp = opt_look_for_col_in_cond_before(cmp_type, col_no, new_cond,
                                                sel_node, nth_table, op);
 
@@ -253,7 +253,7 @@ static que_node_t *opt_look_for_col_in_cond_before(ulint cmp_type, ulint col_no,
       return exp;
     }
 
-    new_cond = static_cast<func_node_t *>(que_node_get_next(new_cond));
+    new_cond = static_cast<FuncNode *>(que_node_get_next(new_cond));
 
     return opt_look_for_col_in_cond_before(cmp_type, col_no, new_cond, sel_node,
                                            nth_table, op);
@@ -303,7 +303,7 @@ static que_node_t *opt_look_for_col_in_cond_before(ulint cmp_type, ulint col_no,
  *
  * @return The calculated goodness.
  */
-static ulint opt_calc_index_goodness(Index *index, sel_node_t *sel_node,
+static ulint opt_calc_index_goodness(Index *index, SelNode *sel_node,
                                      ulint nth_table, que_node_t **index_plan,
                                      ulint *last_op) {
   ulint goodness{};
@@ -320,7 +320,7 @@ static ulint opt_calc_index_goodness(Index *index, sel_node_t *sel_node,
     const auto col_no = index->get_nth_table_col_no(i);
 
     auto exp = opt_look_for_col_in_cond_before(
-        OPT_EQUAL, col_no, static_cast<func_node_t *>(sel_node->m_search_cond),
+        OPT_EQUAL, col_no, static_cast<FuncNode *>(sel_node->m_search_cond),
         sel_node, nth_table, &op);
 
     if (exp != nullptr) {
@@ -335,7 +335,7 @@ static ulint opt_calc_index_goodness(Index *index, sel_node_t *sel_node,
 
       auto exp = opt_look_for_col_in_cond_before(
           OPT_COMPARISON, col_no,
-          static_cast<func_node_t *>(sel_node->m_search_cond), sel_node,
+          static_cast<FuncNode *>(sel_node->m_search_cond), sel_node,
           nth_table, &op);
 
       if (exp != nullptr) {
@@ -432,7 +432,7 @@ inline ib_srch_mode_t opt_op_to_search_mode(bool asc, ulint op) noexcept {
  * @return true if the node is an argument of the function node, false
  * otherwise.
  */
-static bool opt_is_arg(que_node_t *arg_node, func_node_t *func_node) noexcept {
+static bool opt_is_arg(que_node_t *arg_node, FuncNode *func_node) noexcept {
   for (auto arg = func_node->args; arg != nullptr;
        arg = que_node_get_next(arg)) {
     if (arg == arg_node) {
@@ -456,7 +456,7 @@ static bool opt_is_arg(que_node_t *arg_node, func_node_t *func_node) noexcept {
  * @param[in] sel_node The select node containing the query plan and order-by
  * clause.
  */
-static void opt_check_order_by(sel_node_t *sel_node) noexcept {
+static void opt_check_order_by(SelNode *sel_node) noexcept {
   if (sel_node->m_order_by == nullptr) {
 
     return;
@@ -500,7 +500,7 @@ static void opt_check_order_by(sel_node_t *sel_node) noexcept {
  * @param[in] i The index of the current table in the select statement.
  * @param[in] table The table for which the index is being optimized.
  */
-static void opt_search_plan_for_table(sel_node_t *sel_node, ulint i,
+static void opt_search_plan_for_table(SelNode *sel_node, ulint i,
                                       Table *table) noexcept {
   using Que_nodes = std::array<que_node_t *, 256>;
   ulint last_op{}; /* Eliminate a Purify warning */
@@ -591,8 +591,8 @@ static void opt_search_plan_for_table(sel_node_t *sel_node, ulint i,
  * OPT_TEST_COND, or OPT_SCROLL_COND, where the last means that the
  * condition need not be tested, except when scroll cursors are used.
  */
-static ulint opt_classify_comparison(sel_node_t *sel_node, ulint i,
-                                     func_node_t *cond) noexcept {
+static ulint opt_classify_comparison(SelNode *sel_node, ulint i,
+                                     FuncNode *cond) noexcept {
   ulint op;
 
   ut_ad(cond && sel_node);
@@ -681,19 +681,19 @@ static ulint opt_classify_comparison(sel_node_t *sel_node, ulint i,
  * @param[in] i The index of the table in the join.
  * @param[in] cond The conjunction of search conditions or NULL.
  */
-static void opt_find_test_conds(sel_node_t *sel_node, ulint i,
-                                func_node_t *cond) noexcept {
+static void opt_find_test_conds(SelNode *sel_node, ulint i,
+                                FuncNode *cond) noexcept {
   if (cond == nullptr) {
 
     return;
   }
 
   if (cond->func == PARS_AND_TOKEN) {
-    auto new_cond = static_cast<func_node_t *>(cond->args);
+    auto new_cond = static_cast<FuncNode *>(cond->args);
 
     opt_find_test_conds(sel_node, i, new_cond);
 
-    new_cond = static_cast<func_node_t *>(que_node_get_next(new_cond));
+    new_cond = static_cast<FuncNode *>(que_node_get_next(new_cond));
 
     opt_find_test_conds(sel_node, i, new_cond);
 
@@ -719,14 +719,14 @@ static void opt_find_test_conds(sel_node_t *sel_node, ulint i,
  * @param[in] cond The first in a list of comparison conditions, or NULL.
  * @param[in] table The table to which the conditions apply.
  */
-static void opt_normalize_cmp_conds(func_node_t *cond, Table *table) noexcept {
+static void opt_normalize_cmp_conds(FuncNode *cond, Table *table) noexcept {
   for (; cond != nullptr; cond = UT_LIST_GET_NEXT(cond_list, cond)) {
     auto arg1 = cond->args;
     auto arg2 = que_node_get_next(arg1);
 
     if (que_node_get_type(arg2) == QUE_NODE_SYMBOL) {
 
-      auto sym_node = static_cast<sym_node_t *>(arg2);
+      auto sym_node = static_cast<SymNode *>(arg2);
 
       if (sym_node->token_type == SYM_COLUMN && sym_node->table == table) {
 
@@ -752,14 +752,14 @@ static void opt_normalize_cmp_conds(func_node_t *cond, Table *table) noexcept {
  * @param[in] sel_node The select node.
  * @param[in] i The ith table in the join.
  */
-static void opt_determine_and_normalize_test_conds(sel_node_t *sel_node,
+static void opt_determine_and_normalize_test_conds(SelNode *sel_node,
                                                    ulint i) noexcept {
   auto plan = sel_node->get_nth_plan(i);
 
   /* Recursively go through the conjuncts and classify them */
 
   opt_find_test_conds(sel_node, i,
-                      static_cast<func_node_t *>(sel_node->m_search_cond));
+                      static_cast<FuncNode *>(sel_node->m_search_cond));
 
   opt_normalize_cmp_conds(plan->m_end_conds.front(), plan->m_table);
 
@@ -774,7 +774,7 @@ void opt_find_all_cols(bool copy_val, Index *index, sym_node_list_t *col_list,
   }
 
   if (que_node_get_type(exp) == QUE_NODE_FUNC) {
-    auto func_node = static_cast<func_node_t *>(exp);
+    auto func_node = static_cast<FuncNode *>(exp);
     auto arg = func_node->args;
 
     while (arg != nullptr) {
@@ -787,7 +787,7 @@ void opt_find_all_cols(bool copy_val, Index *index, sym_node_list_t *col_list,
 
   ut_a(que_node_get_type(exp) == QUE_NODE_SYMBOL);
 
-  auto sym_node = static_cast<sym_node_t *>(exp);
+  auto sym_node = static_cast<SymNode *>(exp);
 
   if (sym_node->token_type != SYM_COLUMN) {
 
@@ -853,8 +853,8 @@ void opt_find_all_cols(bool copy_val, Index *index, sym_node_list_t *col_list,
  * @param[in] i The index of the current table in the join.
  * @param[in] search_cond Search condition or NULL.
  */
-static void opt_find_copy_cols(sel_node_t *sel_node, ulint i,
-                               func_node_t *search_cond) noexcept {
+static void opt_find_copy_cols(SelNode *sel_node, ulint i,
+                               FuncNode *search_cond) noexcept {
   if (search_cond == nullptr) {
 
     return;
@@ -863,11 +863,11 @@ static void opt_find_copy_cols(sel_node_t *sel_node, ulint i,
   ut_ad(que_node_get_type(search_cond) == QUE_NODE_FUNC);
 
   if (search_cond->func == PARS_AND_TOKEN) {
-    auto new_cond = static_cast<func_node_t *>(search_cond->args);
+    auto new_cond = static_cast<FuncNode *>(search_cond->args);
 
     opt_find_copy_cols(sel_node, i, new_cond);
 
-    new_cond = static_cast<func_node_t *>(que_node_get_next(new_cond));
+    new_cond = static_cast<FuncNode *>(que_node_get_next(new_cond));
 
     opt_find_copy_cols(sel_node, i, new_cond);
 
@@ -898,7 +898,7 @@ static void opt_find_copy_cols(sel_node_t *sel_node, ulint i,
  * @param[in] sel_node The select node containing the query.
  * @param[in] i The index of the current table in the join.
  */
-static void opt_classify_cols(sel_node_t *sel_node, ulint i) noexcept {
+static void opt_classify_cols(SelNode *sel_node, ulint i) noexcept {
   auto plan = sel_node->get_nth_plan(i);
 
   /* The final value of the following field will depend on the
@@ -915,7 +915,7 @@ static void opt_classify_cols(sel_node_t *sel_node, ulint i) noexcept {
   }
 
   opt_find_copy_cols(sel_node, i,
-                     static_cast<func_node_t *>(sel_node->m_search_cond));
+                     static_cast<FuncNode *>(sel_node->m_search_cond));
 
   /* All remaining columns in the search condition are temporary
   columns: therefore false */
@@ -935,7 +935,7 @@ static void opt_classify_cols(sel_node_t *sel_node, ulint i) noexcept {
  * @param[in] sel_node The select node containing the query.
  * @param[in] n The index of the current table in the select statement.
  */
-static void opt_clust_access(sel_node_t *sel_node, ulint n) {
+static void opt_clust_access(SelNode *sel_node, ulint n) {
   auto plan = sel_node->get_nth_plan(n);
   auto index = plan->m_index;
 
@@ -981,8 +981,8 @@ static void opt_clust_access(sel_node_t *sel_node, ulint n) {
   }
 }
 
-void opt_search_plan(sel_node_t *sel_node) {
-  order_node_t *order_by;
+void opt_search_plan(SelNode *sel_node) {
+  OrderNode *order_by;
 
   auto ptr = mem_heap_alloc(pars_sym_tab_global->heap,
                             sel_node->m_n_tables * sizeof(Plan));
@@ -1020,7 +1020,7 @@ void opt_search_plan(sel_node_t *sel_node) {
 
     opt_determine_and_normalize_test_conds(sel_node, i);
 
-    table_node = static_cast<sym_node_t *>(que_node_get_next(table_node));
+    table_node = static_cast<SymNode *>(que_node_get_next(table_node));
   }
 
   table_node = sel_node->m_table_list;
@@ -1037,7 +1037,7 @@ void opt_search_plan(sel_node_t *sel_node) {
 
     opt_clust_access(sel_node, i);
 
-    table_node = static_cast<sym_node_t *>(que_node_get_next(table_node));
+    table_node = static_cast<SymNode *>(que_node_get_next(table_node));
   }
 
   /* Check that the plan obeys a possible order-by clause: if not,
@@ -1050,7 +1050,7 @@ void opt_search_plan(sel_node_t *sel_node) {
 #endif
 }
 
-void opt_print_query_plan(sel_node_t *sel_node) {
+void opt_print_query_plan(SelNode *sel_node) {
   ulint n_fields;
 
   log_info("QUERY PLAN FOR A SELECT NODE");

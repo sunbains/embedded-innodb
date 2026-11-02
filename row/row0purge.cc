@@ -40,11 +40,11 @@ Created 3/14/1997 Heikki Tuuri
 #include "trx0undo.h"
 #include "trx0undo_rec.h"
 
-Row_purge *Row_purge::node_create(que_thr_t *parent, mem_heap_t *heap) {
+RowPurge *RowPurge::node_create(QueThr *parent, MemHeap *heap) {
   ut_ad(parent != nullptr);
 
-  auto ptr = mem_heap_alloc(heap, sizeof(Row_purge));
-  auto node = new (ptr) Row_purge();
+  auto ptr = mem_heap_alloc(heap, sizeof(RowPurge));
+  auto node = new (ptr) RowPurge();
 
   node->m_common.type = QUE_NODE_PURGE;
   node->m_common.parent = parent;
@@ -54,11 +54,11 @@ Row_purge *Row_purge::node_create(que_thr_t *parent, mem_heap_t *heap) {
   return node;
 }
 
-Row_purge *row_purge_node_create(que_thr_t *parent, mem_heap_t *heap) {
-  return static_cast<Row_purge *>(Row_purge::node_create(parent, heap));
+RowPurge *row_purge_node_create(QueThr *parent, MemHeap *heap) {
+  return static_cast<RowPurge *>(RowPurge::node_create(parent, heap));
 }
 
-bool Row_purge::reposition_pcur(ulint latch_mode, mtr_t *mtr) {
+bool RowPurge::reposition_pcur(ulint latch_mode, Mtr *mtr) {
   if (m_found_clust) {
     return m_pcur.restore_position(latch_mode, mtr, Current_location());
   } else {
@@ -72,12 +72,12 @@ bool Row_purge::reposition_pcur(ulint latch_mode, mtr_t *mtr) {
   }
 }
 
-bool Row_purge::remove_clust_if_poss_low(ulint mode) {
-  mtr_t mtr;
-  db_err err;
-  mem_heap_t *heap{};
+bool RowPurge::remove_clust_if_poss_low(ulint mode) {
+  Mtr mtr;
+  DbErr err;
+  MemHeap *heap{};
   std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
-  Rec_offs offsets(offsets_.data());
+  RecOffs offsets(offsets_.data());
 
   auto btr_cur = m_pcur.get_btr_cur();
   auto index = m_table->get_first_index();
@@ -97,7 +97,7 @@ bool Row_purge::remove_clust_if_poss_low(ulint mode) {
   auto rec = m_pcur.get_rec();
 
   {
-    Phy_rec record{index, rec};
+    PhyRec record{index, rec};
 
     offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
   }
@@ -137,7 +137,7 @@ bool Row_purge::remove_clust_if_poss_low(ulint mode) {
   return (success);
 }
 
-void Row_purge::remove_clust_if_poss() {
+void RowPurge::remove_clust_if_poss() {
   ulint n_tries{};
 
   /*	ib_logger(ib_stream, "Purge: Removing clustered record\n"); */
@@ -165,14 +165,14 @@ retry:
   ut_a(success);
 }
 
-bool Row_purge::remove_sec_if_poss_low(Index *index, const DTuple *entry, ulint mode) {
-  Btree_pcursor pcur(srv_fsp, srv_btree_sys);
-  Btree_cursor *btr_cur;
+bool RowPurge::remove_sec_if_poss_low(Index *index, const DTuple *entry, ulint mode) {
+  BtreePcursor pcur(srv_fsp, srv_btree_sys);
+  BtreeCursor *btr_cur;
   bool success;
   bool old_has{};
-  db_err err;
-  mtr_t mtr;
-  mtr_t mtr_vers;
+  DbErr err;
+  Mtr mtr;
+  Mtr mtr_vers;
 
   log_sys->free_check();
 
@@ -237,7 +237,7 @@ bool Row_purge::remove_sec_if_poss_low(Index *index, const DTuple *entry, ulint 
   return (success);
 }
 
-void Row_purge::remove_sec_if_poss(Index *index, DTuple *entry) {
+void RowPurge::remove_sec_if_poss(Index *index, DTuple *entry) {
   ulint n_tries{};
 
   /* ib_logger(ib_stream, "Purge: Removing secondary record\n"); */
@@ -267,7 +267,7 @@ retry:
   ut_a(success);
 }
 
-void Row_purge::del_mark() {
+void RowPurge::del_mark() {
   auto heap = mem_heap_create(1024);
 
   for (; m_index != nullptr; m_index = m_index->get_next()) {
@@ -285,13 +285,13 @@ void Row_purge::del_mark() {
   remove_clust_if_poss();
 }
 
-void Row_purge::upd_exist_or_extern() {
+void RowPurge::upd_exist_or_extern() {
   Index *idx;
   bool is_insert;
   ulint rseg_id;
   page_no_t page_no;
   ulint offset;
-  mtr_t mtr;
+  Mtr mtr;
 
   Blob blob(srv_fsp, srv_btree_sys);
   auto heap = mem_heap_create(1024);
@@ -317,12 +317,12 @@ void Row_purge::upd_exist_or_extern() {
 
 skip_secondaries:
   /* Free possible externally stored fields */
-  for (ulint i = 0; i < Row_update::upd_get_n_fields(m_update); i++) {
+  for (ulint i = 0; i < RowUpdate::upd_get_n_fields(m_update); i++) {
 
     auto ufield = m_update->get_nth_field(i);
 
     if (dfield_is_ext(&ufield->m_new_val)) {
-      Buf_block *block;
+      BufBlock *block;
       ulint internal_offset;
       byte *data_field;
 
@@ -360,7 +360,7 @@ skip_secondaries:
       /* We assume in purge of externally stored fields
       that the space id of the undo log record is 0! */
 
-      Buf_pool::Request req{
+      BufPool::Request req{
         .m_rw_latch = RW_X_LATCH,
         .m_page_id = {SYS_TABLESPACE, page_no},
         .m_mode = BUF_GET,
@@ -383,8 +383,8 @@ skip_secondaries:
   }
 }
 
-bool Row_purge::parse_undo_rec(bool *updated_extern, que_thr_t *thr) {
-  Trx_undo_record::Parsed pars;
+bool RowPurge::parse_undo_rec(bool *updated_extern, QueThr *thr) {
+  TrxUndoRecord::Parsed pars;
   auto trx = thr_get_trx(thr);
 
   auto ptr = m_undo_rec.get_pars(pars);
@@ -402,7 +402,7 @@ bool Row_purge::parse_undo_rec(bool *updated_extern, que_thr_t *thr) {
   ulint info_bits;
   roll_ptr_t roll_ptr;
 
-  ptr = Trx_undo_record::update_rec_get_sys_cols(ptr, &trx_id, &roll_ptr, &info_bits);
+  ptr = TrxUndoRecord::update_rec_get_sys_cols(ptr, &trx_id, &roll_ptr, &info_bits);
 
   m_table = nullptr;
 
@@ -443,20 +443,20 @@ bool Row_purge::parse_undo_rec(bool *updated_extern, que_thr_t *thr) {
     return false;
   }
 
-  ptr = Trx_undo_record::get_row_ref(ptr, clust_index, &m_ref, m_heap);
+  ptr = TrxUndoRecord::get_row_ref(ptr, clust_index, &m_ref, m_heap);
 
-  ptr = Trx_undo_record::update_rec_get_update(ptr, clust_index, pars.m_type, trx_id, roll_ptr, info_bits, trx, m_heap, &m_update);
+  ptr = TrxUndoRecord::update_rec_get_update(ptr, clust_index, pars.m_type, trx_id, roll_ptr, info_bits, trx, m_heap, &m_update);
 
   /* Read to the partial row the fields that occur in indexes */
 
   if (!(pars.m_cmpl_info & UPD_NODE_NO_ORD_CHANGE)) {
-    ptr = Trx_undo_record::get_partial_row(ptr, clust_index, &m_row, pars.m_type == TRX_UNDO_UPD_DEL_REC, m_heap);
+    ptr = TrxUndoRecord::get_partial_row(ptr, clust_index, &m_row, pars.m_type == TRX_UNDO_UPD_DEL_REC, m_heap);
   }
 
   return true;
 }
 
-ulint Row_purge::purge(que_thr_t *thr) {
+ulint RowPurge::purge(QueThr *thr) {
   roll_ptr_t roll_ptr_val;
   bool purge_needed;
   bool updated_extern;
@@ -516,8 +516,8 @@ ulint Row_purge::purge(que_thr_t *thr) {
   return (DB_SUCCESS);
 }
 
-que_thr_t *Row_purge::step(que_thr_t *thr) {
-  auto node = static_cast<Row_purge *>(thr->run_node);
+QueThr *RowPurge::step(QueThr *thr) {
+  auto node = static_cast<RowPurge *>(thr->run_node);
 
   ut_ad(que_node_get_type(node) == QUE_NODE_PURGE);
 
@@ -528,6 +528,6 @@ que_thr_t *Row_purge::step(que_thr_t *thr) {
   return thr;
 }
 
-que_thr_t *row_purge_step(que_thr_t *thr) {
-  return Row_purge::step(thr);
+QueThr *row_purge_step(QueThr *thr) {
+  return RowPurge::step(thr);
 }

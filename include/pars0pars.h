@@ -32,8 +32,8 @@ Created 11/19/1996 Heikki Tuuri
 
 #include <vector>
 
-struct Index_node;
-struct Table_node;
+struct IndexNode;
+struct TableNode;
 
 /** Type of the user functions. The first argument is always InnoDB-supplied
 and varies in type, while 'user_arg' is a user-supplied argument. The
@@ -53,38 +53,38 @@ extern bool pars_print_lexed;
 
 /* Global variable used while parsing a single procedure or query : the code is
 NOT re-entrant */
-extern sym_tab_t *pars_sym_tab_global;
+extern SymTab *pars_sym_tab_global;
 
-extern pars_res_word_t pars_to_char_token;
-extern pars_res_word_t pars_to_number_token;
-extern pars_res_word_t pars_to_binary_token;
-extern pars_res_word_t pars_binary_to_number_token;
-extern pars_res_word_t pars_substr_token;
-extern pars_res_word_t pars_replstr_token;
-extern pars_res_word_t pars_concat_token;
-extern pars_res_word_t pars_length_token;
-extern pars_res_word_t pars_instr_token;
-extern pars_res_word_t pars_sysdate_token;
-extern pars_res_word_t pars_printf_token;
-extern pars_res_word_t pars_assert_token;
-extern pars_res_word_t pars_rnd_token;
-extern pars_res_word_t pars_rnd_str_token;
-extern pars_res_word_t pars_count_token;
-extern pars_res_word_t pars_sum_token;
-extern pars_res_word_t pars_distinct_token;
-extern pars_res_word_t pars_binary_token;
-extern pars_res_word_t pars_blob_token;
-extern pars_res_word_t pars_int_token;
-extern pars_res_word_t pars_char_token;
-extern pars_res_word_t pars_float_token;
-extern pars_res_word_t pars_update_token;
-extern pars_res_word_t pars_asc_token;
-extern pars_res_word_t pars_desc_token;
-extern pars_res_word_t pars_open_token;
-extern pars_res_word_t pars_close_token;
-extern pars_res_word_t pars_share_token;
-extern pars_res_word_t pars_unique_token;
-extern pars_res_word_t pars_clustered_token;
+extern ParsResWord pars_to_char_token;
+extern ParsResWord pars_to_number_token;
+extern ParsResWord pars_to_binary_token;
+extern ParsResWord pars_binary_to_number_token;
+extern ParsResWord pars_substr_token;
+extern ParsResWord pars_replstr_token;
+extern ParsResWord pars_concat_token;
+extern ParsResWord pars_length_token;
+extern ParsResWord pars_instr_token;
+extern ParsResWord pars_sysdate_token;
+extern ParsResWord pars_printf_token;
+extern ParsResWord pars_assert_token;
+extern ParsResWord pars_rnd_token;
+extern ParsResWord pars_rnd_str_token;
+extern ParsResWord pars_count_token;
+extern ParsResWord pars_sum_token;
+extern ParsResWord pars_distinct_token;
+extern ParsResWord pars_binary_token;
+extern ParsResWord pars_blob_token;
+extern ParsResWord pars_int_token;
+extern ParsResWord pars_char_token;
+extern ParsResWord pars_float_token;
+extern ParsResWord pars_update_token;
+extern ParsResWord pars_asc_token;
+extern ParsResWord pars_desc_token;
+extern ParsResWord pars_open_token;
+extern ParsResWord pars_close_token;
+extern ParsResWord pars_share_token;
+extern ParsResWord pars_unique_token;
+extern ParsResWord pars_clustered_token;
 
 extern ulint pars_star_denoter;
 
@@ -126,7 +126,7 @@ int yyparse();
  * 
  * @return The query graph.
  */
-que_t *pars_sql(pars_info_t *info, const char *str);
+QueFork *pars_sql(ParsInfo *info, const char *str);
 
 /**
  * @brief Retrieves characters to the lexical analyzer.
@@ -153,7 +153,7 @@ void yyerror(const char *s);
  * 
  * @return Symbol table node of type SYM_VAR.
  */
-sym_node_t *pars_variable_declaration(sym_node_t *node, pars_res_word_t *type);
+SymNode *pars_variable_declaration(SymNode *node, ParsResWord *type);
 
 /**
  * @brief Parses a function expression.
@@ -163,7 +163,7 @@ sym_node_t *pars_variable_declaration(sym_node_t *node, pars_res_word_t *type);
  * 
  * @return Function node in a query tree.
  */
-func_node_t *pars_func(que_node_t *res_word, que_node_t *arg);
+FuncNode *pars_func(que_node_t *res_word, que_node_t *arg);
 
 /**
  * @brief Parses an operator expression.
@@ -174,7 +174,7 @@ func_node_t *pars_func(que_node_t *res_word, que_node_t *arg);
  * 
  * @return Function node in a query tree.
  */
-func_node_t *pars_op(int func, que_node_t *arg1, que_node_t *arg2);
+FuncNode *pars_op(int func, que_node_t *arg1, que_node_t *arg2);
 
 /**
  * @brief Parses an ORDER BY clause. Order by a single column only is supported.
@@ -184,7 +184,7 @@ func_node_t *pars_op(int func, que_node_t *arg1, que_node_t *arg2);
  * 
  * @return Order-by node in a query tree.
  */
-order_node_t *pars_order_by(sym_node_t *column, pars_res_word_t *asc);
+OrderNode *pars_order_by(SymNode *column, ParsResWord *asc);
 
 /**
  * @brief Parses a select list and creates a query graph node for the whole SELECT statement.
@@ -192,9 +192,9 @@ order_node_t *pars_order_by(sym_node_t *column, pars_res_word_t *asc);
  * @param[in] select_list The select list.
  * @param[in] into_list The variables list or nullptr.
  * 
- * @return sel_node_t* The select node in a query tree.
+ * @return SelNode* The select node in a query tree.
  */
-sel_node_t *pars_select_list(que_node_t *select_list, sym_node_t *into_list);
+SelNode *pars_select_list(que_node_t *select_list, SymNode *into_list);
 
 /**
  * @brief Parses a cursor declaration.
@@ -204,7 +204,7 @@ sel_node_t *pars_select_list(que_node_t *select_list, sym_node_t *into_list);
  * 
  * @return que_node_t* The cursor declaration node.
  */
-que_node_t *pars_cursor_declaration(sym_node_t *sym_node, sel_node_t *select_node);
+que_node_t *pars_cursor_declaration(SymNode *sym_node, SelNode *select_node);
 
 /**
  * @brief Parses a function declaration.
@@ -213,7 +213,7 @@ que_node_t *pars_cursor_declaration(sym_node_t *sym_node, sel_node_t *select_nod
  * 
  * @return que_node_t* The function declaration node.
  */
-que_node_t *pars_function_declaration(sym_node_t *sym_node);
+que_node_t *pars_function_declaration(SymNode *sym_node);
 
 /**
  * @brief Parses a select statement.
@@ -225,11 +225,11 @@ que_node_t *pars_function_declaration(sym_node_t *sym_node);
  * @param[in] consistent_read nullptr or &pars_consistent_token.
  * @param[in] order_by nullptr or an order-by node.
  * 
- * @return sel_node_t* Select node in a query tree.
+ * @return SelNode* Select node in a query tree.
  */
-sel_node_t *pars_select_statement(
-  sel_node_t *select_node, sym_node_t *table_list, que_node_t *search_cond, pars_res_word_t *for_update,
-  pars_res_word_t *consistent_read, order_node_t *order_by
+SelNode *pars_select_statement(
+  SelNode *select_node, SymNode *table_list, que_node_t *search_cond, ParsResWord *for_update,
+  ParsResWord *consistent_read, OrderNode *order_by
 );
 
 /**
@@ -238,9 +238,9 @@ sel_node_t *pars_select_statement(
  * @param[in] column Column to assign.
  * @param[in] exp Value to assign.
  * 
- * @return col_assign_node_t* Column assignment node.
+ * @return ColAssignNode* Column assignment node.
  */
-col_assign_node_t *pars_column_assignment(sym_node_t *column, que_node_t *exp);
+ColAssignNode *pars_column_assignment(SymNode *column, que_node_t *exp);
 
 /**
  * @brief Parses a delete or update statement start.
@@ -249,9 +249,9 @@ col_assign_node_t *pars_column_assignment(sym_node_t *column, que_node_t *exp);
  * @param[in] table_sym Table name node.
  * @param[in] col_assign_list Column assignment list or nullptr.
  * 
- * @return upd_node_t* Update node in a query tree.
+ * @return UpdNode* Update node in a query tree.
  */
-upd_node_t *pars_update_statement_start(bool is_delete, sym_node_t *table_sym, col_assign_node_t *col_assign_list);
+UpdNode *pars_update_statement_start(bool is_delete, SymNode *table_sym, ColAssignNode *col_assign_list);
 
 /**
  * @brief Parses an update or delete statement.
@@ -259,9 +259,9 @@ upd_node_t *pars_update_statement_start(bool is_delete, sym_node_t *table_sym, c
  * @param[in] node Update node.
  * @param[in] cursor_sym Pointer to a cursor entry in the symbol table or nullptr.
  * 
- * @return upd_node_t* Update node in a query tree.
+ * @return UpdNode* Update node in a query tree.
  */
-upd_node_t *pars_update_statement(upd_node_t *node, sym_node_t *cursor_sym, que_node_t *search_cond);
+UpdNode *pars_update_statement(UpdNode *node, SymNode *cursor_sym, que_node_t *search_cond);
 
 /**
  * @brief Parses an insert statement.
@@ -270,9 +270,9 @@ upd_node_t *pars_update_statement(upd_node_t *node, sym_node_t *cursor_sym, que_
  * @param[in] values_list Value expression list or nullptr.
  * @param[in] select Select condition or nullptr.
  * 
- * @return ins_node_t* Insert node in a query tree.
+ * @return InsertNode* Insert node in a query tree.
  */
-ins_node_t *pars_insert_statement(sym_node_t *table_sym, que_node_t *values_list, sel_node_t *select);
+InsertNode *pars_insert_statement(SymNode *table_sym, que_node_t *values_list, SelNode *select);
 
 /**
  * @brief Parses a procedure parameter declaration.
@@ -281,9 +281,9 @@ ins_node_t *pars_insert_statement(sym_node_t *table_sym, que_node_t *values_list
  * @param[in] param_type PARS_INPUT or PARS_OUTPUT.
  * @param[in] type Pointer to a type token.
  * 
- * @return sym_node_t* Symbol table node of type SYM_VAR.
+ * @return SymNode* Symbol table node of type SYM_VAR.
  */
-sym_node_t *pars_parameter_declaration(sym_node_t *node, ulint param_type, pars_res_word_t *type);
+SymNode *pars_parameter_declaration(SymNode *node, ulint param_type, ParsResWord *type);
 
 /**
  * @brief Parses an elsif element.
@@ -291,9 +291,9 @@ sym_node_t *pars_parameter_declaration(sym_node_t *node, ulint param_type, pars_
  * @param[in] cond If-condition.
  * @param[in] stat_list Statement list.
  * 
- * @return elsif_node_t* Elsif node.
+ * @return ElsifNode* Elsif node.
  */
-elsif_node_t *pars_elsif_element(que_node_t *cond, que_node_t *stat_list);
+ElsifNode *pars_elsif_element(que_node_t *cond, que_node_t *stat_list);
 
 /**
  * @brief Parses an if-statement.
@@ -302,9 +302,9 @@ elsif_node_t *pars_elsif_element(que_node_t *cond, que_node_t *stat_list);
  * @param[in] stat_list Statement list.
  * @param[in] else_part Else-part statement list.
  * 
- * @return if_node_t* If-statement node.
+ * @return IfNode* If-statement node.
  */
-if_node_t *pars_if_statement(que_node_t *cond, que_node_t *stat_list, que_node_t *else_part);
+IfNode *pars_if_statement(que_node_t *cond, que_node_t *stat_list, que_node_t *else_part);
 
 /**
  * @brief Parses a for-loop-statement.
@@ -314,10 +314,10 @@ if_node_t *pars_if_statement(que_node_t *cond, que_node_t *stat_list, que_node_t
  * @param[in] loop_end_limit Loop end expression.
  * @param[in] stat_list Statement list.
  * 
- * @return for_node_t* For-statement node.
+ * @return ForNode* For-statement node.
  */
-for_node_t *pars_for_statement(
-  sym_node_t *loop_var, que_node_t *loop_start_limit, que_node_t *loop_end_limit, que_node_t *stat_list
+ForNode *pars_for_statement(
+  SymNode *loop_var, que_node_t *loop_start_limit, que_node_t *loop_end_limit, que_node_t *stat_list
 );
 
 /**
@@ -326,23 +326,23 @@ for_node_t *pars_for_statement(
  * @param[in] cond While-condition.
  * @param[in] stat_list Statement list.
  * 
- * @return while_node_t* While-statement node.
+ * @return WhileNode* While-statement node.
  */
-while_node_t *pars_while_statement(que_node_t *cond, que_node_t *stat_list);
+WhileNode *pars_while_statement(que_node_t *cond, que_node_t *stat_list);
 
 /**
  * @brief Parses an exit statement.
  * 
- * @return exit_node_t* Exit statement node.
+ * @return ExitNode* Exit statement node.
  */
-exit_node_t *pars_exit_statement();
+ExitNode *pars_exit_statement();
 
 /**
  * @brief Parses a return-statement.
  * 
- * @return return_node_t* Return statement node.
+ * @return ReturnNode* Return statement node.
  */
-return_node_t *pars_return_statement();
+ReturnNode *pars_return_statement();
 
 /**
  * @brief Parses a procedure call.
@@ -350,9 +350,9 @@ return_node_t *pars_return_statement();
  * @param[in] res_word Procedure name reserved word.
  * @param[in] args Argument list.
  * 
- * @return func_node_t* Function node.
+ * @return FuncNode* Function node.
  */
-func_node_t *pars_procedure_call(que_node_t *res_word, que_node_t *args);
+FuncNode *pars_procedure_call(que_node_t *res_word, que_node_t *args);
 
 /**
  * @brief Parses an assignment statement.
@@ -360,9 +360,9 @@ func_node_t *pars_procedure_call(que_node_t *res_word, que_node_t *args);
  * @param[in] var Variable to assign.
  * @param[in] val Value to assign.
  * 
- * @return assign_node_t* Assignment statement node.
+ * @return AssignNode* Assignment statement node.
  */
-assign_node_t *pars_assignment_statement(sym_node_t *var, que_node_t *val);
+AssignNode *pars_assignment_statement(SymNode *var, que_node_t *val);
 
 /**
  * @brief Parses a fetch statement.
@@ -371,9 +371,9 @@ assign_node_t *pars_assignment_statement(sym_node_t *var, que_node_t *val);
  * @param[in] into_list Variables to set or nullptr.
  * @param[in] user_func User function name or nullptr.
  * 
- * @return fetch_node_t* Fetch statement node.
+ * @return FetchNode* Fetch statement node.
  */
-fetch_node_t *pars_fetch_statement(sym_node_t *cursor, sym_node_t *into_list, sym_node_t *user_func);
+FetchNode *pars_fetch_statement(SymNode *cursor, SymNode *into_list, SymNode *user_func);
 
 /**
  * @brief Parses an open or close cursor statement.
@@ -381,32 +381,32 @@ fetch_node_t *pars_fetch_statement(sym_node_t *cursor, sym_node_t *into_list, sy
  * @param[in] type ROW_SEL_OPEN_CURSOR or ROW_SEL_CLOSE_CURSOR.
  * @param[in] cursor Cursor node.
  * 
- * @return open_node_t* Open or close cursor statement node.
+ * @return OpenNode* Open or close cursor statement node.
  */
-open_node_t *pars_open_statement(ulint type, sym_node_t *cursor);
+OpenNode *pars_open_statement(ulint type, SymNode *cursor);
 
 /**
  * @brief Parses a row_printf-statement.
  * 
  * @param[in] sel_node Select node.
  * 
- * @return row_printf_node_t* Row_printf-statement node.
+ * @return RowPrintfNode* Row_printf-statement node.
  */
-row_printf_node_t *pars_row_printf_statement(sel_node_t *sel_node);
+RowPrintfNode *pars_row_printf_statement(SelNode *sel_node);
 
 /**
  * @brief Parses a commit statement.
  * 
  * @return commit_node_t* Commit statement node.
  */
-Commit_node *pars_commit_statement();
+CommitNode *pars_commit_statement();
 
 /**
  * @brief Parses a rollback statement.
  * 
- * @return Trx_rollback* Rollback statement node.
+ * @return TrxRollback* Rollback statement node.
  */
-Trx_rollback *pars_rollback_statement();
+TrxRollback *pars_rollback_statement();
 
 /**
  * @brief Parses a column definition at a table creation.
@@ -417,9 +417,9 @@ Trx_rollback *pars_rollback_statement();
  * @param[in] is_unsigned If not nullptr, column is of type UNSIGNED.
  * @param[in] is_not_null If not nullptr, column is of type NOT nullptr.
  * 
- * @return sym_node_t* Column symbol table node.
+ * @return SymNode* Column symbol table node.
  */
-sym_node_t *pars_column_def(sym_node_t *sym_node, pars_res_word_t *type, sym_node_t *len, void *is_unsigned, void *is_not_null);
+SymNode *pars_column_def(SymNode *sym_node, ParsResWord *type, SymNode *len, void *is_unsigned, void *is_not_null);
 
 /**
  * @brief Parses a table creation operation.
@@ -431,9 +431,9 @@ sym_node_t *pars_column_def(sym_node_t *sym_node, pars_res_word_t *type, sym_nod
  *  to the data dictionary on disk, and the database will forget about non-nullptr value if it has to reload
  *  the table definition from disk.
  * 
- * @return Table_node* Table create subgraph.
+ * @return TableNode* Table create subgraph.
  */
-Table_node *pars_create_table(sym_node_t *table_sym, sym_node_t *column_defs, void *not_fit_in_memory);
+TableNode *pars_create_table(SymNode *table_sym, SymNode *column_defs, void *not_fit_in_memory);
 
 /**
  * @brief Parses an index creation operation.
@@ -444,10 +444,10 @@ Table_node *pars_create_table(sym_node_t *table_sym, sym_node_t *column_defs, vo
  * @param[in] table_sym Table name node in the symbol table.
  * @param[in] column_list List of column names.
  * 
- * @return Index_node* Index create subgraph.
+ * @return IndexNode* Index create subgraph.
  */
-Index_node *pars_create_index(
-  pars_res_word_t *unique_def, pars_res_word_t *clustered_def, sym_node_t *index_sym, sym_node_t *table_sym, sym_node_t *column_list
+IndexNode *pars_create_index(
+  ParsResWord *unique_def, ParsResWord *clustered_def, SymNode *index_sym, SymNode *table_sym, SymNode *column_list
 );
 
 /**
@@ -457,9 +457,9 @@ Index_node *pars_create_index(
  * @param[in] param_list Parameter declaration list.
  * @param[in] stat_list Statement list.
  * 
- * @return que_fork_t* Query fork node.
+ * @return QueFork* Query fork node.
  */
-que_fork_t *pars_procedure_definition(sym_node_t *sym_node, sym_node_t *param_list, que_node_t *stat_list);
+QueFork *pars_procedure_definition(SymNode *sym_node, SymNode *param_list, que_node_t *stat_list);
 
 /**
  * @brief Parses a stored procedure call, when this is not within another stored
@@ -469,9 +469,9 @@ que_fork_t *pars_procedure_definition(sym_node_t *sym_node, sym_node_t *param_li
  * 
  * @param[in] sym_node Stored procedure name node.
  * 
- * @return que_fork_t* Query graph.
+ * @return QueFork* Query graph.
  */
-que_fork_t *pars_stored_procedure_call(sym_node_t *sym_node);
+QueFork *pars_stored_procedure_call(SymNode *sym_node);
 
 /**
  * @brief Completes a query graph by adding query thread and fork nodes
@@ -482,23 +482,23 @@ que_fork_t *pars_stored_procedure_call(sym_node_t *sym_node);
  * @param[in] trx Transaction handle.
  * @param[in] heap Memory heap from which allocated.
  * 
- * @return que_thr_t* Query thread node to run.
+ * @return QueThr* Query thread node to run.
  */
-que_thr_t *pars_complete_graph_for_exec(que_node_t *node, Trx *trx, mem_heap_t *heap);
+QueThr *pars_complete_graph_for_exec(que_node_t *node, Trx *trx, MemHeap *heap);
 
 /**
  * @brief Create parser info struct.
  * 
- * @return pars_info_t* Info struct.
+ * @return ParsInfo* Info struct.
  */
-pars_info_t *pars_info_create();
+ParsInfo *pars_info_create();
 
 /**
  * @brief Free info struct and everything it contains.
  * 
  * @param[in] info Info struct.
  */
-void pars_info_free(pars_info_t *info);
+void pars_info_free(ParsInfo *info);
 
 /**
  * @brief Add bound literal.
@@ -510,7 +510,7 @@ void pars_info_free(pars_info_t *info);
  * @param[in] type Type, e.g. DATA_FIXBINARY.
  * @param[in] prtype Precise type, e.g. DATA_UNSIGNED.
  */
-void pars_info_add_literal(pars_info_t *info, const char *name, const void *address, ulint length, ulint type, ulint prtype);
+void pars_info_add_literal(ParsInfo *info, const char *name, const void *address, ulint length, ulint type, ulint prtype);
 
 /**
  * @brief Equivalent to pars_info_add_literal(info, name, str, strlen(str),
@@ -520,7 +520,7 @@ void pars_info_add_literal(pars_info_t *info, const char *name, const void *addr
  * @param[in] name Name.
  * @param[in] str String.
  */
-void pars_info_add_str_literal(pars_info_t *info, const char *name, const char *str);
+void pars_info_add_str_literal(ParsInfo *info, const char *name, const char *str);
 
 /**
  * @brief Equivalent to:
@@ -535,7 +535,7 @@ void pars_info_add_str_literal(pars_info_t *info, const char *name, const char *
  * @param[in] name Name.
  * @param[in] val Value.
  */
-void pars_info_add_int4_literal(pars_info_t *info, const char *name, lint val);
+void pars_info_add_int4_literal(ParsInfo *info, const char *name, lint val);
 
 /** Equivalent to:
  * 
@@ -550,7 +550,7 @@ void pars_info_add_int4_literal(pars_info_t *info, const char *name, lint val);
  * @param[in] name Name.
  * @param[in] val Value.
  */
-void pars_info_add_int8_literal(pars_info_t *info, const char *name, uint64_t val);
+void pars_info_add_int8_literal(ParsInfo *info, const char *name, uint64_t val);
 
 /** Equivalent to:
  * 
@@ -565,7 +565,7 @@ void pars_info_add_int8_literal(pars_info_t *info, const char *name, uint64_t va
  * @param[in] name Name.
  * @param[in] val Value.
  */
-void pars_info_add_uint64_literal(pars_info_t *info, const char *name, uint64_t val);
+void pars_info_add_uint64_literal(ParsInfo *info, const char *name, uint64_t val);
 
 /**
  * @brief Add user function.
@@ -575,7 +575,7 @@ void pars_info_add_uint64_literal(pars_info_t *info, const char *name, uint64_t 
  * @param[in] func Function address.
  * @param[in] arg User-supplied argument.
  */
-void pars_info_add_function(pars_info_t *info, const char *name, pars_user_func_cb_t func, void *arg);
+void pars_info_add_function(ParsInfo *info, const char *name, pars_user_func_cb_t func, void *arg);
 
 /**
  * @brief Add bound id.
@@ -584,7 +584,7 @@ void pars_info_add_function(pars_info_t *info, const char *name, pars_user_func_
  * @param[in] name Name.
  * @param[in] id Id.
  */
-void pars_info_add_id(pars_info_t *info, const char *name, const char *id);
+void pars_info_add_id(ParsInfo *info, const char *name, const char *id);
 
 /**
  * @brief Get user function with the given name.
@@ -594,7 +594,7 @@ void pars_info_add_id(pars_info_t *info, const char *name, const char *id);
  * 
  * @return User func, or nullptr if not found.
  */
-pars_user_func_t *pars_info_get_user_func(pars_info_t *info, const char *name);
+ParsUserFunc *pars_info_get_user_func(ParsInfo *info, const char *name);
 
 /**
  * @brief Get bound literal with the given name.
@@ -604,7 +604,7 @@ pars_user_func_t *pars_info_get_user_func(pars_info_t *info, const char *name);
  * 
  * @return Bound literal, or nullptr if not found.
  */
-pars_bound_lit_t *pars_info_get_bound_lit(pars_info_t *info, const char *name);
+ParsBoundLit *pars_info_get_bound_lit(ParsInfo *info, const char *name);
 
 /**
  * @brief Get bound id with the given name.
@@ -614,7 +614,7 @@ pars_bound_lit_t *pars_info_get_bound_lit(pars_info_t *info, const char *name);
  * 
  * @return Bound id, or nullptr if not found.
  */
-pars_bound_id_t *pars_info_get_bound_id(pars_info_t *info, const char *name);
+ParsBoundId *pars_info_get_bound_id(ParsInfo *info, const char *name);
 
 /**
  * @brief Release any resources used by the parser and lexer.
@@ -639,25 +639,25 @@ void pars_lexer_close(void);
 /**
  * @brief Extra information supplied for pars_sql().
  */
-struct pars_info_t {
+struct ParsInfo {
   /** Our own memory heap */
-  mem_heap_t *m_heap{};
+  MemHeap *m_heap{};
 
-  /** User functions, or nullptr (pars_user_func_t*) */
-  std::vector<pars_user_func_t *> m_funcs{};
+  /** User functions, or nullptr (ParsUserFunc*) */
+  std::vector<ParsUserFunc *> m_funcs{};
 
-  /** Bound literals, or nullptr (pars_bound_lit_t*) */
-  std::vector<pars_bound_lit_t *> m_bound_lits{};
+  /** Bound literals, or nullptr (ParsBoundLit*) */
+  std::vector<ParsBoundLit *> m_bound_lits{};
 
-  /** Bound ids, or nullptr (pars_bound_id_t*) */
-  std::vector<pars_bound_id_t *> m_bound_ids{};
+  /** Bound ids, or nullptr (ParsBoundId*) */
+  std::vector<ParsBoundId *> m_bound_ids{};
 
   /** If true (which is the default), que_graph_free() will free us */
   bool m_graph_owns_us{};
 };
 
 /** User-supplied function and argument. */
-struct pars_user_func_struct {
+struct ParsUserFunc {
   /** function name */
   const char *name;
 
@@ -669,7 +669,7 @@ struct pars_user_func_struct {
 };
 
 /** Bound literal. */
-struct pars_bound_lit_struct {
+struct ParsBoundLit {
   /** name */
   const char *name;
 
@@ -687,7 +687,7 @@ struct pars_bound_lit_struct {
 };
 
 /** Bound identifier. */
-struct pars_bound_id_struct {
+struct ParsBoundId {
   /** name */
   const char *name;
 
@@ -696,16 +696,16 @@ struct pars_bound_id_struct {
 };
 
 /** Struct used to denote a reserved word in a parsing tree */
-struct pars_res_word_struct {
+struct ParsResWord {
   /** the token code for the reserved word from pars0grm.h */
   int code;
 };
 
 /** A predefined function or operator node in a parsing tree; this construct
 is also used for some non-functions like the assignment ':=' */
-struct func_node_struct {
+struct FuncNode {
   /** type: QUE_NODE_FUNC */
-  que_common_t common;
+  QueCommon common;
 
   /** token code of the function name */
   int func;
@@ -718,50 +718,50 @@ struct func_node_struct {
 
   /** list of comparison conditions; defined only for comparison operator
    * nodes except, presently, for OPT_SCROLL_TYPE ones */
-  UT_LIST_NODE_T(func_node_t) cond_list;
+  UT_LIST_NODE_T(FuncNode) cond_list;
 
   /** list of function nodes in a parsed query graph */
-  UT_LIST_NODE_T(func_node_t) func_node_list;
+  UT_LIST_NODE_T(FuncNode) func_node_list;
 };
 
-UT_LIST_NODE_GETTER_DEFINITION(func_node_t, cond_list);
+UT_LIST_NODE_GETTER_DEFINITION(FuncNode, cond_list);
 
-UT_LIST_NODE_GETTER_DEFINITION(func_node_t, func_node_list);
+UT_LIST_NODE_GETTER_DEFINITION(FuncNode, func_node_list);
 
 /** An order-by node in a select */
-struct order_node_struct {
+struct OrderNode {
   /** type: QUE_NODE_ORDER */
-  que_common_t common;
+  QueCommon common;
 
   /** order-by column */
-  sym_node_t *column;
+  SymNode *column;
 
   /** true if ascending, false if descending */
   bool asc;
 };
 
 /** Procedure definition node */
-struct proc_node_struct {
+struct ProcNode {
   /** type: QUE_NODE_PROC */
-  que_common_t common;
+  QueCommon common;
 
   /** procedure name symbol in the symbol table of this same procedure */
-  sym_node_t *proc_id;
+  SymNode *proc_id;
 
   /** input and output parameters */
-  sym_node_t *param_list;
+  SymNode *param_list;
 
   /** statement list */
   que_node_t *stat_list;
 
   /** symbol table of this procedure */
-  sym_tab_t *sym_tab;
+  SymTab *sym_tab;
 };
 
 /** elsif-element node */
-struct elsif_node_struct {
+struct ElsifNode {
   /** type: QUE_NODE_ELSIF */
-  que_common_t common;
+  QueCommon common;
 
   /** if condition */
   que_node_t *cond;
@@ -771,9 +771,9 @@ struct elsif_node_struct {
 };
 
 /** if-statement node */
-struct if_node_struct {
+struct IfNode {
   /** type: QUE_NODE_IF */
-  que_common_t common;
+  QueCommon common;
 
   /** if condition */
   que_node_t *cond;
@@ -785,13 +785,13 @@ struct if_node_struct {
   que_node_t *else_part;
 
   /** elsif element list */
-  elsif_node_t *elsif_list;
+  ElsifNode *elsif_list;
 };
 
 /** while-statement node */
-struct while_node_struct {
+struct WhileNode {
   /** type: QUE_NODE_WHILE */
-  que_common_t common;
+  QueCommon common;
 
   /** while condition */
   que_node_t *cond;
@@ -801,13 +801,13 @@ struct while_node_struct {
 };
 
 /** for-loop-statement node */
-struct for_node_struct {
+struct ForNode {
   /** type: QUE_NODE_FOR */
-  que_common_t common;
+  QueCommon common;
 
   /** Loop variable: this is the dereferenced symbol from the variable declarations,
    * not the symbol occurrence in the for loop definition */
-  sym_node_t *loop_var;
+  SymNode *loop_var;
 
   /** Initial value of loop variable */
   que_node_t *loop_start_limit;
@@ -824,30 +824,30 @@ struct for_node_struct {
 };
 
 /** exit statement node */
-struct exit_node_struct {
+struct ExitNode {
   /** type: QUE_NODE_EXIT */
-  que_common_t common;
+  QueCommon common;
 };
 
 /** return-statement node */
-struct return_node_struct {
+struct ReturnNode {
   /**
    * @brief Type: QUE_NODE_RETURN
    */
-  que_common_t common;
+  QueCommon common;
 };
 
 /** Assignment statement node */
-struct assign_node_struct {
+struct AssignNode {
   /**
    * @brief Type: QUE_NODE_ASSIGNMENT
    */
-  que_common_t common;
+  QueCommon common;
 
   /**
    * @brief Variable to set
    */
-  sym_node_t *var;
+  SymNode *var;
 
   /**
    * @brief Value to assign
@@ -856,16 +856,16 @@ struct assign_node_struct {
 };
 
 /** Column assignment node */
-struct col_assign_node_struct {
+struct ColAssignNode {
   /**
    * @brief Type: QUE_NODE_COL_ASSIGN
    */
-  que_common_t common;
+  QueCommon common;
 
   /**
    * @brief Column to set
    */
-  sym_node_t *col;
+  SymNode *col;
 
   /**
    * @brief Value to assign

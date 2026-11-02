@@ -35,7 +35,7 @@ Created 5/30/1994 Heikki Tuuri
 
 #ifdef UNIV_DEBUG
 /** Dummy variable to catch access to uninitialized fields.  In the
-debug version, dtuple_create() will make all fields of dtuple_t point
+debug version, dtuple_create() will make all fields of Dtuple point
 to data_error. */
 byte data_error;
 
@@ -56,7 +56,7 @@ void dfield_var_init(void) {
 #endif /* UNIV_DEBUG */
 }
 
-bool dfield_data_is_binary_equal(const dfield_t *field, ulint len, const byte *data) {
+bool dfield_data_is_binary_equal(const Dfield *field, ulint len, const byte *data) {
   if (len != dfield_get_len(field)) {
 
     return (false);
@@ -94,8 +94,8 @@ int dtuple_coll_cmp(void *cmp_ctx, const DTuple *tuple1, const DTuple *tuple2) {
 
   for (i = 0; i < n_fields; i++) {
     int cmp;
-    const dfield_t *field1 = dtuple_get_nth_field(tuple1, i);
-    const dfield_t *field2 = dtuple_get_nth_field(tuple2, i);
+    const Dfield *field1 = dtuple_get_nth_field(tuple1, i);
+    const Dfield *field2 = dtuple_get_nth_field(tuple2, i);
 
     cmp = cmp_dfield_dfield(cmp_ctx, field1, field2);
 
@@ -116,7 +116,7 @@ void dtuple_set_n_fields(DTuple *tuple, ulint n_fields) {
 
 /** Checks that a data field is typed.
 @return	true if ok */
-static bool dfield_check_typed_no_assert(const dfield_t *field) /*!< in: data field */
+static bool dfield_check_typed_no_assert(const Dfield *field) /*!< in: data field */
 {
   if (dfield_get_type(field)->mtype > DATA_CLIENT || dfield_get_type(field)->mtype < DATA_VARCHAR) {
 
@@ -130,7 +130,7 @@ static bool dfield_check_typed_no_assert(const dfield_t *field) /*!< in: data fi
 }
 
 bool dtuple_check_typed_no_assert(const DTuple *tuple) {
-  const dfield_t *field;
+  const Dfield *field;
   ulint i;
 
   if (dtuple_get_n_fields(tuple) > REC_MAX_N_FIELDS) {
@@ -156,7 +156,7 @@ bool dtuple_check_typed_no_assert(const DTuple *tuple) {
 }
 
 #ifdef UNIV_DEBUG
-bool dfield_check_typed(const dfield_t *field) {
+bool dfield_check_typed(const Dfield *field) {
   if (dfield_get_type(field)->mtype > DATA_CLIENT || dfield_get_type(field)->mtype < DATA_VARCHAR) {
 
     ib_logger(
@@ -170,7 +170,7 @@ bool dfield_check_typed(const dfield_t *field) {
 }
 
 bool dtuple_check_typed(const DTuple *tuple) {
-  const dfield_t *field;
+  const Dfield *field;
   ulint i;
 
   for (i = 0; i < dtuple_get_n_fields(tuple); i++) {
@@ -184,7 +184,7 @@ bool dtuple_check_typed(const DTuple *tuple) {
 }
 
 bool dtuple_validate(const DTuple *tuple) {
-  const dfield_t *field;
+  const Dfield *field;
   ulint n_fields;
   ulint len;
   ulint i;
@@ -221,7 +221,7 @@ bool dtuple_validate(const DTuple *tuple) {
 }
 #endif /* UNIV_DEBUG */
 
-void dfield_print(const dfield_t *dfield) {
+void dfield_print(const Dfield *dfield) {
   ulint i;
 
   auto len = dfield_get_len(dfield);
@@ -254,7 +254,7 @@ void dfield_print(const dfield_t *dfield) {
   }
 }
 
-void dfield_print_also_hex(const dfield_t *dfield) {
+void dfield_print_also_hex(const Dfield *dfield) {
   ulint i;
   bool print_also_hex;
 
@@ -411,7 +411,7 @@ void dfield_print_also_hex(const dfield_t *dfield) {
  * @param ib_stream Output stream.
  * @param dfield    Dfield to be printed.
  */
-static void dfield_print_raw(std::ostream &o, const dfield_t *dfield) {
+static void dfield_print_raw(std::ostream &o, const Dfield *dfield) {
   ulint len = dfield_get_len(dfield);
 
   if (!dfield_is_null(dfield)) {
@@ -455,9 +455,9 @@ std::ostream &DTuple::print(std::ostream &o) const {
   return o;
 }
 
-big_rec_t* dtuple_convert_big_rec(const Index *index, DTuple *entry, ulint *n_ext) {
-  mem_heap_t *heap;
-  big_rec_t *vector;
+BigRec* dtuple_convert_big_rec(const Index *index, DTuple *entry, ulint *n_ext) {
+  MemHeap *heap;
+  BigRec *vector;
   ulint n_fields;
   ulint local_prefix_len;
 
@@ -478,12 +478,12 @@ big_rec_t* dtuple_convert_big_rec(const Index *index, DTuple *entry, ulint *n_ex
     ib_logger(ib_stream, "\n");
   }
 
-  heap = mem_heap_create(size + dtuple_get_n_fields(entry) * sizeof(big_rec_field_t) + 1000);
+  heap = mem_heap_create(size + dtuple_get_n_fields(entry) * sizeof(BigRecField) + 1000);
 
-  vector = (big_rec_t *)mem_heap_alloc(heap, sizeof(big_rec_t));
+  vector = (BigRec *)mem_heap_alloc(heap, sizeof(BigRec));
 
   vector->heap = heap;
-  vector->fields = (big_rec_field_t *)mem_heap_alloc(heap, dtuple_get_n_fields(entry) * sizeof(big_rec_field_t));
+  vector->fields = (BigRecField *)mem_heap_alloc(heap, dtuple_get_n_fields(entry) * sizeof(BigRecField));
 
   /* Decide which fields to shorten: the algorithm is to look for
   a variable-length field that yields the biggest savings when
@@ -496,7 +496,7 @@ big_rec_t* dtuple_convert_big_rec(const Index *index, DTuple *entry, ulint *n_ex
     ulint longest = 0;
     ulint longest_i = ULINT_MAX;
     byte *data;
-    big_rec_field_t *b;
+    BigRecField *b;
 
     for (i = index->get_n_unique_in_tree(); i < dtuple_get_n_fields(entry); i++) {
       ulint savings;
@@ -583,12 +583,12 @@ big_rec_t* dtuple_convert_big_rec(const Index *index, DTuple *entry, ulint *n_ex
   return vector;
 }
 
-void dtuple_convert_back_big_rec(DTuple *entry, big_rec_t *vector) {
-  big_rec_field_t *b = vector->fields;
-  const big_rec_field_t *const end = b + vector->n_fields;
+void dtuple_convert_back_big_rec(DTuple *entry, BigRec *vector) {
+  BigRecField *b = vector->fields;
+  const BigRecField *const end = b + vector->n_fields;
 
   for (; b < end; b++) {
-    dfield_t *dfield;
+    Dfield *dfield;
     ulint local_len;
 
     dfield = dtuple_get_nth_field(entry, b->field_no);
@@ -607,8 +607,8 @@ void dtuple_convert_back_big_rec(DTuple *entry, big_rec_t *vector) {
   mem_heap_free(vector->heap);
 }
 
-std::ostream &dfield_t::print(std::ostream &out) const {
-  out << "dfield_t { data:" << (void *)data << ", ext=" << (ulint)ext << " ";
+std::ostream &Dfield::print(std::ostream &out) const {
+  out << "Dfield { data:" << (void *)data << ", ext=" << (ulint)ext << " ";
 
   if (dfield_is_ext(this)) {
     out << (static_cast<byte *>(data) + len - BTR_EXTERN_FIELD_REF_SIZE);

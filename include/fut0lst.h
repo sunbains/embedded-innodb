@@ -32,7 +32,7 @@ Created 11/28/1995 Heikki Tuuri
 #include "mtr0log.h"
 #include "mtr0mtr.h"
 
-struct Fil_addr;
+struct FilAddr;
 
 /* The C 'types' of base node and list node: these should be used to
 write self-documenting code. Of course, the sizeof macro cannot be
@@ -69,14 +69,14 @@ constexpr ulint FLST_NODE_SIZE = 2 * FIL_ADDR_SIZE;
 void flst_add_last(
   flst_base_node_t *base, /** in: pointer to base node of list */
   flst_node_t *node,      /** in: node to add */
-  mtr_t *mtr
+  Mtr *mtr
 ); /** in: mini-transaction handle */
 
 /** Adds a node as the first node in a list. */
 void flst_add_first(
   flst_base_node_t *base, /** in: pointer to base node of list */
   flst_node_t *node,      /** in: node to add */
-  mtr_t *mtr
+  Mtr *mtr
 ); /** in: mini-transaction handle */
 
 /** Inserts a node after another in a list. */
@@ -84,7 +84,7 @@ void flst_insert_after(
   flst_base_node_t *base, /** in: pointer to base node of list */
   flst_node_t *node1,     /** in: node to insert after */
   flst_node_t *node2,     /** in: node to add */
-  mtr_t *mtr
+  Mtr *mtr
 ); /** in: mini-transaction handle */
 
 /** Inserts a node before another in a list. */
@@ -92,14 +92,14 @@ void flst_insert_before(
   flst_base_node_t *base, /** in: pointer to base node of list */
   flst_node_t *node2,     /** in: node to insert */
   flst_node_t *node3,     /** in: node to insert before */
-  mtr_t *mtr
+  Mtr *mtr
 ); /** in: mini-transaction handle */
 
 /** Removes a node. */
 void flst_remove(
   flst_base_node_t *base, /** in: pointer to base node of list */
   flst_node_t *node2,     /** in: node to remove */
-  mtr_t *mtr
+  Mtr *mtr
 ); /** in: mini-transaction handle */
 
 /** Cuts off the tail of the list, including the node given. The number of
@@ -110,7 +110,7 @@ void flst_cut_end(
   flst_node_t *node2,     /** in: first node to remove */
   ulint n_nodes,          /** in: number of nodes to remove,
                             must be >= 1 */
-  mtr_t *mtr
+  Mtr *mtr
 ); /** in: mini-transaction handle */
 
 /** Cuts off the tail of the list, not including the given node. The number of
@@ -120,27 +120,27 @@ void flst_truncate_end(
   flst_base_node_t *base, /** in: pointer to base node of list */
   flst_node_t *node2,     /** in: first node not to remove */
   ulint n_nodes,          /** in: number of nodes to remove */
-  mtr_t *mtr
+  Mtr *mtr
 ); /** in: mini-transaction handle */
 
 /** Validates a file-based list.
 @return	true if ok */
 bool flst_validate(
   const flst_base_node_t *base, /** in: pointer to base node of list */
-  mtr_t *mtr1
+  Mtr *mtr1
 ); /** in: mtr */
 
 /** Prints info of a file-based list. */
 void flst_print(
   const flst_base_node_t *base, /** in: pointer to base node of list */
-  mtr_t *mtr
+  Mtr *mtr
 ); /** in: mtr */
 
 /** Writes a file address. */
 inline void flst_write_addr(
   fil_faddr_t *faddr, /** in: pointer to file faddress */
-  Fil_addr addr,      /** in: file address */
-  mtr_t *mtr
+  FilAddr addr,      /** in: file address */
+  Mtr *mtr
 ) /** in: mini-transaction handle */
 {
   ut_ad(faddr && mtr);
@@ -156,8 +156,8 @@ inline void flst_write_addr(
 @param[in] faddr                Pointer to file faddress
 @param[in,out] mtr              Mini-transaction that covers the operation.
 @return	file address */
-inline Fil_addr flst_read_addr(const fil_faddr_t *faddr, mtr_t *mtr) {
-  Fil_addr addr;
+inline FilAddr flst_read_addr(const fil_faddr_t *faddr, Mtr *mtr) {
+  FilAddr addr;
 
   ut_ad(faddr && mtr);
 
@@ -172,7 +172,7 @@ inline Fil_addr flst_read_addr(const fil_faddr_t *faddr, mtr_t *mtr) {
 /** Initializes a list base node.
 @param[in] base                 Pointer to the base node
 @param[in,out] mtr              Mini-transaction that covers the operation. */
-inline void flst_init(flst_base_node_t *base, mtr_t *mtr) {
+inline void flst_init(flst_base_node_t *base, Mtr *mtr) {
   ut_ad(mtr->memo_contains_page(base, MTR_MEMO_PAGE_X_FIX));
 
   mlog_write_ulint(base + FLST_LEN, 0, MLOG_4BYTES, mtr);
@@ -184,7 +184,7 @@ inline void flst_init(flst_base_node_t *base, mtr_t *mtr) {
 @param[in] base                 Pointer to base node
 @param[in,out] mtr              Mini-transaction that covers the operation.
 @return	length */
-inline ulint flst_get_len(const flst_base_node_t *base, mtr_t *mtr) {
+inline ulint flst_get_len(const flst_base_node_t *base, Mtr *mtr) {
   return mtr->read_ulint(base + FLST_LEN, MLOG_4BYTES);
 }
 
@@ -192,7 +192,7 @@ inline ulint flst_get_len(const flst_base_node_t *base, mtr_t *mtr) {
 @param[in] base                 Pointer to the base node
 @param[in,out] mtr              Mini-transaction that covers the operation.
 @return	file address */
-inline Fil_addr flst_get_first(const flst_base_node_t *base, mtr_t *mtr) {
+inline FilAddr flst_get_first(const flst_base_node_t *base, Mtr *mtr) {
   return flst_read_addr(base + FLST_FIRST, mtr);
 }
 
@@ -200,7 +200,7 @@ inline Fil_addr flst_get_first(const flst_base_node_t *base, mtr_t *mtr) {
 @param[in] base                 Pointer to the base node
 @param[in,out] mtr              Mini-transaction that covers the operation.
 @return	file address */
-inline Fil_addr flst_get_last(const flst_base_node_t *base, mtr_t *mtr) {
+inline FilAddr flst_get_last(const flst_base_node_t *base, Mtr *mtr) {
   return flst_read_addr(base + FLST_LAST, mtr);
 }
 
@@ -208,7 +208,7 @@ inline Fil_addr flst_get_last(const flst_base_node_t *base, mtr_t *mtr) {
 @param[in] node                 Pointer to the node
 @param[in,out] mtr              Mini-transaction that covers the operation.
 @return	file address */
-inline Fil_addr flst_get_next_addr(const flst_node_t *node, mtr_t *mtr) {
+inline FilAddr flst_get_next_addr(const flst_node_t *node, Mtr *mtr) {
   return flst_read_addr(node + FLST_NEXT, mtr);
 }
 
@@ -216,6 +216,6 @@ inline Fil_addr flst_get_next_addr(const flst_node_t *node, mtr_t *mtr) {
 @param[in] node                 Pointer to the node node
 @param[in,out] mtr              Mini-transaction that covers the operation.
 @return	file address */
-inline Fil_addr flst_get_prev_addr(const flst_node_t *node, mtr_t *mtr) {
+inline FilAddr flst_get_prev_addr(const flst_node_t *node, Mtr *mtr) {
   return flst_read_addr(node + FLST_PREV, mtr);
 }

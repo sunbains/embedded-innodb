@@ -40,7 +40,7 @@ Created 3/26/1996 Heikki Tuuri
 /* Threads with unknown id. */
 os_thread_id_t NULL_THREAD_ID;
 
-Trx::Trx(Trx_sys *trx_sys, Session *sess, void *arg) noexcept : m_client_ctx(arg), m_sess(sess), m_trx_sys(trx_sys) {
+Trx::Trx(TrxSys *trx_sys, Session *sess, void *arg) noexcept : m_client_ctx(arg), m_sess(sess), m_trx_sys(trx_sys) {
 
   m_op_info = "";
   m_start_time = ::time(nullptr);
@@ -111,7 +111,7 @@ Trx::~Trx() noexcept {
   ut_a(m_read_view == nullptr);
 }
 
-Trx *Trx::create(Trx_sys *trx_sys, Session *sess, void *arg) noexcept {
+Trx *Trx::create(TrxSys *trx_sys, Session *sess, void *arg) noexcept {
   auto ptr = mem_alloc(sizeof(Trx));
   return new (ptr) Trx(trx_sys, sess, arg);
 }
@@ -201,7 +201,7 @@ void Trx::commit_off_kernel() noexcept {
 
     mutex_exit(&m_trx_sys->m_mutex);
 
-    mtr_t mtr;
+    Mtr mtr;
 
     mtr.start();
 
@@ -402,7 +402,7 @@ void Trx::cleanup_at_db_startup() noexcept {
   m_trx_sys->m_trx_list.remove(this);
 }
 
-Read_view *Trx::assign_read_view() noexcept {
+ReadView *Trx::assign_read_view() noexcept {
   ut_ad(m_conc_state == TRX_ACTIVE);
 
   if (m_read_view != nullptr) {
@@ -421,7 +421,7 @@ Read_view *Trx::assign_read_view() noexcept {
   return m_read_view;
 }
 
-void Trx::handle_commit_sig_off_kernel(que_thr_t *&next_thr) noexcept {
+void Trx::handle_commit_sig_off_kernel(QueThr *&next_thr) noexcept {
   ut_ad(mutex_own(&m_trx_sys->m_mutex));
 
   m_que_state = TRX_QUE_COMMITTING;
@@ -536,10 +536,10 @@ bool Trx::sig_is_compatible(ulint type, ulint sender) noexcept {
   }
 }
 
-void Trx::sig_send(ulint type, ulint sender, que_thr_t *receiver_thr, trx_savept_t *savept, que_thr_t *&next_thr) noexcept {
+void Trx::sig_send(ulint type, ulint sender, QueThr *receiver_thr, TrxSavept *savept, QueThr *&next_thr) noexcept {
   ut_ad(mutex_own(&m_trx_sys->m_mutex));
 
-  trx_sig_t *sig;
+  TrxSig *sig;
   Trx *receiver_trx;
 
   if (!sig_is_compatible(type, sender)) {
@@ -558,7 +558,7 @@ void Trx::sig_send(ulint type, ulint sender, que_thr_t *receiver_thr, trx_savept
   } else {
     /* It might be that the 'sig' slot is unused also in this
     case, but we choose the easy way of using mem_alloc */
-    sig = static_cast<trx_sig_t *>(mem_alloc(sizeof(trx_sig_t)));
+    sig = static_cast<TrxSig *>(mem_alloc(sizeof(TrxSig)));
   }
 
   m_signals.push_back(sig);
@@ -609,7 +609,7 @@ void Trx::end_signal_handling() noexcept {
   }
 }
 
-void Trx::sig_start_handling(que_thr_t *&next_thr) noexcept {
+void Trx::sig_start_handling(QueThr *&next_thr) noexcept {
   for (;;) {
     /* We loop in this function body as long as there are queued signals
     we can process immediately */
@@ -694,7 +694,7 @@ void Trx::sig_start_handling(que_thr_t *&next_thr) noexcept {
   }
 }
 
-void Trx::sig_reply(trx_sig_t *sig, que_thr_t *&next_thr) noexcept {
+void Trx::sig_reply(TrxSig *sig, QueThr *&next_thr) noexcept {
   ut_ad(mutex_own(&srv_trx_sys->m_mutex));
 
   if (sig->receiver != nullptr) {
@@ -711,7 +711,7 @@ void Trx::sig_reply(trx_sig_t *sig, que_thr_t *&next_thr) noexcept {
   }
 }
 
-void Trx::sig_remove(trx_sig_t *&sig) noexcept {
+void Trx::sig_remove(TrxSig *&sig) noexcept {
   ut_ad(mutex_own(&m_trx_sys->m_mutex));
   ut_ad(sig->receiver == nullptr);
 
@@ -725,9 +725,9 @@ void Trx::sig_remove(trx_sig_t *&sig) noexcept {
   }
 }
 
-Commit_node *Trx::commit_node_create(mem_heap_t *heap) noexcept {
-  auto ptr = mem_heap_alloc(heap, sizeof(Commit_node));
-  auto node = new (ptr) Commit_node();
+CommitNode *Trx::commit_node_create(MemHeap *heap) noexcept {
+  auto ptr = mem_heap_alloc(heap, sizeof(CommitNode));
+  auto node = new (ptr) CommitNode();
 
   node->state = COMMIT_NODE_SEND;
   node->common.type = QUE_NODE_COMMIT;
@@ -735,8 +735,8 @@ Commit_node *Trx::commit_node_create(mem_heap_t *heap) noexcept {
   return node;
 }
 
-que_thr_t *Trx::commit_step(que_thr_t *thr) noexcept {
-  auto node = static_cast<Commit_node *>(thr->run_node);
+QueThr *Trx::commit_step(QueThr *thr) noexcept {
+  auto node = static_cast<CommitNode *>(thr->run_node);
 
   ut_ad(que_node_get_type(node) == QUE_NODE_COMMIT);
 
@@ -751,7 +751,7 @@ que_thr_t *Trx::commit_step(que_thr_t *thr) noexcept {
 
     node->state = COMMIT_NODE_WAIT;
 
-    que_thr_t *next_thr{};
+    QueThr *next_thr{};
 
     thr->state = QUE_THR_SIG_REPLY_WAIT;
 
@@ -773,7 +773,7 @@ que_thr_t *Trx::commit_step(que_thr_t *thr) noexcept {
   return thr;
 }
 
-db_err Trx::commit() noexcept {
+DbErr Trx::commit() noexcept {
   /* Because we do not do the commit by sending an Innobase
   sig to the transaction, we must here make sure that trx has been
   started. */
@@ -905,7 +905,7 @@ void Trx::prepare_for_commit() noexcept {
   if (m_insert_undo != nullptr || m_update_undo != nullptr) {
     mutex_exit(&m_trx_sys->m_mutex);
 
-    mtr_t mtr;
+    Mtr mtr;
 
     mtr.start();
 

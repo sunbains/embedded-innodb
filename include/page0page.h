@@ -169,7 +169,7 @@ constexpr ulint PAGE_DIR_SLOT_MIN_N_OWNED = 4;
  * @param[in] trx_id transaction ID
  * @param[in] mtr mini-transaction
  */
-void page_set_max_trx_id(Buf_block *block, trx_id_t trx_id, mtr_t *mtr);
+void page_set_max_trx_id(BufBlock *block, trx_id_t trx_id, Mtr *mtr);
 
 #define page_get_infimum_rec(page) (Rec(((page) + page_get_infimum_offset(page))))
 
@@ -265,7 +265,7 @@ ulint page_dir_find_owner_slot(const Rec rec);
  * @param[in] page_no value to write
  * @param[im,out] mtr mini-transaction
  */
-void page_rec_write_index_page_no(Rec rec, ulint i, ulint page_no, mtr_t *mtr);
+void page_rec_write_index_page_no(Rec rec, ulint i, ulint page_no, Mtr *mtr);
 
 /**
  * Allocates a block of memory from the heap of an index page.
@@ -285,7 +285,7 @@ byte *page_mem_alloc_heap(page_t *page, ulint need, ulint *heap_no);
  *
  * @return	pointer to the page
  */
-page_t *page_create(const Index *index, Buf_block *block, mtr_t *mtr);
+page_t *page_create(const Index *index, BufBlock *block, Mtr *mtr);
 
 /**
  * Differs from page_copy_rec_list_end, because this function does not
@@ -297,7 +297,7 @@ page_t *page_create(const Index *index, Buf_block *block, mtr_t *mtr);
  * @param[in] index index that contains the record
  * @param[in,out] mtr mini-transaction
  */
-void page_copy_rec_list_end_no_locks(Buf_block *new_block, Buf_block *block, Rec rec, const Index *index, mtr_t *mtr);
+void page_copy_rec_list_end_no_locks(BufBlock *new_block, BufBlock *block, Rec rec, const Index *index, Mtr *mtr);
 
 /**
  * Copies records from page to new_page, from the given record onward,
@@ -311,7 +311,7 @@ void page_copy_rec_list_end_no_locks(Buf_block *new_block, Buf_block *block, Rec
  * @param[in, out] mtr mini-transaction
  * @return pointer to the original successor of the infimum record on new_page.
  */
-Rec page_copy_rec_list_end(Buf_block *new_block, Buf_block *block, Rec rec, const Index *index, mtr_t *mtr);
+Rec page_copy_rec_list_end(BufBlock *new_block, BufBlock *block, Rec rec, const Index *index, Mtr *mtr);
 
 /**
  * Copies records from page to new_page, up to the given record, NOT
@@ -326,7 +326,7 @@ Rec page_copy_rec_list_end(Buf_block *new_block, Buf_block *block, Rec rec, cons
  *
  * @return pointer to the original predecessor of the supremum record on new_page
  */
-Rec page_copy_rec_list_start(Buf_block *new_block, Buf_block *block, Rec rec, Index *index, mtr_t *mtr);
+Rec page_copy_rec_list_start(BufBlock *new_block, BufBlock *block, Rec rec, Index *index, Mtr *mtr);
 
 /**
  * Deletes records from a page from a given record onward, including that
@@ -339,7 +339,7 @@ Rec page_copy_rec_list_start(Buf_block *new_block, Buf_block *block, Rec rec, In
  * @param[in] size the sum of the sizes of the records in the end of the chain to delete, or ULINT_UNDEFINED if not known
  * @param[in,out] mtr mini-transaction
  */
-void page_delete_rec_list_end(Rec rec, Buf_block *block, Index *index, ulint n_recs, ulint size, mtr_t *mtr);
+void page_delete_rec_list_end(Rec rec, BufBlock *block, Index *index, ulint n_recs, ulint size, Mtr *mtr);
 
 /**
  * Deletes records from page, up to the given record, NOT including
@@ -350,7 +350,7 @@ void page_delete_rec_list_end(Rec rec, Buf_block *block, Index *index, ulint n_r
  * @param[in] index containing the record
  * @param[in,out] mtr mini-transaction
  */
-void page_delete_rec_list_start(Rec rec, Buf_block *block, Index *index, mtr_t *mtr);
+void page_delete_rec_list_start(Rec rec, BufBlock *block, Index *index, Mtr *mtr);
 
 /**
  * Moves record list end to another page. Moved records include split_rec.
@@ -363,7 +363,7 @@ void page_delete_rec_list_start(Rec rec, Buf_block *block, Index *index, mtr_t *
  *
  * @return true on success
  */
-bool page_move_rec_list_end(Buf_block *new_block, Buf_block *block, Rec split_rec, Index *index, mtr_t *mtr);
+bool page_move_rec_list_end(BufBlock *new_block, BufBlock *block, Rec split_rec, Index *index, Mtr *mtr);
 
 /**
  * Moves record list start to another page. Moved records do not include
@@ -377,7 +377,7 @@ bool page_move_rec_list_end(Buf_block *new_block, Buf_block *block, Rec split_re
  *
  * @return	true on success
  */
-bool page_move_rec_list_start(Buf_block *new_block, Buf_block *block, Rec split_rec, Index *index, mtr_t *mtr);
+bool page_move_rec_list_start(BufBlock *new_block, BufBlock *block, Rec split_rec, Index *index, Mtr *mtr);
 
 /**
  * Splits a directory slot which owns too many records.
@@ -409,7 +409,7 @@ void page_dir_balance_slot(page_t *page, ulint slot_no);
  *
  * @return	end of log record or NULL
  */
-byte *page_parse_delete_rec_list(byte type, byte *ptr, byte *end_ptr, Buf_block *block, Index *index, mtr_t *mtr);
+byte *page_parse_delete_rec_list(byte type, byte *ptr, byte *end_ptr, BufBlock *block, Index *index, Mtr *mtr);
 
 /**
  * Parses a redo log record of creating a page.
@@ -421,16 +421,16 @@ byte *page_parse_delete_rec_list(byte type, byte *ptr, byte *end_ptr, Buf_block 
  *
  * @return	end of log record or NULL
  */
-byte *page_parse_create(byte *ptr, byte *end_ptr, Buf_block *block, Index *index, mtr_t *mtr);
+byte *page_parse_create(byte *ptr, byte *end_ptr, BufBlock *block, Index *index, Mtr *mtr);
 
 /**
  * Prints record contents including the data relevant only in
  * the index page context.
  *
  * @param[in] rec physical record
- * @param[in] offsets array returned by Phy_rec::get_col_offsets()
+ * @param[in] offsets array returned by PhyRec::get_col_offsets()
  */
-void page_rec_print(const Rec rec, const Rec_offs &offsets);
+void page_rec_print(const Rec rec, const RecOffs &offsets);
 
 /**
  * This is used to print the contents of the directory for
@@ -449,7 +449,7 @@ void page_dir_print(page_t *page, ulint pr_n);
  * @param[in] index dictionary index of the page
  * @param[in] pr_n print n first and last entries in directory
  */
-void page_print_list(Buf_block *block, Index *index, ulint pr_n);
+void page_print_list(BufBlock *block, Index *index, ulint pr_n);
 
 /**
  * Prints the info in a page header.
@@ -467,7 +467,7 @@ void page_header_print(const page_t *page);
  * @param[in] dn print dn first and last entries in directory
  * @param[in] rn print rn first and last records in directory
  */
-void page_print(Buf_block *block, Index *index, ulint dn, ulint rn);
+void page_print(BufBlock *block, Index *index, ulint dn, ulint rn);
 
 /**
  * The following is used to validate a record on a page. This function
@@ -475,7 +475,7 @@ void page_print(Buf_block *block, Index *index, ulint dn, ulint rn);
  * the heap_no field.
  *
  * @param[in] rec physical record
- * @param[in] offsets array returned by Phy_rec::get_col_offsets()
+ * @param[in] offsets array returned by PhyRec::get_col_offsets()
  * @return	true if ok */
 bool page_rec_validate(Rec rec, const ulint *offsets);
 
@@ -547,7 +547,7 @@ inline trx_id_t page_get_max_trx_id(const page_t *page) {
  * @param[in] trx_id transaction id
  * @param[in,out] mtr mini-transaction
  */
-inline void page_update_max_trx_id(Buf_block *block, trx_id_t trx_id, mtr_t *mtr) {
+inline void page_update_max_trx_id(BufBlock *block, trx_id_t trx_id, Mtr *mtr) {
   ut_ad(mtr->memo_contains(block, MTR_MEMO_PAGE_X_FIX));
 
   /* During crash recovery, this function may be called on
@@ -602,7 +602,7 @@ inline void page_header_set_ptr(page_t *page, ulint field, const byte *ptr) {
  * @param[in,out] page Page to write to
  * @param[in,out] mtr mini-transaction
  */
-inline void page_header_reset_last_insert(page_t *page, mtr_t *mtr) {
+inline void page_header_reset_last_insert(page_t *page, Mtr *mtr) {
   mlog_write_ulint(page + (PAGE_HEADER + PAGE_LAST_INSERT), 0, MLOG_2BYTES, mtr);
 }
 
@@ -727,7 +727,7 @@ inline bool page_rec_is_infimum(const Rec rec) {
  * @param[in] dtuple data tuple
  * @param[in] rec physical record on a page; may also be page infimum or supremum,
  *  in which case matched-parameter values below are not affected
- * @param[in] offsets array returned by Phy_rec::get_col_offsets()
+ * @param[in] offsets array returned by PhyRec::get_col_offsets()
  * @param[in,out] matched_fields number of already completely matched fields;
  *  when function returns contains the value for current comparison
  * @param[in,out] matched_bytes number of already matched bytes within the first
@@ -1176,9 +1176,9 @@ inline ulint page_get_max_insert_size_after_reorganize(const page_t *page, ulint
  * @param[in,out] page index page
  * @param[in] rec pointer to the record
  * @param[in] index index of rec
- * @param[in] offsets array returned by Phy_rec::get_col_offsets()
+ * @param[in] offsets array returned by PhyRec::get_col_offsets()
  */
-inline void page_mem_free(page_t *page, Rec rec, const Index *index, const Rec_offs &offsets) {
+inline void page_mem_free(page_t *page, Rec rec, const Index *index, const RecOffs &offsets) {
   ut_ad(rec.offs_validate(index, offsets));
 
   auto free_rec = page_header_get_ptr(page, PAGE_FREE);

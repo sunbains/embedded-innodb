@@ -25,11 +25,11 @@ Created 2024-09-25 by Sunny Bains. */
 #include "trx0sys.h"
 
 /** The doublewrite buffer instance */
-DBLWR *srv_dblwr{};
+Dblwr *srv_dblwr{};
 
-DBLWR::DBLWR(FSP *fsp) : m_fsp(fsp), m_block1(ULINT32_UNDEFINED), m_block2(ULINT32_UNDEFINED) {
+Dblwr::Dblwr(Fsp *fsp) : m_fsp(fsp), m_block1(ULINT32_UNDEFINED), m_block2(ULINT32_UNDEFINED) {
 
-  mutex_create(&m_mutex, IF_DEBUG("DBLWR::m_mutex", ) IF_SYNC_DEBUG(SYNC_DOUBLEWRITE, ) Current_location());
+  mutex_create(&m_mutex, IF_DEBUG("Dblwr::m_mutex", ) IF_SYNC_DEBUG(SYNC_DOUBLEWRITE, ) Current_location());
 
   m_ptr = static_cast<byte *>(ut_new((1 + 2 * SYS_DOUBLEWRITE_BLOCK_SIZE) * UNIV_PAGE_SIZE));
 
@@ -38,7 +38,7 @@ DBLWR::DBLWR(FSP *fsp) : m_fsp(fsp), m_block1(ULINT32_UNDEFINED), m_block2(ULINT
   m_bpages.resize(2 * SYS_DOUBLEWRITE_BLOCK_SIZE);
 }
 
-DBLWR::~DBLWR() {
+Dblwr::~Dblwr() {
   if (m_ptr != nullptr) {
     ut_delete(m_ptr);
   }
@@ -46,7 +46,7 @@ DBLWR::~DBLWR() {
   mutex_free(&m_mutex);
 }
 
-bool DBLWR::is_page_inside(page_no_t page_no) const noexcept {
+bool Dblwr::is_page_inside(page_no_t page_no) const noexcept {
   if (page_no >= m_block1 && page_no < m_block1 + SYS_DOUBLEWRITE_BLOCK_SIZE) {
     return true;
   } else {
@@ -54,13 +54,13 @@ bool DBLWR::is_page_inside(page_no_t page_no) const noexcept {
   }
 }
 
-db_err DBLWR::initialize() noexcept {
+DbErr Dblwr::initialize() noexcept {
   ut_a(m_block1 == ULINT32_UNDEFINED);
   ut_a(m_block2 == ULINT32_UNDEFINED);
 
-  mtr_t mtr;
+  Mtr mtr;
 
-  Buf_pool::Request req{
+  BufPool::Request req{
     .m_rw_latch = RW_X_LATCH,
     .m_page_id = {SYS_TABLESPACE, TRX_SYS_PAGE_NO},
     .m_mode = BUF_GET,
@@ -136,7 +136,7 @@ db_err DBLWR::initialize() noexcept {
     doublewrite. */
 
     IF_SYNC_DEBUG({
-      Buf_pool::Request req{
+      BufPool::Request req{
         .m_rw_lock = RW_X_LATCH,
         .m_page_id = {SYS_TABLESPACE, page_no},
         .m_mode = BUF_GET,
@@ -178,7 +178,7 @@ db_err DBLWR::initialize() noexcept {
   return DB_SUCCESS;
 }
 
-bool DBLWR::check_if_exists(Fil *fil, std::pair<page_no_t, page_no_t> &offsets) noexcept {
+bool Dblwr::check_if_exists(Fil *fil, std::pair<page_no_t, page_no_t> &offsets) noexcept {
 
   offsets.first = ULINT32_UNDEFINED;
   offsets.second = ULINT32_UNDEFINED;
@@ -189,7 +189,7 @@ bool DBLWR::check_if_exists(Fil *fil, std::pair<page_no_t, page_no_t> &offsets) 
 
   /* Read the trx sys header to check if we are using the doublewrite buffer */
 
-  fil->data_io(IO_request::Sync_read, false, Page_id(SYS_TABLESPACE, TRX_SYS_PAGE_NO), 0, UNIV_PAGE_SIZE, page, nullptr);
+  fil->data_io(IoRequest::Sync_read, false, PageId(SYS_TABLESPACE, TRX_SYS_PAGE_NO), 0, UNIV_PAGE_SIZE, page, nullptr);
 
   auto dblwr = page + SYS_DOUBLEWRITE;
   auto exists = mach_read_from_4(dblwr + SYS_DOUBLEWRITE_MAGIC) == SYS_DOUBLEWRITE_MAGIC_N;
@@ -204,7 +204,7 @@ bool DBLWR::check_if_exists(Fil *fil, std::pair<page_no_t, page_no_t> &offsets) 
   return exists;
 }
 
-void DBLWR::recover_pages() noexcept {
+void Dblwr::recover_pages() noexcept {
   ut_a(m_block1 != ULINT32_UNDEFINED);
   ut_a(m_block2 != ULINT32_UNDEFINED);
 
@@ -215,7 +215,7 @@ void DBLWR::recover_pages() noexcept {
    * Note: We bypass the buffer pool here.*/
 
   m_fsp->m_fil->data_io(
-    IO_request::Sync_read, false, Page_id(SYS_TABLESPACE, TRX_SYS_PAGE_NO), 0, UNIV_PAGE_SIZE, read_buf, nullptr
+    IoRequest::Sync_read, false, PageId(SYS_TABLESPACE, TRX_SYS_PAGE_NO), 0, UNIV_PAGE_SIZE, read_buf, nullptr
   );
 
   {
@@ -230,13 +230,13 @@ void DBLWR::recover_pages() noexcept {
   /* Read the pages from both the doublewrite buffers into memory */
 
   m_fsp->m_fil->data_io(
-    IO_request::Sync_read, false, Page_id(SYS_TABLESPACE, m_block1), 0, SYS_DOUBLEWRITE_BLOCK_SIZE * UNIV_PAGE_SIZE, buf, nullptr
+    IoRequest::Sync_read, false, PageId(SYS_TABLESPACE, m_block1), 0, SYS_DOUBLEWRITE_BLOCK_SIZE * UNIV_PAGE_SIZE, buf, nullptr
   );
 
   m_fsp->m_fil->data_io(
-    IO_request::Sync_read,
+    IoRequest::Sync_read,
     false,
-    Page_id(SYS_TABLESPACE, m_block2),
+    PageId(SYS_TABLESPACE, m_block2),
     0,
     SYS_DOUBLEWRITE_BLOCK_SIZE * UNIV_PAGE_SIZE,
     buf + SYS_DOUBLEWRITE_BLOCK_SIZE * UNIV_PAGE_SIZE,
@@ -268,7 +268,7 @@ void DBLWR::recover_pages() noexcept {
       /* It is an unwritten doublewrite buffer page: do nothing */
     } else {
       /* Read in the actual page from the file */
-      m_fsp->m_fil->data_io(IO_request::Sync_read, false, Page_id(space_id, page_no), 0, UNIV_PAGE_SIZE, read_buf, nullptr);
+      m_fsp->m_fil->data_io(IoRequest::Sync_read, false, PageId(space_id, page_no), 0, UNIV_PAGE_SIZE, read_buf, nullptr);
 
       /* Check if the page is corrupt */
 
@@ -297,7 +297,7 @@ void DBLWR::recover_pages() noexcept {
         /* Write the good page from the doublewrite buffer to the intended
          * position */
 
-        m_fsp->m_fil->data_io(IO_request::Sync_write, false, Page_id(space_id, page_no), 0, UNIV_PAGE_SIZE, page, nullptr);
+        m_fsp->m_fil->data_io(IoRequest::Sync_write, false, PageId(space_id, page_no), 0, UNIV_PAGE_SIZE, page, nullptr);
 
         log_info("Recovered the page from the doublewrite buffer.");
       }
@@ -311,13 +311,13 @@ void DBLWR::recover_pages() noexcept {
   ut_delete(ptr);
 }
 
-DBLWR *DBLWR::create(FSP *fsp) noexcept {
-  auto ptr = ut_new(sizeof(DBLWR));
+Dblwr *Dblwr::create(Fsp *fsp) noexcept {
+  auto ptr = ut_new(sizeof(Dblwr));
 
-  return ptr != nullptr ? new (ptr) DBLWR(fsp) : nullptr;
+  return ptr != nullptr ? new (ptr) Dblwr(fsp) : nullptr;
 }
 
-void DBLWR::destroy(DBLWR *&dblwr) noexcept {
+void Dblwr::destroy(Dblwr *&dblwr) noexcept {
   call_destructor(dblwr);
   ut_delete(dblwr);
   dblwr = nullptr;

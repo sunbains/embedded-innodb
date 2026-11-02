@@ -1,4 +1,4 @@
-/** Contains InnoDB DDL operations.
+/** Contains InnoDB Ddl operations.
 
 (c)opyright 2008 Oracle Corpn/Innobase Oy
 Copyright (c) 2024 Sunny Bains. All rights reserved.
@@ -15,14 +15,14 @@ struct Log;
 struct Trx;
 struct Dict;
 
-/** Data Dictionary Layer DDL operations. */
-struct DDL {
+/** Data Dictionary Layer Ddl operations. */
+struct Ddl {
   /**
    * @brief Constructor.
    *
    * @param[in] dict Data dictionary.
    */
-  explicit DDL(Dict *dict) noexcept : m_dict{dict} {}
+  explicit Ddl(Dict *dict) noexcept : m_dict{dict} {}
 
   /** Get the background drop list length. NOTE: the caller must own the kernel mutex!
    * @return	how many tables in list
@@ -43,7 +43,7 @@ struct DDL {
    *
    * @return Error code or DB_SUCCESS.
    */
-  [[nodiscard]] db_err create_table(Table *table, Trx *trx) noexcept;
+  [[nodiscard]] DbErr create_table(Table *table, Trx *trx) noexcept;
 
   /**
    * @brief Does an index creation operation.
@@ -55,7 +55,7 @@ struct DDL {
    *
    * @return Error number or DB_SUCCESS.
    */
-  [[nodiscard]] db_err create_index(Index *index, Trx *trx) noexcept;
+  [[nodiscard]] DbErr create_index(Index *index, Trx *trx) noexcept;
 
   /**
    * @brief Drops a table but does not commit the transaction. If the
@@ -70,7 +70,7 @@ struct DDL {
    *
    * @return Error code or DB_SUCCESS.
    */
-  [[nodiscard]] db_err drop_table(const char *name, Trx *trx, bool drop_db) noexcept;
+  [[nodiscard]] DbErr drop_table(const char *name, Trx *trx, bool drop_db) noexcept;
 
   /**
    * @brief Drops an index.
@@ -81,7 +81,7 @@ struct DDL {
    *
    * @return Error code or DB_SUCCESS.
    */
-  [[nodiscard]] db_err drop_index(Table *table, Index *index, Trx *trx) noexcept;
+  [[nodiscard]] DbErr drop_index(Table *table, Index *index, Trx *trx) noexcept;
 
   /**
    * @brief The master thread in srv0srv.c calls this regularly to drop tables which
@@ -100,7 +100,7 @@ struct DDL {
    *
    * @return Error code or DB_SUCCESS.
    */
-  [[nodiscard]] db_err truncate_table(Table *table, Trx *trx) noexcept;
+  [[nodiscard]] DbErr truncate_table(Table *table, Trx *trx) noexcept;
 
   /**
    * @brief Renames a table.
@@ -111,7 +111,7 @@ struct DDL {
    *
    * @return Error code or DB_SUCCESS.
    */
-  [[nodiscard]] db_err rename_table(const char *old_name, const char *new_name, Trx *trx) noexcept;
+  [[nodiscard]] DbErr rename_table(const char *old_name, const char *new_name, Trx *trx) noexcept;
 
   /**
    * @brief Renames an index.
@@ -123,7 +123,7 @@ struct DDL {
    *
    * @return Error code or DB_SUCCESS.
    */
-  [[nodiscard]] db_err rename_index(const char *table_name, const char *old_name, const char *new_name, Trx *trx) noexcept;
+  [[nodiscard]] DbErr rename_index(const char *table_name, const char *old_name, const char *new_name, Trx *trx) noexcept;
 
   /**
    * @brief Drops a database.
@@ -133,21 +133,21 @@ struct DDL {
    *
    * @return Error code or DB_SUCCESS.
    */
-  [[nodiscard]] db_err drop_database(const char *name, Trx *trx) noexcept;
+  [[nodiscard]] DbErr drop_database(const char *name, Trx *trx) noexcept;
 
   /**
    * @brief Drop all partially created indexes.
    *
    * @param[in] recovery - Recovery level setting.
    */
-  void drop_all_temp_indexes(ib_recovery_t recovery) noexcept;
+  void drop_all_temp_indexes(IbRecovery recovery) noexcept;
 
   /**
    * @brief Drop all temporary tables.
    *
    * @param[in] recovery - Recovery level setting.
    */
-  void drop_all_temp_tables(ib_recovery_t recovery) noexcept;
+  void drop_all_temp_tables(IbRecovery recovery) noexcept;
 
 #ifndef UNIT_TEST
  private:
@@ -164,7 +164,7 @@ struct DDL {
    *
    * @return Error code or DB_SUCCESS
    */
-  [[nodiscard]] db_err drop_table_in_background(const char *name) noexcept;
+  [[nodiscard]] DbErr drop_table_in_background(const char *name) noexcept;
 
   /**
    * @brief If a table is not yet in the drop list, adds the table to the list of
@@ -187,7 +187,7 @@ struct DDL {
    * 
    * @return Error code or DB_SUCCESS
    */
-  [[nodiscard]] db_err delete_foreign_constraint(const char *id, Trx *trx) noexcept;
+  [[nodiscard]] DbErr delete_foreign_constraint(const char *id, Trx *trx) noexcept;
 
   /**
    * @brief Delete a single constraint.
@@ -199,7 +199,7 @@ struct DDL {
    *
    * @return error code or DB_SUCCESS
    */
-  [[nodiscard]] db_err delete_constraint(const char *id, const char *database_name, mem_heap_t *heap, Trx *trx) noexcept;
+  [[nodiscard]] DbErr delete_constraint(const char *id, const char *database_name, MemHeap *heap, Trx *trx) noexcept;
 
   /**
    * @brief Drop all foreign keys in a database, see Bug#18942.
@@ -209,7 +209,7 @@ struct DDL {
    *
    * @return error code or DB_SUCCESS
    */
-  [[nodiscard]] db_err drop_all_foreign_keys_in_db(const char *name, Trx *trx) noexcept;
+  [[nodiscard]] DbErr drop_all_foreign_keys_in_db(const char *name, Trx *trx) noexcept;
 
 #ifndef UNIT_TEST
  private:
@@ -220,12 +220,12 @@ struct DDL {
    * that the table handler can drop the table in background when there are no
    * queries to it any more. Protected by the kernel mutex.
    */
-  struct Drop_list {
+  struct DropList {
     /** Table name to drop.. */
     char *m_table_name{};
 
     /** Next node in the list. */
-    UT_LIST_NODE_T(Drop_list) m_node{};
+    UT_LIST_NODE_T(DropList) m_node{};
   };
 
   /** Data Dictionary. */
@@ -235,18 +235,18 @@ struct DDL {
   Log *m_log{};
 
   /** List of tables we should drop in background. */
-  UT_LIST_BASE_NODE_T(Drop_list, m_node) m_drop_list;
+  UT_LIST_BASE_NODE_T(DropList, m_node) m_drop_list;
 };
 
-[[nodiscard]] inline DDL_index_status Index::get_online_ddl_status() const noexcept {
-  const auto ddl_status = static_cast<DDL_index_status>(m_ddl_status);
+[[nodiscard]] inline DdlIndexStatus Index::get_online_ddl_status() const noexcept {
+  const auto ddl_status = static_cast<DdlIndexStatus>(m_ddl_status);
 
 #ifdef UNIV_DEBUG
   switch (ddl_status) {
-    case DDL_index_status::READY:
-    case DDL_index_status::IN_PROGRESS:
-    case DDL_index_status::FAILED:
-    case DDL_index_status::DROPPED:
+    case DdlIndexStatus::READY:
+    case DdlIndexStatus::IN_PROGRESS:
+    case DdlIndexStatus::FAILED:
+    case DdlIndexStatus::DROPPED:
       return ddl_status;
   }
   ut_error;
@@ -259,17 +259,17 @@ struct DDL {
 #ifdef UNIV_DEBUG
   if (is_clustered()) {
     switch (get_online_ddl_status()) {
-      case DDL_index_status::READY:
+      case DdlIndexStatus::READY:
         return true;
-      case DDL_index_status::IN_PROGRESS:
+      case DdlIndexStatus::IN_PROGRESS:
         return false;
-      case DDL_index_status::FAILED:
-      case DDL_index_status::DROPPED:
+      case DdlIndexStatus::FAILED:
+      case DdlIndexStatus::DROPPED:
         break;
     }
     ut_error;
   }
 #endif /* UNIV_DEBUG */
 
-  return get_online_ddl_status() != DDL_index_status::READY;
+  return get_online_ddl_status() != DdlIndexStatus::READY;
 }

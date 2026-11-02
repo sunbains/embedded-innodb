@@ -31,7 +31,7 @@ limitations under the License.
 #include "ut0mem.h"
 #include "ut0mpmcbq.h"
 
-AIO *srv_aio{};
+Aio *srv_aio{};
 
 namespace aio {
 
@@ -93,10 +93,10 @@ struct Slot {
   IF_DEBUG(bool m_reserved{};)
 
   /** The IO context */
-  IO_ctx m_io_ctx{};
+  IoCtx m_io_ctx{};
 };
 
-using Slots_pool = Bounded_channel<Slot *>;
+using Slots_pool = BoundedChannel<Slot *>;
 
 /** There are three different types of requests:
  * 1. Log requests
@@ -119,14 +119,14 @@ using Slots_pool = Bounded_channel<Slot *>;
  * slots in the free pool.
  * 
  * The io_uring completion queue is polled by the queue reap threads.
- * These queue reap threads are created by the callers of AIO::reap().
+ * These queue reap threads are created by the callers of Aio::reap().
  * So the caller must ensure that reap is called with the correct
  * queue id.
  * 
  * The queues are suspended when there are no available
  * completion entries in the io_uring queue.
  * 
- * The queue id argument to AIO::reap() is the ordinal number
+ * The queue id argument to Aio::reap() is the ordinal number
  * of the queue in the "global" queue array. The "global" queue
  * array is:   LOG + READ + WRITE
  * 
@@ -136,7 +136,7 @@ using Slots_pool = Bounded_channel<Slot *>;
  *                 = 1 + 3 + 0 = 4
  * 
  * FIXME: In the next refactor iteration remove the requirement to pass
- * the queue ID to AIO::reap().
+ * the queue ID to Aio::reap().
  */
 struct Handler {
 
@@ -170,7 +170,7 @@ struct Handler {
 
   /** Get the queue for submitting a request
    * 
-   * @return the queue for the AIO
+   * @return the queue for the Aio
   */
   [[nodiscard]] Queue *get_queue_for_submit() noexcept;
 
@@ -205,11 +205,11 @@ struct Handler {
 
   /** The event which is set to the signaled state when there are
    * slots available in this handler. */
-  Cond_var *m_not_full{};
+  CondVar *m_not_full{};
 
   /** The event which is set to the signaled state when there are
    * no free slots in this handler. */
-  Cond_var *m_is_empty{};
+  CondVar *m_is_empty{};
 
   /** Number of  reserved slots in the handler */
   std::atomic<ulint> m_n_reserved{};
@@ -251,14 +251,14 @@ struct Handler::Queue {
    * 
    * @return DB_SUCCESS or error code.
   */
-  db_err submit(Slot *slot) noexcept;
+  DbErr submit(Slot *slot) noexcept;
 
   /** Wait for completed requests and return the IO context.
    * 
    * @param[out] io_ctx IO context
    * 
    *  @return DB_SUCCESS or error code. */
-  db_err reap(IO_ctx &io_ctx) noexcept;
+  DbErr reap(IoCtx &io_ctx) noexcept;
 
   /**
   * Reserve a slot from the free pool
@@ -267,7 +267,7 @@ struct Handler::Queue {
   * @param[in] len Length of the buffer (to read/write)
   * @param[in] off Offset in the file.
   * @return an IO slot instance. */
-  [[nodiscard]] Slot *reserve_slot(const IO_ctx &io_ctx, void *ptr, uint32_t len, off_t off) noexcept;
+  [[nodiscard]] Slot *reserve_slot(const IoCtx &io_ctx, void *ptr, uint32_t len, off_t off) noexcept;
 
   /** Shutdown the queue. */
   void shutdown() {
@@ -309,7 +309,7 @@ struct Handler::Queue {
   /* For collecting operational statistics. */
   Stats m_stats{};
 
-  /** Number of pending AIO slots. */
+  /** Number of pending Aio slots. */
   std::atomic<ulint> m_pending_slots{};
 
   /** Parent handler. */
@@ -318,11 +318,11 @@ struct Handler::Queue {
   /** Local queue id. */
   ulint m_id{ULINT_UNDEFINED};
 
-  /** io_uring instance  use for AIO. */
+  /** io_uring instance  use for Aio. */
   io_uring m_iouring{};
 };
 
-struct Impl : public AIO {
+struct Impl : public Aio {
   /** Constructor.
    * @param[in] n_slots Total number of slots for all queues
    * @param[in] read_queues Number of reader queues.
@@ -349,7 +349,7 @@ struct Impl : public AIO {
   * @param offset Least significant 32 bits of file offset where to read or write.
   * @return true if the request was queued successfully, false if failed.
   */
-  [[nodiscard]] virtual db_err submit(IO_ctx &&io_ctx, void *buf, ulint n, off_t off) noexcept;
+  [[nodiscard]] virtual DbErr submit(IoCtx &&io_ctx, void *buf, ulint n, off_t off) noexcept;
 
   /**
   * @brief Reap the completed request from io_uring.
@@ -358,7 +358,7 @@ struct Impl : public AIO {
   * @param[out] io_ctx Context of the i/o operation.
   * @return DB_SUCCESS or error code.
   */
-  [[nodiscard]] virtual db_err reap(ulint queue_id, IO_ctx &io_ctx) noexcept;
+  [[nodiscard]] virtual DbErr reap(ulint queue_id, IoCtx &io_ctx) noexcept;
 
   /**
   * @brief Waits until there are no pending async operations.
@@ -366,7 +366,7 @@ struct Impl : public AIO {
   virtual void wait_for_pending_ops(ulint handler_idd) noexcept;
 
   /**
-  * @brief Closes/shuts down the AIO sub-system and frees all the memory.
+  * @brief Closes/shuts down the Aio sub-system and frees all the memory.
   */
   virtual void shutdown() noexcept;
 
@@ -377,13 +377,13 @@ struct Impl : public AIO {
   */
   virtual std::string to_string() noexcept;
 
-  /** Get the AIO type from the IO context.
+  /** Get the Aio type from the IO context.
    * 
    * @param[in] io_ctx  IO context
    * 
    * @return one of LOG, READ or WRITE
   */
-  [[nodiscard]] ulint get_type(const IO_ctx &io_ctx) noexcept;
+  [[nodiscard]] ulint get_type(const IoCtx &io_ctx) noexcept;
 
   /** 
    * Get the handler for the given queue_id
@@ -428,8 +428,8 @@ struct Impl : public AIO {
 };
 
 Handler::Handler(ulint id, size_t n_slots, size_t n_queues) noexcept : m_id(id) {
-  m_not_full = Cond_var::create(nullptr);
-  m_is_empty = Cond_var::create(nullptr);
+  m_not_full = CondVar::create(nullptr);
+  m_is_empty = CondVar::create(nullptr);
 
   m_slots.resize(n_slots);
 
@@ -458,8 +458,8 @@ Handler::~Handler() noexcept {
   }
   m_queues.clear();
 
-  Cond_var::destroy(m_not_full);
-  Cond_var::destroy(m_is_empty);
+  CondVar::destroy(m_not_full);
+  CondVar::destroy(m_is_empty);
 }
 
 std::string Handler::to_string() const {
@@ -545,7 +545,7 @@ void Handler::mark_as_free(Slot *slot) noexcept {
   }
 }
 
-Slot *Handler::Queue::reserve_slot(const IO_ctx &io_ctx, void *ptr, uint32_t len, off_t off) noexcept {
+Slot *Handler::Queue::reserve_slot(const IoCtx &io_ctx, void *ptr, uint32_t len, off_t off) noexcept {
   for (;;) {
     if (m_handler->m_n_reserved.load(std::memory_order_relaxed) == m_handler->m_slots.capacity()) {
 
@@ -589,7 +589,7 @@ Slot *Handler::Queue::reserve_slot(const IO_ctx &io_ctx, void *ptr, uint32_t len
   return nullptr;
 }
 
-db_err Handler::Queue::submit(Slot *slot) noexcept {
+DbErr Handler::Queue::submit(Slot *slot) noexcept {
   ut_a(!m_shutdown.load(std::memory_order_acquire));
   ut_ad(m_handler->m_n_reserved.load(std::memory_order_acquire) > 0);
 
@@ -632,7 +632,7 @@ db_err Handler::Queue::submit(Slot *slot) noexcept {
   }
 }
 
-db_err Handler::Queue::reap(IO_ctx &io_ctx) noexcept {
+DbErr Handler::Queue::reap(IoCtx &io_ctx) noexcept {
   ut_ad(m_handler->validate());
 
   io_uring_cqe *cqe;
@@ -695,7 +695,7 @@ db_err Handler::Queue::reap(IO_ctx &io_ctx) noexcept {
   }
 }
 
-ulint Impl::get_type(const IO_ctx &io_ctx) noexcept {
+ulint Impl::get_type(const IoCtx &io_ctx) noexcept {
   if (io_ctx.is_log_request()) {
     return LOG;
   } else if (io_ctx.is_read_request()) {
@@ -732,7 +732,7 @@ Handler::Queue *Impl::get_queue(ulint queue_id) noexcept {
   }
 }
 
-db_err Impl::submit(IO_ctx &&io_ctx, void *ptr, ulint n, off_t off) noexcept {
+DbErr Impl::submit(IoCtx &&io_ctx, void *ptr, ulint n, off_t off) noexcept {
   io_ctx.validate();
 
   ut_ad(n > 0);
@@ -778,7 +778,7 @@ std::string Impl::to_string() noexcept {
   return os.str();
 }
 
-db_err Impl::reap(ulint handler_id, IO_ctx &io_ctx) noexcept {
+DbErr Impl::reap(ulint handler_id, IoCtx &io_ctx) noexcept {
   return get_queue(handler_id)->reap(io_ctx);
 }
 
@@ -799,19 +799,19 @@ void Impl::shutdown() noexcept {
 
 }  // namespace aio
 
-void IO_ctx::validate() const noexcept {
+void IoCtx::validate() const noexcept {
   ut_a(m_fil_node->m_fh != -1);
   ut_a(m_fil_node->m_file_name != nullptr);
 }
 
-AIO *AIO::create(ulint max_slots, ulint read_queues, ulint write_queues) noexcept {
+Aio *Aio::create(ulint max_slots, ulint read_queues, ulint write_queues) noexcept {
   ut_a(read_queues > 0);
   ut_a(write_queues > 0);
 
   return new (ut_new(sizeof(aio::Impl))) aio::Impl(max_slots, read_queues, write_queues);
 }
 
-void AIO::destroy(AIO *&aio) noexcept {
+void Aio::destroy(Aio *&aio) noexcept {
   call_destructor(aio);
   ut_delete(aio);
   aio = nullptr;

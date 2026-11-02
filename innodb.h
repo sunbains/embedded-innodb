@@ -51,12 +51,12 @@ using ib_msg_stream_t = FILE*;
  * behavior as fprintf(3). */
 typedef int (*ib_msg_log_t)(ib_msg_stream_t, const char*, ...);
 
-/** \enum db_err InnoDB error codes.
+/** \enum DbErr InnoDB error codes.
  * Most of the error codes are internal to the engine
  * and will not be seen by user applications. The partial error codes reflect
  * the sub-state of an operation within InnoDB. Some of the error codes are
  * deprecated and are no longer used. */
-enum db_err {
+enum DbErr {
   /** A successult result */
   DB_SUCCESS = 10,    
 
@@ -230,25 +230,24 @@ enum db_err {
   /** Index is corrupted. */
   DB_INDEX_CORRUPT,
 
-  /** DDL is in progress. */
+  /** Ddl is in progress. */
   DB_DDL_IN_PROGRESS,
 };
 
-using dberr_t = db_err;
 
-/** std::formatter specialization for db_err to enable use with std::format */
+/** std::formatter specialization for DbErr to enable use with std::format */
 template <>
-struct std::formatter<db_err> : std::formatter<int> {
-  auto format(db_err e, std::format_context& ctx) const {
+struct std::formatter<DbErr> : std::formatter<int> {
+  auto format(DbErr e, std::format_context& ctx) const {
     return std::formatter<int>::format(static_cast<int>(e), ctx);
   }
 };
 
 /* Basic types used by the InnoDB API. */
 
-/** All InnoDB error codes are represented by ib_err_t. See \ref db_err for
+/** All InnoDB error codes are represented by ib_err_t. See \ref DbErr for
 a complete list of possible error codes. */
-using ib_err_t = dberr_t;
+using ib_err_t = DbErr;
 
 /** Representation of a byte within InnoDB */
 using ib_byte_t = unsigned char;
@@ -463,7 +462,7 @@ enum ib_trx_state_t {
   IB_TRX_PREPARED
 };
 
-/* Note: Must be in sync with Trx_isolation in trx0types.h */
+/* Note: Must be in sync with TrxIsolation in trx0types.h */
 /** @enum ib_trx_level_t Transaction isolation levels */
 enum ib_trx_level_t {
   /** Dirty read: non-locking SELECTs are performed so that we do not
@@ -770,7 +769,7 @@ extern ib_client_cmp_t  ib_client_compare;
    @defgroup cursor Cursor functions
    @defgroup trx Transaction functions
    @defgroup config Configuration functions
-   @defgroup ddl DDL functions
+   @defgroup ddl Ddl functions
    @defgroup misc Miscellaneous functions
    @defgroup tuple Tuple functions
    @defgroup sql SQL functions

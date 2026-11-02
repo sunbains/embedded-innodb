@@ -13,7 +13,7 @@ constexpr int USER_OPT = 1000;
 #define OK(expr)                                                               \
   do {                                                                         \
     ib_err_t ok_ib_err;                                                        \
-    ok_ib_err = db_err(expr);                                                  \
+    ok_ib_err = DbErr(expr);                                                  \
     if (ok_ib_err != DB_SUCCESS) {                                             \
       fprintf(stderr, "%s: %s\n", #expr, ib_strerror(ok_ib_err));              \
       exit(EXIT_FAILURE);                                                      \

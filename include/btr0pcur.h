@@ -26,11 +26,11 @@ Created 2/23/1996 Heikki Tuuri
 
 #include "btr0cur.h"
 
-struct mtr_t;
-struct Buf_block;
+struct Mtr;
+struct BufBlock;
 
 /* Relative positions for a stored cursor position */
-enum class Btree_cursor_pos : uint8_t {
+enum class BtreeCursorPos : uint8_t {
   UNSET = 0,
   ON = 1,
   BEFORE = 2,
@@ -48,7 +48,7 @@ enum class Btree_cursor_pos : uint8_t {
   AFTER_LAST_IN_TREE = 5
 };
 
-enum class Btr_pcur_positioned {
+enum class BtrPcurPositioned {
   /** Persistent cursor is not positioned. */
   UNSET = 0,
 
@@ -57,7 +57,7 @@ enum class Btr_pcur_positioned {
   IS_POSITIONED,
 
   /** The persistent cursor is positioned by optimistic get to the same
-  record as it was positioned at. Not used for rel_pos == Btree_cursor_pos::ON.
+  record as it was positioned at. Not used for rel_pos == BtreeCursorPos::ON.
   It may need adjustment depending on previous/current search direction
   and rel_pos. */
   IS_POSITIONED_OPTIMISTIC,
@@ -72,14 +72,14 @@ enum class Btr_pcur_positioned {
 
 /* The persistent B-tree cursor structure. This is used mainly for SQL
 selects, updates, and deletes. */
-struct Btree_pcursor {
+struct BtreePcursor {
   struct Ctx {
     Index *m_index{};
     const DTuple *m_tuple{};
     ib_srch_mode_t m_search_mode{};
     ulint m_latch_mode{};
-    mtr_t *m_mtr{};
-    Source_location m_loc{Current_location()};
+    Mtr *m_mtr{};
+    SourceLocation m_loc{Current_location()};
   };
 
   /** @brief Constructor.
@@ -87,12 +87,12 @@ struct Btree_pcursor {
    * @param[in] fsp             The file segment manager.
    * @param[in] btree           The B-tree.
    */
-  Btree_pcursor(FSP *fsp, Btree *btree) noexcept;
+  BtreePcursor(Fsp *fsp, Btree *btree) noexcept;
 
   /**
    * @brief Destructor.
    */
-  ~Btree_pcursor() noexcept;
+  ~BtreePcursor() noexcept;
 
   /**
    * @brief Copies the stored position of a persistent cursor to this persistent cursor.
@@ -101,7 +101,7 @@ struct Btree_pcursor {
    *
    * @param[in] src             The persistent cursor from which the position information is copied.
    */
-  void copy_stored_position(Btree_pcursor *src) noexcept;
+  void copy_stored_position(BtreePcursor *src) noexcept;
 
   /**
    * @brief Opens a persistent cursor on the first or last user record satisfying the search condition.
@@ -119,7 +119,7 @@ struct Btree_pcursor {
    * @param[in] loc             The callers location
    */
   void open_on_user_rec(
-    Index *index, const DTuple *tuple, ib_srch_mode_t mode, ulint latch_mode, mtr_t *mtr, Source_location loc
+    Index *index, const DTuple *tuple, ib_srch_mode_t mode, ulint latch_mode, Mtr *mtr, SourceLocation loc
   ) noexcept;
 
   /** Allows setting the persistent cursor manually.
@@ -128,7 +128,7 @@ struct Btree_pcursor {
     * @param[in] mode           PAGE_CUR_L, ...
     * @param[in] latch_mode     BTR_SEARCH_LEAF or BTR_MODIFY_LEAF
     */
-  void open_on_user_rec(const Page_cursor &page_cursor, ib_srch_mode_t mode, ulint latch_mode) noexcept;
+  void open_on_user_rec(const PageCursor &page_cursor, ib_srch_mode_t mode, ulint latch_mode) noexcept;
 
   /**
    * @brief Stores the position of the cursor.
@@ -143,7 +143,7 @@ struct Btree_pcursor {
    *
    * @param[in] mtr             The mtr (mini-transaction) object.
    */
-  void store_position(mtr_t *mtr) noexcept;
+  void store_position(Mtr *mtr) noexcept;
 
   /**
    * @brief Restores the stored position of a persistent cursor.
@@ -166,7 +166,7 @@ struct Btree_pcursor {
    * @return True if the cursor position was stored when it was on a user record and it can be restored on a user record
    *         whose ordering fields are identical to the ones of the original user record.
    */
-  [[nodiscard]] bool restore_position(ulint latch_mode, mtr_t *mtr, Source_location loc) noexcept;
+  [[nodiscard]] bool restore_position(ulint latch_mode, Mtr *mtr, SourceLocation loc) noexcept;
 
   /**
    * @brief Releases the page latch and bufferfix reserved by the cursorif the latch mode is BTR_LEAF_SEARCH or BTR_LEAF_MODIFY.
@@ -176,7 +176,7 @@ struct Btree_pcursor {
    *
    * @param[in] mtr             The mtr (mini-transaction) object.
    */
-  void release_leaf(mtr_t *mtr) noexcept;
+  void release_leaf(Mtr *mtr) noexcept;
 
   /**
    * @brief Moves the persistent cursor to the first record on the next page.
@@ -186,7 +186,7 @@ struct Btree_pcursor {
    *
    * @param[in] mtr             The mtr (mini-transaction) object.
    */
-  void move_to_next_page(mtr_t *mtr) noexcept;
+  void move_to_next_page(Mtr *mtr) noexcept;
 
   /**
    * @brief Moves the persistent cursor backward if it is on the first record of the page.
@@ -200,28 +200,28 @@ struct Btree_pcursor {
    *
    * @param[in] mtr             The mtr (mini-transaction) object.
    */
-  void move_backward_from_page(mtr_t *mtr) noexcept;
+  void move_backward_from_page(Mtr *mtr) noexcept;
 
   /**
    * @brief Gets the rel_pos field for a cursor whose position has been stored.
    *
    * @return The rel_pos field value.
    */
-  [[nodiscard]] Btree_cursor_pos get_rel_pos() const noexcept;
+  [[nodiscard]] BtreeCursorPos get_rel_pos() const noexcept;
 
   /**
    * @brief Sets the mtr field for a persistent cursor.
    *
    * @param[in] mtr             The mtr to set.
    */
-  void set_mtr(mtr_t *mtr) noexcept;
+  void set_mtr(Mtr *mtr) noexcept;
 
   /**
    * @brief Gets the mtr field for a persistent cursor.
    *
    * @return The mtr field.
    */
-  [[nodiscard]] mtr_t *get_mtr() noexcept;
+  [[nodiscard]] Mtr *get_mtr() noexcept;
 
   /**
    * @brief Returns the page of a persistent cursor.
@@ -235,7 +235,7 @@ struct Btree_pcursor {
    *
    * @return Pointer to the block.
    */
-  [[nodiscard]] Buf_block *get_block() noexcept;
+  [[nodiscard]] BufBlock *get_block() noexcept;
 
   /**
    * @brief The index of the persistent cursor.
@@ -293,7 +293,7 @@ struct Btree_pcursor {
    *
    * @return True if the cursor is before the first user record in the index tree, false otherwise.
    */
-  [[nodiscard]] bool is_before_first_in_tree(mtr_t *mtr) noexcept;
+  [[nodiscard]] bool is_before_first_in_tree(Mtr *mtr) noexcept;
 
   /**
    * @brief Checks if the persistent cursor is after the last user record in the index tree.
@@ -301,7 +301,7 @@ struct Btree_pcursor {
    * @param[in] mtr             The mtr.
    * @return True if the cursor is after the last user record in the index tree, false otherwise.
    */
-  [[nodiscard]] bool is_after_last_in_tree(mtr_t *mtr) noexcept;
+  [[nodiscard]] bool is_after_last_in_tree(Mtr *mtr) noexcept;
 
   /**
    * @brief Moves the persistent cursor to the next record on the same page.
@@ -319,7 +319,7 @@ struct Btree_pcursor {
    *
    * @param[in] mtr             The mtr.
    */
-  void move_to_last_on_page(mtr_t *mtr) noexcept;
+  void move_to_last_on_page(Mtr *mtr) noexcept;
 
   /**
    * @brief Moves the persistent cursor to the next user record in the tree.
@@ -329,7 +329,7 @@ struct Btree_pcursor {
    *
    * @return True if the cursor moved forward, ending on a user record.
    */
-  [[nodiscard]] bool move_to_next_user_rec(mtr_t *mtr) noexcept;
+  [[nodiscard]] bool move_to_next_user_rec(Mtr *mtr) noexcept;
 
   /**
    * @brief Moves the persistent cursor to the previous user record in the tree. If no
@@ -340,7 +340,7 @@ struct Btree_pcursor {
    *
    * @return True if the cursor moved backward, ending on a user record.
    */
-  [[nodiscard]] bool move_to_prev_user_rec(mtr_t *mtr) noexcept;
+  [[nodiscard]] bool move_to_prev_user_rec(Mtr *mtr) noexcept;
 
   /**
    * Moves the persistent cursor to the next record in the tree. If no records
@@ -350,7 +350,7 @@ struct Btree_pcursor {
    *
    * @return True if the cursor was not after last in tree
    */
-  [[nodiscard]] bool move_to_next(mtr_t *mtr) noexcept;
+  [[nodiscard]] bool move_to_next(Mtr *mtr) noexcept;
 
   /**
    * Moves the persistent cursor to the previous record in the tree. If no
@@ -360,7 +360,7 @@ struct Btree_pcursor {
    *
    * @return True if the cursor was not before first in tree.
    */
-  [[nodiscard]] bool move_to_prev(mtr_t *mtr) noexcept;
+  [[nodiscard]] bool move_to_prev(Mtr *mtr) noexcept;
 
   /**
    * Commits the mtr and sets the pcur latch mode to BTR_NO_LATCHES,
@@ -371,7 +371,7 @@ struct Btree_pcursor {
    *
    * @param[in] mtr             The mtr to commit.
    */
-  void commit_specify_mtr(mtr_t *mtr) noexcept;
+  void commit_specify_mtr(Mtr *mtr) noexcept;
 
   /**
    * Sets the persistent cursor latch mode to BTR_NO_LATCHES.
@@ -417,7 +417,7 @@ struct Btree_pcursor {
    * @param[in] loc             The source location.
    */
   void open(
-    const Index *index, const DTuple *tuple, ib_srch_mode_t search_mode, ulint latch_mode, mtr_t *mtr, Source_location loc
+    const Index *index, const DTuple *tuple, ib_srch_mode_t search_mode, ulint latch_mode, Mtr *mtr, SourceLocation loc
   ) noexcept;
 
   /**
@@ -432,8 +432,8 @@ struct Btree_pcursor {
    * @param[in] loc             The source location.
    */
   void open_with_no_init(
-    const Index *index, const DTuple *tuple, ib_srch_mode_t search_mode, ulint latch_mode, ulint has_search_latch, mtr_t *mtr,
-    Source_location loc
+    const Index *index, const DTuple *tuple, ib_srch_mode_t search_mode, ulint latch_mode, ulint has_search_latch, Mtr *mtr,
+    SourceLocation loc
   ) noexcept;
 
   /**
@@ -446,7 +446,7 @@ struct Btree_pcursor {
    * @param[in] level           read level where the cursor would be positioned or re-positioned.
    * @param[in] mtr             The mtr.
    */
-  void open_at_index_side(bool from_left, const Index *index, ulint latch_mode, bool do_init, ulint level, mtr_t *mtr) noexcept;
+  void open_at_index_side(bool from_left, const Index *index, ulint latch_mode, bool do_init, ulint level, Mtr *mtr) noexcept;
 
   /**
    * @brief Positions a cursor at a randomly chosen position within a B-tree.
@@ -456,7 +456,7 @@ struct Btree_pcursor {
    * @param[in] mtr             The mtr.
    * @param[in] loc             The source location.
    */
-  void set_random_position(const Index *index, ulint latch_mode, mtr_t *mtr, Source_location loc) noexcept;
+  void set_random_position(const Index *index, ulint latch_mode, Mtr *mtr, SourceLocation loc) noexcept;
 
   /**
    * @brief Frees the possible memory heap of a persistent cursor and sets the latch mode of the persistent cursor to BTR_NO_LATCHES.
@@ -468,31 +468,31 @@ struct Btree_pcursor {
    *
    * @return Pointer to btr cursor component.
    */
-  [[nodiscard]] Btree_cursor *get_btr_cur() noexcept;
+  [[nodiscard]] BtreeCursor *get_btr_cur() noexcept;
 
   /**
    * @brief Returns the btr cursor component of a persistent cursor.
    *
    * @return Pointer to btr cursor component.
    */
-  [[nodiscard]] const Btree_cursor *get_btr_cur() const noexcept;
+  [[nodiscard]] const BtreeCursor *get_btr_cur() const noexcept;
 
   /**
    * @brief Returns the page cursor component of a persistent cursor.
    *
    * @return Pointer to page cursor component.
    */
-  [[nodiscard]] Page_cursor *get_page_cur() noexcept;
+  [[nodiscard]] PageCursor *get_page_cur() noexcept;
 
   /**
    * @brief Returns the page cursor component of a persistent cursor.
    *
    * @return Pointer to page cursor component.
    */
-  [[nodiscard]] const Page_cursor *get_page_cur() const noexcept;
+  [[nodiscard]] const PageCursor *get_page_cur() const noexcept;
 
   /** a B-tree cursor */
-  Btree_cursor m_btr_cur;
+  BtreeCursor m_btr_cur;
 
   /** See the TODO note below.
   BTR_SEARCH_LEAF, BTR_MODIFY_LEAF, BTR_MODIFY_TREE, or BTR_NO_LATCHES,
@@ -512,19 +512,19 @@ struct Btree_pcursor {
   /** number of fields in old_rec */
   ulint m_old_n_fields{};
 
-  /** Btree_cursor_pos::ON, Btree_cursor_pos::BEFORE, or Btree_cursor_pos::AFTER, depending on whether
+  /** BtreeCursorPos::ON, BtreeCursorPos::BEFORE, or BtreeCursorPos::AFTER, depending on whether
   cursor was on, before, or after the old_rec record */
-  Btree_cursor_pos m_rel_pos{Btree_cursor_pos::UNSET};
+  BtreeCursorPos m_rel_pos{BtreeCursorPos::UNSET};
 
   /** buffer block when the position was stored */
-  Buf_block *m_block_when_stored{};
+  BufBlock *m_block_when_stored{};
 
   /** the modify clock value of the buffer block when the cursor position
   was stored */
   uint64_t m_modify_clock{};
 
   /** Cursor postiion state. */
-  Btr_pcur_positioned m_pos_state{Btr_pcur_positioned::UNSET};
+  BtrPcurPositioned m_pos_state{BtrPcurPositioned::UNSET};
 
   /** PAGE_CUR_G, ... */
   ib_srch_mode_t m_search_mode{};
@@ -539,7 +539,7 @@ struct Btree_pcursor {
 
   /** nullptr, or this field may contain a mini-transaction which holds the
   latch on the cursor page */
-  mtr_t *m_mtr{};
+  Mtr *m_mtr{};
 
   /** nullptr, or a dynamically allocated buffer for old_rec */
   byte *m_old_rec_buf{};
@@ -551,71 +551,71 @@ struct Btree_pcursor {
   ulint m_read_level{};
 };
 
-inline Btree_cursor_pos Btree_pcursor::get_rel_pos() const noexcept {
+inline BtreeCursorPos BtreePcursor::get_rel_pos() const noexcept {
   ut_ad(!m_old_rec.is_null());
   ut_ad(m_old_stored);
 
-  ut_ad(m_pos_state == Btr_pcur_positioned::WAS_POSITIONED || m_pos_state == Btr_pcur_positioned::IS_POSITIONED);
+  ut_ad(m_pos_state == BtrPcurPositioned::WAS_POSITIONED || m_pos_state == BtrPcurPositioned::IS_POSITIONED);
 
   return m_rel_pos;
 }
 
-inline void Btree_pcursor::set_mtr(mtr_t *mtr) noexcept {
+inline void BtreePcursor::set_mtr(Mtr *mtr) noexcept {
   m_mtr = mtr;
 }
 
-inline mtr_t *Btree_pcursor::get_mtr() noexcept {
+inline Mtr *BtreePcursor::get_mtr() noexcept {
   return m_mtr;
 }
 
-inline const Btree_cursor *Btree_pcursor::get_btr_cur() const noexcept {
+inline const BtreeCursor *BtreePcursor::get_btr_cur() const noexcept {
   return &m_btr_cur;
 }
 
-inline Btree_cursor *Btree_pcursor::get_btr_cur() noexcept {
+inline BtreeCursor *BtreePcursor::get_btr_cur() noexcept {
   return &m_btr_cur;
 }
 
-inline const Page_cursor *Btree_pcursor::get_page_cur() const noexcept {
+inline const PageCursor *BtreePcursor::get_page_cur() const noexcept {
   return m_btr_cur.get_page_cur();
 }
 
-inline Page_cursor *Btree_pcursor::get_page_cur() noexcept {
+inline PageCursor *BtreePcursor::get_page_cur() noexcept {
   return m_btr_cur.get_page_cur();
 }
 
-inline page_t *Btree_pcursor::get_page_no() noexcept {
-  ut_ad(m_pos_state == Btr_pcur_positioned::IS_POSITIONED);
+inline page_t *BtreePcursor::get_page_no() noexcept {
+  ut_ad(m_pos_state == BtrPcurPositioned::IS_POSITIONED);
 
   return m_btr_cur.get_page_no();
 }
 
-inline Buf_block *Btree_pcursor::get_block() noexcept {
-  ut_ad(m_pos_state == Btr_pcur_positioned::IS_POSITIONED);
+inline BufBlock *BtreePcursor::get_block() noexcept {
+  ut_ad(m_pos_state == BtrPcurPositioned::IS_POSITIONED);
 
   return m_btr_cur.get_block();
 }
 
-inline Rec Btree_pcursor::get_rec() noexcept {
-  ut_ad(m_pos_state == Btr_pcur_positioned::IS_POSITIONED);
+inline Rec BtreePcursor::get_rec() noexcept {
+  ut_ad(m_pos_state == BtrPcurPositioned::IS_POSITIONED);
   ut_ad(m_latch_mode != BTR_NO_LATCHES);
 
   return m_btr_cur.get_rec();
 }
 
-inline ulint Btree_pcursor::get_up_match() noexcept {
-  ut_ad(m_pos_state == Btr_pcur_positioned::WAS_POSITIONED || m_pos_state == Btr_pcur_positioned::IS_POSITIONED);
+inline ulint BtreePcursor::get_up_match() noexcept {
+  ut_ad(m_pos_state == BtrPcurPositioned::WAS_POSITIONED || m_pos_state == BtrPcurPositioned::IS_POSITIONED);
 
   ut_ad(m_btr_cur.m_up_match != ULINT_UNDEFINED);
 
   return m_btr_cur.m_up_match;
 }
 
-inline ulint Btree_pcursor::get_low_match() noexcept {
+inline ulint BtreePcursor::get_low_match() noexcept {
   /**
    * @note The cursor must be either in the WAS_POSITIONED or IS_POSITIONED state.
    */
-  ut_ad(m_pos_state == Btr_pcur_positioned::WAS_POSITIONED || m_pos_state == Btr_pcur_positioned::IS_POSITIONED);
+  ut_ad(m_pos_state == BtrPcurPositioned::WAS_POSITIONED || m_pos_state == BtrPcurPositioned::IS_POSITIONED);
 
   /**
    * @note The low_match value must not be undefined.
@@ -625,29 +625,29 @@ inline ulint Btree_pcursor::get_low_match() noexcept {
   return m_btr_cur.m_low_match;
 }
 
-inline bool Btree_pcursor::is_after_last_on_page() const noexcept {
-  ut_ad(m_pos_state == Btr_pcur_positioned::IS_POSITIONED);
+inline bool BtreePcursor::is_after_last_on_page() const noexcept {
+  ut_ad(m_pos_state == BtrPcurPositioned::IS_POSITIONED);
   ut_ad(m_latch_mode != BTR_NO_LATCHES);
 
   return get_page_cur()->is_after_last();
 }
 
-inline bool Btree_pcursor::is_before_first_on_page() const noexcept {
-  ut_ad(m_pos_state == Btr_pcur_positioned::IS_POSITIONED);
+inline bool BtreePcursor::is_before_first_on_page() const noexcept {
+  ut_ad(m_pos_state == BtrPcurPositioned::IS_POSITIONED);
   ut_ad(m_latch_mode != BTR_NO_LATCHES);
 
   return get_page_cur()->is_before_first();
 }
 
-inline bool Btree_pcursor::is_on_user_rec() const noexcept {
-  ut_ad(m_pos_state == Btr_pcur_positioned::IS_POSITIONED);
+inline bool BtreePcursor::is_on_user_rec() const noexcept {
+  ut_ad(m_pos_state == BtrPcurPositioned::IS_POSITIONED);
   ut_ad(m_latch_mode != BTR_NO_LATCHES);
 
   return !is_before_first_on_page() && !is_after_last_on_page();
 }
 
-inline bool Btree_pcursor::is_before_first_in_tree(mtr_t *m) noexcept {
-  ut_ad(m_pos_state == Btr_pcur_positioned::IS_POSITIONED);
+inline bool BtreePcursor::is_before_first_in_tree(Mtr *m) noexcept {
+  ut_ad(m_pos_state == BtrPcurPositioned::IS_POSITIONED);
   ut_ad(m_latch_mode != BTR_NO_LATCHES);
 
   if (Btree::page_get_prev(get_page_no(), m) != FIL_NULL) {
@@ -657,8 +657,8 @@ inline bool Btree_pcursor::is_before_first_in_tree(mtr_t *m) noexcept {
   }
 }
 
-inline bool Btree_pcursor::is_after_last_in_tree(mtr_t *m) noexcept {
-  ut_ad(m_pos_state == Btr_pcur_positioned::IS_POSITIONED);
+inline bool BtreePcursor::is_after_last_in_tree(Mtr *m) noexcept {
+  ut_ad(m_pos_state == BtrPcurPositioned::IS_POSITIONED);
   ut_ad(m_latch_mode != BTR_NO_LATCHES);
 
   if (Btree::page_get_next(get_page_no(), m) != FIL_NULL) {
@@ -668,8 +668,8 @@ inline bool Btree_pcursor::is_after_last_in_tree(mtr_t *m) noexcept {
   }
 }
 
-inline void Btree_pcursor::move_to_next_on_page() noexcept {
-  ut_ad(m_pos_state == Btr_pcur_positioned::IS_POSITIONED);
+inline void BtreePcursor::move_to_next_on_page() noexcept {
+  ut_ad(m_pos_state == BtrPcurPositioned::IS_POSITIONED);
   ut_ad(m_latch_mode != BTR_NO_LATCHES);
 
   get_page_cur()->move_to_next();
@@ -677,8 +677,8 @@ inline void Btree_pcursor::move_to_next_on_page() noexcept {
   m_old_stored = false;
 }
 
-inline void Btree_pcursor::move_to_prev_on_page() noexcept {
-  ut_ad(m_pos_state == Btr_pcur_positioned::IS_POSITIONED);
+inline void BtreePcursor::move_to_prev_on_page() noexcept {
+  ut_ad(m_pos_state == BtrPcurPositioned::IS_POSITIONED);
   ut_ad(m_latch_mode != BTR_NO_LATCHES);
 
   get_page_cur()->move_to_prev();
@@ -686,7 +686,7 @@ inline void Btree_pcursor::move_to_prev_on_page() noexcept {
   m_old_stored = false;
 }
 
-inline void Btree_pcursor::move_to_last_on_page(mtr_t *mtr) noexcept {
+inline void BtreePcursor::move_to_last_on_page(Mtr *mtr) noexcept {
   ut_ad(m_latch_mode != BTR_NO_LATCHES);
 
   get_page_cur()->set_after_last(get_block());
@@ -694,8 +694,8 @@ inline void Btree_pcursor::move_to_last_on_page(mtr_t *mtr) noexcept {
   m_old_stored = false;
 }
 
-inline bool Btree_pcursor::move_to_next_user_rec(mtr_t *mtr) noexcept {
-  ut_ad(m_pos_state == Btr_pcur_positioned::IS_POSITIONED);
+inline bool BtreePcursor::move_to_next_user_rec(Mtr *mtr) noexcept {
+  ut_ad(m_pos_state == BtrPcurPositioned::IS_POSITIONED);
   ut_ad(m_latch_mode != BTR_NO_LATCHES);
 
   m_old_stored = false;
@@ -715,8 +715,8 @@ inline bool Btree_pcursor::move_to_next_user_rec(mtr_t *mtr) noexcept {
   }
 }
 
-inline bool Btree_pcursor::move_to_prev_user_rec(mtr_t *mtr) noexcept {
-  ut_ad(m_pos_state == Btr_pcur_positioned::IS_POSITIONED);
+inline bool BtreePcursor::move_to_prev_user_rec(Mtr *mtr) noexcept {
+  ut_ad(m_pos_state == BtrPcurPositioned::IS_POSITIONED);
   ut_ad(m_latch_mode != BTR_NO_LATCHES);
 
   m_old_stored = false;
@@ -737,8 +737,8 @@ inline bool Btree_pcursor::move_to_prev_user_rec(mtr_t *mtr) noexcept {
   }
 }
 
-inline bool Btree_pcursor::move_to_next(mtr_t *mtr) noexcept {
-  ut_ad(m_pos_state == Btr_pcur_positioned::IS_POSITIONED);
+inline bool BtreePcursor::move_to_next(Mtr *mtr) noexcept {
+  ut_ad(m_pos_state == BtrPcurPositioned::IS_POSITIONED);
   ut_ad(m_latch_mode != BTR_NO_LATCHES);
 
   m_old_stored = false;
@@ -760,8 +760,8 @@ inline bool Btree_pcursor::move_to_next(mtr_t *mtr) noexcept {
   return true;
 }
 
-inline bool Btree_pcursor::move_to_prev(mtr_t *mtr) noexcept {
-  ut_ad(m_pos_state == Btr_pcur_positioned::IS_POSITIONED);
+inline bool BtreePcursor::move_to_prev(Mtr *mtr) noexcept {
+  ut_ad(m_pos_state == BtrPcurPositioned::IS_POSITIONED);
   ut_ad(m_latch_mode != BTR_NO_LATCHES);
 
   m_old_stored = false;
@@ -783,36 +783,36 @@ inline bool Btree_pcursor::move_to_prev(mtr_t *mtr) noexcept {
   return true;
 }
 
-inline void Btree_pcursor::commit_specify_mtr(mtr_t *mtr) noexcept {
-  ut_a(m_pos_state == Btr_pcur_positioned::IS_POSITIONED);
+inline void BtreePcursor::commit_specify_mtr(Mtr *mtr) noexcept {
+  ut_a(m_pos_state == BtrPcurPositioned::IS_POSITIONED);
 
   m_latch_mode = BTR_NO_LATCHES;
 
   mtr->commit();
 
-  m_pos_state = Btr_pcur_positioned::WAS_POSITIONED;
+  m_pos_state = BtrPcurPositioned::WAS_POSITIONED;
 }
 
-inline void Btree_pcursor::detach() noexcept {
-  ut_a(m_pos_state == Btr_pcur_positioned::IS_POSITIONED);
+inline void BtreePcursor::detach() noexcept {
+  ut_a(m_pos_state == BtrPcurPositioned::IS_POSITIONED);
 
   m_latch_mode = BTR_NO_LATCHES;
-  m_pos_state = Btr_pcur_positioned::WAS_POSITIONED;
+  m_pos_state = BtrPcurPositioned::WAS_POSITIONED;
 }
 
-inline bool Btree_pcursor::is_detached() const noexcept {
+inline bool BtreePcursor::is_detached() const noexcept {
   return m_latch_mode == BTR_NO_LATCHES;
 }
 
-inline void Btree_pcursor::init(ulint read_level) noexcept {
+inline void BtreePcursor::init(ulint read_level) noexcept {
   m_old_stored = false;
   m_old_rec_buf = nullptr;
   m_old_rec = nullptr;
   m_read_level = read_level;
 }
 
-inline void Btree_pcursor::open(
-  const Index *index, const DTuple *tuple, ib_srch_mode_t search_mode, ulint latch_mode, mtr_t *mtr, Source_location loc
+inline void BtreePcursor::open(
+  const Index *index, const DTuple *tuple, ib_srch_mode_t search_mode, ulint latch_mode, Mtr *mtr, SourceLocation loc
 ) noexcept {
 
   init(0);
@@ -823,14 +823,14 @@ inline void Btree_pcursor::open(
   /* Search with the tree cursor */
   m_btr_cur.search_to_nth_level(nullptr, index, m_read_level, tuple, search_mode, latch_mode, mtr, loc);
 
-  m_pos_state = Btr_pcur_positioned::IS_POSITIONED;
+  m_pos_state = BtrPcurPositioned::IS_POSITIONED;
 
   m_trx_if_known = nullptr;
 }
 
-inline void Btree_pcursor::open_with_no_init(
-  const Index *index, const DTuple *tuple, ib_srch_mode_t search_mode, ulint latch_mode, ulint has_search_latch, mtr_t *mtr,
-  Source_location loc
+inline void BtreePcursor::open_with_no_init(
+  const Index *index, const DTuple *tuple, ib_srch_mode_t search_mode, ulint latch_mode, ulint has_search_latch, Mtr *mtr,
+  SourceLocation loc
 ) noexcept {
 
   m_latch_mode = latch_mode;
@@ -842,11 +842,11 @@ inline void Btree_pcursor::open_with_no_init(
 
   m_old_stored = false;
   m_trx_if_known = nullptr;
-  m_pos_state = Btr_pcur_positioned::IS_POSITIONED;
+  m_pos_state = BtrPcurPositioned::IS_POSITIONED;
 }
 
-inline void Btree_pcursor::open_at_index_side(
-  bool from_left, const Index *index, ulint latch_mode, bool do_init, ulint level, mtr_t *mtr
+inline void BtreePcursor::open_at_index_side(
+  bool from_left, const Index *index, ulint latch_mode, bool do_init, ulint level, Mtr *mtr
 ) noexcept {
   m_latch_mode = latch_mode;
   m_search_mode = from_left ? PAGE_CUR_G : PAGE_CUR_L;
@@ -857,12 +857,12 @@ inline void Btree_pcursor::open_at_index_side(
 
   m_btr_cur.open_at_index_side(nullptr, from_left, index, latch_mode, m_read_level, mtr, Current_location());
 
-  m_pos_state = Btr_pcur_positioned::IS_POSITIONED;
+  m_pos_state = BtrPcurPositioned::IS_POSITIONED;
   m_old_stored = false;
   m_trx_if_known = nullptr;
 }
 
-inline void Btree_pcursor::set_random_position(const Index *index, ulint latch_mode, mtr_t *mtr, Source_location loc) noexcept {
+inline void BtreePcursor::set_random_position(const Index *index, ulint latch_mode, Mtr *mtr, SourceLocation loc) noexcept {
 
   m_latch_mode = latch_mode;
   m_search_mode = PAGE_CUR_G;
@@ -871,12 +871,12 @@ inline void Btree_pcursor::set_random_position(const Index *index, ulint latch_m
 
   m_btr_cur.open_at_rnd_pos(index, latch_mode, mtr, loc);
 
-  m_pos_state = Btr_pcur_positioned::IS_POSITIONED;
+  m_pos_state = BtrPcurPositioned::IS_POSITIONED;
   m_old_stored = false;
   m_trx_if_known = nullptr;
 }
 
-inline void Btree_pcursor::close() noexcept {
+inline void BtreePcursor::close() noexcept {
   if (m_old_rec_buf != nullptr) {
     mem_free(m_old_rec_buf);
     m_old_rec = Rec{};
@@ -888,6 +888,6 @@ inline void Btree_pcursor::close() noexcept {
   m_old_rec = Rec{};
   m_old_stored = false;
   m_latch_mode = BTR_NO_LATCHES;
-  m_pos_state = Btr_pcur_positioned::UNSET;
+  m_pos_state = BtrPcurPositioned::UNSET;
   m_trx_if_known = nullptr;
 }

@@ -41,7 +41,7 @@ Created 11/5/1995 Heikki Tuuri
 #include "ut0lst.h"
 
 /** The number of blocks from the LRU_old pointer onward, including
-the block pointed to, must be Buf_LRU::old_ratio/OLD_RATIO_DIV
+the block pointed to, must be BufLru::old_ratio/OLD_RATIO_DIV
 of the whole LRU list length, except that the tolerance defined below
 is allowed. Note that the tolerance must be small enough such that for
 even the OLD_MIN_LEN long LRU list, the LRU_old pointer is not
@@ -50,15 +50,15 @@ constexpr ulint OLD_TOLERANCE = 20;
 
 /** The minimum amount of non-old blocks when the LRU_old list exists
 (that is, when there are more than LD_MIN_LEN blocks).
-@see Buf_LRU::old_adjust_len */
+@see BufLru::old_adjust_len */
 constexpr ulint NON_MIN_LEN = 5;
 
-static_assert(NON_MIN_LEN < Buf_LRU::OLD_MIN_LEN, "error Buf_LRU::NON_MIN_LEN >= Buf_LRU::OLD_MIN_LEN");
+static_assert(NON_MIN_LEN < BufLru::OLD_MIN_LEN, "error BufLru::NON_MIN_LEN >= BufLru::OLD_MIN_LEN");
 
-ulint Buf_LRU::s_old_ratio{};
-ulint Buf_LRU::s_old_threshold_ms{};
+ulint BufLru::s_old_ratio{};
+ulint BufLru::s_old_threshold_ms{};
 
-void Buf_LRU::invalidate_tablespace(space_id_t id) {
+void BufLru::invalidate_tablespace(space_id_t id) {
   bool all_freed{};
 
   while (!all_freed) {
@@ -113,7 +113,7 @@ void Buf_LRU::invalidate_tablespace(space_id_t id) {
 
           {
             /* We can't cast it using buf_page_get_block() because of the checks there. */
-            auto block{reinterpret_cast<Buf_block *>(bpage)};
+            auto block{reinterpret_cast<BufBlock *>(bpage)};
             block_free_hashed_page(block);
           }
         }
@@ -132,7 +132,7 @@ void Buf_LRU::invalidate_tablespace(space_id_t id) {
   }
 }
 
-bool Buf_LRU::free_from_common_LRU_list(ulint n_iterations) {
+bool BufLru::free_from_common_LRU_list(ulint n_iterations) {
   ut_ad(mutex_own(&m_buf_pool->m_mutex));
 
   auto distance = 100 + (n_iterations * srv_buf_pool->m_curr_size) / 10;
@@ -153,7 +153,7 @@ bool Buf_LRU::free_from_common_LRU_list(ulint n_iterations) {
     mutex_exit(block_mutex);
 
     switch (block_status) {
-      case Block_status::FREED:
+      case BlockStatus::FREED:
         /* Keep track of pages that are evicted without ever being accessed.
 	his gives us a measure of the effectiveness of readahead */
         if (!accessed) {
@@ -161,11 +161,11 @@ bool Buf_LRU::free_from_common_LRU_list(ulint n_iterations) {
         }
         return true;
 
-      case Block_status::NOT_FREED:
+      case BlockStatus::NOT_FREED:
         /* The block was dirty, buffer-fixed, or I/O-fixed.  Keep looking. */
         continue;
 
-      case Block_status::CANNOT_RELOCATE:
+      case BlockStatus::CANNOT_RELOCATE:
         /* This should never occur, because we want to discard the compressed page too. */
         break;
     }
@@ -176,7 +176,7 @@ bool Buf_LRU::free_from_common_LRU_list(ulint n_iterations) {
   return false;
 }
 
-bool Buf_LRU::search_and_free_block(ulint n_iterations) {
+bool BufLru::search_and_free_block(ulint n_iterations) {
   m_buf_pool->mutex_acquire();
 
   auto freed = free_from_common_LRU_list(n_iterations);
@@ -192,7 +192,7 @@ bool Buf_LRU::search_and_free_block(ulint n_iterations) {
   return freed;
 }
 
-void Buf_LRU::try_free_flushed_blocks() {
+void BufLru::try_free_flushed_blocks() {
   m_buf_pool->mutex_acquire();
 
   while (srv_buf_pool->m_LRU_flush_ended > 0) {
@@ -207,7 +207,7 @@ void Buf_LRU::try_free_flushed_blocks() {
   m_buf_pool->mutex_release();
 }
 
-bool Buf_LRU::buf_pool_running_out() {
+bool BufLru::buf_pool_running_out() {
   m_buf_pool->mutex_acquire();
 
   auto ret = !recv_recovery_on &&
@@ -218,10 +218,10 @@ bool Buf_LRU::buf_pool_running_out() {
   return ret;
 }
 
-Buf_block *Buf_LRU::get_free_only() {
+BufBlock *BufLru::get_free_only() {
   ut_ad(mutex_own(&m_buf_pool->m_mutex));
 
-  auto block = (Buf_block *)UT_LIST_GET_FIRST(srv_buf_pool->m_free_list);
+  auto block = (BufBlock *)UT_LIST_GET_FIRST(srv_buf_pool->m_free_list);
 
   if (block != nullptr) {
     ut_ad(block->m_page.m_in_free_list);
@@ -244,10 +244,10 @@ Buf_block *Buf_LRU::get_free_only() {
   return block;
 }
 
-Buf_block *Buf_LRU::get_free_block() {
+BufBlock *BufLru::get_free_block() {
   bool freed;
   ulint n_iterations = 1;
-  Buf_block *block = nullptr;
+  BufBlock *block = nullptr;
   bool mon_value_was = false;
   bool started_monitor = false;
 
@@ -307,7 +307,7 @@ loop:
   }
 
   /* If there is a block in the free list, take it */
-  block = Buf_LRU::get_free_only();
+  block = BufLru::get_free_only();
 
   if (block != nullptr) {
     m_buf_pool->mutex_release();
@@ -324,7 +324,7 @@ loop:
 
   m_buf_pool->mutex_release();
 
-  freed = Buf_LRU::search_and_free_block(n_iterations);
+  freed = BufLru::search_and_free_block(n_iterations);
 
   if (freed > 0) {
     goto loop;
@@ -396,7 +396,7 @@ loop:
   goto loop;
 }
 
-void Buf_LRU::old_adjust_len() {
+void BufLru::old_adjust_len() {
   ut_a(srv_buf_pool->m_LRU_old);
   ut_ad(mutex_own(&m_buf_pool->m_mutex));
   ut_ad(m_old_ratio >= OLD_RATIO_MIN);
@@ -446,7 +446,7 @@ void Buf_LRU::old_adjust_len() {
   }
 }
 
-void Buf_LRU::old_init() {
+void BufLru::old_init() {
   ut_ad(mutex_own(&m_buf_pool->m_mutex));
   ut_a(UT_LIST_GET_LEN(srv_buf_pool->m_LRU_list) == OLD_MIN_LEN);
 
@@ -469,7 +469,7 @@ void Buf_LRU::old_init() {
   old_adjust_len();
 }
 
-void Buf_LRU::remove_block(Buf_page *bpage) {
+void BufLru::remove_block(BufPage *bpage) {
   ut_ad(srv_buf_pool);
   ut_ad(bpage);
   ut_ad(mutex_own(&m_buf_pool->m_mutex));
@@ -484,7 +484,7 @@ void Buf_LRU::remove_block(Buf_page *bpage) {
   if (unlikely(bpage == srv_buf_pool->m_LRU_old)) {
 
     /* Below: the previous block is guaranteed to exist, because the LRU_old pointer is
-    only allowed to differ by OLD_TOLERANCE from strict Buf_LRU::old_ratio/OLD_RATIO_DIV
+    only allowed to differ by OLD_TOLERANCE from strict BufLru::old_ratio/OLD_RATIO_DIV
     of the LRU list length. */
     auto prev_bpage = UT_LIST_GET_PREV(m_LRU_list, bpage);
 
@@ -526,7 +526,7 @@ void Buf_LRU::remove_block(Buf_page *bpage) {
   old_adjust_len();
 }
 
-void Buf_LRU::add_block_to_end_low(Buf_page *bpage) {
+void BufLru::add_block_to_end_low(BufPage *bpage) {
   ut_ad(srv_buf_pool);
   ut_ad(bpage);
   ut_ad(mutex_own(&m_buf_pool->m_mutex));
@@ -558,7 +558,7 @@ void Buf_LRU::add_block_to_end_low(Buf_page *bpage) {
   }
 }
 
-void Buf_LRU::add_block_low(Buf_page *bpage, bool old) {
+void BufLru::add_block_low(BufPage *bpage, bool old) {
   ut_ad(srv_buf_pool);
   ut_ad(bpage);
   ut_ad(mutex_own(&m_buf_pool->m_mutex));
@@ -598,11 +598,11 @@ void Buf_LRU::add_block_low(Buf_page *bpage, bool old) {
   }
 }
 
-void Buf_LRU::add_block(Buf_page *bpage, bool old) {
+void BufLru::add_block(BufPage *bpage, bool old) {
   add_block_low(bpage, old);
 }
 
-void Buf_LRU::make_block_young(Buf_page *bpage) {
+void BufLru::make_block_young(BufPage *bpage) {
   ut_ad(mutex_own(&m_buf_pool->m_mutex));
 
   if (bpage->m_old) {
@@ -613,12 +613,12 @@ void Buf_LRU::make_block_young(Buf_page *bpage) {
   add_block_low(bpage, false);
 }
 
-void Buf_LRU::make_block(Buf_page *bpage) {
+void BufLru::make_block(BufPage *bpage) {
   remove_block(bpage);
   add_block_to_end_low(bpage);
 }
 
-Buf_LRU::Block_status Buf_LRU::free_block(Buf_page *bpage, bool *buf_pool_mutex_released) {
+BufLru::BlockStatus BufLru::free_block(BufPage *bpage, bool *buf_pool_mutex_released) {
   auto block_mutex = buf_page_get_mutex(bpage);
 
   ut_ad(mutex_own(&m_buf_pool->m_mutex));
@@ -632,12 +632,12 @@ Buf_LRU::Block_status Buf_LRU::free_block(Buf_page *bpage, bool *buf_pool_mutex_
   if (!buf_page_can_relocate(bpage)) {
 
     /* Do not free buffer-fixed or I/O-fixed blocks. */
-    return Block_status::NOT_FREED;
+    return BlockStatus::NOT_FREED;
   }
 
   if (bpage->m_oldest_modification > 0) {
 
-    return Block_status::NOT_FREED;
+    return BlockStatus::NOT_FREED;
 
   } else if (block_remove_hashed_page(bpage) == BUF_BLOCK_REMOVE_HASH) {
     ut_a(bpage->m_buf_fix_count == 0);
@@ -649,24 +649,24 @@ Buf_LRU::Block_status Buf_LRU::free_block(Buf_page *bpage, bool *buf_pool_mutex_
     m_buf_pool->mutex_release();
     mutex_exit(block_mutex);
 
-    /* The page was declared uninitialized by Buf_LRU::block_remove_hashed_page(). We need to flag
+    /* The page was declared uninitialized by BufLru::block_remove_hashed_page(). We need to flag
     the contents of the page valid (which it still is) in order to avoid bogus Valgrind warnings.*/
 
-    UNIV_MEM_VALID(((Buf_block *)bpage)->m_frame, UNIV_PAGE_SIZE);
+    UNIV_MEM_VALID(((BufBlock *)bpage)->m_frame, UNIV_PAGE_SIZE);
 
-    UNIV_MEM_INVALID(((Buf_block *)bpage)->m_frame, UNIV_PAGE_SIZE);
+    UNIV_MEM_INVALID(((BufBlock *)bpage)->m_frame, UNIV_PAGE_SIZE);
 
     m_buf_pool->mutex_acquire();
 
     mutex_enter(block_mutex);
 
-    block_free_hashed_page(reinterpret_cast<Buf_block *>(bpage));
+    block_free_hashed_page(reinterpret_cast<BufBlock *>(bpage));
   }
 
-  return Block_status::FREED;
+  return BlockStatus::FREED;
 }
 
-void Buf_LRU::block_free_non_file_page(Buf_block *block) {
+void BufLru::block_free_non_file_page(BufBlock *block) {
   ut_ad(block != nullptr);
   ut_ad(mutex_own(&m_buf_pool->m_mutex));
   ut_ad(mutex_own(&block->m_mutex));
@@ -705,7 +705,7 @@ void Buf_LRU::block_free_non_file_page(Buf_block *block) {
   UNIV_MEM_ASSERT_AND_FREE(block, UNIV_PAGE_SIZE);
 }
 
-Buf_page_state Buf_LRU::block_remove_hashed_page(Buf_page *bpage) {
+BufPageState BufLru::block_remove_hashed_page(BufPage *bpage) {
   ut_ad(bpage != nullptr);
   ut_ad(mutex_own(&m_buf_pool->m_mutex));
   ut_ad(mutex_own(buf_page_get_mutex(bpage)));
@@ -721,10 +721,10 @@ Buf_page_state Buf_LRU::block_remove_hashed_page(Buf_page *bpage) {
 
   switch (bpage->get_state()) {
     case BUF_BLOCK_FILE_PAGE:
-      UNIV_MEM_ASSERT_W(bpage, sizeof(Buf_block));
-      UNIV_MEM_ASSERT_W(((Buf_block *)bpage)->m_frame, UNIV_PAGE_SIZE);
+      UNIV_MEM_ASSERT_W(bpage, sizeof(BufBlock));
+      UNIV_MEM_ASSERT_W(((BufBlock *)bpage)->m_frame, UNIV_PAGE_SIZE);
 
-      buf_block_modify_clock_inc(reinterpret_cast<Buf_block *>(bpage));
+      buf_block_modify_clock_inc(reinterpret_cast<BufBlock *>(bpage));
       break;
 
     case BUF_BLOCK_NOT_USED:
@@ -735,7 +735,7 @@ Buf_page_state Buf_LRU::block_remove_hashed_page(Buf_page *bpage) {
       break;
   }
 
-  auto hashed_bpage = srv_buf_pool->hash_get_page(Page_id(bpage->m_space, bpage->m_page_no));
+  auto hashed_bpage = srv_buf_pool->hash_get_page(PageId(bpage->m_space, bpage->m_page_no));
 
   if (unlikely(bpage != hashed_bpage)) {
     ib_logger(ib_stream, "Error: page %lu %lu not found in the hash table ", (ulong)bpage->m_space, (ulong)bpage->m_page_no);
@@ -769,14 +769,14 @@ Buf_page_state Buf_LRU::block_remove_hashed_page(Buf_page *bpage) {
   ut_ad(bpage->m_in_page_hash);
   ut_d(bpage->m_in_page_hash = false);
 
-  srv_buf_pool->m_page_hash->erase(Page_id(bpage->m_space, bpage->m_page_no));
+  srv_buf_pool->m_page_hash->erase(PageId(bpage->m_space, bpage->m_page_no));
 
   switch (bpage->get_state()) {
     case BUF_BLOCK_FILE_PAGE:
-      memset(((Buf_block *)bpage)->m_frame + FIL_PAGE_OFFSET, 0xff, 4);
-      memset(((Buf_block *)bpage)->m_frame + FIL_PAGE_SPACE_ID, 0xff, 4);
+      memset(((BufBlock *)bpage)->m_frame + FIL_PAGE_OFFSET, 0xff, 4);
+      memset(((BufBlock *)bpage)->m_frame + FIL_PAGE_SPACE_ID, 0xff, 4);
 
-      UNIV_MEM_INVALID(((Buf_block *)bpage)->m_frame, UNIV_PAGE_SIZE);
+      UNIV_MEM_INVALID(((BufBlock *)bpage)->m_frame, UNIV_PAGE_SIZE);
 
       buf_page_set_state(bpage, BUF_BLOCK_REMOVE_HASH);
 
@@ -793,7 +793,7 @@ Buf_page_state Buf_LRU::block_remove_hashed_page(Buf_page *bpage) {
   return BUF_BLOCK_REMOVE_HASH;
 }
 
-void Buf_LRU::block_free_hashed_page(Buf_block *block) {
+void BufLru::block_free_hashed_page(BufBlock *block) {
   ut_ad(mutex_own(&m_buf_pool->m_mutex));
   ut_ad(mutex_own(&block->m_mutex));
 
@@ -802,7 +802,7 @@ void Buf_LRU::block_free_hashed_page(Buf_block *block) {
   block_free_non_file_page(block);
 }
 
-ulint Buf_LRU::old_ratio_update(ulint old_pct, bool adjust) {
+ulint BufLru::old_ratio_update(ulint old_pct, bool adjust) {
   auto ratio = old_pct * OLD_RATIO_DIV / 100;
 
   if (ratio < OLD_RATIO_MIN) {
@@ -839,7 +839,7 @@ ulint Buf_LRU::old_ratio_update(ulint old_pct, bool adjust) {
   return (ulint)(ratio * 100 / (double)OLD_RATIO_DIV + 0.5);
 }
 
-void Buf_LRU::stat_update() {
+void BufLru::stat_update() {
   /* If we haven't started eviction yet then don't update stats. */
   if (srv_buf_pool->m_freed_page_clock != 0) {
     m_buf_pool->mutex_acquire();
@@ -863,7 +863,7 @@ void Buf_LRU::stat_update() {
 }
 
 #if defined UNIV_DEBUG
-bool Buf_LRU::validate() {
+bool BufLru::validate() {
   m_buf_pool->mutex_acquire();
 
   if (UT_LIST_GET_LEN(srv_buf_pool->m_LRU_list) >= OLD_MIN_LEN) {
@@ -917,7 +917,7 @@ bool Buf_LRU::validate() {
 
   ut_a(srv_buf_pool->m_LRU_old_len == old_len);
 
-  auto check = [](const Buf_page *page) {
+  auto check = [](const BufPage *page) {
     ut_ad(page->m_in_free_list);
   };
   ut_list_validate(srv_buf_pool->m_free_list, check);
@@ -932,7 +932,7 @@ bool Buf_LRU::validate() {
   return (true);
 }
 
-void Buf_LRU::print() {
+void BufLru::print() {
   m_buf_pool->mutex_acquire();
 
   for (auto bpage = UT_LIST_GET_FIRST(srv_buf_pool->m_LRU_list); bpage != nullptr; bpage = UT_LIST_GET_NEXT(m_LRU_list, bpage)) {
@@ -960,7 +960,7 @@ void Buf_LRU::print() {
       const byte *frame;
 
       case BUF_BLOCK_FILE_PAGE:
-        frame = reinterpret_cast<Buf_block *>(bpage)->get_frame();
+        frame = reinterpret_cast<BufBlock *>(bpage)->get_frame();
 
         ib_logger(
           ib_stream,

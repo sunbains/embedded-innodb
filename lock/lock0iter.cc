@@ -29,7 +29,7 @@ Created July 16, 2007 Vasil Dimov
 #include "ut0dbg.h"
 #include "ut0lst.h"
 
-void Lock_iterator::reset(const Lock *lock, ulint bit_no) noexcept {
+void LockIterator::reset(const Lock *lock, ulint bit_no) noexcept {
   m_current_lock = lock;
 
   if (bit_no != ULINT_UNDEFINED) {
@@ -50,7 +50,7 @@ void Lock_iterator::reset(const Lock *lock, ulint bit_no) noexcept {
   }
 }
 
-const Lock *Lock_iterator::prev() noexcept {
+const Lock *LockIterator::prev() noexcept {
   const Lock *prev_lock;
 
   switch (m_current_lock->type()) {

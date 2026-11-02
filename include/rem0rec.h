@@ -74,10 +74,10 @@ inline ulint rec_get_converted_size(const Index *index, const DTuple *dtuple, ul
   return data_size + extra_size;
 }
 
-struct Immutable_rec {
-  explicit Immutable_rec(const Rec &rec) noexcept : m_rec(rec) {}
+struct ImmutableRec {
+  explicit ImmutableRec(const Rec &rec) noexcept : m_rec(rec) {}
 
-  Immutable_rec next() const noexcept { return Immutable_rec(m_rec.get_next_ptr_const()); }
+  ImmutableRec next() const noexcept { return ImmutableRec(m_rec.get_next_ptr_const()); }
 
   ulint n_fields() const noexcept { return m_rec.get_n_fields(); }
 
@@ -94,10 +94,10 @@ struct Immutable_rec {
   const Rec m_rec{};
 };
 
-struct Mutable_rec : public Immutable_rec {
-  explicit Mutable_rec(const Rec &rec) noexcept : Immutable_rec(rec) {}
+struct MutableRec : public ImmutableRec {
+  explicit MutableRec(const Rec &rec) noexcept : ImmutableRec(rec) {}
 
-  Mutable_rec next() noexcept { return Mutable_rec(m_rec.get_next_ptr()); }
+  MutableRec next() noexcept { return MutableRec(m_rec.get_next_ptr()); }
 
   void delete_mark() noexcept {
     Rec rec{const_cast<rec_t *>(m_rec.get())};
@@ -113,34 +113,34 @@ struct Mutable_rec : public Immutable_rec {
 };
 
 /** Physical record manager */
-struct Phy_rec {
+struct PhyRec {
   /** first = rec header size in bytes, second = data size in bytes. */
   using Size = std::pair<ulint, ulint>;
 
   /** Record fields.*/
-  using DFields = std::pair<const dfield_t *, ulint>;
+  using DFields = std::pair<const Dfield *, ulint>;
 
   /** Constructor.
    *
    * @param[in] index The index that contains the record.
    * @param[in] rec The record in the index.
    */
-  explicit Phy_rec(const Index *index, const Rec rec) noexcept : m_index(index), m_rec(rec) {}
+  explicit PhyRec(const Index *index, const Rec rec) noexcept : m_index(index), m_rec(rec) {}
 
   /**
    * Determine the offset to each field in a leaf-page record.
    *
    * @param offsets The array of offsets. On input, it should contain
-   *   the number of fields (n=Rec_offs::n_fields(offsets)).
+   *   the number of fields (n=RecOffs::n_fields(offsets)).
    */
-  void get_col_offsets(Rec_offs offsets) const noexcept;
+  void get_col_offsets(RecOffs offsets) const noexcept;
 
   /**
    * Retrieves the offsets of fields in a physical record. It can reuse
    * a previously allocated array.
    *
    * @param offsets An array consisting of offsets[0] allocated elements,
-   *   or an array from Phy_rec::get_col_offsets(), or nullptr.
+   *   or an array from PhyRec::get_col_offsets(), or nullptr.
    * @param n_fields The maximum number of initialized fields (ULINT_UNDEFINED
    *   if all fields).
    * @param heap The memory heap, if offsets == nullptr. If it's nullptr, then
@@ -149,32 +149,32 @@ struct Phy_rec {
    *
    * @return the new offsets representing the fields in the record.
    */
-  Rec_offs get_col_offsets(ulint *offsets, ulint n_fields, mem_heap_t **heap, Source_location sl) const noexcept;
+  RecOffs get_col_offsets(ulint *offsets, ulint n_fields, MemHeap **heap, SourceLocation sl) const noexcept;
 
   /**
    * Retrieves the offsets of all fields in a physical record. It can reuse
    * a previously allocated array.
    *
    * @param offsets An array consisting of offsets[0] allocated elements,
-   *   or an array from Phy_rec::get_col_offsets(), or nullptr.
+   *   or an array from PhyRec::get_col_offsets(), or nullptr.
    * @param heap The memory heap, if offsets == nullptr. If it's nullptr, then
    *  the heap is allocated and returned in the output parameter.
    * @param sl Source location of caller.
    *
    * @return the new offsets representing the fields in the record.
    */
-  ulint *get_all_col_offsets(ulint *offsets, mem_heap_t **heap, Source_location sl) const noexcept {
+  ulint *get_all_col_offsets(ulint *offsets, MemHeap **heap, SourceLocation sl) const noexcept {
     return get_col_offsets(offsets, ULINT_UNDEFINED, heap, sl);
   }
 
   template <size_t N>
-  ulint *get_col_offsets(std::array<ulint, N> &offsets, ulint n_fields, mem_heap_t **heap, Source_location sl) const noexcept {
+  ulint *get_col_offsets(std::array<ulint, N> &offsets, ulint n_fields, MemHeap **heap, SourceLocation sl) const noexcept {
     ut_ad(n_fields == ULINT_UNDEFINED || n_fields < N);
     return get_col_offsets(offsets.data(), n_fields, heap, sl);
   }
 
   template <size_t N>
-  ulint *get_all_col_offsets(std::array<ulint, N> &offsets, mem_heap_t **heap, Source_location sl) const noexcept {
+  ulint *get_all_col_offsets(std::array<ulint, N> &offsets, MemHeap **heap, SourceLocation sl) const noexcept {
     return get_col_offsets(offsets, ULINT_UNDEFINED, heap, sl);
   }
 

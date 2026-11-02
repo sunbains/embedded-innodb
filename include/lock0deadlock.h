@@ -29,7 +29,7 @@ Deadlock detection and resolution
 
 struct Lock;
 struct Trx;
-struct Lock_sys;
+struct LockSys;
 
 /** Restricts the length of search we will do in the waits-for
 graph of transactions */
@@ -50,13 +50,13 @@ constexpr ulint LOCK_EXCEED_MAX_DEPTH = 3;
  * This class provides functionality to detect deadlocks in the transaction
  * lock wait graph and resolve them by choosing victim transactions.
  */
-struct Deadlock_detector {
+struct DeadlockDetector {
   /**
-   * @brief Constructor for Deadlock_detector
+   * @brief Constructor for DeadlockDetector
    *
    * @param[in] lock_sys Pointer to the main lock system
    */
-  explicit Deadlock_detector(Lock_sys *lock_sys) noexcept;
+  explicit DeadlockDetector(LockSys *lock_sys) noexcept;
 
   /**
    * @brief Checks if a lock request results in a deadlock.
@@ -107,7 +107,7 @@ struct Deadlock_detector {
    * This structure holds the state needed for each step in the iterative
    * deadlock detection algorithm.
    */
-  struct Search_frame {
+  struct SearchFrame {
     Trx *trx;                /**< Current transaction being examined */
     Lock *wait_lock;         /**< Lock that the transaction is waiting for */
     ulint depth;             /**< Current depth in the search */
@@ -115,7 +115,7 @@ struct Deadlock_detector {
     Lock *found_lock;        /**< Current lock being examined in the queue */
     bool is_first_iteration; /**< Whether this is the first iteration for this frame */
 
-    Search_frame(Trx *t, Lock *wl, ulint d, ulint hn, Lock *fl, bool first = true)
+    SearchFrame(Trx *t, Lock *wl, ulint d, ulint hn, Lock *fl, bool first = true)
         : trx(t), wait_lock(wl), depth(d), heap_no(hn), found_lock(fl), is_first_iteration(first) {}
   };
 
@@ -145,8 +145,8 @@ struct Deadlock_detector {
   void report_deadlock(Trx *victim, Lock *wait_lock) noexcept;
 
   /** Pointer to the main lock system */
-  Lock_sys *m_lock_sys;
+  LockSys *m_lock_sys;
 
   /** Stack for iterative deadlock detection */
-  std::stack<Search_frame> m_search_stack;
+  std::stack<SearchFrame> m_search_stack;
 };

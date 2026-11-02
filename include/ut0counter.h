@@ -45,7 +45,7 @@ struct Counter {
 };
 
 /** Null indexer, doesnt do anything. */
-struct Dummy_indexer {
+struct DummyIndexer {
   [[nodiscard]] std::size_t get_index() const {
     ut_error;
     return 0;
@@ -61,8 +61,8 @@ concept has_get_index = requires(T t) {
 
 /** Struct with a get_index method using the hash of the thread id.
  @tparam total_buckets total number of buckets*/
-struct Thread_id_indexer {
-  explicit Thread_id_indexer() : m_hash{} {}
+struct ThreadIdIndexer {
+  explicit ThreadIdIndexer() : m_hash{} {}
 
   [[nodiscard]] std::size_t get_index() const { return m_hash(std::this_thread::get_id()); }
 
@@ -73,7 +73,7 @@ struct Thread_id_indexer {
 
 /** Struct with a get_index method using the cpu number of the thread.
  @tparam total_buckets total number of buckets*/
-struct CPU_indexer {
+struct CpuIndexer {
   [[nodiscard]] std::size_t get_index() const {
 #ifdef UNIV_LINUX
     uint cpu;
@@ -96,7 +96,7 @@ struct CPU_indexer {
  @tparam shards total number of counters
  @tparam T type supporting get_index method to select the appropriate shard
  @tparam Int type of the integer */
-template <std::int32_t Shards, typename T = Dummy_indexer, typename Int = uint64_t>
+template <std::int32_t Shards, typename T = DummyIndexer, typename Int = uint64_t>
   requires has_get_index<T>
 struct Counters {
 
@@ -133,9 +133,9 @@ template <std::int32_t Shards>
 using Sharded_counter = Counters<Shards>;
 
 template <std::int32_t Shards>
-using Thread_id_sharded_counter = Counters<Shards, Thread_id_indexer>;
+using Thread_id_sharded_counter = Counters<Shards, ThreadIdIndexer>;
 
 template <std::int32_t Shards>
-using CPU_sharded_counter = Counters<Shards, CPU_indexer>;
+using CPU_sharded_counter = Counters<Shards, CpuIndexer>;
 
 }  // namespace ut

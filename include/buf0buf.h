@@ -35,7 +35,7 @@ Created 11/5/1995 Heikki Tuuri
 
 /** mutex protecting the buffer pool struct and control blocks, except the
 read-write lock in them */
-extern mutex_t buf_pool_mutex;
+extern Mutex buf_pool_mutex;
 
 #ifdef UNIV_DEBUG
 /**
@@ -47,7 +47,7 @@ extern mutex_t buf_pool_mutex;
  * @param page_no   in: page number
  * @return          control block if found in page hash table, otherwise nullptr
  */
-Buf_page *buf_page_set_file_page_was_freed(const Page_id &page_id);
+BufPage *buf_page_set_file_page_was_freed(const PageId &page_id);
 
 /** Flag to forbid the release of the buffer pool mutex.
 Protected by buf_pool_mutex. */
@@ -129,7 +129,7 @@ FILE_PAGE => NOT_USED	NOTE: This transition is allowed if and only if
   (3) io_fix == 0.
 */
 
-inline uint64_t Buf_pool::get_oldest_modification() const {
+inline uint64_t BufPool::get_oldest_modification() const {
   mutex_enter(&m_mutex);
 
   auto bpage = UT_LIST_GET_LAST(m_flush_list);
@@ -151,7 +151,7 @@ inline uint64_t Buf_pool::get_oldest_modification() const {
   return lsn;
 }
 
-inline Buf_page_state Buf_page::get_state() const {
+inline BufPageState BufPage::get_state() const {
 #ifdef UNIV_DEBUG
   switch (m_state) {
     case BUF_BLOCK_NOT_USED:
@@ -165,10 +165,10 @@ inline Buf_page_state Buf_page::get_state() const {
   }
 #endif /* UNIV_DEBUG */
 
-  return static_cast<Buf_page_state>(m_state);
+  return static_cast<BufPageState>(m_state);
 }
 
-inline Buf_page_state Buf_block::get_state() const {
+inline BufPageState BufBlock::get_state() const {
   return m_page.get_state();
 }
 
@@ -178,7 +178,7 @@ inline Buf_page_state Buf_block::get_state() const {
  * @param bpage Pointer to the control block.
  * @param state The state to set.
  */
-inline void buf_page_set_state(Buf_page *bpage, Buf_page_state state) {
+inline void buf_page_set_state(BufPage *bpage, BufPageState state) {
 #ifdef UNIV_DEBUG
   auto old_state = bpage->get_state();
 
@@ -211,7 +211,7 @@ inline void buf_page_set_state(Buf_page *bpage, Buf_page_state state) {
  * @param block Pointer to the control block.
  * @param state The state to set.
  */
-inline void buf_block_set_state(Buf_block *block, Buf_page_state state) {
+inline void buf_block_set_state(BufBlock *block, BufPageState state) {
   buf_page_set_state(&block->m_page, state);
 }
 
@@ -221,7 +221,7 @@ inline void buf_block_set_state(Buf_block *block, Buf_page_state state) {
  * @param bpage Pointer to the control block.
  * @return Pointer to the mutex protecting the block.
  */
-inline mutex_t *buf_page_get_mutex(const Buf_page *bpage) {
+inline Mutex *buf_page_get_mutex(const BufPage *bpage) {
   return &bpage->get_block()->m_mutex;
 }
 
@@ -231,8 +231,8 @@ inline mutex_t *buf_page_get_mutex(const Buf_page *bpage) {
  * @param bpage Pointer to the buffer page.
  * @return The flush type of the page.
  */
-inline auto buf_page_get_flush_type(const Buf_page *bpage) {
-  auto flush_type = static_cast<buf_flush>(bpage->m_flush_type);
+inline auto buf_page_get_flush_type(const BufPage *bpage) {
+  auto flush_type = static_cast<BufFlushType>(bpage->m_flush_type);
 
 #ifdef UNIV_DEBUG
   switch (flush_type) {
@@ -255,7 +255,7 @@ inline auto buf_page_get_flush_type(const Buf_page *bpage) {
  * @param bpage Pointer to the buffer page.
  * @param flush_type The flush type to set.
  */
-inline void buf_page_set_flush_type(Buf_page *bpage, buf_flush flush_type) {
+inline void buf_page_set_flush_type(BufPage *bpage, BufFlushType flush_type) {
   bpage->m_flush_type = flush_type;
   ut_ad(buf_page_get_flush_type(bpage) == flush_type);
 }
@@ -266,7 +266,7 @@ inline void buf_page_set_flush_type(Buf_page *bpage, buf_flush flush_type) {
  * @param block Pointer to the control block.
  * @param page_id The page ID containing space and page number.
  */
-inline void buf_block_set_file_page(Buf_block *block, const Page_id &page_id) {
+inline void buf_block_set_file_page(BufBlock *block, const PageId &page_id) {
   buf_block_set_state(block, BUF_BLOCK_FILE_PAGE);
   block->m_page.m_space = page_id.space_id();
   block->m_page.m_page_no = page_id.page_no();
@@ -278,8 +278,8 @@ inline void buf_block_set_file_page(Buf_block *block, const Page_id &page_id) {
  * @param bpage Pointer to the control block.
  * @return The io_fix state of the block.
  */
-inline auto buf_page_get_io_fix(const Buf_page *bpage) {
-  const auto io_fix = static_cast<buf_io_fix>(bpage->m_io_fix);
+inline auto buf_page_get_io_fix(const BufPage *bpage) {
+  const auto io_fix = static_cast<BufIoFix>(bpage->m_io_fix);
 
 #ifdef UNIV_DEBUG
   switch (io_fix) {
@@ -300,7 +300,7 @@ inline auto buf_page_get_io_fix(const Buf_page *bpage) {
  * @param block Pointer to the control block.
  * @return The io_fix state of the block.
  */
-inline buf_io_fix buf_block_get_io_fix(const Buf_block *block) {
+inline BufIoFix buf_block_get_io_fix(const BufBlock *block) {
   return buf_page_get_io_fix(&block->m_page);
 }
 
@@ -310,7 +310,7 @@ inline buf_io_fix buf_block_get_io_fix(const Buf_block *block) {
  * @param bpage Pointer to the control block.
  * @param io_fix The io_fix state to set.
  */
-inline void buf_page_set_io_fix(Buf_page *bpage, buf_io_fix io_fix) {
+inline void buf_page_set_io_fix(BufPage *bpage, BufIoFix io_fix) {
   // ut_ad(mutex_own(&m_mutex));
   ut_ad(mutex_own(buf_page_get_mutex(bpage)));
 
@@ -324,7 +324,7 @@ inline void buf_page_set_io_fix(Buf_page *bpage, buf_io_fix io_fix) {
  * @param block Pointer to the control block.
  * @param io_fix The io_fix state to set.
  */
-inline void buf_block_set_io_fix(Buf_block *block, buf_io_fix io_fix) {
+inline void buf_block_set_io_fix(BufBlock *block, BufIoFix io_fix) {
   buf_page_set_io_fix(&block->m_page, io_fix);
 }
 
@@ -335,7 +335,7 @@ inline void buf_block_set_io_fix(Buf_block *block, buf_io_fix io_fix) {
  * @param bpage Pointer to the control block being relocated.
  * @return True if the block can be relocated, false otherwise.
  */
-inline bool buf_page_can_relocate(const Buf_page *bpage) {
+inline bool buf_page_can_relocate(const BufPage *bpage) {
   // ut_ad(mutex_own(&m_mutex));
   ut_ad(mutex_own(buf_page_get_mutex(bpage)));
   ut_ad(bpage->in_file());
@@ -350,7 +350,7 @@ inline bool buf_page_can_relocate(const Buf_page *bpage) {
  * @param bpage Pointer to the control block.
  * @return True if the block is flagged as old, false otherwise.
  */
-inline bool buf_page_is_old(const Buf_page *bpage) {
+inline bool buf_page_is_old(const BufPage *bpage) {
   ut_ad(bpage->in_file());
   // ut_ad(mutex_own(&m_mutex));
 
@@ -363,7 +363,7 @@ inline bool buf_page_is_old(const Buf_page *bpage) {
  * @param bpage Pointer to the control block.
  * @param old Flag indicating if the block is old.
  */
-inline void buf_page_set(Buf_page *bpage, bool old) {
+inline void buf_page_set(BufPage *bpage, bool old) {
   ut_a(bpage->in_file());
   // ut_ad(mutex_own(&m_mutex));
   ut_ad(bpage->m_in_LRU_list);
@@ -377,7 +377,7 @@ inline void buf_page_set(Buf_page *bpage, bool old) {
  * @param bpage Pointer to the control block.
  * @return The time of first access (ut_time_ms()) if the block has been accessed, 0 otherwise.
  */
-inline unsigned buf_page_is_accessed(const Buf_page *bpage) {
+inline unsigned buf_page_is_accessed(const BufPage *bpage) {
   ut_ad(bpage->in_file());
 
   return bpage->m_access_time;
@@ -389,7 +389,7 @@ inline unsigned buf_page_is_accessed(const Buf_page *bpage) {
  * @param bpage Pointer to the control block.
  * @param time_ms The current time in milliseconds.
  */
-inline void buf_page_set_accessed(Buf_page *bpage, ulint time_ms) {
+inline void buf_page_set_accessed(BufPage *bpage, ulint time_ms) {
   ut_a(bpage->in_file());
   // ut_ad(mutex_own(&m_mutex));
 
@@ -405,12 +405,12 @@ inline void buf_page_set_accessed(Buf_page *bpage, ulint time_ms) {
  * @param bpage Pointer to the control block.
  * @return The control block if an uncompressed page frame exists, or nullptr.
  */
-inline Buf_block *buf_page_get_block(Buf_page *bpage) {
+inline BufBlock *buf_page_get_block(BufPage *bpage) {
   if (likely(bpage != nullptr)) {
     ut_ad(bpage->in_file());
 
     if (bpage->get_state() == BUF_BLOCK_FILE_PAGE) {
-      return reinterpret_cast<Buf_block *>(bpage);
+      return reinterpret_cast<BufBlock *>(bpage);
     }
   }
 
@@ -424,7 +424,7 @@ inline Buf_block *buf_page_get_block(Buf_page *bpage) {
  * @param space Pointer to store the space id.
  * @param addr Pointer to store the page offset and byte offset.
  */
-inline void buf_ptr_get_fsp_addr(const void *ptr, space_id_t *space, Fil_addr *addr) {
+inline void buf_ptr_get_fsp_addr(const void *ptr, space_id_t *space, FilAddr *addr) {
   auto page = reinterpret_cast<const page_t *>(ut_align_down(ptr, UNIV_PAGE_SIZE));
 
   *space = mach_read_from_4(page + FIL_PAGE_SPACE_ID);
@@ -451,7 +451,7 @@ inline byte *buf_frame_copy(byte *buf, const buf_frame_t *frame) {
  * @param page_id The page ID containing space and page number.
  * @return The folded value.
  */
-inline ulint buf_page_address_fold(const Page_id &page_id) {
+inline ulint buf_page_address_fold(const PageId &page_id) {
   return (page_id.space_id() << 20) + page_id.space_id() + page_id.page_no();
 }
 
@@ -462,7 +462,7 @@ inline ulint buf_page_address_fold(const Page_id &page_id) {
  * @param bpage Pointer to the block containing the page frame.
  * @return The newest modification to the page.
  */
-inline lsn_t buf_page_get_newest_modification(const Buf_page *bpage) {
+inline lsn_t buf_page_get_newest_modification(const BufPage *bpage) {
   auto block_mutex = buf_page_get_mutex(bpage);
 
   mutex_enter(block_mutex);
@@ -487,7 +487,7 @@ inline lsn_t buf_page_get_newest_modification(const Buf_page *bpage) {
  *
  * @param block Pointer to the buffer block.
  */
-inline void buf_block_modify_clock_inc(Buf_block *block) {
+inline void buf_block_modify_clock_inc(BufBlock *block) {
 
   IF_SYNC_DEBUG(
     ut_ad((mutex_own(&m_mutex) && block->m_page.buf_fix_count == 0) || rw_lock_own(&block->m_rw_lock, RW_LOCK_EXCLUSIVE));
@@ -503,7 +503,7 @@ inline void buf_block_modify_clock_inc(Buf_block *block) {
  * @param block Pointer to the buffer block.
  * @return The value of the modify clock.
  */
-inline uint64_t buf_block_get_modify_clock(Buf_block *block) {
+inline uint64_t buf_block_get_modify_clock(BufBlock *block) {
 
   IF_SYNC_DEBUG(ut_ad(rw_lock_own(&(block->m_rw_lock), RW_LOCK_SHARED) || rw_lock_own(&(block->m_rw_lock), RW_LOCK_EXCLUSIVE));)
 
@@ -517,7 +517,7 @@ inline uint64_t buf_block_get_modify_clock(Buf_block *block) {
  * @param line Line number.
  * @param block Pointer to the buffer block.
  */
-inline void buf_block_buf_fix_inc_func(IF_SYNC_DEBUG(const char *file, ulint line, ) Buf_block *block) {
+inline void buf_block_buf_fix_inc_func(IF_SYNC_DEBUG(const char *file, ulint line, ) BufBlock *block) {
   IF_SYNC_DEBUG(auto ret = rw_lock_s_lock_nowait(&(block->m_debug_latch), file, line); ut_a(ret););
 
   ut_ad(mutex_own(&block->m_mutex));
@@ -527,7 +527,7 @@ inline void buf_block_buf_fix_inc_func(IF_SYNC_DEBUG(const char *file, ulint lin
 
 #define buf_block_buf_fix_inc(b, f, l) buf_block_buf_fix_inc_func(IF_SYNC_DEBUG(f, l, ) b)
 
-inline void Buf_block::fix_dec() {
+inline void BufBlock::fix_dec() {
   ut_ad(mutex_own(&m_mutex));
 
   --m_page.m_buf_fix_count;
@@ -541,7 +541,7 @@ inline void Buf_block::fix_dec() {
  * @param page_id The page ID containing space and page number.
  * @return The page if found, nullptr otherwise.
  */
-inline Buf_page *Buf_pool::hash_get_page(const Page_id &page_id) {
+inline BufPage *BufPool::hash_get_page(const PageId &page_id) {
   ut_ad(mutex_own(&m_mutex));
 
   if (auto it = m_page_hash->find(page_id); it != m_page_hash->end()) {
@@ -561,7 +561,7 @@ inline Buf_page *Buf_pool::hash_get_page(const Page_id &page_id) {
  * @param page_id The page ID containing space and page number.
  * @return The block if found, nullptr otherwise.
  */
-inline Buf_block *Buf_pool::hash_get_block(const Page_id &page_id) {
+inline BufBlock *BufPool::hash_get_block(const PageId &page_id) {
   return buf_page_get_block(hash_get_page(page_id));
 }
 
@@ -571,7 +571,7 @@ inline Buf_block *Buf_pool::hash_get_block(const Page_id &page_id) {
  * @param page_id The page ID containing space and page number.
  * @return true if the page exists, false otherwise.
  */
-inline bool Buf_pool::peek(const Page_id &page_id) {
+inline bool BufPool::peek(const PageId &page_id) {
   mutex_enter(&m_mutex);
 
   auto bpage = hash_get_page(page_id);
@@ -581,7 +581,7 @@ inline bool Buf_pool::peek(const Page_id &page_id) {
   return bpage != nullptr;
 }
 
-inline buf_frame_t *Buf_block::get_frame() const {
+inline buf_frame_t *BufBlock::get_frame() const {
 #ifdef UNIV_DEBUG
   switch (get_state()) {
     default:
@@ -610,14 +610,14 @@ inline buf_frame_t *Buf_block::get_frame() const {
  * @param block The buffer page where we have acquired latch.
  * @param level The latching order level.
  */
-inline void buf_block_dbg_add_level(IF_SYNC_DEBUG(Buf_block *block, ulint level)) {
+inline void buf_block_dbg_add_level(IF_SYNC_DEBUG(BufBlock *block, ulint level)) {
   IF_SYNC_DEBUG(sync_thread_add_level(&block->m_rw_lock, level));
 }
 
 /** Releases a latch, if specified.
 @param[in] block             Block for which to release the latch
 @param[in] rw_latch          The latch type. */
-inline void buf_page_release_latch(Buf_block *block, ulint rw_latch) {
+inline void buf_page_release_latch(BufBlock *block, ulint rw_latch) {
   if (rw_latch == RW_S_LATCH) {
     rw_lock_s_unlock(&block->m_rw_lock);
   } else if (rw_latch == RW_X_LATCH) {

@@ -38,11 +38,11 @@ Created 12/13/1995 Heikki Tuuri
 @param[in,out] mtr              Mini-transaction to track block fetch.
 @return pointer to a byte in a frame; the file page in the frame is
 bufferfixed and latched */
-inline byte *fut_get_ptr(space_id_t space_id, Fil_addr addr, ulint rw_latch, mtr_t *mtr) {
+inline byte *fut_get_ptr(space_id_t space_id, FilAddr addr, ulint rw_latch, Mtr *mtr) {
   ut_ad(addr.m_boffset < UNIV_PAGE_SIZE);
   ut_ad(rw_latch == RW_S_LATCH || rw_latch == RW_X_LATCH);
 
-  Buf_pool::Request req{
+  BufPool::Request req{
     .m_rw_latch = rw_latch,
     .m_page_id = {space_id, addr.m_page_no},
     .m_mode = BUF_GET,

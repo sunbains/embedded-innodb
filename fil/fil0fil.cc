@@ -103,10 +103,10 @@ the count drops to zero. */
 // FIXME: Remove this global variable
 Fil *srv_fil;
 
-extern AIO *srv_aio;
+extern Aio *srv_aio;
 
 /** The null file address */
-constexpr Fil_addr fil_addr_null = {FIL_NULL, 0};
+constexpr FilAddr fil_addr_null = {FIL_NULL, 0};
 
 Fil::Fil(ulint max_n_open) {
   ut_a(max_n_open > 0);
@@ -163,7 +163,7 @@ int Fil::tablename_compare(const char *name1, const char *name2) {
   return strcmp(name1, name2);
 }
 
-fil_space_t *Fil::space_get_by_id(space_id_t id) {
+FilSpace *Fil::space_get_by_id(space_id_t id) {
   ut_ad(mutex_own(&m_mutex));
 
   auto it{m_space_by_id.find(id)};
@@ -171,7 +171,7 @@ fil_space_t *Fil::space_get_by_id(space_id_t id) {
   return it != m_space_by_id.end() ? it->second : nullptr;
 }
 
-fil_space_t *Fil::space_get_by_name(const char *name) {
+FilSpace *Fil::space_get_by_name(const char *name) {
   ut_ad(mutex_own(&m_mutex));
 
   auto it{m_space_by_name.find(name)};
@@ -197,7 +197,7 @@ int64_t Fil::space_get_version(space_id_t id) {
   return version;
 }
 
-rw_lock_t *Fil::space_get_latch(space_id_t id) {
+RwLock *Fil::space_get_latch(space_id_t id) {
   mutex_enter(&m_mutex);
 
   auto space = space_get_by_id(id);
@@ -217,7 +217,7 @@ ulint Fil::space_get_type(space_id_t id) {
   return space->m_type;
 }
 
-bool Fil::space_is_flushed(fil_space_t *space) {
+bool Fil::space_is_flushed(FilSpace *space) {
   ut_ad(mutex_own(&m_mutex));
 
   for (const auto node : space->m_chain) {
@@ -233,7 +233,7 @@ bool Fil::space_is_flushed(fil_space_t *space) {
 void Fil::node_create(const char *name, ulint size, space_id_t id, bool is_raw) {
   mutex_enter(&m_mutex);
 
-  auto node = static_cast<fil_node_t *>(mem_alloc(sizeof(fil_node_t)));
+  auto node = static_cast<FilNode *>(mem_alloc(sizeof(FilNode)));
 
   node->m_file_name = mem_strdup(name);
   node->open = false;
@@ -276,7 +276,7 @@ void Fil::node_create(const char *name, ulint size, space_id_t id, bool is_raw) 
   mutex_exit(&m_mutex);
 }
 
-void Fil::node_open_file(fil_node_t *node, fil_space_t *space, bool startup) {
+void Fil::node_open_file(FilNode *node, FilSpace *space, bool startup) {
   off_t size;
   bool success;
 
@@ -381,7 +381,7 @@ void Fil::node_open_file(fil_node_t *node, fil_space_t *space, bool startup) {
   ++m_n_open;
 }
 
-void Fil::node_close_file(fil_node_t *node) {
+void Fil::node_close_file(FilNode *node) {
   ut_ad(mutex_own(&m_mutex));
   ut_a(node->open);
   ut_a(node->m_n_pending == 0);
@@ -472,7 +472,7 @@ void Fil::mutex_enter_and_prepare_for_io(space_id_t space_id) {
   }
 }
 
-void Fil::node_free(fil_node_t *node, fil_space_t *space) {
+void Fil::node_free(FilNode *node, FilSpace *space) {
   ut_ad(mutex_own(&(m_mutex)));
   ut_a(node->m_magic_n == FIL_NODE_MAGIC_N);
   ut_a(node->m_n_pending == 0);
@@ -501,8 +501,8 @@ void Fil::node_free(fil_node_t *node, fil_space_t *space) {
   mem_free(node);
 }
 
-bool Fil::space_create(const char *name, space_id_t id, ulint flags, Fil_type fil_type) {
-  fil_space_t *space;
+bool Fil::space_create(const char *name, space_id_t id, ulint flags, FilType fil_type) {
+  FilSpace *space;
 
   /* FIXME: This is redundant now. */
   ut_a(flags == 0);
@@ -570,7 +570,7 @@ try_again:
     return false;
   }
 
-  space = static_cast<fil_space_t *>(mem_alloc(sizeof(fil_space_t)));
+  space = static_cast<FilSpace *>(mem_alloc(sizeof(FilSpace)));
 
   space->m_name = mem_strdup(name);
   space->m_id = id;
@@ -747,7 +747,7 @@ ulint Fil::space_get_size(space_id_t id) {
     size fields */
 
     node_prepare_for_io(node, space);
-    node_complete_io(node, IO_request::Sync_read);
+    node_complete_io(node, IoRequest::Sync_read);
   }
 
   auto size = space->m_size_in_pages;
@@ -785,7 +785,7 @@ ulint Fil::space_get_flags(space_id_t id) {
     size fields */
 
     node_prepare_for_io(node, space);
-    node_complete_io(node, IO_request::Sync_read);
+    node_complete_io(node, IoRequest::Sync_read);
   }
 
   auto flags = space->m_flags;
@@ -823,7 +823,7 @@ void Fil::close_all_files() {
   auto space = UT_LIST_GET_FIRST(m_space_list);
 
   while (space != nullptr) {
-    fil_space_t *prev_space = space;
+    FilSpace *prev_space = space;
 
     ut_a(UT_LIST_GET_LEN(space->m_chain) == 1 || space->m_type == FIL_LOG);
     auto node = UT_LIST_GET_FIRST(space->m_chain);
@@ -855,22 +855,22 @@ void Fil::set_max_space_id_if_bigger(space_id_t max_id) {
   mutex_exit(&m_mutex);
 }
 
-db_err Fil::write_lsn_and_arch_no_to_file(ulint sum_of_sizes, lsn_t lsn) {
+DbErr Fil::write_lsn_and_arch_no_to_file(ulint sum_of_sizes, lsn_t lsn) {
   auto ptr = static_cast<byte *>(mem_alloc(2 * UNIV_PAGE_SIZE));
   auto buf = static_cast<byte *>(ut_align(ptr, UNIV_PAGE_SIZE));
 
-  data_io(IO_request::Sync_read, false, Page_id(SYS_TABLESPACE, sum_of_sizes), 0, UNIV_PAGE_SIZE, buf, nullptr);
+  data_io(IoRequest::Sync_read, false, PageId(SYS_TABLESPACE, sum_of_sizes), 0, UNIV_PAGE_SIZE, buf, nullptr);
 
   mach_write_to_8(buf + FIL_PAGE_FILE_FLUSH_LSN, lsn);
 
-  data_io(IO_request::Sync_read, false, Page_id(SYS_TABLESPACE, sum_of_sizes), 0, UNIV_PAGE_SIZE, buf, nullptr);
+  data_io(IoRequest::Sync_read, false, PageId(SYS_TABLESPACE, sum_of_sizes), 0, UNIV_PAGE_SIZE, buf, nullptr);
 
   mem_free(ptr);
 
   return DB_SUCCESS;
 }
 
-db_err Fil::write_flushed_lsn_to_data_files(lsn_t lsn) {
+DbErr Fil::write_flushed_lsn_to_data_files(lsn_t lsn) {
   ulint sum_of_sizes;
 
   mutex_enter(&m_mutex);
@@ -945,7 +945,7 @@ void Fil::create_directory_for_tablename(const char *name) {
 }
 
 void Fil::op_write_log(
-  mlog_type_t type, space_id_t space_id, ulint log_flags, ulint flags, const char *name, const char *new_name, mtr_t *mtr
+  MlogType type, space_id_t space_id, ulint log_flags, ulint flags, const char *name, const char *new_name, Mtr *mtr
 ) {
   auto log_ptr = mlog_open(mtr, 11 + 2 + 1);
 
@@ -1127,7 +1127,7 @@ bool Fil::delete_tablespace(space_id_t id) {
     auto success = space_free(id, false);
 
     if (success) {
-      mtr_t mtr;
+      Mtr mtr;
 
       /* Write a log record to replay during recovery. */
       mtr.start();
@@ -1210,7 +1210,7 @@ bool Fil::discard_tablespace(space_id_t id) {
   return success;
 }
 
-bool Fil::rename_tablespace_in_mem(fil_space_t *space, fil_node_t *node, const char *path) {
+bool Fil::rename_tablespace_in_mem(FilSpace *space, FilNode *node, const char *path) {
   auto old_name = space->m_name;
 
   ut_ad(mutex_own(&m_mutex));
@@ -1263,8 +1263,8 @@ char *Fil::make_ibd_name(const char *name, bool is_temp) {
 
 bool Fil::rename_tablespace(const char *old_name, space_id_t id, const char *new_name) {
   bool success;
-  fil_space_t *space;
-  fil_node_t *node;
+  FilSpace *space;
+  FilNode *node;
   ulint count = 0;
   char *path;
   bool old_name_was_specified = true;
@@ -1380,7 +1380,7 @@ retry:
   mutex_exit(&m_mutex);
 
   if (success) {
-    mtr_t mtr;
+    Mtr mtr;
 
     mtr.start();
 
@@ -1391,7 +1391,7 @@ retry:
   return success;
 }
 
-db_err Fil::create_new_single_table_tablespace(space_id_t *space_id, const char *tablename, bool is_temp, ulint flags, ulint size) {
+DbErr Fil::create_new_single_table_tablespace(space_id_t *space_id, const char *tablename, bool is_temp, ulint flags, ulint size) {
   bool success;
 
   ut_a(flags == 0);
@@ -1450,7 +1450,7 @@ db_err Fil::create_new_single_table_tablespace(space_id_t *space_id, const char 
     *space_id = assign_new_space_id();
   }
 
-  auto err_exit = [](char *path, os_file_t file) -> db_err {
+  auto err_exit = [](char *path, os_file_t file) -> DbErr {
     if (file != -1) {
       os_file_close(file);
     }
@@ -1519,7 +1519,7 @@ db_err Fil::create_new_single_table_tablespace(space_id_t *space_id, const char 
   node_create(path, size, *space_id, false);
 
   {
-    mtr_t mtr;
+    Mtr mtr;
 
     mtr.start();
 
@@ -1614,7 +1614,7 @@ bool Fil::open_single_table_tablespace(bool check_space_id, space_id_t id, ulint
   return success;
 }
 
-void Fil::load_single_table_tablespace(ib_recovery_t recovery, const char *dbname, const char *filename) {
+void Fil::load_single_table_tablespace(IbRecovery recovery, const char *dbname, const char *filename) {
   char dir[OS_FILE_MAX_PATH];
 
   strcpy(dir, srv_config.m_data_home);
@@ -1792,7 +1792,7 @@ func_exit:
   mem_free(filepath);
 }
 
-db_err Fil::scan_and_load_tablespaces(const std::string &dir, ib_recovery_t recovery, ulint max_depth, ulint depth) {
+DbErr Fil::scan_and_load_tablespaces(const std::string &dir, IbRecovery recovery, ulint max_depth, ulint depth) {
   namespace fs = std::filesystem;
 
   if (depth >= max_depth) {
@@ -1804,7 +1804,7 @@ db_err Fil::scan_and_load_tablespaces(const std::string &dir, ib_recovery_t reco
   fs::path path(dir);
   auto dir_name = path.parent_path().string();
 
-  auto check_directory = [dir_name](const fs::path &path) -> db_err {
+  auto check_directory = [dir_name](const fs::path &path) -> DbErr {
     if (fs::status(path).type() != fs::file_type::directory) {
       log_err(std::format("The datadir is not a directory: '{}'", dir_name));
       return DB_ERROR;
@@ -1855,7 +1855,7 @@ db_err Fil::scan_and_load_tablespaces(const std::string &dir, ib_recovery_t reco
   return DB_SUCCESS;
 }
 
-db_err Fil::load_single_table_tablespaces(const std::string &dir, ib_recovery_t recovery, ulint max_depth) {
+DbErr Fil::load_single_table_tablespaces(const std::string &dir, IbRecovery recovery, ulint max_depth) {
   return scan_and_load_tablespaces(dir, recovery, max_depth, 0);
 }
 
@@ -2062,13 +2062,13 @@ bool Fil::extend_space_to_desired_size(page_no_t *actual_size, space_id_t space_
   memset(buf, 0, buf_size);
 
   bool success{true};
-  auto io_request = IO_request::Sync_write;
+  auto io_request = IoRequest::Sync_write;
 
   while (start_page_no < size_after_extend) {
     const ulint n_pages = std::min<ulint>(buf_size / page_size, size_after_extend - start_page_no);
     const off_t off = off_t(start_page_no) * page_size;
 
-    IO_ctx io_ctx = {.m_batch = false, .m_fil_node = node, .m_msg = nullptr, .m_io_request = io_request};
+    IoCtx io_ctx = {.m_batch = false, .m_fil_node = node, .m_msg = nullptr, .m_io_request = io_request};
 
     success = srv_aio->submit(std::move(io_ctx), buf, page_size * n_pages, off);
 
@@ -2148,7 +2148,7 @@ ulint Fil::space_get_n_reserved_extents(space_id_t id) {
   return n;
 }
 
-void Fil::node_prepare_for_io(fil_node_t *node, fil_space_t *space) {
+void Fil::node_prepare_for_io(FilNode *node, FilSpace *space) {
   ut_ad(mutex_own(&m_mutex));
 
   if (m_n_open > m_max_n_open + 5) {
@@ -2165,14 +2165,14 @@ void Fil::node_prepare_for_io(fil_node_t *node, fil_space_t *space) {
   node->m_n_pending++;
 }
 
-void Fil::node_complete_io(fil_node_t *node, IO_request io_request) {
+void Fil::node_complete_io(FilNode *node, IoRequest io_request) {
   ut_ad(mutex_own(&m_mutex));
 
   ut_a(node->m_n_pending > 0);
 
   --node->m_n_pending;
 
-  if (io_request == IO_request::Sync_write) {
+  if (io_request == IoRequest::Sync_write) {
     ++m_modification_counter;
     node->m_modification_counter = m_modification_counter;
 
@@ -2185,7 +2185,7 @@ void Fil::node_complete_io(fil_node_t *node, IO_request io_request) {
 }
 
 [[noreturn]] void Fil::report_invalid_page_access(
-  const Page_id &page_id, const char *space_name, ulint byte_offset, ulint len, IO_request io_request
+  const PageId &page_id, const char *space_name, ulint byte_offset, ulint len, IoRequest io_request
 ) {
   log_fatal(std::format(
     "Trying to access page number {} in space {}, space name {}, which is"
@@ -2202,8 +2202,8 @@ void Fil::node_complete_io(fil_node_t *node, IO_request io_request) {
   ut_error;
 }
 
-db_err Fil::data_io(
-  IO_request io_request, bool batched, const Page_id &page_id, ulint byte_offset, ulint len, void *buf, void *message
+DbErr Fil::data_io(
+  IoRequest io_request, bool batched, const PageId &page_id, ulint byte_offset, ulint len, void *buf, void *message
 ) {
 
   ut_ad(len > 0);
@@ -2217,27 +2217,27 @@ db_err Fil::data_io(
   bool is_sync_request{};
 
   switch (io_request) {
-    case IO_request::None:
-    case IO_request::Sync_log_read:
-    case IO_request::Async_log_read:
-    case IO_request::Sync_log_write:
-    case IO_request::Async_log_write:
-    case IO_request::Sync_log_flush:
-    case IO_request::Async_log_flush:
+    case IoRequest::None:
+    case IoRequest::Sync_log_read:
+    case IoRequest::Async_log_read:
+    case IoRequest::Sync_log_write:
+    case IoRequest::Async_log_write:
+    case IoRequest::Sync_log_flush:
+    case IoRequest::Async_log_flush:
       ut_error;
       break;
 
-    case IO_request::Sync_read:
+    case IoRequest::Sync_read:
       is_sync_request = true;
       // falthrough
-    case IO_request::Async_read:
+    case IoRequest::Async_read:
       srv_data_read += len;
       break;
 
-    case IO_request::Sync_write:
+    case IoRequest::Sync_write:
       is_sync_request = true;
       // falthrough
-    case IO_request::Async_write:
+    case IoRequest::Async_write:
       srv_data_written += len;
       break;
   }
@@ -2297,7 +2297,7 @@ db_err Fil::data_io(
   ut_a(byte_offset % IB_FILE_BLOCK_SIZE == 0);
   ut_a((len % IB_FILE_BLOCK_SIZE) == 0);
 
-  IO_ctx io_ctx = {.m_batch = batched, .m_fil_node = fil_node, .m_msg = message, .m_io_request = io_request};
+  IoCtx io_ctx = {.m_batch = batched, .m_fil_node = fil_node, .m_msg = message, .m_io_request = io_request};
 
   /* Queue the aio request */
   auto err = srv_aio->submit(std::move(io_ctx), buf, len, off);
@@ -2321,7 +2321,7 @@ db_err Fil::data_io(
 bool Fil::aio_wait(ulint segment) {
   ut_ad(validate());
 
-  IO_ctx io_ctx{};
+  IoCtx io_ctx{};
 
   auto err = srv_aio->reap(segment, io_ctx);
 
@@ -2347,7 +2347,7 @@ bool Fil::aio_wait(ulint segment) {
   open, and use a special i/o thread to serve insert buffer requests. */
 
   ut_ad(io_ctx.m_fil_node->m_space->m_type == FIL_TABLESPACE);
-  srv_buf_pool->io_complete(reinterpret_cast<Buf_page *>(io_ctx.m_msg));
+  srv_buf_pool->io_complete(reinterpret_cast<BufPage *>(io_ctx.m_msg));
 
   return true;
 }
@@ -2510,7 +2510,7 @@ bool Fil::validate() {
   return true;
 }
 
-bool Fil::addr_is_null(const Fil_addr &addr) {
+bool Fil::addr_is_null(const FilAddr &addr) {
   return addr.m_page_no == FIL_NULL;
 }
 
@@ -2526,8 +2526,8 @@ void Fil::page_set_type(byte *page, ulint type) {
   mach_write_to_2(page + FIL_PAGE_TYPE, type);
 }
 
-Fil_page_type Fil::page_get_type(const byte *page) {
-  return static_cast<Fil_page_type>(mach_read_from_2(page + FIL_PAGE_TYPE));
+FilPageType Fil::page_get_type(const byte *page) {
+  return static_cast<FilPageType>(mach_read_from_2(page + FIL_PAGE_TYPE));
 }
 
 bool Fil::rmdir(const char *dbname) {

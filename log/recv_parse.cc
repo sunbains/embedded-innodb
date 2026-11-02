@@ -34,10 +34,10 @@ static ulint recv_previous_parsed_rec_type;
 static ulint recv_previous_parsed_rec_offset;
 static ulint recv_previous_parsed_rec_is_multi;
 
-byte *recv_parse_or_apply_log_rec_body(mlog_type_t type, byte *ptr, byte *end_ptr, Buf_block *block, mtr_t *mtr) noexcept;
+byte *recv_parse_or_apply_log_rec_body(MlogType type, byte *ptr, byte *end_ptr, BufBlock *block, Mtr *mtr) noexcept;
 
 static ulint recv_parse_log_rec(
-  byte *ptr, byte *end_ptr, mlog_type_t *type, space_id_t *space, page_no_t *page_no, byte **body
+  byte *ptr, byte *end_ptr, MlogType *type, space_id_t *space, page_no_t *page_no, byte **body
 ) noexcept {
   *body = nullptr;
 
@@ -46,12 +46,12 @@ static ulint recv_parse_log_rec(
   }
 
   if (*ptr == MLOG_MULTI_REC_END) {
-    *type = static_cast<mlog_type_t>(*ptr);
+    *type = static_cast<MlogType>(*ptr);
     return 1;
   }
 
   if (*ptr == MLOG_DUMMY_RECORD) {
-    *type = static_cast<mlog_type_t>(*ptr);
+    *type = static_cast<MlogType>(*ptr);
     *space = ULINT32_UNDEFINED - 1;
     return 1;
   }
@@ -77,10 +77,10 @@ static ulint recv_parse_log_rec(
   return new_ptr - ptr;
 }
 
-byte *recv_parse_or_apply_log_rec_body(mlog_type_t type, byte *ptr, byte *end_ptr, Buf_block *block, mtr_t *mtr) noexcept {
+byte *recv_parse_or_apply_log_rec_body(MlogType type, byte *ptr, byte *end_ptr, BufBlock *block, Mtr *mtr) noexcept {
   page_t *page{};
   Index *index{};
-  ut_d(Fil_page_type page_type{FIL_PAGE_TYPE_ALLOCATED});
+  ut_d(FilPageType page_type{FIL_PAGE_TYPE_ALLOCATED});
 
   ut_ad(!block == !mtr);
 
@@ -123,24 +123,24 @@ byte *recv_parse_or_apply_log_rec_body(mlog_type_t type, byte *ptr, byte *end_pt
       ut_ad(page == nullptr || page_type == FIL_PAGE_TYPE_INDEX);
 
       if ((ptr = mlog_parse_index(ptr, end_ptr, index)) != nullptr) {
-        ptr = Page_cursor::parse_insert_rec(false, ptr, end_ptr, block, index, mtr);
+        ptr = PageCursor::parse_insert_rec(false, ptr, end_ptr, block, index, mtr);
       }
       break;
     case MLOG_REC_CLUST_DELETE_MARK:
       ut_ad(page == nullptr || page_type == FIL_PAGE_TYPE_INDEX);
 
       if ((ptr = mlog_parse_index(ptr, end_ptr, index)) != nullptr) {
-        ptr = Btree_cursor::parse_del_mark_set_clust_rec(ptr, end_ptr, page, index);
+        ptr = BtreeCursor::parse_del_mark_set_clust_rec(ptr, end_ptr, page, index);
       }
     case MLOG_REC_SEC_DELETE_MARK:
       ut_ad(page == nullptr || page_type == FIL_PAGE_TYPE_INDEX);
-      ptr = Btree_cursor::parse_del_mark_set_sec_rec(ptr, end_ptr, page);
+      ptr = BtreeCursor::parse_del_mark_set_sec_rec(ptr, end_ptr, page);
       break;
     case MLOG_REC_UPDATE_IN_PLACE:
       ut_ad(page == nullptr || page_type == FIL_PAGE_TYPE_INDEX);
 
       if ((ptr = mlog_parse_index(ptr, end_ptr, index)) != nullptr) {
-        ptr = Btree_cursor::parse_update_in_place(ptr, end_ptr, page, index);
+        ptr = BtreeCursor::parse_update_in_place(ptr, end_ptr, page, index);
       }
       break;
     case MLOG_LIST_END_DELETE:
@@ -155,7 +155,7 @@ byte *recv_parse_or_apply_log_rec_body(mlog_type_t type, byte *ptr, byte *end_pt
       ut_ad(page == nullptr || page_type == FIL_PAGE_TYPE_INDEX);
 
       if ((ptr = mlog_parse_index(ptr, end_ptr, index)) != nullptr) {
-        ptr = Page_cursor::parse_copy_rec_list_to_created_page(ptr, end_ptr, block, index, mtr);
+        ptr = PageCursor::parse_copy_rec_list_to_created_page(ptr, end_ptr, block, index, mtr);
       }
       break;
     case MLOG_PAGE_REORGANIZE:
@@ -172,11 +172,11 @@ byte *recv_parse_or_apply_log_rec_body(mlog_type_t type, byte *ptr, byte *end_pt
       break;
     case MLOG_UNDO_INSERT:
       ut_ad(page == nullptr || page_type == FIL_PAGE_TYPE_UNDO_LOG);
-      ptr = Trx_undo_record::parse_add_undo_rec(ptr, end_ptr, page);
+      ptr = TrxUndoRecord::parse_add_undo_rec(ptr, end_ptr, page);
       break;
     case MLOG_UNDO_ERASE_END:
       ut_ad(page == nullptr || page_type == FIL_PAGE_TYPE_UNDO_LOG);
-      ptr = Trx_undo_record::parse_erase_page_end(ptr, end_ptr, page, mtr);
+      ptr = TrxUndoRecord::parse_erase_page_end(ptr, end_ptr, page, mtr);
       break;
     case MLOG_UNDO_INIT:
       ptr = Undo::parse_page_init(ptr, end_ptr, page, mtr);
@@ -198,7 +198,7 @@ byte *recv_parse_or_apply_log_rec_body(mlog_type_t type, byte *ptr, byte *end_pt
       ut_ad(!page || page_type == FIL_PAGE_TYPE_INDEX);
 
       if ((ptr = mlog_parse_index(ptr, end_ptr, index)) != nullptr) {
-        ptr = Page_cursor::parse_delete_rec(ptr, end_ptr, block, index, mtr);
+        ptr = PageCursor::parse_delete_rec(ptr, end_ptr, block, index, mtr);
       }
       break;
     case MLOG_INIT_FILE_PAGE:
@@ -228,13 +228,13 @@ byte *recv_parse_or_apply_log_rec_body(mlog_type_t type, byte *ptr, byte *end_pt
 }
 
 static lsn_t recv_calc_lsn_on_data_add(lsn_t lsn, uint64_t len) noexcept {
-  auto frag_len = (ulint(lsn) % sizeof(Log_phy_block)) - Log_phy_block::HEADER_SIZE;
+  auto frag_len = (ulint(lsn) % sizeof(LogPhyBlock)) - LogPhyBlock::HEADER_SIZE;
 
-  ut_ad(frag_len < sizeof(Log_phy_block) - Log_phy_block::HEADER_SIZE - Log_phy_block::TRAILER_SIZE);
+  ut_ad(frag_len < sizeof(LogPhyBlock) - LogPhyBlock::HEADER_SIZE - LogPhyBlock::TRAILER_SIZE);
   auto lsn_len = ulint(len);
 
-  lsn_len += (lsn_len + frag_len) / (sizeof(Log_phy_block) - Log_phy_block::HEADER_SIZE - Log_phy_block::TRAILER_SIZE) *
-             (Log_phy_block::HEADER_SIZE + Log_phy_block::TRAILER_SIZE);
+  lsn_len += (lsn_len + frag_len) / (sizeof(LogPhyBlock) - LogPhyBlock::HEADER_SIZE - LogPhyBlock::TRAILER_SIZE) *
+             (LogPhyBlock::HEADER_SIZE + LogPhyBlock::TRAILER_SIZE);
 
   return lsn + lsn_len;
 }
@@ -285,7 +285,7 @@ bool recv_parse_log_recs(bool store_to_hash) noexcept {
   ulint len;
   lsn_t old_lsn;
   ulint total_len;
-  mlog_type_t type;
+  MlogType type;
   byte *body;
   space_id_t space;
   page_no_t page_no;

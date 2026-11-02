@@ -29,9 +29,9 @@ Created 5/30/1994 Heikki Tuuri
 /** Initializes the mem block list at database startup. */
 void ut_mem_init();
 
-#define ut_new(n) ut_new_func(n, Source_location(std::source_location::current()))
-#define ut_delete(ptr) ut_delete_func(ptr, Source_location(std::source_location::current()))
-#define ut_realloc(ptr, n) ut_realloc_func(ptr, n, Source_location(std::source_location::current()))
+#define ut_new(n) ut_new_func(n, SourceLocation(std::source_location::current()))
+#define ut_delete(ptr) ut_delete_func(ptr, SourceLocation(std::source_location::current()))
+#define ut_realloc(ptr, n) ut_realloc_func(ptr, n, SourceLocation(std::source_location::current()))
 
 /**
  * Allocates memory. Sets it also to zero if UNIV_SET_MEM_TO_ZERO is defined.
@@ -40,14 +40,14 @@ void ut_mem_init();
  *
  * @return Allocated memory
  */
-void *ut_new_func(ulint n, Source_location location);
+void *ut_new_func(ulint n, SourceLocation location);
 
 /**
  * Frees a memory block allocated with ut_new_func().
  *
  * @param ptr Memory block to free
  */
-void ut_delete_func(void *ptr, Source_location location);
+void ut_delete_func(void *ptr, SourceLocation location);
 
 /**
  * Implements realloc. This is needed by /pars/lexyy.c. Otherwise, you should
@@ -79,7 +79,7 @@ void ut_delete_func(void *ptr, Source_location location);
  *
  * @return Pointer to new mem block or nullptr
  */
-void *ut_realloc_func(void *ptr, ulint size, Source_location location);
+void *ut_realloc_func(void *ptr, ulint size, SourceLocation location);
 
 /** Frees in shutdown all allocated memory not freed yet. */
 void ut_delete_all_mem();

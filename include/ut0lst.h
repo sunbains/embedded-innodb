@@ -52,7 +52,7 @@ at a time. */
  * @tparam Type The list node type name.
  */
 template <typename Type>
-struct ut_list_node {
+struct UtListNode {
   /** Pointer to the previous node, nullptr if start of list */
   Type *m_prev{nullptr};
 
@@ -73,7 +73,7 @@ struct ut_list_node {
 };
 
 /** Macro used for legacy reasons */
-#define UT_LIST_NODE_T(t) ut_list_node<t>
+#define UT_LIST_NODE_T(t) UtListNode<t>
 
 /** TODO: Fix concept - temporarily disabled for compatibility */
 template <typename NodeGetter, typename Type>
@@ -94,19 +94,19 @@ concept NodeGetterFor = true;
  * 
  * @tparam Type The type of the list element.
  * @tparam NodeGetter A class which has a static member function 
- *         ut_list_node<Type> get_node(const Type &e) which knows how to extract a node from an element.
+ *         UtListNode<Type> get_node(const Type &e) which knows how to extract a node from an element.
  */
 template <typename Type, typename NodeGetter>
   requires NodeGetterFor<NodeGetter, Type>
-struct ut_list_base {
+struct UtListBase {
   using elem_type = Type;
-  using node_type = ut_list_node<elem_type>;
+  using node_type = UtListNode<elem_type>;
 
   /** Copy constructor.
    * 
    * This is required to copy the count explicitly.
    */
-  ut_list_base(const ut_list_base &rhs) noexcept : m_first_element{rhs.m_first_element}, m_last_element{rhs.m_last_element} {
+  UtListBase(const UtListBase &rhs) noexcept : m_first_element{rhs.m_first_element}, m_last_element{rhs.m_last_element} {
     count.store(rhs.count.load(std::memory_order_acquire));
   }
 
@@ -128,10 +128,10 @@ struct ut_list_base {
   /** Pointer to list end, nullptr if empty. */
   elem_type *m_last_element{nullptr};
 
-  ut_list_base() = default;
-  ut_list_base(ut_list_base &&) = delete;
-  ut_list_base &operator=(ut_list_base &&) = delete;
-  ut_list_base &operator=(const ut_list_base &) = delete;
+  UtListBase() = default;
+  UtListBase(UtListBase &&) = delete;
+  UtListBase &operator=(UtListBase &&) = delete;
+  UtListBase &operator=(const UtListBase &) = delete;
 
   /**
    * Returns number of nodes currently present in the list.
@@ -264,7 +264,7 @@ struct ut_list_base {
 #ifdef UNIV_DEBUG
   /**
    * UT_LIST_INITIALISED if the list was initialised with the constructor. It
-   * is used to detect if the ut_list_base object is used directly after
+   * is used to detect if the UtListBase object is used directly after
    * allocating memory from malloc-like calls that do not run constructor.
    */
   ulint init{UT_LIST_INITIALISED};
@@ -317,7 +317,7 @@ struct ut_list_base {
   struct Removable {
 
     struct iterator {
-      iterator(ut_list_base &list, elem_type *elem) : m_list{list}, m_elem{elem}, m_prev_elem{elem ? prev(*elem) : nullptr} {
+      iterator(UtListBase &list, elem_type *elem) : m_list{list}, m_elem{elem}, m_prev_elem{elem ? prev(*elem) : nullptr} {
         // We haven't really tested any other case yet:
         ut_ad(m_prev_elem == nullptr);
       }
@@ -350,18 +350,18 @@ struct ut_list_base {
         return *this;
       }
 
-      ut_list_base &m_list;
+      UtListBase &m_list;
       elem_type *m_elem;
       elem_type *m_prev_elem;
     };
 
-    Removable(ut_list_base &list) : m_list{list} {}
+    Removable(UtListBase &list) : m_list{list} {}
 
     iterator begin() { return iterator{m_list, m_list.m_first_element}; }
 
     iterator end() { return iterator{m_list, nullptr}; }
 
-    ut_list_base &m_list;
+    UtListBase &m_list;
   };
 
   /**
@@ -389,9 +389,9 @@ struct ut_list_base {
   Removable removable() { return Removable{*this}; }
 };
 
-template <typename Type, ut_list_node<Type> Type::*node_ptr>
-struct ut_list_base_explicit_getter {
-  static const ut_list_node<Type> &get_node(const Type &element) { return element.*node_ptr; }
+template <typename Type, UtListNode<Type> Type::*node_ptr>
+struct UtListBaseExplicitGetter {
+  static const UtListNode<Type> &get_node(const Type &element) { return element.*node_ptr; }
 };
 
 /**
@@ -399,7 +399,7 @@ struct ut_list_base_explicit_getter {
  * NOTE: In cases in which definition of t is not yet in scope and thus you can't
  * refer to t::m at this point yet, use UT_LIST_BASE_NODE_T_EXTERN macro instead.
  */
-#define UT_LIST_BASE_NODE_T(t, m) ut_list_base<t, ut_list_base_explicit_getter<t, &t::m>>
+#define UT_LIST_BASE_NODE_T(t, m) UtListBase<t, UtListBaseExplicitGetter<t, &t::m>>
 
 /**
  * A helper for the UT_LIST_BASE_NODE_T_EXTERN which builds a name of a node
@@ -420,7 +420,7 @@ struct ut_list_base_explicit_getter {
  * in code which knows that get_node exists also knows its implementation.
  */
 #define UT_LIST_NODE_GETTER_DEFINITION(t, m) \
-  struct UT_LIST_NODE_GETTER(t, m) : public ut_list_base_explicit_getter<t, &t::m> {}
+  struct UT_LIST_NODE_GETTER(t, m) : public UtListBaseExplicitGetter<t, &t::m> {}
 
 /**
  * A variant of UT_LIST_BASE_NODE_T to be used in rare cases where the full
@@ -429,7 +429,7 @@ struct ut_list_base_explicit_getter {
  * forward declare UT_LIST_NODE_GETTER(t,m) struct to be defined later by the
  * UT_LIST_NODE_GETTER_DEFINITION(t,m) once t::m is defined.
  */
-#define UT_LIST_BASE_NODE_T_EXTERN(t, m) ut_list_base<t, struct UT_LIST_NODE_GETTER(t, m)>
+#define UT_LIST_BASE_NODE_T_EXTERN(t, m) UtListBase<t, struct UT_LIST_NODE_GETTER(t, m)>
 
 /**
  * Initializes the base node of a two-way list.

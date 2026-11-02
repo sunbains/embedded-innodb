@@ -131,7 +131,7 @@ int main() {
   {
     srv_config.m_buf_pool_size = 64 * 1024 * 1024;
 
-    srv_buf_pool = new (std::nothrow) Buf_pool();
+    srv_buf_pool = new (std::nothrow) BufPool();
     ut_a(srv_buf_pool != nullptr);
 
     auto success = srv_buf_pool->open(srv_config.m_buf_pool_size);
@@ -140,9 +140,9 @@ int main() {
 
   srv_lock_timeout_thread_event = os_event_create(nullptr);
 
-  srv_trx_sys = Trx_sys::create(srv_fsp);
+  srv_trx_sys = TrxSys::create(srv_fsp);
 
-  srv_lock_sys = Lock_sys::create(srv_trx_sys, 1024 * 1024);
+  srv_lock_sys = LockSys::create(srv_trx_sys, 1024 * 1024);
 
   UT_LIST_INIT(srv_trx_sys->m_client_trx_list);
 
@@ -150,9 +150,9 @@ int main() {
   test::run_1();
 
   // Shutdown
-  Lock_sys::destroy(srv_lock_sys);
+  LockSys::destroy(srv_lock_sys);
 
-  Trx_sys::destroy(srv_trx_sys);
+  TrxSys::destroy(srv_trx_sys);
 
   os_event_free(srv_lock_timeout_thread_event);
   srv_lock_timeout_thread_event = nullptr;

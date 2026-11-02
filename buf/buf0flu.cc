@@ -37,8 +37,8 @@ Created 11/11/1995 Heikki Tuuri
 #include "trx0sys.h"
 #include "ut0lst.h"
 
-Buf_page *Buf_flush::insert_in_flush_rbt(Buf_page *bpage) {
-  Buf_page *prev = nullptr;
+BufPage *BufFlush::insert_in_flush_rbt(BufPage *bpage) {
+  BufPage *prev = nullptr;
 
   ut_ad(m_buf_pool->mutex_is_owned());
 
@@ -56,14 +56,14 @@ Buf_page *Buf_flush::insert_in_flush_rbt(Buf_page *bpage) {
   return prev;
 }
 
-void Buf_flush::delete_from_flush_rbt(Buf_page *bpage) {
+void BufFlush::delete_from_flush_rbt(BufPage *bpage) {
   ut_ad(m_buf_pool->mutex_is_owned());
 
   auto ret = flush_set_erase(m_buf_pool->m_recovery_flush_list, bpage);
   ut_a(ret);
 }
 
-bool Buf_flush::block_cmp(const Buf_page *b1, const Buf_page *b2) {
+bool BufFlush::block_cmp(const BufPage *b1, const BufPage *b2) {
   ut_ad(b1 != nullptr);
   ut_ad(b2 != nullptr);
 
@@ -87,14 +87,14 @@ bool Buf_flush::block_cmp(const Buf_page *b1, const Buf_page *b2) {
   return b2->m_page_no < b1->m_page_no;
 }
 
-void Buf_flush::init_flush_list() {
+void BufFlush::init_flush_list() {
   ut_ad(m_buf_pool->mutex_is_owned());
 
   /* Create red black tree for speedy insertions in flush list. */
   m_buf_pool->m_recovery_flush_list = flush_set_create(block_cmp);
 }
 
-void Buf_flush::free_flush_list() {
+void BufFlush::free_flush_list() {
   mutex_enter(&m_buf_pool->m_mutex);
 
 #if defined UNIV_DEBUG || defined UNIV_BUF_DEBUG
@@ -107,7 +107,7 @@ void Buf_flush::free_flush_list() {
   mutex_exit(&m_buf_pool->m_mutex);
 }
 
-void Buf_flush::insert_into_flush_list(Buf_block *block) {
+void BufFlush::insert_into_flush_list(BufBlock *block) {
   ut_ad(m_buf_pool->mutex_is_owned());
   ut_ad(
     (UT_LIST_GET_FIRST(m_buf_pool->m_flush_list) == nullptr) ||
@@ -133,7 +133,7 @@ void Buf_flush::insert_into_flush_list(Buf_block *block) {
 #endif /* UNIV_DEBUG || UNIV_BUF_DEBUG */
 }
 
-void Buf_flush::insert_sorted_into_flush_list(Buf_block *block) {
+void BufFlush::insert_sorted_into_flush_list(BufBlock *block) {
   ut_ad(m_buf_pool->mutex_is_owned());
   ut_ad(block->get_state() == BUF_BLOCK_FILE_PAGE);
 
@@ -142,7 +142,7 @@ void Buf_flush::insert_sorted_into_flush_list(Buf_block *block) {
   ut_ad(!block->m_page.m_in_flush_list);
   ut_d(block->m_page.m_in_flush_list = true);
 
-  Buf_page *prev_b{};
+  BufPage *prev_b{};
 
   /* For the most part when this function is called the m_recovery_flush_list
   should not be nullptr. In a very rare boundary case it is possible that the
@@ -175,7 +175,7 @@ void Buf_flush::insert_sorted_into_flush_list(Buf_block *block) {
 #endif /* UNIV_DEBUG || UNIV_BUF_DEBUG */
 }
 
-bool Buf_flush::ready_for_replace(Buf_page *bpage) {
+bool BufFlush::ready_for_replace(BufPage *bpage) {
   ut_ad(m_buf_pool->mutex_is_owned());
   ut_ad(mutex_own(buf_page_get_mutex(bpage)));
   ut_ad(bpage->m_in_LRU_list);
@@ -186,12 +186,12 @@ bool Buf_flush::ready_for_replace(Buf_page *bpage) {
   }
 
   log_err("Buffer block state ", (ulong)bpage->get_state(), " in the LRU list!");
-  log_warn_buf(bpage, sizeof(Buf_page));
+  log_warn_buf(bpage, sizeof(BufPage));
 
   return false;
 }
 
-bool Buf_flush::ready_for_flush(Buf_page *bpage, buf_flush flush_type) {
+bool BufFlush::ready_for_flush(BufPage *bpage, BufFlushType flush_type) {
   ut_a(bpage->in_file());
   ut_ad(m_buf_pool->mutex_is_owned());
   ut_ad(mutex_own(buf_page_get_mutex(bpage)));
@@ -217,7 +217,7 @@ bool Buf_flush::ready_for_flush(Buf_page *bpage, buf_flush flush_type) {
   return false;
 }
 
-void Buf_flush::remove(Buf_page *bpage) {
+void BufFlush::remove(BufPage *bpage) {
   ut_ad(m_buf_pool->mutex_is_owned());
   ut_ad(mutex_own(buf_page_get_mutex(bpage)));
   ut_ad(bpage->m_in_flush_list);
@@ -245,14 +245,14 @@ void Buf_flush::remove(Buf_page *bpage) {
 
   bpage->m_oldest_modification = 0;
 
-  auto check = [](const Buf_page *ptr) {
+  auto check = [](const BufPage *ptr) {
     ut_ad(ptr->m_in_flush_list);
   };
   ut_list_validate(m_buf_pool->m_flush_list, check);
 }
 
-void Buf_flush::relocate_on_flush_list(Buf_page *bpage, Buf_page *dpage) {
-  Buf_page *prev_b{};
+void BufFlush::relocate_on_flush_list(BufPage *bpage, BufPage *dpage) {
+  BufPage *prev_b{};
 
   ut_ad(m_buf_pool->mutex_is_owned());
   ut_ad(mutex_own(buf_page_get_mutex(bpage)));
@@ -290,7 +290,7 @@ void Buf_flush::relocate_on_flush_list(Buf_page *bpage, Buf_page *dpage) {
 #endif /* UNIV_DEBUG || UNIV_BUF_DEBUG */
 }
 
-void Buf_flush::write_complete(Buf_page *bpage) {
+void BufFlush::write_complete(BufPage *bpage) {
   remove(bpage);
 
   auto flush_type = buf_page_get_flush_type(bpage);
@@ -317,7 +317,7 @@ void Buf_flush::write_complete(Buf_page *bpage) {
   }
 }
 
-void Buf_flush::sync_datafiles() {
+void BufFlush::sync_datafiles() {
   /* Wait until all pending async writes are completed */
   srv_aio->wait_for_pending_ops(aio::WRITE);
 
@@ -327,7 +327,7 @@ void Buf_flush::sync_datafiles() {
   return;
 }
 
-void Buf_flush::buffered_writes(DBLWR *dblwr) {
+void BufFlush::buffered_writes(Dblwr *dblwr) {
   ulint len;
   ulint len2;
   byte *write_buf;
@@ -353,7 +353,7 @@ void Buf_flush::buffered_writes(DBLWR *dblwr) {
 
   for (ulint i{}; i < dblwr->m_first_free; ++i) {
 
-    auto block = reinterpret_cast<const Buf_block *>(dblwr->m_bpages[i]);
+    auto block = reinterpret_cast<const BufBlock *>(dblwr->m_bpages[i]);
 
     if (block->get_state() != BUF_BLOCK_FILE_PAGE) {
       /* No simple validate for compressed pages exists. */
@@ -390,10 +390,10 @@ void Buf_flush::buffered_writes(DBLWR *dblwr) {
 
   ulint i{};
 
-  srv_fil->data_io(IO_request::Sync_write, false, Page_id(TRX_SYS_SPACE, dblwr->m_block1), 0, len, write_buf, nullptr);
+  srv_fil->data_io(IoRequest::Sync_write, false, PageId(TRX_SYS_SPACE, dblwr->m_block1), 0, len, write_buf, nullptr);
 
   for (len2 = 0; len2 + UNIV_PAGE_SIZE <= len; len2 += UNIV_PAGE_SIZE, i++) {
-    const Buf_block *block = reinterpret_cast<Buf_block *>(dblwr->m_bpages[i]);
+    const BufBlock *block = reinterpret_cast<BufBlock *>(dblwr->m_bpages[i]);
 
     if (likely(block->get_state() == BUF_BLOCK_FILE_PAGE) &&
         unlikely(memcmp(write_buf + len2 + (FIL_PAGE_LSN + 4), write_buf + len2 + (UNIV_PAGE_SIZE - FIL_PAGE_END_LSN_CHKSUM + 4), 4)
@@ -415,10 +415,10 @@ void Buf_flush::buffered_writes(DBLWR *dblwr) {
   write_buf = dblwr->m_write_buf + SYS_DOUBLEWRITE_BLOCK_SIZE * UNIV_PAGE_SIZE;
   ut_ad(i == SYS_DOUBLEWRITE_BLOCK_SIZE);
 
-  srv_fil->data_io(IO_request::Sync_write, false, Page_id(TRX_SYS_SPACE, dblwr->m_block2), 0, len, (void *)write_buf, nullptr);
+  srv_fil->data_io(IoRequest::Sync_write, false, PageId(TRX_SYS_SPACE, dblwr->m_block2), 0, len, (void *)write_buf, nullptr);
 
   for (len2 = 0; len2 + UNIV_PAGE_SIZE <= len; len2 += UNIV_PAGE_SIZE, i++) {
-    const Buf_block *block = reinterpret_cast<Buf_block *>(dblwr->m_bpages[i]);
+    const BufBlock *block = reinterpret_cast<BufBlock *>(dblwr->m_bpages[i]);
 
     if (likely(block->get_state() == BUF_BLOCK_FILE_PAGE) &&
         unlikely(memcmp(write_buf + len2 + (FIL_PAGE_LSN + 4), write_buf + len2 + (UNIV_PAGE_SIZE - FIL_PAGE_END_LSN_CHKSUM + 4), 4)
@@ -440,7 +440,7 @@ flush:
   blocks. Next do the writes to the intended positions. */
 
   for (i = 0; i < dblwr->m_first_free; ++i) {
-    const Buf_block *block = reinterpret_cast<Buf_block *>(dblwr->m_bpages[i]);
+    const BufBlock *block = reinterpret_cast<BufBlock *>(dblwr->m_bpages[i]);
 
     ut_a(block->m_page.in_file());
 
@@ -456,7 +456,7 @@ flush:
       ));
     }
 
-    srv_fil->data_io(IO_request::Async_write, true, block->get_page_id(), 0, UNIV_PAGE_SIZE, (void *)block->m_frame, (void *)block);
+    srv_fil->data_io(IoRequest::Async_write, true, block->get_page_id(), 0, UNIV_PAGE_SIZE, (void *)block->m_frame, (void *)block);
 
     /* Increment the counter of I/O operations used
     for selecting LRU policy. */
@@ -472,7 +472,7 @@ flush:
   mutex_exit(&dblwr->m_mutex);
 }
 
-void Buf_flush::post_to_doublewrite_buf(DBLWR *dblwr, Buf_page *bpage) {
+void BufFlush::post_to_doublewrite_buf(Dblwr *dblwr, BufPage *bpage) {
   for (;;) {
     mutex_enter(&dblwr->m_mutex);
 
@@ -489,7 +489,7 @@ void Buf_flush::post_to_doublewrite_buf(DBLWR *dblwr, Buf_page *bpage) {
 
   ut_a(bpage->get_state() == BUF_BLOCK_FILE_PAGE);
 
-  memcpy(dblwr->m_write_buf + UNIV_PAGE_SIZE * dblwr->m_first_free, reinterpret_cast<Buf_block *>(bpage)->m_frame, UNIV_PAGE_SIZE);
+  memcpy(dblwr->m_write_buf + UNIV_PAGE_SIZE * dblwr->m_first_free, reinterpret_cast<BufBlock *>(bpage)->m_frame, UNIV_PAGE_SIZE);
 
   dblwr->m_bpages[dblwr->m_first_free] = bpage;
 
@@ -503,7 +503,7 @@ void Buf_flush::post_to_doublewrite_buf(DBLWR *dblwr, Buf_page *bpage) {
   }
 }
 
-void Buf_flush::init_for_writing(byte *page, lsn_t newest_lsn) {
+void BufFlush::init_for_writing(byte *page, lsn_t newest_lsn) {
   /* Write the newest modification lsn to the page header and trailer */
   mach_write_to_8(page + FIL_PAGE_LSN, newest_lsn);
 
@@ -521,7 +521,7 @@ void Buf_flush::init_for_writing(byte *page, lsn_t newest_lsn) {
   mach_write_to_4(page + UNIV_PAGE_SIZE - FIL_PAGE_END_LSN_CHKSUM, BUF_NO_CHECKSUM_MAGIC);
 }
 
-void Buf_flush::write_block_low(DBLWR *dblwr, Buf_page *bpage) {
+void BufFlush::write_block_low(Dblwr *dblwr, BufPage *bpage) {
   page_t *frame = nullptr;
 
   ut_ad(bpage->in_file());
@@ -549,19 +549,19 @@ void Buf_flush::write_block_low(DBLWR *dblwr, Buf_page *bpage) {
       ut_error;
       break;
     case BUF_BLOCK_FILE_PAGE:
-      frame = ((Buf_block *)bpage)->m_frame;
-      init_for_writing(((Buf_block *)bpage)->m_frame, bpage->m_newest_modification);
+      frame = ((BufBlock *)bpage)->m_frame;
+      init_for_writing(((BufBlock *)bpage)->m_frame, bpage->m_newest_modification);
       break;
   }
 
   if (!srv_config.m_use_doublewrite_buf || dblwr == nullptr) {
-    srv_fil->data_io(IO_request::Async_write, true, bpage->get_page_id(), 0, UNIV_PAGE_SIZE, frame, bpage);
+    srv_fil->data_io(IoRequest::Async_write, true, bpage->get_page_id(), 0, UNIV_PAGE_SIZE, frame, bpage);
   } else {
     post_to_doublewrite_buf(dblwr, bpage);
   }
 }
 
-inline static bool free_page_if_truncated(Buf_pool *buf_pool, Buf_page *bpage) {
+inline static bool free_page_if_truncated(BufPool *buf_pool, BufPage *bpage) {
   ut_a(bpage != nullptr);
 
   ut_ad(buf_pool->mutex_is_owned());
@@ -587,7 +587,7 @@ inline static bool free_page_if_truncated(Buf_pool *buf_pool, Buf_page *bpage) {
   return false;
 }
 
-void Buf_flush::page(DBLWR *dblwr, Buf_page *bpage, buf_flush flush_type) {
+void BufFlush::page(Dblwr *dblwr, BufPage *bpage, BufFlushType flush_type) {
   ut_ad(m_buf_pool->mutex_is_owned());
   ut_ad(flush_type == BUF_FLUSH_LRU || flush_type == BUF_FLUSH_LIST);
   ut_ad(bpage->in_file());
@@ -617,7 +617,7 @@ void Buf_flush::page(DBLWR *dblwr, Buf_page *bpage, buf_flush flush_type) {
 
       is_s_latched = (bpage->m_buf_fix_count == 0);
       if (is_s_latched) {
-        rw_lock_s_lock_gen(&((Buf_block *)bpage)->m_rw_lock, BUF_IO_WRITE);
+        rw_lock_s_lock_gen(&((BufBlock *)bpage)->m_rw_lock, BUF_IO_WRITE);
       }
 
       mutex_exit(block_mutex);
@@ -632,7 +632,7 @@ void Buf_flush::page(DBLWR *dblwr, Buf_page *bpage, buf_flush flush_type) {
       if (!is_s_latched) {
         buffered_writes(dblwr);
 
-        rw_lock_s_lock_gen(&((Buf_block *)bpage)->m_rw_lock, BUF_IO_WRITE);
+        rw_lock_s_lock_gen(&((BufBlock *)bpage)->m_rw_lock, BUF_IO_WRITE);
       }
 
       break;
@@ -645,7 +645,7 @@ void Buf_flush::page(DBLWR *dblwr, Buf_page *bpage, buf_flush flush_type) {
       accomplished because ready_for_flush() must hold,
       and that requires the page not to be bufferfixed. */
 
-      rw_lock_s_lock_gen(&((Buf_block *)bpage)->m_rw_lock, BUF_IO_WRITE);
+      rw_lock_s_lock_gen(&((BufBlock *)bpage)->m_rw_lock, BUF_IO_WRITE);
 
       /* Note that the s-latch is acquired before releasing the
       m_buf_pool mutex: this ensures that the latch is acquired
@@ -667,14 +667,14 @@ void Buf_flush::page(DBLWR *dblwr, Buf_page *bpage, buf_flush flush_type) {
   write_block_low(dblwr, bpage);
 }
 
-ulint Buf_flush::try_neighbors(DBLWR *dblwr, space_id_t space, page_no_t page_no, buf_flush flush_type) {
+ulint BufFlush::try_neighbors(Dblwr *dblwr, space_id_t space, page_no_t page_no, BufFlushType flush_type) {
   ulint count{};
   page_no_t low;
   page_no_t high;
 
   ut_ad(flush_type == BUF_FLUSH_LRU || flush_type == BUF_FLUSH_LIST);
 
-  if (UT_LIST_GET_LEN(m_buf_pool->m_LRU_list) < Buf_LRU::OLD_MIN_LEN) {
+  if (UT_LIST_GET_LEN(m_buf_pool->m_LRU_list) < BufLru::OLD_MIN_LEN) {
     /* If there is little space, it is better not to flush any
     block except from the end of the LRU list */
 
@@ -700,7 +700,7 @@ ulint Buf_flush::try_neighbors(DBLWR *dblwr, space_id_t space, page_no_t page_no
 
   for (auto i = low; i < high; ++i) {
 
-    auto bpage = m_buf_pool->hash_get_page(Page_id(space, i));
+    auto bpage = m_buf_pool->hash_get_page(PageId(space, i));
 
     if (bpage == nullptr) {
 
@@ -752,8 +752,8 @@ ulint Buf_flush::try_neighbors(DBLWR *dblwr, space_id_t space, page_no_t page_no
   return count;
 }
 
-ulint Buf_flush::batch(DBLWR *dblwr, buf_flush flush_type, ulint min_n, uint64_t lsn_limit) {
-  Buf_page *bpage;
+ulint BufFlush::batch(Dblwr *dblwr, BufFlushType flush_type, ulint min_n, uint64_t lsn_limit) {
+  BufPage *bpage;
   ulint page_count = 0;
   space_id_t space;
   page_no_t page_no;
@@ -806,7 +806,7 @@ ulint Buf_flush::batch(DBLWR *dblwr, buf_flush flush_type, ulint min_n, uint64_t
     function a pointer to a block in the list! */
 
     do {
-      mutex_t *block_mutex = buf_page_get_mutex(bpage);
+      Mutex *block_mutex = buf_page_get_mutex(bpage);
       bool ready{false};
 
       ut_a(bpage->in_file());
@@ -869,14 +869,14 @@ ulint Buf_flush::batch(DBLWR *dblwr, buf_flush flush_type, ulint min_n, uint64_t
   return page_count;
 }
 
-void Buf_flush::wait_batch_end(buf_flush type) {
+void BufFlush::wait_batch_end(BufFlushType type) {
   ut_ad(type == BUF_FLUSH_LRU || type == BUF_FLUSH_LIST);
 
   os_event_wait(m_buf_pool->m_no_flush[type]);
 }
 
-ulint Buf_flush::LRU_recommendation() {
-  Buf_page *bpage;
+ulint BufFlush::LRU_recommendation() {
+  BufPage *bpage;
   ulint n_replaceable;
   ulint distance = 0;
 
@@ -887,7 +887,7 @@ ulint Buf_flush::LRU_recommendation() {
   bpage = UT_LIST_GET_LAST(m_buf_pool->m_LRU_list);
 
   while (bpage != nullptr && n_replaceable < get_free_block_margin() + get_extra_margin() &&
-         (distance < Buf_LRU::get_free_search_len())) {
+         (distance < BufLru::get_free_search_len())) {
 
     auto block_mutex = buf_page_get_mutex(bpage);
 
@@ -916,7 +916,7 @@ ulint Buf_flush::LRU_recommendation() {
   }
 }
 
-void Buf_flush::free_margin(DBLWR *dblwr) {
+void BufFlush::free_margin(Dblwr *dblwr) {
   auto n_to_flush = LRU_recommendation();
 
   if (n_to_flush > 0) {
@@ -932,7 +932,7 @@ void Buf_flush::free_margin(DBLWR *dblwr) {
   }
 }
 
-void Buf_flush::stat_update() {
+void BufFlush::stat_update() {
   auto lsn = log_sys->get_lsn();
 
   if (m_stat_cur.m_redo == 0) {
@@ -964,7 +964,7 @@ void Buf_flush::stat_update() {
   m_stat_cur.m_n_flushed = m_LRU_flush_page_count;
 }
 
-ulint Buf_flush::get_desired_flush_rate() {
+ulint BufFlush::get_desired_flush_rate() {
   // FIXME: Implement this
   auto lsn = 0;           // log_sys->get_lsn();
   auto log_capacity = 0;  // log_sys->get_capacity();
@@ -1005,7 +1005,7 @@ ulint Buf_flush::get_desired_flush_rate() {
 }
 
 #if defined UNIV_DEBUG
-bool Buf_flush::validate_low() {
+bool BufFlush::validate_low() {
   std::optional<Buf_page_set_itr> rnode{};
 
   UT_LIST_CHECK(m_buf_pool->m_flush_list);
@@ -1047,7 +1047,7 @@ bool Buf_flush::validate_low() {
   return true;
 }
 
-bool Buf_flush::validate() {
+bool BufFlush::validate() {
   m_buf_pool->mutex_acquire();
 
   auto ret = validate_low();

@@ -37,7 +37,7 @@ Created 12/29/1997 Heikki Tuuri
 
 /** Evaluates a function node. */
 
-void eval_func(func_node_t *func_node); /*!< in: function node */
+void eval_func(FuncNode *func_node); /*!< in: function node */
 /** Allocate a buffer from global dynamic memory for a value of a que_node.
 NOTE that this memory must be explicitly freed when the query graph is
 freed. If the node already has allocated buffer, that buffer is freed
@@ -59,10 +59,10 @@ void eval_node_free_val_buf(que_node_t *node); /*!< in: query graph node */
 
 /** Evaluates a comparison node.
 @return	the result of the comparison */
-bool eval_cmp(func_node_t *cmp_node); /*!< in: comparison node */
+bool eval_cmp(FuncNode *cmp_node); /*!< in: comparison node */
 
 /** Evaluates a function node. */
-void eval_func(func_node_t *func_node); /*!< in: function node */
+void eval_func(FuncNode *func_node); /*!< in: function node */
 
 /** Allocate a buffer from global dynamic memory for a value of a que_node.
 NOTE that this memory must be explicitly freed when the query graph is
@@ -100,7 +100,7 @@ inline byte *eval_node_ensure_val_buf(
 }
 
 /** Evaluates a symbol table symbol. */
-inline void eval_sym(sym_node_t *sym_node) /*!< in: symbol table node */
+inline void eval_sym(SymNode *sym_node) /*!< in: symbol table node */
 {
 
   ut_ad(que_node_get_type(sym_node) == QUE_NODE_SYMBOL);
@@ -118,12 +118,12 @@ inline void eval_exp(que_node_t *exp_node) /*!< in: expression */
 {
   if (que_node_get_type(exp_node) == QUE_NODE_SYMBOL) {
 
-    eval_sym((sym_node_t *)exp_node);
+    eval_sym((SymNode *)exp_node);
 
     return;
   }
 
-  eval_func((func_node_t *)exp_node);
+  eval_func((FuncNode *)exp_node);
 }
 
 /** Sets an integer value as the value of an expression node. */
@@ -170,7 +170,7 @@ inline bool eval_node_get_bool_val(que_node_t *node) /*!< in: query graph node *
 
 /** Sets a boolean value as the value of a function node. */
 inline void eval_node_set_bool_val(
-  func_node_t *func_node, /*!< in: function node */
+  FuncNode *func_node, /*!< in: function node */
   bool val
 ) /*!< in: value to set */
 {

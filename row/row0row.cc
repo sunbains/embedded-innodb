@@ -57,7 +57,7 @@ ulint row_get_trx_id_offset(const Rec rec __attribute__((unused)), const Index *
   return offset;
 }
 
-DTuple *row_build_index_entry(const DTuple *row, row_ext_t *ext, const Index *index, mem_heap_t *heap) {
+DTuple *row_build_index_entry(const DTuple *row, RowExt *ext, const Index *index, MemHeap *heap) {
   ut_ad(dtuple_check_typed(row));
 
   const auto entry_len = index->get_n_fields();
@@ -76,8 +76,8 @@ DTuple *row_build_index_entry(const DTuple *row, row_ext_t *ext, const Index *in
     const auto ind_field = index->get_nth_field(i);
     const auto col = ind_field->m_col;
     ulint col_no = col->get_no();
-    dfield_t *dfield = dtuple_get_nth_field(entry, i);
-    const dfield_t *dfield2 = dtuple_get_nth_field(row, col_no);
+    Dfield *dfield = dtuple_get_nth_field(entry, i);
+    const Dfield *dfield2 = dtuple_get_nth_field(row, col_no);
     ulint len = dfield_get_len(dfield2);
 
     dfield_copy(dfield, dfield2);
@@ -118,9 +118,9 @@ DTuple *row_build_index_entry(const DTuple *row, row_ext_t *ext, const Index *in
 }
 
 DTuple *row_build(
-  ulint type, const Index *index, Rec rec, const Rec_offs &offsets, const Table *col_table, row_ext_t **ext, mem_heap_t *heap
+  ulint type, const Index *index, Rec rec, const RecOffs &offsets, const Table *col_table, RowExt **ext, MemHeap *heap
 ) {
-  mem_heap_t *tmp_heap{};
+  MemHeap *tmp_heap{};
   std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
 
   rec_offs_init(offsets_);
@@ -128,9 +128,9 @@ DTuple *row_build(
   ut_ad(index->is_clustered());
   ut_ad(!rec.is_null() && heap != nullptr);
 
-  Rec_offs local_offsets;
+  RecOffs local_offsets;
   if (offsets == nullptr) {
-    Phy_rec record{index, rec};
+    PhyRec record{index, rec};
 
     local_offsets = record.get_all_col_offsets(offsets_.data(), &tmp_heap, Current_location());
   } else {
@@ -145,7 +145,7 @@ DTuple *row_build(
     rec = rec.copy(buf, local_offsets);
 
     /* Avoid a debug assertion in rec.offs_validate(). */
-    Rec_offs rec_offs(const_cast<ulint *>(local_offsets.get()));
+    RecOffs rec_offs(const_cast<ulint *>(local_offsets.get()));
     ut_d(rec.offs_make_valid(index, rec_offs));
   }
 
@@ -214,7 +214,7 @@ DTuple *row_build(
   return row;
 }
 
-DTuple *row_rec_to_index_entry_low(const Rec rec, const Index *index, const Rec_offs &offsets, ulint *n_ext, mem_heap_t *heap) {
+DTuple *row_rec_to_index_entry_low(const Rec rec, const Index *index, const RecOffs &offsets, ulint *n_ext, MemHeap *heap) {
   /* Because this function may be invoked by row0merge.c
   on a record whose header is in different format, the check
   rec.offs_validate(rec, index, offsets) must be avoided here. */
@@ -248,7 +248,7 @@ DTuple *row_rec_to_index_entry_low(const Rec rec, const Index *index, const Rec_
   return entry;
 }
 
-DTuple *row_rec_to_index_entry(ulint type, Rec rec, const Index *index, const Rec_offs &offsets, ulint *n_ext, mem_heap_t *heap) {
+DTuple *row_rec_to_index_entry(ulint type, Rec rec, const Index *index, const RecOffs &offsets, ulint *n_ext, MemHeap *heap) {
   ut_ad(rec.offs_validate(index, offsets));
 
   if (type == ROW_COPY_DATA) {
@@ -258,7 +258,7 @@ DTuple *row_rec_to_index_entry(ulint type, Rec rec, const Index *index, const Re
     rec = rec.copy(buf, offsets);
 
     /* Avoid a debug assertion in rec.offs_validate(). */
-    ut_d(rec.offs_make_valid(index, const_cast<Rec_offs &>(offsets)));
+    ut_d(rec.offs_make_valid(index, const_cast<RecOffs &>(offsets)));
   }
 
   auto entry = row_rec_to_index_entry_low(rec, index, offsets, n_ext, heap);
@@ -268,19 +268,19 @@ DTuple *row_rec_to_index_entry(ulint type, Rec rec, const Index *index, const Re
   return entry;
 }
 
-DTuple *row_build_row_ref(ulint type, const Index *index, Rec rec, mem_heap_t *heap) {
+DTuple *row_build_row_ref(ulint type, const Index *index, Rec rec, MemHeap *heap) {
   std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
-  Rec_offs offsets(offsets_.data());
+  RecOffs offsets(offsets_.data());
 
   rec_offs_init(offsets_);
 
   ut_ad(index && rec && heap);
   ut_ad(!index->is_clustered());
 
-  mem_heap_t *tmp_heap{};
+  MemHeap *tmp_heap{};
 
   {
-    Phy_rec record{index, rec};
+    PhyRec record{index, rec};
 
     offsets = record.get_all_col_offsets(offsets.get(), &tmp_heap, Current_location());
   }
@@ -325,7 +325,7 @@ DTuple *row_build_row_ref(ulint type, const Index *index, Rec rec, mem_heap_t *h
     if (clust_col_prefix_len > 0) {
       if (len != UNIV_SQL_NULL) {
 
-        const dtype_t *dtype = dfield_get_type(dfield);
+        const Dtype *dtype = dfield_get_type(dfield);
 
         dfield_set_len(
           dfield,
@@ -345,8 +345,8 @@ DTuple *row_build_row_ref(ulint type, const Index *index, Rec rec, mem_heap_t *h
   return dtuple;
 }
 
-void row_build_row_ref_in_tuple(DTuple *ref, Rec rec, const Index *index, const Rec_offs *offsets, Trx *trx) {
-  mem_heap_t *heap{};
+void row_build_row_ref_in_tuple(DTuple *ref, Rec rec, const Index *index, const RecOffs *offsets, Trx *trx) {
+  MemHeap *heap{};
   std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
 
   rec_offs_init(offsets_);
@@ -370,10 +370,10 @@ void row_build_row_ref_in_tuple(DTuple *ref, Rec rec, const Index *index, const 
     goto notfound;
   }
 
-  Rec_offs local_offsets(offsets_.data());
+  RecOffs local_offsets(offsets_.data());
 
   if (offsets == nullptr) {
-    Phy_rec record{index, rec};
+    PhyRec record{index, rec};
 
     local_offsets = record.get_all_col_offsets(local_offsets.get(), &heap, Current_location());
     offsets = &local_offsets;
@@ -410,7 +410,7 @@ void row_build_row_ref_in_tuple(DTuple *ref, Rec rec, const Index *index, const 
     if (clust_col_prefix_len > 0) {
       if (len != UNIV_SQL_NULL) {
 
-        const dtype_t *dtype = dfield_get_type(dfield);
+        const Dtype *dtype = dfield_get_type(dfield);
 
         dfield_set_len(
           dfield,
@@ -428,7 +428,7 @@ void row_build_row_ref_in_tuple(DTuple *ref, Rec rec, const Index *index, const 
   }
 }
 
-bool row_search_on_row_ref(Btree_pcursor *pcur, ulint mode, const Table *table, const DTuple *ref, mtr_t *mtr) {
+bool row_search_on_row_ref(BtreePcursor *pcur, ulint mode, const Table *table, const DTuple *ref, Mtr *mtr) {
   ut_ad(dtuple_check_typed(ref));
 
   auto index = table->get_first_index();
@@ -449,8 +449,8 @@ bool row_search_on_row_ref(Btree_pcursor *pcur, ulint mode, const Table *table, 
   return low_match == dtuple_get_n_fields(ref);
 }
 
-Rec row_get_clust_rec(ulint mode, const Rec rec, const Index *index, Index **clust_index, mtr_t *mtr) {
-  Btree_pcursor pcur(srv_fsp, srv_btree_sys);
+Rec row_get_clust_rec(ulint mode, const Rec rec, const Index *index, Index **clust_index, Mtr *mtr) {
+  BtreePcursor pcur(srv_fsp, srv_btree_sys);
 
   ut_ad(!index->is_clustered());
 
@@ -473,7 +473,7 @@ Rec row_get_clust_rec(ulint mode, const Rec rec, const Index *index, Index **clu
   return clust_rec;
 }
 
-bool row_search_index_entry(Index *index, const DTuple *entry, ulint mode, Btree_pcursor *pcur, mtr_t *mtr) {
+bool row_search_index_entry(Index *index, const DTuple *entry, ulint mode, BtreePcursor *pcur, Mtr *mtr) {
   ut_ad(dtuple_check_typed(entry));
 
   pcur->open(index, entry, PAGE_CUR_LE, mode, mtr, Current_location());

@@ -63,7 +63,6 @@ const ulint UNIV_MAX_PARALLELISM = 32;
 
 using byte = unsigned char;
 
-using uint16_t = uint16_t;
 
 constexpr ulint ULINT_MAX = ((ulint)(-2));
 constexpr ulint ULINT_UNDEFINED = std::numeric_limits<ulint>::max();
@@ -180,16 +179,16 @@ constexpr ulint IB_FILE_BLOCK_SIZE = 512;
 #define IF_XA(...)
 #endif /* WITH_XOPEN */
 
-#define Current_location() Source_location(std::source_location::current())
+#define Current_location() SourceLocation(std::source_location::current())
 
-struct Source_location {
+struct SourceLocation {
   /** Constructor/
    *
    * @param[in] from The source location.
    */
-  explicit Source_location(std::source_location from = std::source_location::current()) : m_from(from) {}
+  explicit SourceLocation(std::source_location from = std::source_location::current()) : m_from(from) {}
 
-  Source_location &operator=(const Source_location &rhs) {
+  SourceLocation &operator=(const SourceLocation &rhs) {
     this->m_from = rhs.m_from;
     return *this;
   }
@@ -203,14 +202,14 @@ struct Source_location {
   std::source_location m_from{};
 };
 
-struct Page_id {
+struct PageId {
   struct Hash;
 
-  Page_id() = default;
-  Page_id(Page_id &&) = default;
-  Page_id(const Page_id &) = default;
-  Page_id &operator=(Page_id &&) = default;
-  Page_id &operator=(const Page_id &) = default;
+  PageId() = default;
+  PageId(PageId &&) = default;
+  PageId(const PageId &) = default;
+  PageId &operator=(PageId &&) = default;
+  PageId &operator=(const PageId &) = default;
 
   /**
    * @brief Constructor.
@@ -218,11 +217,11 @@ struct Page_id {
    * @param[in] space_id The tablespace ID.
    * @param[in] page_no The page number [default: NULL_PAGE_NO].
    */
-  Page_id(space_id_t space_id, page_no_t page_no = NULL_PAGE_NO) noexcept : m_space_id(space_id), m_page_no(page_no) {}
+  PageId(space_id_t space_id, page_no_t page_no = NULL_PAGE_NO) noexcept : m_space_id(space_id), m_page_no(page_no) {}
 
-  bool operator==(const Page_id &rhs) const noexcept { return m_space_id == rhs.m_space_id && m_page_no == rhs.m_page_no; }
+  bool operator==(const PageId &rhs) const noexcept { return m_space_id == rhs.m_space_id && m_page_no == rhs.m_page_no; }
 
-  bool operator!=(const Page_id &rhs) const noexcept { return !(*this == rhs); }
+  bool operator!=(const PageId &rhs) const noexcept { return !(*this == rhs); }
 
   /**
    * @brief Converts the page ID to a string.
@@ -260,7 +259,7 @@ struct Page_id {
   page_no_t m_page_no{NULL_PAGE_NO};
 };
 
-struct Page_id::Hash {
+struct PageId::Hash {
   /**
    * @brief Calculates the hash value from a page ID.
    *
@@ -268,7 +267,7 @@ struct Page_id::Hash {
    *
    * @return The calculated hash value.
    */
-  [[nodiscard]] std::size_t operator()(const Page_id &page_id) const noexcept {
+  [[nodiscard]] std::size_t operator()(const PageId &page_id) const noexcept {
     return m_space_id_hash(page_id.m_space_id) ^ m_page_no_hash(page_id.m_page_no);
     // return ut_fold_ulint_pair(page_id.space(), page_id.page_no());
   }
@@ -285,7 +284,7 @@ struct Page_id::Hash {
 };
 
 template <typename T>
-using Page_id_hash = std::unordered_map<Page_id, T, Page_id::Hash>;
+using Page_id_hash = std::unordered_map<PageId, T, PageId::Hash>;
 
 #ifdef __cpp_lib_hardware_interference_size
 using std::hardware_constructive_interference_size;
@@ -301,7 +300,7 @@ using os_file_t = int;
 
 /** For Direct IO we need aligned allocations. */
 template <typename T, std::size_t Alignment = IB_FILE_BLOCK_SIZE>
-struct Aligned_allocator {
+struct AlignedAllocator {
   using value_type = T;
   using size_type = std::size_t;
   using difference_type = std::ptrdiff_t;
@@ -309,14 +308,14 @@ struct Aligned_allocator {
   using propagate_on_container_move_assignment = std::false_type;
   using propagate_on_container_swap = std::false_type;
 
-  Aligned_allocator() noexcept {}
+  AlignedAllocator() noexcept {}
 
   template <class U>
-  Aligned_allocator(const Aligned_allocator<U, Alignment> &) noexcept {}
+  AlignedAllocator(const AlignedAllocator<U, Alignment> &) noexcept {}
 
   template <class U>
   struct rebind {
-    using other = Aligned_allocator<U, Alignment>;
+    using other = AlignedAllocator<U, Alignment>;
   };
 
   T *allocate(std::size_t n) {
@@ -330,18 +329,18 @@ struct Aligned_allocator {
   void deallocate(T *p, std::size_t n) noexcept { ::operator delete(p, n * sizeof(T), std::align_val_t(Alignment)); }
 
   template <class U>
-  bool operator==(const Aligned_allocator<U, Alignment> &) const noexcept {
+  bool operator==(const AlignedAllocator<U, Alignment> &) const noexcept {
     return true;
   }
 
   template <class U>
-  bool operator!=(const Aligned_allocator<U, Alignment> &) const noexcept {
+  bool operator!=(const AlignedAllocator<U, Alignment> &) const noexcept {
     return false;
   }
 };
 
 template <typename T, std::size_t Alignment = IB_FILE_BLOCK_SIZE>
-using IO_allocator = Aligned_allocator<T, Alignment>;
+using IO_allocator = AlignedAllocator<T, Alignment>;
 
 #include "innodb0valgrind.h"
 #include "ut0dbg.h"

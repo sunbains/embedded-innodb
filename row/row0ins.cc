@@ -45,26 +45,26 @@ Created 4/20/1996 Heikki Tuuri
 constexpr ulint ROW_INS_PREV = 1;
 constexpr ulint ROW_INS_NEXT = 2;
 
-Row_insert *srv_row_ins;
+RowInsert *srv_row_ins;
 
-Row_insert::Row_insert(Dict *dict, Lock_sys *lock_sys, Row_update *row_upd) noexcept
+RowInsert::RowInsert(Dict *dict, LockSys *lock_sys, RowUpdate *row_upd) noexcept
     : m_dict(dict), m_lock_sys(lock_sys), m_row_upd(row_upd) {}
 
-Row_insert *Row_insert::create(Dict *dict, Lock_sys *lock_sys, Row_update *row_upd) noexcept {
-  auto ptr = ut_new(sizeof(Row_insert));
+RowInsert *RowInsert::create(Dict *dict, LockSys *lock_sys, RowUpdate *row_upd) noexcept {
+  auto ptr = ut_new(sizeof(RowInsert));
 
-  return new (ptr) Row_insert(dict, lock_sys, row_upd);
+  return new (ptr) RowInsert(dict, lock_sys, row_upd);
 }
 
-void Row_insert::destroy(Row_insert *&ptr) noexcept {
+void RowInsert::destroy(RowInsert *&ptr) noexcept {
   call_destructor(ptr);
   ut_delete(ptr);
   ptr = nullptr;
 }
 
-ins_node_t *Row_insert::node_create(ib_ins_mode_t ins_type, Table *table, mem_heap_t *heap) noexcept {
-  auto ptr = mem_heap_alloc(heap, sizeof(ins_node_t));
-  auto node = new (ptr) ins_node_t();
+InsertNode *RowInsert::node_create(IbInsMode ins_type, Table *table, MemHeap *heap) noexcept {
+  auto ptr = mem_heap_alloc(heap, sizeof(InsertNode));
+  auto node = new (ptr) InsertNode();
 
   node->m_common.type = QUE_NODE_INSERT;
 
@@ -86,7 +86,7 @@ ins_node_t *Row_insert::node_create(ib_ins_mode_t ins_type, Table *table, mem_he
   return node;
 }
 
-void Row_insert::create_entry_list(ins_node_t *node) noexcept {
+void RowInsert::create_entry_list(InsertNode *node) noexcept {
   ut_ad(node->m_entry_sys_heap);
 
   UT_LIST_INIT(node->m_entry_list);
@@ -103,7 +103,7 @@ void Row_insert::create_entry_list(ins_node_t *node) noexcept {
  *
  * @param[in,out] node Insert node to initialize.
  */
-void Row_insert::alloc_sys_fields(ins_node_t *node) noexcept {
+void RowInsert::alloc_sys_fields(InsertNode *node) noexcept {
   auto row = node->m_row;
   auto table = node->m_table;
   auto heap = node->m_entry_sys_heap;
@@ -141,7 +141,7 @@ void Row_insert::alloc_sys_fields(ins_node_t *node) noexcept {
   dfield_set_data(dfield, ptr, DATA_ROLL_PTR_LEN);
 }
 
-void Row_insert::set_new_row(ins_node_t *node, DTuple *row) noexcept {
+void RowInsert::set_new_row(InsertNode *node, DTuple *row) noexcept {
   node->m_state = INS_NODE_SET_IX_LOCK;
   node->m_index = nullptr;
   node->m_entry = nullptr;
@@ -177,10 +177,10 @@ void Row_insert::set_new_row(ins_node_t *node, DTuple *row) noexcept {
  * @param[in] mtr               Must be committed before latching any further pages
  * @return DB_SUCCESS or error code
  */
-db_err Row_insert::sec_index_entry_by_modify(
-  ulint mode, Btree_cursor *btr_cur, const DTuple *entry, que_thr_t *thr, mtr_t *mtr
+DbErr RowInsert::sec_index_entry_by_modify(
+  ulint mode, BtreeCursor *btr_cur, const DTuple *entry, QueThr *thr, Mtr *mtr
 ) noexcept {
-  db_err err;
+  DbErr err;
   auto rec = btr_cur->get_rec();
 
   ut_ad(!btr_cur->m_index->is_clustered());
@@ -216,7 +216,7 @@ db_err Row_insert::sec_index_entry_by_modify(
     if (unlikely(buf_pool->m_LRU->buf_pool_running_out())) {
       err = DB_LOCK_TABLE_FULL;
     } else {
-      big_rec_t dummy_big_rec;
+      BigRec dummy_big_rec;
 
       err = btr_cur->pessimistic_update(BTR_KEEP_SYS_FLAG, &heap, &dummy_big_rec, update, 0, thr, mtr);
       ut_ad(dummy_big_rec.n_fields == 0);
@@ -228,12 +228,12 @@ db_err Row_insert::sec_index_entry_by_modify(
   return err;
 }
 
-db_err Row_insert::clust_index_entry_by_modify(
-  ulint mode, Btree_cursor *btr_cur, mem_heap_t **heap, big_rec_t *big_rec, const DTuple *entry, que_thr_t *thr, mtr_t *mtr
+DbErr RowInsert::clust_index_entry_by_modify(
+  ulint mode, BtreeCursor *btr_cur, MemHeap **heap, BigRec *big_rec, const DTuple *entry, QueThr *thr, Mtr *mtr
 ) noexcept {
   ut_ad(btr_cur->m_index->is_clustered());
 
-  *big_rec = big_rec_t{};
+  *big_rec = BigRec{};
 
   auto rec = btr_cur->get_rec();
 
@@ -280,12 +280,12 @@ db_err Row_insert::clust_index_entry_by_modify(
   }
 }
 
-bool Row_insert::cascade_ancestor_updates_table(que_node_t *node, Table *table) noexcept {
+bool RowInsert::cascade_ancestor_updates_table(que_node_t *node, Table *table) noexcept {
   auto parent = que_node_get_parent(node);
 
   while (que_node_get_type(parent) == QUE_NODE_UPDATE) {
 
-    auto upd_node = static_cast<upd_node_t *>(parent);
+    auto upd_node = static_cast<UpdNode *>(parent);
 
     if (upd_node->m_table == table && !upd_node->m_is_delete) {
 
@@ -300,7 +300,7 @@ bool Row_insert::cascade_ancestor_updates_table(que_node_t *node, Table *table) 
   return false;
 }
 
-ulint Row_insert::cascade_n_ancestors(que_node_t *node) noexcept {
+ulint RowInsert::cascade_n_ancestors(que_node_t *node) noexcept {
   ulint n_ancestors{};
 
   auto parent = que_node_get_parent(node);
@@ -316,10 +316,10 @@ ulint Row_insert::cascade_n_ancestors(que_node_t *node) noexcept {
   return n_ancestors;
 }
 
-ulint Row_insert::cascade_calc_update_vec(upd_node_t *node, const Foreign *foreign, mem_heap_t *heap) noexcept {
+ulint RowInsert::cascade_calc_update_vec(UpdNode *node, const Foreign *foreign, MemHeap *heap) noexcept {
   Table *table = foreign->m_foreign_table;
   Index *index = foreign->m_foreign_index;
-  upd_node_t *cascade = node->m_cascade_node;
+  UpdNode *cascade = node->m_cascade_node;
 
   /* Calculate the appropriate update vector which will set the fields
   in the child index record to the same value (possibly padded with
@@ -451,7 +451,7 @@ ulint Row_insert::cascade_calc_update_vec(upd_node_t *node, const Foreign *forei
   return n_fields_updated;
 }
 
-void Row_insert::set_detailed(Trx *trx, const Foreign *foreign) noexcept {
+void RowInsert::set_detailed(Trx *trx, const Foreign *foreign) noexcept {
   ut_print_name(foreign->m_foreign_table_name);
 
   m_dict->print_info_on_foreign_key_in_create_format(trx, foreign, false);
@@ -459,8 +459,8 @@ void Row_insert::set_detailed(Trx *trx, const Foreign *foreign) noexcept {
   trx->set_detailed_error("foreign key error");
 }
 
-void Row_insert::foreign_report_err(
-  const char *errstr, que_thr_t *thr, const Foreign *foreign, const Rec rec, const DTuple *entry
+void RowInsert::foreign_report_err(
+  const char *errstr, QueThr *thr, const Foreign *foreign, const Rec rec, const DTuple *entry
 ) noexcept {
   auto trx = thr_get_trx(thr);
 
@@ -492,7 +492,7 @@ void Row_insert::foreign_report_err(
   mutex_exit(&m_dict->m_foreign_err_mutex);
 }
 
-void Row_insert::foreign_report_add_err(Trx *trx, const Foreign *foreign, Rec rec, const DTuple *entry) noexcept {
+void RowInsert::foreign_report_add_err(Trx *trx, const Foreign *foreign, Rec rec, const DTuple *entry) noexcept {
   set_detailed(trx, foreign);
 
   mutex_enter(&m_dict->m_foreign_err_mutex);
@@ -528,7 +528,7 @@ void Row_insert::foreign_report_add_err(Trx *trx, const Foreign *foreign, Rec re
   mutex_exit(&m_dict->m_foreign_err_mutex);
 }
 
-db_err Row_insert::update_cascade_client(que_thr_t *thr, upd_node_t *node, Table *table) noexcept {
+DbErr RowInsert::update_cascade_client(QueThr *thr, UpdNode *node, Table *table) noexcept {
   auto trx = thr_get_trx(thr);
 
   for (;;) {
@@ -583,21 +583,21 @@ db_err Row_insert::update_cascade_client(que_thr_t *thr, upd_node_t *node, Table
   return DB_SUCCESS;
 }
 
-db_err Row_insert::foreign_check_on_constraint(
-  que_thr_t *thr, const Foreign *foreign, Btree_pcursor *pcur, DTuple *entry, mtr_t *mtr
+DbErr RowInsert::foreign_check_on_constraint(
+  QueThr *thr, const Foreign *foreign, BtreePcursor *pcur, DTuple *entry, Mtr *mtr
 ) noexcept {
   Table *table = foreign->m_foreign_table;
   const Index *index;
   const Index *clust_index;
   DTuple *ref;
-  mem_heap_t *upd_vec_heap = nullptr;
+  MemHeap *upd_vec_heap = nullptr;
   Rec rec;
   Rec clust_rec;
-  const Buf_block *clust_block;
-  upd_t *update;
+  const BufBlock *clust_block;
+  Upd *update;
   ulint n_to_update;
-  db_err err;
-  mem_heap_t *tmp_heap{};
+  DbErr err;
+  MemHeap *tmp_heap{};
 
   ut_a(thr);
   ut_a(foreign);
@@ -605,7 +605,7 @@ db_err Row_insert::foreign_check_on_constraint(
   ut_a(mtr);
 
   auto trx = thr_get_trx(thr);
-  auto node = static_cast<upd_node_t *>(thr->run_node);
+  auto node = static_cast<UpdNode *>(thr->run_node);
 
   if (node->m_is_delete && 0 == (foreign->m_type & (DICT_FOREIGN_ON_DELETE_CASCADE | DICT_FOREIGN_ON_DELETE_SET_NULL))) {
 
@@ -650,7 +650,7 @@ db_err Row_insert::foreign_check_on_constraint(
     if (foreign->m_n_fields > cascade->m_update_n_fields) {
       /* We have to make the update vector longer */
 
-      cascade->m_update = Row_update::upd_create(foreign->m_n_fields, node->m_cascade_heap);
+      cascade->m_update = RowUpdate::upd_create(foreign->m_n_fields, node->m_cascade_heap);
       cascade->m_update_n_fields = foreign->m_n_fields;
     }
   }
@@ -826,7 +826,7 @@ db_err Row_insert::foreign_check_on_constraint(
 
   mtr->commit();
 
-  ut_a(cascade->m_pcur->get_rel_pos() == Btree_cursor_pos::ON);
+  ut_a(cascade->m_pcur->get_rel_pos() == BtreeCursorPos::ON);
 
   cascade->m_state = UPD_NODE_UPDATE_CLUSTERED;
 
@@ -883,8 +883,8 @@ nonstandard_exit_func:
   return err;
 }
 
-db_err Row_insert::set_shared_rec_lock(
-  ulint type, const Buf_block *block, const Rec rec, const Index *index, const ulint *offsets, que_thr_t *thr
+DbErr RowInsert::set_shared_rec_lock(
+  ulint type, const BufBlock *block, const Rec rec, const Index *index, const ulint *offsets, QueThr *thr
 ) noexcept {
   ut_ad(rec.offs_validate(index, offsets));
 
@@ -895,8 +895,8 @@ db_err Row_insert::set_shared_rec_lock(
   }
 }
 
-db_err Row_insert::set_exclusive_rec_lock(
-  ulint type, const Buf_block *block, const Rec rec, const Index *index, const ulint *offsets, que_thr_t *thr
+DbErr RowInsert::set_exclusive_rec_lock(
+  ulint type, const BufBlock *block, const Rec rec, const Index *index, const ulint *offsets, QueThr *thr
 ) noexcept {
   ut_ad(rec.offs_validate(index, offsets));
 
@@ -907,23 +907,23 @@ db_err Row_insert::set_exclusive_rec_lock(
   }
 }
 
-db_err Row_insert::check_foreign_constraint(
-  bool check_ref, const Foreign *foreign, const Table *table, DTuple *entry, que_thr_t *thr
+DbErr RowInsert::check_foreign_constraint(
+  bool check_ref, const Foreign *foreign, const Table *table, DTuple *entry, QueThr *thr
 ) noexcept {
-  upd_node_t *upd_node;
+  UpdNode *upd_node;
   Table *check_table;
   Index *check_index;
   ulint n_fields_cmp;
   bool moved;
   int cmp;
-  db_err err;
+  DbErr err;
   ulint i;
-  mtr_t mtr;
+  Mtr mtr;
   Trx *trx = thr_get_trx(thr);
-  mem_heap_t *heap = nullptr;
+  MemHeap *heap = nullptr;
   std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
-  Rec_offs offsets(offsets_.data());
-  Btree_pcursor pcur(m_dict->m_store.m_fsp, m_dict->m_store.m_btree);
+  RecOffs offsets(offsets_.data());
+  BtreePcursor pcur(m_dict->m_store.m_fsp, m_dict->m_store.m_btree);
 
 run_again:
 
@@ -951,7 +951,7 @@ run_again:
   }
 
   if (que_node_get_type(thr->run_node) == QUE_NODE_UPDATE) {
-    upd_node = static_cast<upd_node_t *>(thr->run_node);
+    upd_node = static_cast<UpdNode *>(thr->run_node);
 
     if (!upd_node->m_is_delete && upd_node->m_foreign == foreign) {
       /* If a cascaded update is done as defined by a foreign key constraint, do not check that
@@ -1026,7 +1026,7 @@ run_again:
 
   for (;;) {
     Rec rec = pcur.get_rec();
-    const Buf_block *block = pcur.get_block();
+    const BufBlock *block = pcur.get_block();
 
     if (page_rec_is_infimum(rec)) {
 
@@ -1034,7 +1034,7 @@ run_again:
     }
 
     {
-      Phy_rec record{check_index, rec};
+      PhyRec record{check_index, rec};
 
       offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
     }
@@ -1146,7 +1146,7 @@ run_again:
 
 do_possible_lock_wait:
   if (err == DB_LOCK_WAIT) {
-    trx->m_error_state = static_cast<db_err>(err);
+    trx->m_error_state = static_cast<DbErr>(err);
 
     que_thr_stop_client(thr);
 
@@ -1167,8 +1167,8 @@ exit_func:
   return err;
 }
 
-db_err Row_insert::check_foreign_constraints(const Table *table, const Index *index, DTuple *entry, que_thr_t *thr) noexcept {
-  db_err err;
+DbErr RowInsert::check_foreign_constraints(const Table *table, const Index *index, DTuple *entry, QueThr *thr) noexcept {
+  DbErr err;
   bool got_s_lock = false;
 
   auto trx = thr_get_trx(thr);
@@ -1221,7 +1221,7 @@ db_err Row_insert::check_foreign_constraints(const Table *table, const Index *in
   return DB_SUCCESS;
 }
 
-bool Row_insert::dupl_error_with_rec(const Rec rec, const DTuple *entry, const Index *index, const ulint *offsets) noexcept {
+bool RowInsert::dupl_error_with_rec(const Rec rec, const DTuple *entry, const Index *index, const ulint *offsets) noexcept {
   ut_ad(rec.offs_validate(index, offsets));
 
   const auto n_unique = index->get_n_unique();
@@ -1252,15 +1252,15 @@ bool Row_insert::dupl_error_with_rec(const Rec rec, const DTuple *entry, const I
   return !rec.get_deleted_flag();
 }
 
-db_err Row_insert::scan_sec_index_for_duplicate(const Index *index, DTuple *entry, que_thr_t *thr) noexcept {
+DbErr RowInsert::scan_sec_index_for_duplicate(const Index *index, DTuple *entry, QueThr *thr) noexcept {
   int cmp;
-  Btree_pcursor pcur(m_dict->m_store.m_fsp, m_dict->m_store.m_btree);
-  db_err err = DB_SUCCESS;
+  BtreePcursor pcur(m_dict->m_store.m_fsp, m_dict->m_store.m_btree);
+  DbErr err = DB_SUCCESS;
   unsigned allow_duplicates;
-  mtr_t mtr;
-  mem_heap_t *heap = nullptr;
+  Mtr mtr;
+  MemHeap *heap = nullptr;
   std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
-  Rec_offs offsets(offsets_.data());
+  RecOffs offsets(offsets_.data());
   const auto n_unique = index->get_n_unique();
 
   /* If the secondary index is unique, but one of the fields in the
@@ -1290,7 +1290,7 @@ db_err Row_insert::scan_sec_index_for_duplicate(const Index *index, DTuple *entr
 
   do {
     Rec rec = pcur.get_rec();
-    const Buf_block *block = pcur.get_block();
+    const BufBlock *block = pcur.get_block();
 
     if (page_rec_is_infimum(rec)) {
 
@@ -1298,7 +1298,7 @@ db_err Row_insert::scan_sec_index_for_duplicate(const Index *index, DTuple *entr
     }
 
     {
-      Phy_rec record{index, rec};
+      PhyRec record{index, rec};
 
       offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
     }
@@ -1357,13 +1357,13 @@ db_err Row_insert::scan_sec_index_for_duplicate(const Index *index, DTuple *entr
   return err;
 }
 
-db_err Row_insert::duplicate_error_in_clust(Btree_cursor *btr_cur, DTuple *entry, que_thr_t *thr, mtr_t *mtr) noexcept {
-  db_err err;
+DbErr RowInsert::duplicate_error_in_clust(BtreeCursor *btr_cur, DTuple *entry, QueThr *thr, Mtr *mtr) noexcept {
+  DbErr err;
   Rec rec;
   Trx *trx = thr_get_trx(thr);
-  mem_heap_t *heap = nullptr;
+  MemHeap *heap = nullptr;
   std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
-  Rec_offs offsets(offsets_.data());
+  RecOffs offsets(offsets_.data());
 
   UT_NOT_USED(mtr);
 
@@ -1391,7 +1391,7 @@ db_err Row_insert::duplicate_error_in_clust(Btree_cursor *btr_cur, DTuple *entry
 
     if (!page_rec_is_infimum(rec)) {
       {
-        Phy_rec record{btr_cur->m_index, rec};
+        PhyRec record{btr_cur->m_index, rec};
 
         offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
       }
@@ -1432,7 +1432,7 @@ db_err Row_insert::duplicate_error_in_clust(Btree_cursor *btr_cur, DTuple *entry
 
     if (!page_rec_is_supremum(rec)) {
       {
-        Phy_rec record{btr_cur->m_index, rec};
+        PhyRec record{btr_cur->m_index, rec};
 
         offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
       }
@@ -1472,7 +1472,7 @@ func_exit:
   return err;
 }
 
-inline ulint Row_insert::must_modify(Btree_cursor *btr_cur) noexcept {
+inline ulint RowInsert::must_modify(BtreeCursor *btr_cur) noexcept {
   /* NOTE: (compare to the note in duplicate_error) Because node
   pointers on upper levels of the B-tree may match more to entry than
   to actual user records on the leaf level, we have to check if the
@@ -1494,18 +1494,18 @@ inline ulint Row_insert::must_modify(Btree_cursor *btr_cur) noexcept {
   return 0;
 }
 
-db_err Row_insert::index_entry_low(ulint mode, const Index *index, DTuple *entry, ulint n_ext, que_thr_t *thr) noexcept {
+DbErr RowInsert::index_entry_low(ulint mode, const Index *index, DTuple *entry, ulint n_ext, QueThr *thr) noexcept {
   ulint modify{};
   Rec insert_rec;
   Rec rec;
-  db_err err;
-  mem_heap_t *heap = nullptr;
-  big_rec_t big_rec{};
-  Btree_cursor btr_cur(m_dict->m_store.m_fsp, m_dict->m_store.m_btree);
+  DbErr err;
+  MemHeap *heap = nullptr;
+  BigRec big_rec{};
+  BtreeCursor btr_cur(m_dict->m_store.m_fsp, m_dict->m_store.m_btree);
 
   log_sys->free_check();
 
-  mtr_t mtr;
+  Mtr mtr;
 
   mtr.start();
 
@@ -1609,7 +1609,7 @@ function_exit:
     auto rec = btr_cur.get_rec();
 
     {
-      Phy_rec record{index, rec};
+      PhyRec record{index, rec};
 
       offsets = record.get_all_col_offsets(nullptr, &heap, Current_location());
     }
@@ -1633,7 +1633,7 @@ function_exit:
   return err;
 }
 
-db_err Row_insert::index_entry(const Index *index, DTuple *entry, ulint n_ext, bool foreign, que_thr_t *thr) noexcept {
+DbErr RowInsert::index_entry(const Index *index, DTuple *entry, ulint n_ext, bool foreign, QueThr *thr) noexcept {
   if (foreign && !index->m_table->m_foreign_list.empty()) {
     const auto err = check_foreign_constraints(index->m_table, index, entry, thr);
 
@@ -1657,7 +1657,7 @@ db_err Row_insert::index_entry(const Index *index, DTuple *entry, ulint n_ext, b
   return index_entry_low(BTR_MODIFY_TREE, index, entry, n_ext, thr);
 }
 
-void Row_insert::index_entry_set_vals(Index *index, DTuple *entry, const DTuple *row) noexcept {
+void RowInsert::index_entry_set_vals(Index *index, DTuple *entry, const DTuple *row) noexcept {
   ut_ad(entry && row);
 
   const auto n_fields = dtuple_get_n_fields(entry);
@@ -1689,7 +1689,7 @@ void Row_insert::index_entry_set_vals(Index *index, DTuple *entry, const DTuple 
   }
 }
 
-db_err Row_insert::index_entry_step(ins_node_t *node, que_thr_t *thr) noexcept {
+DbErr RowInsert::index_entry_step(InsertNode *node, QueThr *thr) noexcept {
   ut_ad(dtuple_check_typed(node->m_row));
 
   index_entry_set_vals(node->m_index, node->m_entry, node->m_row);
@@ -1699,7 +1699,7 @@ db_err Row_insert::index_entry_step(ins_node_t *node, que_thr_t *thr) noexcept {
   return index_entry(node->m_index, node->m_entry, 0, true, thr);
 }
 
-inline void Row_insert::alloc_row_id_step(ins_node_t *node) noexcept {
+inline void RowInsert::alloc_row_id_step(InsertNode *node) noexcept {
   ut_ad(node->m_state == INS_NODE_ALLOC_ROW_ID);
 
   /* No row id is stored if the clustered index is unique */
@@ -1710,7 +1710,7 @@ inline void Row_insert::alloc_row_id_step(ins_node_t *node) noexcept {
   }
 }
 
-void Row_insert::get_row_from_values(ins_node_t *node) noexcept {
+void RowInsert::get_row_from_values(InsertNode *node) noexcept {
   /* The field values are copied in the buffers of the select node and
   it is safe to use them until we fetch from select again: therefore
   we can just copy the pointers */
@@ -1732,7 +1732,7 @@ void Row_insert::get_row_from_values(ins_node_t *node) noexcept {
   }
 }
 
-inline void Row_insert::get_row_from_select(ins_node_t *node) noexcept {
+inline void RowInsert::get_row_from_select(InsertNode *node) noexcept {
   /* The field values are copied in the buffers of the select node and
   it is safe to use them until we fetch from select again: therefore
   we can just copy the pointers */
@@ -1753,8 +1753,8 @@ inline void Row_insert::get_row_from_select(ins_node_t *node) noexcept {
   }
 }
 
-db_err Row_insert::insert(ins_node_t *node, que_thr_t *thr) noexcept {
-  db_err err;
+DbErr RowInsert::insert(InsertNode *node, QueThr *thr) noexcept {
+  DbErr err;
 
   if (node->m_state == INS_NODE_ALLOC_ROW_ID) {
 
@@ -1796,14 +1796,14 @@ db_err Row_insert::insert(ins_node_t *node, que_thr_t *thr) noexcept {
   return DB_SUCCESS;
 }
 
-que_thr_t *Row_insert::step(que_thr_t *thr) noexcept {
-  db_err err;
+QueThr *RowInsert::step(QueThr *thr) noexcept {
+  DbErr err;
 
   auto trx = thr_get_trx(thr);
 
   ut_a(trx->m_conc_state != TRX_NOT_STARTED);
 
-  auto node = static_cast<ins_node_t *>(thr->run_node);
+  auto node = static_cast<InsertNode *>(thr->run_node);
 
   ut_ad(que_node_get_type(node) == QUE_NODE_INSERT);
 
@@ -1823,9 +1823,9 @@ que_thr_t *Row_insert::step(que_thr_t *thr) noexcept {
   operation, and there is no need to set it again here. But we
   must write trx->m_id to node->trx_id. */
 
-  Trx_sys::write_trx_id(node->m_trx_id_buf, trx->m_id);
+  TrxSys::write_trx_id(node->m_trx_id_buf, trx->m_id);
 
-  auto insert_row = [&](ins_node_t *node, que_thr_t *thr) noexcept -> auto {
+  auto insert_row = [&](InsertNode *node, QueThr *thr) noexcept -> auto {
     node->m_state = INS_NODE_ALLOC_ROW_ID;
 
     if (node->m_ins_type == INS_SEARCHED) {
@@ -1841,8 +1841,8 @@ que_thr_t *Row_insert::step(que_thr_t *thr) noexcept {
     }
   };
 
-  auto error = [thr, sel_node](ins_node_t *node, Trx *trx, db_err err) noexcept -> que_thr_t * {
-    trx->m_error_state = static_cast<db_err>(err);
+  auto error = [thr, sel_node](InsertNode *node, Trx *trx, DbErr err) noexcept -> QueThr * {
+    trx->m_error_state = static_cast<DbErr>(err);
 
     if (err != DB_SUCCESS) {
       /* err == DB_LOCK_WAIT or SQL error detected */

@@ -32,7 +32,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 struct Lock;
 struct Trx;
-struct Buf_pool;
+struct BufPool;
 struct Table;
 struct Index;
 
@@ -99,7 +99,7 @@ static_assert(
 /* @} */
 
 /* Basic lock modes */
-enum Lock_mode : lock_type_t {
+enum LockMode : lock_type_t {
   /* Intention shared */
   LOCK_IS = 0,
 
@@ -119,10 +119,10 @@ enum Lock_mode : lock_type_t {
   LOCK_NUM = LOCK_NONE
 };
 
-using Lock_mode_type = typename std::underlying_type<Lock_mode>::type;
+using Lock_mode_type = typename std::underlying_type<LockMode>::type;
 
 /** A table lock */
-struct Table_lock {
+struct TableLock {
   /** Database table in dictionary cache */
   Table *m_table;
 
@@ -131,24 +131,24 @@ struct Table_lock {
 };
 
 /** Play it safe. */
-static_assert(std::is_standard_layout<Table_lock>::value, "Table_lock must have a standard layout");
+static_assert(std::is_standard_layout<TableLock>::value, "TableLock must have a standard layout");
 
 /** Record lock for a page */
-struct Rec_lock {
+struct RecLock {
   using List_node = UT_LIST_NODE_T(Lock);
 
   /** Index record lock */
   const Index *m_index;
 
   /** Page ID. */
-  Page_id m_page_id;
+  PageId m_page_id;
 
   /** List of the record locks on the same page */
   List_node m_rec_locks;
 };
 
-/** We need this to read beyond Rec_lock. */
-static_assert(std::is_standard_layout<Rec_lock>::value, "Rec_lock must have a standard layout");
+/** We need this to read beyond RecLock. */
+static_assert(std::is_standard_layout<RecLock>::value, "RecLock must have a standard layout");
 
 /** Lock struct */
 struct Lock {
@@ -181,9 +181,9 @@ struct Lock {
    * This function retrieves the mode of the specified lock by
    * extracting the mode bits from the lock's type mode.
    *
-   * @return The mode of the lock as a Lock_mode enum.
+   * @return The mode of the lock as a LockMode enum.
    */
-  [[nodiscard]] inline Lock_mode mode() const noexcept { return static_cast<Lock_mode>(m_type_mode & LOCK_MODE_MASK); }
+  [[nodiscard]] inline LockMode mode() const noexcept { return static_cast<LockMode>(m_type_mode & LOCK_MODE_MASK); }
 
   /**
    * @brief Gets the precise type mode of a lock.
@@ -529,7 +529,7 @@ struct Lock {
    *
    * @return A pointer to the copied lock.
    */
-  [[nodiscard]] inline Lock *rec_clone(mem_heap_t *heap) const noexcept;
+  [[nodiscard]] inline Lock *rec_clone(MemHeap *heap) const noexcept;
 
   /**
    * @brief Gets the mode of a lock in a human readable string.
@@ -548,7 +548,7 @@ struct Lock {
    *
    * @return The page id of the lock.
    */
-  [[nodiscard]] inline Page_id page_id() const noexcept {
+  [[nodiscard]] inline PageId page_id() const noexcept {
     ut_ad(type() == LOCK_REC);
     return m_rec.m_page_id;
   }
@@ -576,7 +576,7 @@ struct Lock {
    *
    * @return A string representation of the record lock object.
    */
-  std::string rec_to_string(Buf_pool *buf_pool) const noexcept;
+  std::string rec_to_string(BufPool *buf_pool) const noexcept;
 
   /**
    * @brief Converts the lock object to a string representation.
@@ -587,7 +587,7 @@ struct Lock {
    *
    * @return A string representation of the lock object.
    */
-  [[nodiscard]] std::string to_string(Buf_pool *buf_pool) const noexcept;
+  [[nodiscard]] std::string to_string(BufPool *buf_pool) const noexcept;
 
   /**
    * @brief Gets the next lock in the list.
@@ -625,7 +625,7 @@ struct Lock {
    *
    * @return true if lhs stronger or equal to rhs
    */
-  [[nodiscard]] static bool mode_stronger_or_eq(Lock_mode lhs, Lock_mode rhs) noexcept;
+  [[nodiscard]] static bool mode_stronger_or_eq(LockMode lhs, LockMode rhs) noexcept;
 
   /**
    * @brief Determines if two lock modes are compatible.
@@ -639,15 +639,15 @@ struct Lock {
    *
    * @return true if lhs is compatible with rhs , falseotherwise.
    */
-  [[nodiscard]] static inline bool mode_compatible(Lock_mode lhs, Lock_mode rhs) noexcept;
+  [[nodiscard]] static inline bool mode_compatible(LockMode lhs, LockMode rhs) noexcept;
 
   /** Transaction owning the lock */
   union {
     /** Table lock */
-    Table_lock m_table;
+    TableLock m_table;
 
     /** Record lock */
-    Rec_lock m_rec;
+    RecLock m_rec;
   };
 
   Trx *m_trx;
@@ -660,7 +660,7 @@ struct Lock {
   uint32_t m_n_bits;
 
   /** Lock type, mode, LOCK_GAP or LOCK_REC_NOT_GAP, LOCK_INSERT_INTENTION, wait flag, ORed */
-  Lock_mode m_type_mode;
+  LockMode m_type_mode;
 };
 
 /** Try and keep the size of Lock to 64 bytes so that it can fit in a cache line.*/
@@ -670,12 +670,12 @@ static_assert(sizeof(Lock) <= 64, "Lock must be 64 bytes or smaller");
 static_assert(std::is_standard_layout<Lock>::value, "Lock must have a standard layout");
 
 /** Lock operation struct */
-struct Lock_op {
+struct LockOp {
   /** Table to be locked */
   Table *m_table;
 
   /** Lock mode */
-  Lock_mode mode;
+  LockMode mode;
 };
 
 /**
@@ -683,7 +683,7 @@ struct Lock_op {
  * list has a list node that is embedded in a nested union/structure. We have to
  * generate a specific template for it. See lock0lock.cc for the implementation.
  */
-struct Rec_lock_get_node;
+struct RecLockGetNode;
 
 /**
  * @brief List of locks that different transactions have acquired on a record.
@@ -693,4 +693,4 @@ struct Rec_lock_get_node;
  * union/structure. We have to generate a specific template for it. See lock0lock.cc
  * for the implementation.
  */
-using Rec_locks = ut_list_base<Lock, Rec_lock_get_node>;
+using Rec_locks = UtListBase<Lock, RecLockGetNode>;

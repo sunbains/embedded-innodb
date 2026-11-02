@@ -71,12 +71,12 @@ array to signal any waiting threads who have missed the signal. */
 /** A cell where an individual thread may wait suspended
 until a resource is released. The suspending is implemented
 using an operating system event semaphore. */
-struct Sync_cell {
+struct SyncCell {
   /** Determines if we can wake up the thread waiting for a sempahore. */
   bool can_wake_up();
 
   /** Returns the event that the thread owning the cell waits for. */
-  Cond_var *get_event();
+  CondVar *get_event();
 
   /** Reports info of a wait array cell.
   @param[in,out] stream         Where to print */
@@ -86,10 +86,10 @@ struct Sync_cell {
   void *m_wait_object{};
 
   /** the latest wait mutex in cell */
-  mutex_t *m_old_wait_mutex{};
+  Mutex *m_old_wait_mutex{};
 
   /** the latest wait rw-lock in cell */
-  rw_lock_t *m_old_wait_rw_lock{};
+  RwLock *m_old_wait_rw_lock{};
 
   /** lock type requested on the object */
   ulint m_request_type{};
@@ -122,22 +122,22 @@ protecting mutex (depending on the case: OS or database mutex), but
 all changes (set or reset) to the state of the event must be made
 while owning the mutex. */
 
-using Cells = std::vector<Sync_cell>;
+using Cells = std::vector<SyncCell>;
 
 /** Synchronization array */
-struct Sync_check {
+struct SyncCheck {
 
   /** Constructor
   @param[in] n                    Number of cells.
   @param[in] p                    Type of latch. */
-  explicit Sync_check(ulint n, ulint p);
+  explicit SyncCheck(ulint n, ulint p);
 
-  ~Sync_check();
+  ~SyncCheck();
 
   /** Looks for a cell with the given thread id.
   @param[in] thread               Thread ID.
   @return pointer to cell or nullptr if not found */
-  Sync_cell *find_thead(os_thread_id_t thread);
+  SyncCell *find_thead(os_thread_id_t thread);
 
   /** Recursion step for deadlock detection.
   @param[in] start                Cell where recursive search started
@@ -145,7 +145,7 @@ struct Sync_check {
   @param[in] pass                 Pass value
   @param[in] depth                Recursion depth
   @return true if deadlock detected */
-  bool deadlock_step(Sync_cell *start, os_thread_id_t thread, ulint pass, ulint depth);
+  bool deadlock_step(SyncCell *start, os_thread_id_t thread, ulint pass, ulint depth);
 
   /** Prints info of the wait array.
   NOTE! caller must own the mutex
@@ -169,7 +169,7 @@ struct Sync_check {
   @param[in] cell               Cell to search
   @param[in] depth              Recursion depth
   @return true if deadlock detected */
-  bool detect_deadlock(Sync_cell *start, Sync_cell *cell, ulint depth);
+  bool detect_deadlock(SyncCell *start, SyncCell *cell, ulint depth);
 #endif /* UNIV_SYNC_DEBUG */
 
   /** Number of currently reserved cells in the wait array */
@@ -182,12 +182,12 @@ struct Sync_check {
   ulint m_protection{};
 
   /** Possible database mutex protecting this data structure */
-  mutex_t m_mutex{};
+  Mutex m_mutex{};
 
   /** Possible operating system mutex protecting the data structure.
   As this data structure is used in constructing the database mutex, to
   prevent infinite recursion in implementation, we fall back to an OS mutex. */
-  OS_mutex *m_os_mutex{};
+  OsMutex *m_os_mutex{};
 
   /** Count of how many times an object has been signalled */
   std::atomic<ulint> m_sg_count{};
@@ -196,7 +196,7 @@ struct Sync_check {
   ulint m_res_count{};
 };
 
-Sync_check::Sync_check(ulint n, ulint p) : m_protection(p) {
+SyncCheck::SyncCheck(ulint n, ulint p) : m_protection(p) {
   m_cells.resize(n);
 
   /* Then create the mutex to protect the wait array complex */
@@ -209,7 +209,7 @@ Sync_check::Sync_check(ulint n, ulint p) : m_protection(p) {
   }
 }
 
-Sync_check::~Sync_check() {
+SyncCheck::~SyncCheck() {
   /* Free the mutex protecting the wait array. */
   if (m_protection == SYNC_ARRAY_OS_MUTEX) {
     os_mutex_destroy(m_os_mutex);
@@ -220,7 +220,7 @@ Sync_check::~Sync_check() {
   }
 }
 
-void Sync_check::acquire() {
+void SyncCheck::acquire() {
   if (m_protection == SYNC_ARRAY_OS_MUTEX) {
     os_mutex_enter(m_os_mutex);
   } else if (m_protection == SYNC_ARRAY_MUTEX) {
@@ -230,7 +230,7 @@ void Sync_check::acquire() {
   }
 }
 
-void Sync_check::release() {
+void SyncCheck::release() {
   if (m_protection == SYNC_ARRAY_OS_MUTEX) {
     os_mutex_exit(m_os_mutex);
   } else if (m_protection == SYNC_ARRAY_MUTEX) {
@@ -240,7 +240,7 @@ void Sync_check::release() {
   }
 }
 
-void Sync_check::validate() {
+void SyncCheck::validate() {
   ulint count{};
 
   acquire();
@@ -256,14 +256,14 @@ void Sync_check::validate() {
   release();
 }
 
-Sync_check *sync_array_create(ulint n_cells, ulint protection) {
+SyncCheck *sync_array_create(ulint n_cells, ulint protection) {
   ut_a(n_cells > 0);
 
   /* Allocate memory for the data structures */
-  return new Sync_check(n_cells, protection);
+  return new SyncCheck(n_cells, protection);
 }
 
-void sync_array_free(Sync_check *arr) {
+void sync_array_free(SyncCheck *arr) {
   ut_a(arr->m_n_reserved == 0);
 
   arr->validate();
@@ -272,17 +272,17 @@ void sync_array_free(Sync_check *arr) {
 }
 
 /** Returns the event that the thread owning the cell waits for. */
-Cond_var *Sync_cell::get_event() {
+CondVar *SyncCell::get_event() {
   if (m_request_type == SYNC_MUTEX) {
-    return reinterpret_cast<mutex_t *>(m_wait_object)->event;
+    return reinterpret_cast<Mutex *>(m_wait_object)->event;
   } else if (m_request_type == RW_LOCK_WAIT_EX) {
-    return reinterpret_cast<rw_lock_t *>(m_wait_object)->m_wait_ex_event;
+    return reinterpret_cast<RwLock *>(m_wait_object)->m_wait_ex_event;
   } else { /* RW_LOCK_SHARED and RW_LOCK_EX wait on the same event */
-    return reinterpret_cast<rw_lock_t *>(m_wait_object)->m_event;
+    return reinterpret_cast<RwLock *>(m_wait_object)->m_event;
   }
 }
 
-void sync_array_reserve_cell(Sync_check *arr, void *object, ulint type, const char *file, ulint line, ulint *index) {
+void sync_array_reserve_cell(SyncCheck *arr, void *object, ulint type, const char *file, ulint line, ulint *index) {
   ut_a(index != nullptr);
   ut_a(object != nullptr);
 
@@ -305,9 +305,9 @@ void sync_array_reserve_cell(Sync_check *arr, void *object, ulint type, const ch
     cell.m_wait_object = object;
 
     if (type == SYNC_MUTEX) {
-      cell.m_old_wait_mutex = static_cast<mutex_t *>(object);
+      cell.m_old_wait_mutex = static_cast<Mutex *>(object);
     } else {
-      cell.m_old_wait_rw_lock = static_cast<rw_lock_t *>(object);
+      cell.m_old_wait_rw_lock = static_cast<RwLock *>(object);
     }
 
     cell.m_request_type = type;
@@ -338,7 +338,7 @@ void sync_array_reserve_cell(Sync_check *arr, void *object, ulint type, const ch
   return;
 }
 
-void sync_array_wait_event(Sync_check *arr, ulint index) {
+void sync_array_wait_event(SyncCheck *arr, ulint index) {
   arr->acquire();
 
   auto &cell = arr->m_cells[index];
@@ -376,7 +376,7 @@ void sync_array_wait_event(Sync_check *arr, ulint index) {
   sync_array_free_cell(arr, index);
 }
 
-void Sync_cell::print(ib_stream_t ib_stream) {
+void SyncCell::print(ib_stream_t ib_stream) {
   const auto type = m_request_type;
 
   ib_logger(
@@ -464,7 +464,7 @@ void Sync_cell::print(ib_stream_t ib_stream) {
 /** Looks for a cell with the given thread id.
 @param[in] thread               Thread ID.
 @return	pointer to cell or nullptr if not found */
-Sync_cell *find_thead(os_thread_id_t thread) {
+SyncCell *find_thead(os_thread_id_t thread) {
 
   for (auto &cell : m_cells) {
     if (cell.m_wait_object != nullptr && os_thread_eq(cell.m_thread, thread)) {
@@ -476,7 +476,7 @@ Sync_cell *find_thead(os_thread_id_t thread) {
   return nullptr;
 }
 
-bool Sync_check::deadlock_step(Sync_cell *start, os_thread_id_t thread, ulint pass, ulint depth) {
+bool SyncCheck::deadlock_step(SyncCell *start, os_thread_id_t thread, ulint pass, ulint depth) {
   ++depth;
 
   if (pass != 0) {
@@ -508,10 +508,10 @@ bool Sync_check::deadlock_step(Sync_cell *start, os_thread_id_t thread, ulint pa
   }
 }
 
-bool Sync_check::detect_deadlock(Sync_cell *start, Sync_cell *cell, ulint depth) {
+bool SyncCheck::detect_deadlock(SyncCell *start, SyncCell *cell, ulint depth) {
   bool ret;
-  rw_lock_t *lock;
-  rw_lock_debug_t *debug;
+  RwLock *lock;
+  RwLockDebug *debug;
 
   ut_ad(depth < 100);
   ut_ad(cell->m_wait_object != nullptr);
@@ -527,7 +527,7 @@ bool Sync_check::detect_deadlock(Sync_cell *start, Sync_cell *cell, ulint depth)
 
   if (cell->m_request_type == SYNC_MUTEX) {
 
-    mutex_t *mutex = cell->m_wait_object;
+    Mutex *mutex = cell->m_wait_object;
 
     if (mutex_get_lock_word(mutex) != 0) {
 
@@ -560,7 +560,7 @@ bool Sync_check::detect_deadlock(Sync_cell *start, Sync_cell *cell, ulint depth)
 
   } else if (cell->m_request_type == RW_LOCK_EX || cell->m_request_type == RW_LOCK_WAIT_EX) {
 
-    rw_lock_t *lock = cell->m_wait_object;
+    RwLock *lock = cell->m_wait_object;
 
     for (auto debug : lock->debug_list) {
 
@@ -586,7 +586,7 @@ bool Sync_check::detect_deadlock(Sync_cell *start, Sync_cell *cell, ulint depth)
 
   } else if (cell->m_request_type == RW_LOCK_SHARED) {
 
-    rw_lock_t *lock = cell->m_wait_object;
+    RwLock *lock = cell->m_wait_object;
 
     for (auto debug : lock->debug_list) {
 
@@ -618,10 +618,10 @@ bool Sync_check::detect_deadlock(Sync_cell *start, Sync_cell *cell, ulint depth)
 }
 #endif /* UNIV_SYNC_DEBUG */
 
-bool Sync_cell::can_wake_up() {
+bool SyncCell::can_wake_up() {
   if (m_request_type == SYNC_MUTEX) {
 
-    auto mutex = static_cast<mutex_t *>(m_wait_object);
+    auto mutex = static_cast<Mutex *>(m_wait_object);
 
     if (mutex_get_lock_word(mutex) == 0) {
 
@@ -630,7 +630,7 @@ bool Sync_cell::can_wake_up() {
 
   } else if (m_request_type == RW_LOCK_EX) {
 
-    auto lock = static_cast<rw_lock_t *>(m_wait_object);
+    auto lock = static_cast<RwLock *>(m_wait_object);
 
     if (lock->m_lock_word > 0) {
 
@@ -641,7 +641,7 @@ bool Sync_cell::can_wake_up() {
 
   } else if (m_request_type == RW_LOCK_WAIT_EX) {
 
-    auto lock = static_cast<rw_lock_t *>(m_wait_object);
+    auto lock = static_cast<RwLock *>(m_wait_object);
 
     /* lock_word == 0 means all readers have left */
     if (lock->m_lock_word == 0) {
@@ -651,7 +651,7 @@ bool Sync_cell::can_wake_up() {
 
   } else if (m_request_type == RW_LOCK_SHARED) {
 
-    auto lock = static_cast<rw_lock_t *>(m_wait_object);
+    auto lock = static_cast<RwLock *>(m_wait_object);
 
     /* lock_word > 0 means no writer or reserved writer */
     if (lock->m_lock_word > 0) {
@@ -663,7 +663,7 @@ bool Sync_cell::can_wake_up() {
   return false;
 }
 
-void sync_array_free_cell(Sync_check *arr, ulint index) {
+void sync_array_free_cell(SyncCheck *arr, ulint index) {
   arr->acquire();
 
   auto &cell = arr->m_cells[index];
@@ -680,7 +680,7 @@ void sync_array_free_cell(Sync_check *arr, ulint index) {
   arr->release();
 }
 
-void sync_array_object_signalled(Sync_check *arr) {
+void sync_array_object_signalled(SyncCheck *arr) {
   arr->m_sg_count.fetch_add(1);
 }
 
@@ -764,7 +764,7 @@ bool sync_array_print_long_waits() {
   return fatal;
 }
 
-void Sync_check::output_info(ib_stream_t ib_stream) {
+void SyncCheck::output_info(ib_stream_t ib_stream) {
   ib_logger(ib_stream, "OS WAIT ARRAY INFO: reservation count %ld, signal count %ld\n", (long)m_res_count, (long)m_sg_count);
 
   ulint i{};
@@ -783,7 +783,7 @@ void Sync_check::output_info(ib_stream_t ib_stream) {
   }
 }
 
-void sync_array_print_info(ib_stream_t ib_stream, Sync_check *arr) {
+void sync_array_print_info(ib_stream_t ib_stream, SyncCheck *arr) {
   arr->acquire();
 
   arr->output_info(ib_stream);

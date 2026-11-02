@@ -1,5 +1,5 @@
 /**
- * Unit test for Log_buffer - STUBBED OUT
+ * Unit test for LogBuffer - STUBBED OUT
  */
 
 #include <iostream>

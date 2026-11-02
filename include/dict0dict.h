@@ -42,11 +42,11 @@ Created 1/8/1996 Heikki Tuuri
 #include <string_view>
 #include <unordered_map>
 
-struct FSP;
-struct mtr_t;
+struct Fsp;
+struct Mtr;
 struct Table;
 struct Index;
-struct Buf_pool;
+struct BufPool;
 struct Btree;
 
 /** Data dictionary system. */
@@ -93,7 +93,7 @@ struct Dict {
    * 
    * @return DB_SUCCESS or error code.
    */
-  db_err create_instance() noexcept { return m_store.create_instance(); }
+  DbErr create_instance() noexcept { return m_store.create_instance(); }
 
   /**
    * Get the database name length in a table name.
@@ -120,7 +120,7 @@ struct Dict {
    * 
    * @return DB_SUCCESS or error code.
    */
-  [[nodiscard]] db_err open(bool in_crash_recovery) noexcept { return m_loader.open(in_crash_recovery); }
+  [[nodiscard]] DbErr open(bool in_crash_recovery) noexcept { return m_loader.open(in_crash_recovery); }
 
   /**
    * Inits Dict::m_dummy_index, dummy index template required for recovery.
@@ -141,7 +141,7 @@ struct Dict {
    * 
    * @return table, NULL if does not exist
    */
-  [[nodiscard]] Table *table_get_on_id(ib_recovery_t recovery, Dict_id table_id, Trx *trx) noexcept;
+  [[nodiscard]] Table *table_get_on_id(IbRecovery recovery, Dict_id table_id, Trx *trx) noexcept;
 
   /**
    * Decrements the count of open handles to a table.
@@ -178,7 +178,7 @@ struct Dict {
    * 
    * @return The table object, or NULL if it does not exist.
    */
-  [[nodiscard]] Table *table_get_using_id(ib_recovery_t recovery, Dict_id table_id, bool ref_count) noexcept;
+  [[nodiscard]] Table *table_get_using_id(IbRecovery recovery, Dict_id table_id, bool ref_count) noexcept;
 
   /**
    * @brief Checks if the given column name is reserved for InnoDB system columns.
@@ -237,7 +237,7 @@ struct Dict {
    * 
    * @return DB_SUCCESS or error code.
    */
-  [[nodiscard]] db_err foreign_add_to_cache(Foreign *foreign, bool check_charsets) noexcept;
+  [[nodiscard]] DbErr foreign_add_to_cache(Foreign *foreign, bool check_charsets) noexcept;
 
   /**
    * @brief Scans a table create SQL string and adds the foreign key constraints declared in the string to the data dictionary.
@@ -249,7 +249,7 @@ struct Dict {
    * 
    * @return Error code or DB_SUCCESS.
    */
-  [[nodiscard]] db_err create_foreign_constraints(Trx *trx, const char *sql_string, const char *name, bool reject_fks) noexcept;
+  [[nodiscard]] DbErr create_foreign_constraints(Trx *trx, const char *sql_string, const char *name, bool reject_fks) noexcept;
 
   /**
    * @brief Parses the CONSTRAINT id's to be dropped in an ALTER TABLE statement.
@@ -262,8 +262,8 @@ struct Dict {
    * 
    * @return DB_SUCCESS or DB_CANNOT_DROP_CONSTRAINT if syntax error or the constraint id does not match.
    */
-  [[nodiscard]] db_err foreign_parse_drop_constraints(
-    mem_heap_t *heap, Trx *trx, Table *table, ulint *n, const char ***constraints_to_drop
+  [[nodiscard]] DbErr foreign_parse_drop_constraints(
+    MemHeap *heap, Trx *trx, Table *table, ulint *n, const char ***constraints_to_drop
   ) noexcept;
 
   /**
@@ -354,7 +354,7 @@ struct Dict {
    * 
    * @return DB_SUCCESS, DB_TOO_BIG_RECORD, or DB_CORRUPTION.
    */
-  [[nodiscard]] db_err index_add_to_cache(Index *index, ulint page_no, bool strict) noexcept;
+  [[nodiscard]] DbErr index_add_to_cache(Index *index, ulint page_no, bool strict) noexcept;
 
   /**
    * Returns an index instance if it is found in the dictionary cache.
@@ -377,7 +377,7 @@ struct Dict {
    * @return own: node pointer
    */
   [[nodiscard]] DTuple *index_build_node_ptr(
-    const Index *index, const Rec rec, ulint page_no, mem_heap_t *heap, ulint level
+    const Index *index, const Rec rec, ulint page_no, MemHeap *heap, ulint level
   ) noexcept;
 
   /**
@@ -405,7 +405,7 @@ struct Dict {
    * 
    * @return own: data tuple
    */
-  [[nodiscard]] DTuple *index_build_data_tuple(Index *index, Rec rec, ulint n_fields, mem_heap_t *heap) noexcept;
+  [[nodiscard]] DTuple *index_build_data_tuple(Index *index, Rec rec, ulint n_fields, MemHeap *heap) noexcept;
 
   /**
    * Calculates the minimum record length in an index.
@@ -585,7 +585,7 @@ struct Dict {
    * 
    * @return table, NULL if does not exist
    */
-  inline Table *table_get_on_id(ib_recovery_t recovery, Dict_id table_id) noexcept {
+  inline Table *table_get_on_id(IbRecovery recovery, Dict_id table_id) noexcept {
     ut_ad(mutex_own(&m_mutex));
 
     /* Look for the table name in the hash table */
@@ -656,7 +656,7 @@ struct Dict {
    * 
    * @return true if succeed
    */
-  [[nodiscard]] bool hdr_create(mtr_t *mtr) noexcept;
+  [[nodiscard]] bool hdr_create(Mtr *mtr) noexcept;
 
   /**
    * @brief If an undo log record for this table might not fit on a single page, return true.
@@ -754,7 +754,7 @@ struct Dict {
    * @return scanned to
    */
   const char *scan_id(
-    const charset_t *cs, const char *ptr, mem_heap_t *heap, const char **id, bool table_id, bool accept_also_dot
+    const charset_t *cs, const char *ptr, MemHeap *heap, const char **id, bool table_id, bool accept_also_dot
   ) noexcept;
 
   /**
@@ -771,7 +771,7 @@ struct Dict {
    * @return Scanned to.
    */
   const char *scan_col(
-    const charset_t *cs, const char *ptr, bool *success, Table *table, const Column **column, mem_heap_t *heap, const char **name
+    const charset_t *cs, const char *ptr, bool *success, Table *table, const Column **column, MemHeap *heap, const char **name
   ) noexcept;
 
   /**
@@ -788,7 +788,7 @@ struct Dict {
    * @return Scanned to.
    */
   const char *scan_table_name(
-    const charset_t *cs, const char *ptr, Table **table, const char *name, bool *success, mem_heap_t *heap, const char **ref_name
+    const charset_t *cs, const char *ptr, Table **table, const char *name, bool *success, MemHeap *heap, const char **ref_name
   ) noexcept;
 
   /**
@@ -855,8 +855,8 @@ struct Dict {
    *
    * @return error code or DB_SUCCESS
    */
-  db_err create_foreign_constraints(
-    Trx *trx, mem_heap_t *heap, const charset_t *cs, const char *sql_string, const char *name, bool reject_fks
+  DbErr create_foreign_constraints(
+    Trx *trx, MemHeap *heap, const charset_t *cs, const char *sql_string, const char *name, bool reject_fks
   ) noexcept;
 
   /**
@@ -873,18 +873,18 @@ struct Dict {
    * DROP TABLE, as well as reading the dictionary data for a table from 
    * system tables.
    */
-  mutable mutex_t m_mutex{};
+  mutable Mutex m_mutex{};
 
-  struct Stats_mutex {
+  struct StatsMutex {
     /** Constructor */
-    Stats_mutex() noexcept {
+    StatsMutex() noexcept {
       for (auto &mutex : m_mutexes) {
-        mutex_create(&mutex, IF_DEBUG("Dict::Stats_mutex", ) IF_SYNC_DEBUG(SYNC_INDEX_TREE, ) Current_location());
+        mutex_create(&mutex, IF_DEBUG("Dict::StatsMutex", ) IF_SYNC_DEBUG(SYNC_INDEX_TREE, ) Current_location());
       }
     }
 
     /** Destructor */
-    ~Stats_mutex() {
+    ~StatsMutex() {
       for (auto &mutex : m_mutexes) {
         mutex_free(&mutex);
       }
@@ -906,11 +906,11 @@ struct Dict {
     void exit(Dict_id id) noexcept { mutex_exit(get_mutex(id)); }
 
     /** Mutex protecting Index::Stats::m_n_diff_key_vals[] */
-    mutable std::array<mutex_t, DICT_INDEX_STAT_MUTEX_SIZE> m_mutexes;
+    mutable std::array<Mutex, DICT_INDEX_STAT_MUTEX_SIZE> m_mutexes;
   };
 
   /** Mutex protecting Index::Stats::m_n_diff_key_vals */
-  Stats_mutex m_stats_mutex{};
+  StatsMutex m_stats_mutex{};
 
   /**
    * @brief the data dictionary rw-latch protecting dict_sys
@@ -921,10 +921,10 @@ struct Dict {
    * operations a table drop since the client does not know about them; therefore
    * we need this; NOTE: a transaction which reserves this must keep book
    * on the mode in trx_t::m_dict_operation_lock_mode */
-  mutable rw_lock_t m_lock{};
+  mutable RwLock m_lock{};
 
   /** Mutex protecting the foreign and unique error buffers */
-  mutable mutex_t m_foreign_err_mutex{};
+  mutable Mutex m_foreign_err_mutex{};
 
   /** Hash table of the tables, based on name */
   std::unordered_map<std::string_view, Table *> m_tables{};
@@ -954,11 +954,11 @@ struct Dict {
   Index *m_dummy_index{};
 
   /** Data dictionary booting/creation. */
-  Dict_store m_store;
+  DictStore m_store;
 
   /** Data dictionary loading. */
-  Dict_load m_loader;
+  DictLoad m_loader;
 
-  /** Data dictionary DDL operations. */
-  DDL m_ddl;
+  /** Data dictionary Ddl operations. */
+  Ddl m_ddl;
 };

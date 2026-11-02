@@ -29,22 +29,22 @@ Created 1/8/1997 Heikki Tuuri
 // #include "row0types.h"
 
 struct Trx;
-struct FSP;
+struct Fsp;
 struct Dict;
 struct Table;
 struct Index;
 struct Btree;
-struct que_thr_t;
-struct Row_update;
+struct QueThr;
+struct RowUpdate;
 #include "trx0undo_rec.h"
 
-struct Row_undo {
+struct RowUndo {
   /**
    * @brief Constructs a row undo.
    *
    * @param[in] dict The data dictionary.
    */
-  explicit Row_undo(Dict *dict) noexcept : m_dict(dict) {}
+  explicit RowUndo(Dict *dict) noexcept : m_dict(dict) {}
 
   /**
    * @brief Creates a row undo.
@@ -53,14 +53,14 @@ struct Row_undo {
    *
    * @return A pointer to the newly created row undo.
    */
-  [[nodiscard]] static Row_undo *create(Dict *dict) noexcept;
+  [[nodiscard]] static RowUndo *create(Dict *dict) noexcept;
 
   /**
    * @brief Destroys a row undo.
    *
    * @param[in,out] row_undo The row undo to destroy.
    */
-  static void destroy(Row_undo *&row_undo) noexcept;
+  static void destroy(RowUndo *&row_undo) noexcept;
 
   /**
    * @brief Creates a row undo node to a query graph.
@@ -71,7 +71,7 @@ struct Row_undo {
    *
    * @return A pointer to the newly created undo node.
    */
-  [[nodiscard]] Undo_node *create_undo_node(Trx *trx, que_thr_t *parent, mem_heap_t *heap) noexcept;
+  [[nodiscard]] UndoNode *create_undo_node(Trx *trx, QueThr *parent, MemHeap *heap) noexcept;
 
   /**
    * @brief Undoes a row operation in a table.
@@ -82,7 +82,7 @@ struct Row_undo {
    *
    * @return Query thread to run next or nullptr.
    */
-  [[nodiscard]] que_thr_t *step(que_thr_t *thr) noexcept;
+  [[nodiscard]] QueThr *step(QueThr *thr) noexcept;
 
   /** Data dictionary */
   Dict *m_dict{};
@@ -105,7 +105,7 @@ and another thread is currently doing the undo for successive versions of
 that index record. */
 
 /** Execution state of an undo node */
-enum undo_exec {
+enum UndoExec {
   UNDO_NODE_UNDEFINED = 0,
 
   /** we should fetch the next undo log record */
@@ -123,9 +123,9 @@ enum undo_exec {
 };
 
 /** Undo node structure */
-struct Undo_node {
+struct UndoNode {
 
-  Undo_node() = delete;
+  UndoNode() = delete;
 
   /**
   * @brief Constructs a row undo node.
@@ -135,7 +135,7 @@ struct Undo_node {
   * @param[in] trx The transaction.
   * @param[in] parent The parent node, i.e., a thr node.
   */
-  Undo_node(Dict *dict, Trx *trx, que_thr_t *parent) noexcept;
+  UndoNode(Dict *dict, Trx *trx, QueThr *parent) noexcept;
 
   /**
    * @brief Creates a row undo node to a query graph.
@@ -147,7 +147,7 @@ struct Undo_node {
    *
    * @return A pointer to the newly created undo node.
    */
-  [[nodiscard]] static Undo_node *create(Dict *dict, Trx *trx, que_thr_t *parent, mem_heap_t *heap) noexcept;
+  [[nodiscard]] static UndoNode *create(Dict *dict, Trx *trx, QueThr *parent, MemHeap *heap) noexcept;
 
   /**
    * @brief Looks for the clustered index record when node has the row reference.
@@ -171,7 +171,7 @@ struct Undo_node {
    *
    * @return DB_SUCCESS if the operation is successfully completed, otherwise an error code.
    */
-  [[nodiscard]] db_err fetch_undo_log_and_undo(que_thr_t *thr) noexcept;
+  [[nodiscard]] DbErr fetch_undo_log_and_undo(QueThr *thr) noexcept;
 
   /**
    * @brief Removes a clustered index record.
@@ -182,14 +182,14 @@ struct Undo_node {
    *
    * @return DB_SUCCESS if the operation is successful, otherwise DB_OUT_OF_FILE_SPACE.
    */
-  [[nodiscard]] db_err remove_cluster_rec() noexcept;
+  [[nodiscard]] DbErr remove_cluster_rec() noexcept;
 
   /**
    * @brief Parses the row reference and other info in a fresh insert undo record.
    *
    * @param[in] recovery Recovery flag.
    */
-  void parse_insert_undo_rec(ib_recovery_t recovery) noexcept;
+  void parse_insert_undo_rec(IbRecovery recovery) noexcept;
 
   /**
     * @brief Parses the row reference and other info in a modify undo log record.
@@ -197,14 +197,14 @@ struct Undo_node {
    * @param[in] recovery             Recovery flag.
    * @param[in,out] thr              Query thread.
    */
-  void parse_update_undo_rec(ib_recovery_t recovery, que_thr_t *thr) noexcept;
+  void parse_update_undo_rec(IbRecovery recovery, QueThr *thr) noexcept;
 
   /**
    * @brief Undoes a fresh insert of a row to a table.
    *
    * @return DB_SUCCESS if the operation is successful, otherwise an error code.
    */
-  [[nodiscard]] db_err undo_insert() noexcept;
+  [[nodiscard]] DbErr undo_insert() noexcept;
 
   /**
    * @brief Checks if also the previous version of the clustered index record was
@@ -226,7 +226,7 @@ struct Undo_node {
  *
  * @return DB_SUCCESS, DB_FAIL, or error code: we may run out of file space.
    */
-  [[nodiscard]] db_err undo_clustered_index_modification(que_thr_t *thr, mtr_t *mtr, ulint mode) noexcept;
+  [[nodiscard]] DbErr undo_clustered_index_modification(QueThr *thr, Mtr *mtr, ulint mode) noexcept;
 
   /**
    * @brief Removes a clustered index record after undo if possible.
@@ -242,7 +242,7 @@ struct Undo_node {
    *
    * @return DB_SUCCESS, DB_FAIL, or error code: we may run out of file space.
    */
-  [[nodiscard]] db_err remove_clustered_index_record(que_thr_t *thr, mtr_t *mtr, ulint mode) noexcept;
+  [[nodiscard]] DbErr remove_clustered_index_record(QueThr *thr, Mtr *mtr, ulint mode) noexcept;
 
   /**
    * @brief Removes a clustered index record after undo if possible.
@@ -259,7 +259,7 @@ struct Undo_node {
    *
    * @return DB_SUCCESS, DB_FAIL, or error code: we may run out of file space.
    */
-  [[nodiscard]] db_err remove_clustered_index_record_low(que_thr_t *thr, mtr_t *mtr, ulint mode) noexcept;
+  [[nodiscard]] DbErr remove_clustered_index_record_low(QueThr *thr, Mtr *mtr, ulint mode) noexcept;
 
   /**
    * @brief Delete marks or removes a secondary index entry if found.
@@ -271,8 +271,8 @@ struct Undo_node {
    *
    * @return DB_SUCCESS, DB_FAIL, or DB_OUT_OF_FILE_SPACE
    */
-  [[nodiscard]] db_err delete_mark_or_remove_secondary_index_entry(
-    que_thr_t *thr, Index *index, DTuple *entry, ulint mode
+  [[nodiscard]] DbErr delete_mark_or_remove_secondary_index_entry(
+    QueThr *thr, Index *index, DTuple *entry, ulint mode
   ) noexcept;
 
   /**
@@ -291,7 +291,7 @@ struct Undo_node {
    *
    * @return DB_SUCCESS or DB_OUT_OF_FILE_SPACE
      */
-  [[nodiscard]] db_err delete_mark_or_remove_secondary_index_entry(que_thr_t *thr, Index *index, DTuple *entry) noexcept;
+  [[nodiscard]] DbErr delete_mark_or_remove_secondary_index_entry(QueThr *thr, Index *index, DTuple *entry) noexcept;
 
   /**
  * Delete unmarks a secondary index entry which must be found. It might not be
@@ -306,8 +306,8 @@ struct Undo_node {
  *
  * @return DB_FAIL or DB_SUCCESS or DB_OUT_OF_FILE_SPACE
  */
-  [[nodiscard]] db_err del_unmark_secondary_index_and_undo_update(
-    ulint mode, que_thr_t *thr, Index *index, const DTuple *entry
+  [[nodiscard]] DbErr del_unmark_secondary_index_and_undo_update(
+    ulint mode, QueThr *thr, Index *index, const DTuple *entry
   ) noexcept;
 
   /**
@@ -319,7 +319,7 @@ struct Undo_node {
    *
    * @return DB_SUCCESS or error code: we may run out of file space.
    */
-  [[nodiscard]] db_err undo_clustered_index_modification(que_thr_t *thr) noexcept;
+  [[nodiscard]] DbErr undo_clustered_index_modification(QueThr *thr) noexcept;
 
   /**
    * Undoes a modify in secondary indexes when undo record type is UPD_DEL.
@@ -328,7 +328,7 @@ struct Undo_node {
    *
    * @return DB_SUCCESS or DB_OUT_OF_FILE_SPACE
    */
-  [[nodiscard]] db_err undo_delete_in_secondary_indexes(que_thr_t *thr) noexcept;
+  [[nodiscard]] DbErr undo_delete_in_secondary_indexes(QueThr *thr) noexcept;
 
   /**
    * @brief Undoes a modify in secondary indexes when undo record type is DEL_MARK.
@@ -337,7 +337,7 @@ struct Undo_node {
    *
    * @return DB_SUCCESS or DB_OUT_OF_FILE_SPACE
    */
-  [[nodiscard]] db_err undo_del_mark_secondary_indexes(que_thr_t *thr) noexcept;
+  [[nodiscard]] DbErr undo_del_mark_secondary_indexes(QueThr *thr) noexcept;
 
   /**
    * Undoes a modify in secondary indexes when undo record type is UPD_EXIST.
@@ -346,7 +346,7 @@ struct Undo_node {
    *
    * @return DB_SUCCESS or DB_OUT_OF_FILE_SPACE
    */
-  [[nodiscard]] db_err undo_update_of_secondary_indexes(que_thr_t *thr) noexcept;
+  [[nodiscard]] DbErr undo_update_of_secondary_indexes(QueThr *thr) noexcept;
 
   /**
    * @brief Undoes a modify operation on a row of a table.
@@ -354,7 +354,7 @@ struct Undo_node {
    * @param[in,out] thr Query thread.
    *
    * @return	DB_SUCCESS or error code */
-  [[nodiscard]] db_err undo_update(que_thr_t *thr) noexcept;
+  [[nodiscard]] DbErr undo_update(QueThr *thr) noexcept;
 
   /**
    * Removes a secondary index entry if found.
@@ -367,7 +367,7 @@ struct Undo_node {
    *
    * @return	DB_SUCCESS, DB_FAIL, or DB_OUT_OF_FILE_SPACE
    */
-  [[nodiscard]] db_err remove_secondary_index_entry(ulint mode, Index *index, DTuple *entry) noexcept;
+  [[nodiscard]] DbErr remove_secondary_index_entry(ulint mode, Index *index, DTuple *entry) noexcept;
 
   /**
    * @brief Removes a secondary index entry from the index if found.
@@ -379,13 +379,13 @@ struct Undo_node {
    *
    * @return DB_SUCCESS or DB_OUT_OF_FILE_SPACE
    */
-  [[nodiscard]] db_err remove_secondary_index_entry(Index *index, DTuple *entry) noexcept;
+  [[nodiscard]] DbErr remove_secondary_index_entry(Index *index, DTuple *entry) noexcept;
 
   /** node type: QUE_NODE_UNDO */
-  que_common_t m_common{};
+  QueCommon m_common{};
 
   /** node execution state */
-  undo_exec m_state{UNDO_NODE_UNDEFINED};
+  UndoExec m_state{UNDO_NODE_UNDEFINED};
 
   /** trx for which undo is done */
   Trx *m_trx{};
@@ -394,7 +394,7 @@ struct Undo_node {
   roll_ptr_t m_roll_ptr{};
 
   /** undo log record */
-  Trx_undo_record m_undo_rec{};
+  TrxUndoRecord m_undo_rec{};
 
   /** undo number of the record */
   undo_no_t m_undo_no{};
@@ -409,7 +409,7 @@ struct Undo_node {
   trx_id_t m_new_trx_id{};
 
   /** persistent cursor used in searching the clustered index record */
-  Btree_pcursor m_pcur;
+  BtreePcursor m_pcur;
 
   /** table where undo is done */
   Table *m_table{};
@@ -418,7 +418,7 @@ struct Undo_node {
   ulint m_cmpl_info{};
 
   /** update vector for a clustered index record */
-  upd_t *m_update{};
+  Upd *m_update{};
 
   /** row reference to the next row to handle */
   DTuple *m_ref{};
@@ -427,20 +427,20 @@ struct Undo_node {
   DTuple *m_row{};
 
   /** nullptr, or prefixes of the externally stored columns of the row */
-  row_ext_t *m_ext{};
+  RowExt *m_ext{};
 
   /** nullptr, or the row after undo */
   DTuple *m_undo_row{};
 
   /** nullptr, or prefixes of the externally stored columns of undo_row */
-  row_ext_t *m_undo_ext{};
+  RowExt *m_undo_ext{};
 
   /** the next index whose record should be handled */
   Index *m_index{};
 
   /** memory heap used as auxiliary storage for row; this must be emptied
   after undo is tried on a row */
-  mem_heap_t *m_heap{};
+  MemHeap *m_heap{};
 
   /** data dictionary */
   Dict *m_dict{};

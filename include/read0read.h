@@ -31,9 +31,9 @@ Created 2/16/1997 Heikki Tuuri
 struct Trx;
 
 /**
- * Read_view class containing read view data and operations.
+ * ReadView class containing read view data and operations.
  */
-struct Read_view {
+struct ReadView {
   /** Check whether the changes by id are visible.
   @param[in]    id      transaction id to check against the view
   @return whether the view sees the modifications of id. */
@@ -105,7 +105,7 @@ struct Read_view {
   }
 
   /** Read view type */
-  Read_view_type m_type;
+  ReadViewType m_type;
 
   /** 0 or if m_type is HIGH_GRANULARITY transaction undo_no when
   this high-granularity consistent read view was created */
@@ -138,13 +138,13 @@ struct Read_view {
   trx_id_t m_creator_trx_id;
 
   /** List of read views in srv_trx_sys */
-  UT_LIST_NODE_T(Read_view) m_view_list;
+  UT_LIST_NODE_T(ReadView) m_view_list;
 };
 
-UT_LIST_NODE_GETTER_DEFINITION(Read_view, m_view_list);
+UT_LIST_NODE_GETTER_DEFINITION(ReadView, m_view_list);
 
 /** Read view types @{ */
 
-[[nodiscard]] inline bool Read_view::changes_visible(trx_id_t id) const {
+[[nodiscard]] inline bool ReadView::changes_visible(trx_id_t id) const {
   return sees_trx_id(id);
 }

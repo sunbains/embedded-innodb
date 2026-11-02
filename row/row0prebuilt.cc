@@ -34,19 +34,19 @@ Created 02/03/2009 Sunny Bains
 #include "row0ins.h"
 #include "row0merge.h"
 
-Prebuilt::Prebuilt(FSP *fsp, Btree *btree, Table *table, mem_heap_t *heap) noexcept : m_table(table) {
+Prebuilt::Prebuilt(Fsp *fsp, Btree *btree, Table *table, MemHeap *heap) noexcept : m_table(table) {
 
   m_magic_n = ROW_PREBUILT_ALLOCATED;
   m_heap = heap;
 
   {
-    auto ptr = ut_new(sizeof(Btree_pcursor));
-    m_pcur = new (ptr) Btree_pcursor(fsp, btree);
+    auto ptr = ut_new(sizeof(BtreePcursor));
+    m_pcur = new (ptr) BtreePcursor(fsp, btree);
   }
 
   {
-    auto ptr = ut_new(sizeof(Btree_pcursor));
-    m_clust_pcur = new (ptr) Btree_pcursor(fsp, btree);
+    auto ptr = ut_new(sizeof(BtreePcursor));
+    m_clust_pcur = new (ptr) BtreePcursor(fsp, btree);
   }
 
   m_search_tuple = dtuple_create(m_heap, 2 * m_table->get_n_cols());
@@ -72,7 +72,7 @@ Prebuilt::Prebuilt(FSP *fsp, Btree *btree, Table *table, mem_heap_t *heap) noexc
 
     auto ptr = mem_heap_zalloc(m_row_cache.m_heap, sz);
 
-    m_row_cache.m_cached_rows = new (ptr) Cached_row[m_row_cache.m_n_max];
+    m_row_cache.m_cached_rows = new (ptr) CachedRow[m_row_cache.m_n_max];
   }
 
   m_magic_n2 = ROW_PREBUILT_ALLOCATED;
@@ -110,7 +110,7 @@ Prebuilt::~Prebuilt() noexcept {
   mem_heap_free(m_row_cache.m_heap);
 }
 
-Prebuilt *Prebuilt::create(FSP *fsp, Btree *btree, Table *table) noexcept {
+Prebuilt *Prebuilt::create(Fsp *fsp, Btree *btree, Table *table) noexcept {
   auto heap = mem_heap_create(128);
   auto ptr = reinterpret_cast<Prebuilt *>(mem_heap_zalloc(heap, sizeof(Prebuilt)));
 

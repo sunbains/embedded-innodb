@@ -40,7 +40,7 @@ Created 12/21/1997 Heikki Tuuri
  *
  * @param[in] sel_node Parsed select node.
  */
-void opt_search_plan(sel_node_t *sel_node);
+void opt_search_plan(SelNode *sel_node);
 
 /**
  * @brief Looks for occurrences of the columns of the table in the query subgraph and
@@ -66,4 +66,4 @@ void opt_find_all_cols(bool copy_val, Index *index, sym_node_list_t *col_list, P
  *
  * @param[in] sel_node The select node containing the query plan to be printed.
  */
-void opt_print_query_plan(sel_node_t *sel_node);
+void opt_print_query_plan(SelNode *sel_node);

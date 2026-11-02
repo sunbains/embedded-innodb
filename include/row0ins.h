@@ -37,49 +37,49 @@ Created 4/20/1996 Heikki Tuuri
 
 const ulint INS_NODE_MAGIC_N = 15849075;
 
-struct Row_update;
-struct Lock_sys;
-struct Btree_cursor;
-struct Btree_pcursor;
-struct mtr_t;
-struct Buf_block;
-struct big_rec_t;
+struct RowUpdate;
+struct LockSys;
+struct BtreeCursor;
+struct BtreePcursor;
+struct Mtr;
+struct BufBlock;
+struct BigRec;
 struct Index;
 struct Foreign;
 
-struct Row_insert {
+struct RowInsert {
 
   /**
-   * @brief Constructor for Row_insert.
+   * @brief Constructor for RowInsert.
    *
    * @param[in] dict Data dictionary.
    * @param[in] lock_sys Lock system.
    * @param[in] row_upd Row update system.
    */
-  Row_insert(Dict *dict, Lock_sys *lock_sys, Row_update *row_upd) noexcept;
+  RowInsert(Dict *dict, LockSys *lock_sys, RowUpdate *row_upd) noexcept;
 
   /**
-   * @brief Destructor for Row_insert.
+   * @brief Destructor for RowInsert.
    */
-  ~Row_insert() = default;
+  ~RowInsert() = default;
 
   /**
-   * @brief Creates a new Row_insert object.
+   * @brief Creates a new RowInsert object.
    *
    * @param[in] dict Data dictionary.
    * @param[in] lock_sys Lock system.
    * @param[in] row_upd Row update system.
    *
-   * @return Pointer to the newly created Row_insert object.
+   * @return Pointer to the newly created RowInsert object.
    */
-  [[nodiscard]] static Row_insert *create(Dict *dict, Lock_sys *lock_sys, Row_update *row_upd) noexcept;
+  [[nodiscard]] static RowInsert *create(Dict *dict, LockSys *lock_sys, RowUpdate *row_upd) noexcept;
 
   /**
-   * @brief Destroys a Row_insert object.
+   * @brief Destroys a RowInsert object.
    *
-   * @param[in] row_insert Pointer to the Row_insert object to destroy.
+   * @param[in] row_insert Pointer to the RowInsert object to destroy.
    */
-  static void destroy(Row_insert *&row_insert) noexcept;
+  static void destroy(RowInsert *&row_insert) noexcept;
 
   /**
    * @brief Checks if foreign key constraint fails for an index entry.
@@ -95,8 +95,8 @@ struct Row_insert {
    *
    * @return DB_SUCCESS, DB_LOCK_WAIT, DB_NO_REFERENCED_ROW, or DB_ROW_IS_REFERENCED.
    */
-  [[nodiscard]] db_err check_foreign_constraint(
-    bool check_ref, const Foreign *foreign, const Table *table, DTuple *entry, que_thr_t *thr
+  [[nodiscard]] DbErr check_foreign_constraint(
+    bool check_ref, const Foreign *foreign, const Table *table, DTuple *entry, QueThr *thr
   ) noexcept;
 
   /**
@@ -108,7 +108,7 @@ struct Row_insert {
    *
    * @return A pointer to the newly created insert node struct.
    */
-  [[nodiscard]] ins_node_t *node_create(ib_ins_mode_t ins_type, Table *table, mem_heap_t *heap) noexcept;
+  [[nodiscard]] InsertNode *node_create(IbInsMode ins_type, Table *table, MemHeap *heap) noexcept;
 
   /**
    * @brief Sets a new row to insert for an INS_DIRECT node.
@@ -119,7 +119,7 @@ struct Row_insert {
    * @param[in] node Insert node.
    * @param[in] row New row (or first row) for the node.
    */
-  void set_new_row(ins_node_t *node, DTuple *row) noexcept;
+  void set_new_row(InsertNode *node, DTuple *row) noexcept;
 
   /**
    * @brief Inserts an index entry to index.
@@ -135,7 +135,7 @@ struct Row_insert {
    *
    * @return DB_SUCCESS, DB_LOCK_WAIT, DB_DUPLICATE_KEY, or some other error code.
    */
-  [[nodiscard]] db_err index_entry(const Index *index, DTuple *entry, ulint n_ext, bool foreign, que_thr_t *thr) noexcept;
+  [[nodiscard]] DbErr index_entry(const Index *index, DTuple *entry, ulint n_ext, bool foreign, QueThr *thr) noexcept;
 
   /**
    * @brief Inserts a row into a table.
@@ -146,7 +146,7 @@ struct Row_insert {
    *
    * @return Query thread to run next or nullptr.
    */
-  [[nodiscard]] que_thr_t *step(que_thr_t *thr) noexcept;
+  [[nodiscard]] QueThr *step(QueThr *thr) noexcept;
 
   /**
    * @brief Creates an entry template for each index of a table.
@@ -155,7 +155,7 @@ struct Row_insert {
    *
    * @param[in] node The insert node for which to create entry templates.
    */
-  void create_entry_list(ins_node_t *node) noexcept;
+  void create_entry_list(InsertNode *node) noexcept;
 
 #ifdef UNIT_TEST
  private:
@@ -173,8 +173,8 @@ struct Row_insert {
    * @param[in] mtr               Must be committed before latching any further pages
    * @return DB_SUCCESS or error code
    */
-  [[nodiscard]] db_err sec_index_entry_by_modify(
-    ulint mode, Btree_cursor *btr_cur, const DTuple *entry, que_thr_t *thr, mtr_t *mtr
+  [[nodiscard]] DbErr sec_index_entry_by_modify(
+    ulint mode, BtreeCursor *btr_cur, const DTuple *entry, QueThr *thr, Mtr *mtr
   ) noexcept;
 
   /**
@@ -192,8 +192,8 @@ struct Row_insert {
    *
    * @return DB_SUCCESS, DB_FAIL, or error code
    */
-  [[nodiscard]] db_err clust_index_entry_by_modify(
-    ulint mode, Btree_cursor *btr_cur, mem_heap_t **heap, big_rec_t *big_rec, const DTuple *entry, que_thr_t *thr, mtr_t *mtr
+  [[nodiscard]] DbErr clust_index_entry_by_modify(
+    ulint mode, BtreeCursor *btr_cur, MemHeap **heap, BigRec *big_rec, const DTuple *entry, QueThr *thr, Mtr *mtr
   ) noexcept;
 
   /**
@@ -231,7 +231,7 @@ struct Row_insert {
    *  is ULINT_UNDEFINED if the column type in the child table is too short
    *  to fit the new value in the parent table, indicating the update fails.
    */
-  [[nodiscard]] ulint cascade_calc_update_vec(upd_node_t *node, const Foreign *foreign, mem_heap_t *heap) noexcept;
+  [[nodiscard]] ulint cascade_calc_update_vec(UpdNode *node, const Foreign *foreign, MemHeap *heap) noexcept;
 
   /**
    * @brief Set detailed error message associated with foreign key errors for the given transaction.
@@ -252,7 +252,7 @@ struct Row_insert {
    * @param[in] entry Index entry in the parent table.
    */
   void foreign_report_err(
-    const char *errstr, que_thr_t *thr, const Foreign *foreign, const Rec rec, const DTuple *entry
+    const char *errstr, QueThr *thr, const Foreign *foreign, const Rec rec, const DTuple *entry
   ) noexcept;
 
   /**
@@ -277,7 +277,7 @@ struct Row_insert {
    *
    * @return Error code or DB_SUCCESS.
    */
-  [[nodiscard]] db_err update_cascade_client(que_thr_t *thr, upd_node_t *node, Table *table) noexcept;
+  [[nodiscard]] DbErr update_cascade_client(QueThr *thr, UpdNode *node, Table *table) noexcept;
 
   /**
    * Perform referential actions or checks when a parent row is
@@ -292,8 +292,8 @@ struct Row_insert {
    *
    * @return DB_SUCCESS, DB_LOCK_WAIT, or error code
    */
-  [[nodiscard]] db_err foreign_check_on_constraint(
-    que_thr_t *thr, const Foreign *foreign, Btree_pcursor *pcur, DTuple *entry, mtr_t *mtr
+  [[nodiscard]] DbErr foreign_check_on_constraint(
+    QueThr *thr, const Foreign *foreign, BtreePcursor *pcur, DTuple *entry, Mtr *mtr
   ) noexcept;
 
   /**
@@ -310,8 +310,8 @@ struct Row_insert {
    *
    * @return DB_SUCCESS if successful, or an error code.
    */
-  [[nodiscard]] db_err set_shared_rec_lock(
-    ulint type, const Buf_block *block, const Rec rec, const Index *index, const ulint *offsets, que_thr_t *thr
+  [[nodiscard]] DbErr set_shared_rec_lock(
+    ulint type, const BufBlock *block, const Rec rec, const Index *index, const ulint *offsets, QueThr *thr
   ) noexcept;
 
   /**
@@ -328,8 +328,8 @@ struct Row_insert {
    *
    * @return DB_SUCCESS if successful, or an error code.
    */
-  [[nodiscard]] db_err set_exclusive_rec_lock(
-    ulint type, const Buf_block *block, const Rec rec, const Index *index, const ulint *offsets, que_thr_t *thr
+  [[nodiscard]] DbErr set_exclusive_rec_lock(
+    ulint type, const BufBlock *block, const Rec rec, const Index *index, const ulint *offsets, QueThr *thr
   ) noexcept;
 
   /**
@@ -346,7 +346,7 @@ struct Row_insert {
    *
    * @return DB_SUCCESS or error code
    */
-  [[nodiscard]] db_err check_foreign_constraints(const Table *table, const Index *index, DTuple *entry, que_thr_t *thr) noexcept;
+  [[nodiscard]] DbErr check_foreign_constraints(const Table *table, const Index *index, DTuple *entry, QueThr *thr) noexcept;
 
   /**
   * @brief Checks if a unique key violation would occur at the index entry insert.
@@ -354,7 +354,7 @@ struct Row_insert {
    * @param[in] rec User record. Assumes that the caller already has a record lock on the record.
    * @param[in] entry Entry to insert.
    * @param[in] index Index.
-   * @param[in] offsets Phy_rec::get_col_offsets(index, rec).
+   * @param[in] offsets PhyRec::get_col_offsets(index, rec).
    *
    * @return true if a unique key violation occurs, false otherwise.
    */
@@ -370,7 +370,7 @@ struct Row_insert {
     *
    * @return DB_SUCCESS, DB_DUPLICATE_KEY, or DB_LOCK_WAIT.
    */
-  [[nodiscard]] db_err scan_sec_index_for_duplicate(const Index *index, DTuple *entry, que_thr_t *thr) noexcept;
+  [[nodiscard]] DbErr scan_sec_index_for_duplicate(const Index *index, DTuple *entry, QueThr *thr) noexcept;
 
   /**
    * @brief Checks if a unique key violation error would occur at an index entry insert.
@@ -384,7 +384,7 @@ struct Row_insert {
    *
    * @return DB_SUCCESS if no error, DB_DUPLICATE_KEY if error, DB_LOCK_WAIT if we have to wait for a lock on a possible duplicate record.
    */
-  [[nodiscard]] db_err duplicate_error_in_clust(Btree_cursor *btr_cur, DTuple *entry, que_thr_t *thr, mtr_t *mtr) noexcept;
+  [[nodiscard]] DbErr duplicate_error_in_clust(BtreeCursor *btr_cur, DTuple *entry, QueThr *thr, Mtr *mtr) noexcept;
 
   /**
    * @brief Checks if an index entry has a long enough common prefix with an existing record.
@@ -397,7 +397,7 @@ struct Row_insert {
    *
    * @return 0 if no update is needed, ROW_INS_PREV if the previous record should be updated.
    */
-  [[nodiscard]] ulint must_modify(Btree_cursor *btr_cur) noexcept;
+  [[nodiscard]] ulint must_modify(BtreeCursor *btr_cur) noexcept;
 
   /**
    * @brief Tries to insert an index entry to an index.
@@ -419,7 +419,7 @@ struct Row_insert {
    *
    * @return DB_SUCCESS, DB_LOCK_WAIT, DB_FAIL if pessimistic retry needed, or error code.
    */
-  [[nodiscard]] db_err index_entry_low(ulint mode, const Index *index, DTuple *entry, ulint n_ext, que_thr_t *thr) noexcept;
+  [[nodiscard]] DbErr index_entry_low(ulint mode, const Index *index, DTuple *entry, ulint n_ext, QueThr *thr) noexcept;
 
   /**
    * @brief Sets the values of the dtuple fields in entry from the values of appropriate columns in row.
@@ -438,28 +438,28 @@ struct Row_insert {
    *
    * @return DB_SUCCESS if operation successfully completed, else error code or DB_LOCK_WAIT.
    */
-  [[nodiscard]] db_err index_entry_step(ins_node_t *node, que_thr_t *thr) noexcept;
+  [[nodiscard]] DbErr index_entry_step(InsertNode *node, QueThr *thr) noexcept;
 
   /**
    * @brief Allocates a row id for row and inits the node->index field.
    *
    * @param[in] node Row insert node.
    */
-  void alloc_row_id_step(ins_node_t *node) noexcept;
+  void alloc_row_id_step(InsertNode *node) noexcept;
 
   /**
    * @brief Gets a row to insert from the values list.
    *
    * @param[in] node Row insert node.
    */
-  void get_row_from_values(ins_node_t *node) noexcept;
+  void get_row_from_values(InsertNode *node) noexcept;
 
   /**
    * @brief Gets a row to insert from the select list.
    *
    * @param[in] node Row insert node.
    */
-  void get_row_from_select(ins_node_t *node) noexcept;
+  void get_row_from_select(InsertNode *node) noexcept;
 
   /**
    * @brief Inserts a row into a table.
@@ -473,35 +473,35 @@ struct Row_insert {
    *
    * @return DB_SUCCESS if the operation is successfully completed, otherwise an error code or DB_LOCK_WAIT.
    */
-  [[nodiscard]] db_err insert(ins_node_t *node, que_thr_t *thr) noexcept;
+  [[nodiscard]] DbErr insert(InsertNode *node, QueThr *thr) noexcept;
 
   /**
    * @brief Adds system field buffers to a row.
    *
    * @param[in,out] node Insert node to initialize.
    */
-  void alloc_sys_fields(ins_node_t *node) noexcept;
+  void alloc_sys_fields(InsertNode *node) noexcept;
 
  public:
   /** Data dictionary */
   Dict *m_dict{};
 
   /** Lock system */
-  Lock_sys *m_lock_sys{};
+  LockSys *m_lock_sys{};
 
   /** Row update system */
-  Row_update *m_row_upd{};
+  RowUpdate *m_row_upd{};
 };
 
 /**
  * @brief Insert node structure.
  */
-struct Insert_node {
+struct InsertNode {
   /** Node type: QUE_NODE_INSERT */
-  que_common_t m_common;
+  QueCommon m_common;
 
   /** Insert type: INS_VALUES, INS_SEARCHED, or INS_DIRECT */
-  ib_ins_mode_t m_ins_type;
+  IbInsMode m_ins_type;
 
   /** Row to insert */
   DTuple *m_row{};
@@ -510,7 +510,7 @@ struct Insert_node {
   Table *m_table{};
 
   /** Select in searched insert */
-  sel_node_t *m_select{};
+  SelNode *m_select{};
 
   /** List of expressions to evaluate and insert in an INS_VALUES insert */
   que_node_t *m_values_list{};
@@ -540,7 +540,7 @@ struct Insert_node {
   /** Memory heap used as auxiliary storage; entry_list and sys fields are
    * stored here; if this is nullptr, entry list should be created and
    * buffers for sys fields in row allocated */
-  mem_heap_t *m_entry_sys_heap{};
+  MemHeap *m_entry_sys_heap{};
 
   /** Magic number for validation */
   IF_DEBUG(ulint m_magic_n{INS_NODE_MAGIC_N};)

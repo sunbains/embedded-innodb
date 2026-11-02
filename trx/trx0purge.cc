@@ -51,7 +51,7 @@ trx_undo_rec_t trx_purge_dummy_rec;
  * @param[out] trx_no           Transaction number: 0 if array is empty.
  * @param[out] undo_no          Undo number.
  */
-static void trx_purge_arr_get_biggest(trx_undo_arr_t *arr, trx_id_t *trx_no, undo_no_t *undo_no) noexcept {
+static void trx_purge_arr_get_biggest(TrxUndoArr *arr, trx_id_t *trx_no, undo_no_t *undo_no) noexcept {
   ulint n{};
   trx_id_t pair_trx_no{};
   undo_no_t pair_undo_no{};
@@ -81,7 +81,7 @@ static void trx_purge_arr_get_biggest(trx_undo_arr_t *arr, trx_id_t *trx_no, und
   }
 }
 
-trx_undo_inf_t *Purge_sys::arr_store_info(trx_id_t trx_no, undo_no_t undo_no) noexcept {
+TrxUndoInf *PurgeSys::arr_store_info(trx_id_t trx_no, undo_no_t undo_no) noexcept {
   for (ulint i{};; ++i) {
     auto cell = trx_undo_arr_get_nth_info(m_arr, i);
 
@@ -98,7 +98,7 @@ trx_undo_inf_t *Purge_sys::arr_store_info(trx_id_t trx_no, undo_no_t undo_no) no
   }
 }
 
-void Purge_sys::arr_remove_info(trx_undo_inf_t *cell) noexcept {
+void PurgeSys::arr_remove_info(TrxUndoInf *cell) noexcept {
   auto arr = m_arr;
 
   cell->in_use = false;
@@ -108,7 +108,7 @@ void Purge_sys::arr_remove_info(trx_undo_inf_t *cell) noexcept {
   --arr->n_used;
 }
 
-que_t *Purge_sys::graph_build() noexcept {
+QueFork *PurgeSys::graph_build() noexcept {
   auto heap = mem_heap_create(512);
   auto fork = que_fork_create(nullptr, nullptr, QUE_FORK_PURGE, heap);
 
@@ -127,10 +127,10 @@ que_t *Purge_sys::graph_build() noexcept {
   return fork;
 }
 
-void Purge_sys::free_segment(Trx_rseg *rseg, Fil_addr hdr_addr, ulint n_removed_logs) noexcept {
+void PurgeSys::free_segment(TrxRseg *rseg, FilAddr hdr_addr, ulint n_removed_logs) noexcept {
   ut_ad(mutex_own(&m_mutex));
 
-  mtr_t mtr;
+  Mtr mtr;
   bool marked{};
   trx_ulogf_t *log_hdr{};
   trx_usegf_t *seg_hdr{};
@@ -210,12 +210,12 @@ void Purge_sys::free_segment(Trx_rseg *rseg, Fil_addr hdr_addr, ulint n_removed_
   mtr.commit();
 }
 
-void Purge_sys::truncate_rseg_history(Trx_rseg *rseg, trx_id_t limit_trx_no, undo_no_t limit_undo_no) noexcept {
+void PurgeSys::truncate_rseg_history(TrxRseg *rseg, trx_id_t limit_trx_no, undo_no_t limit_undo_no) noexcept {
   ulint n_removed_logs{};
 
   ut_ad(mutex_own(&m_mutex));
 
-  mtr_t mtr;
+  Mtr mtr;
 
   mtr.start();
 
@@ -295,7 +295,7 @@ void Purge_sys::truncate_rseg_history(Trx_rseg *rseg, trx_id_t limit_trx_no, und
   }
 }
 
-void Purge_sys::truncate_history() noexcept {
+void PurgeSys::truncate_history() noexcept {
   trx_id_t limit_trx_no;
   undo_no_t limit_undo_no;
 
@@ -324,7 +324,7 @@ void Purge_sys::truncate_history() noexcept {
   }
 }
 
-bool Purge_sys::truncate_if_arr_empty() noexcept {
+bool PurgeSys::truncate_if_arr_empty() noexcept {
   ut_ad(mutex_own(&m_mutex));
 
   if (m_arr->n_used == 0) {
@@ -339,7 +339,7 @@ bool Purge_sys::truncate_if_arr_empty() noexcept {
   }
 }
 
-void Purge_sys::rseg_get_next_history_log(Trx_rseg *rseg) noexcept {
+void PurgeSys::rseg_get_next_history_log(TrxRseg *rseg) noexcept {
   ut_ad(mutex_own(&m_mutex));
 
   mutex_enter(&rseg->m_mutex);
@@ -352,7 +352,7 @@ void Purge_sys::rseg_get_next_history_log(Trx_rseg *rseg) noexcept {
 
   m_next_stored = false;
 
-  mtr_t mtr;
+  Mtr mtr;
 
   mtr.start();
 
@@ -422,17 +422,17 @@ void Purge_sys::rseg_get_next_history_log(Trx_rseg *rseg) noexcept {
   mutex_exit(&rseg->m_mutex);
 }
 
-void Purge_sys::choose_next_log() noexcept {
+void PurgeSys::choose_next_log() noexcept {
   ulint offset{};
   space_id_t space{};
   page_no_t page_no{};
 
-  mtr_t mtr;
+  Mtr mtr;
 
   ut_ad(mutex_own(&m_mutex));
   ut_ad(m_next_stored == false);
 
-  Trx_rseg *min_rseg{};
+  TrxRseg *min_rseg{};
   auto min_trx_no = LSN_MAX;
 
   for (auto rseg : srv_trx_sys->m_rseg_list) {
@@ -497,7 +497,7 @@ void Purge_sys::choose_next_log() noexcept {
 
   } else {
 
-    m_purge_undo_no = Trx_undo_record::get_undo_no(rec);
+    m_purge_undo_no = TrxUndoRecord::get_undo_no(rec);
     m_page_no = page_get_page_no(Rec(rec).page_align());
     m_offset = page_offset(rec);
   }
@@ -505,11 +505,11 @@ void Purge_sys::choose_next_log() noexcept {
   mtr.commit();
 }
 
-Trx_undo_record Purge_sys::get_next_rec(mem_heap_t *heap) noexcept {
+TrxUndoRecord PurgeSys::get_next_rec(MemHeap *heap) noexcept {
   ulint type;
   page_t *page;
   ulint cmpl_info;
-  Trx_undo_record next_rec;
+  TrxUndoRecord next_rec;
 
   ut_ad(mutex_own(&m_mutex));
   ut_ad(m_next_stored);
@@ -528,10 +528,10 @@ Trx_undo_record Purge_sys::get_next_rec(mem_heap_t *heap) noexcept {
 
     choose_next_log();
 
-    return Trx_undo_record(trx_purge_dummy_rec);
+    return TrxUndoRecord(trx_purge_dummy_rec);
   }
 
-  mtr_t mtr;
+  Mtr mtr;
 
   mtr.start();
 
@@ -552,16 +552,16 @@ Trx_undo_record Purge_sys::get_next_rec(mem_heap_t *heap) noexcept {
 
     rec2 = next_rec_raw;
 
-    type = Trx_undo_record::get_type(rec2);
+    type = TrxUndoRecord::get_type(rec2);
 
     if (type == TRX_UNDO_DEL_MARK_REC) {
 
       break;
     }
 
-    cmpl_info = Trx_undo_record::get_cmpl_info(rec2);
+    cmpl_info = TrxUndoRecord::get_cmpl_info(rec2);
 
-    if (Trx_undo_record::get_extern_storage(rec2)) {
+    if (TrxUndoRecord::get_extern_storage(rec2)) {
       break;
     }
 
@@ -587,7 +587,7 @@ Trx_undo_record Purge_sys::get_next_rec(mem_heap_t *heap) noexcept {
   } else {
     page = Rec(rec2).page_align();
 
-    m_purge_undo_no = Trx_undo_record::get_undo_no(rec2);
+    m_purge_undo_no = TrxUndoRecord::get_undo_no(rec2);
     m_page_no = page_get_page_no(page);
     m_offset = rec2 - page;
 
@@ -597,21 +597,21 @@ Trx_undo_record Purge_sys::get_next_rec(mem_heap_t *heap) noexcept {
     }
   }
 
-  auto rec_copy = Trx_undo_record(rec).copy(heap);
+  auto rec_copy = TrxUndoRecord(rec).copy(heap);
 
   mtr.commit();
 
   return rec_copy;
 }
 
-Purge_sys::Purge_sys(Trx *trx) noexcept : m_trx(trx) {
+PurgeSys::PurgeSys(Trx *trx) noexcept : m_trx(trx) {
   ut_ad(mutex_own(&srv_trx_sys->m_mutex));
 
   m_state = PURGE_STATE_OFF;
 
   rw_lock_create(&m_latch, SYNC_PURGE_LATCH);
 
-  mutex_create(&m_mutex, IF_DEBUG("Purge_sys::m_mutex", ) IF_SYNC_DEBUG(SYNC_PURGE_SYS, ) Current_location());
+  mutex_create(&m_mutex, IF_DEBUG("PurgeSys::m_mutex", ) IF_SYNC_DEBUG(SYNC_PURGE_SYS, ) Current_location());
 
   m_heap = mem_heap_create(256);
 
@@ -627,7 +627,7 @@ Purge_sys::Purge_sys(Trx *trx) noexcept : m_trx(trx) {
   m_view = srv_trx_sys->oldest_copy_or_open_new(0, m_heap);
 }
 
-Purge_sys::~Purge_sys() noexcept {
+PurgeSys::~PurgeSys() noexcept {
   ut_ad(!mutex_own(&srv_trx_sys->m_mutex));
 
   que_graph_free(m_query);
@@ -654,7 +654,7 @@ Purge_sys::~Purge_sys() noexcept {
   mem_heap_free(m_heap);
 }
 
-bool Purge_sys::update_undo_must_exist(trx_id_t trx_id) noexcept {
+bool PurgeSys::update_undo_must_exist(trx_id_t trx_id) noexcept {
 #ifdef UNIV_SYNC_DEBUG
   ut_ad(rw_lock_own(&m_latch, RW_LOCK_SHARED));
 #endif /* UNIV_SYNC_DEBUG */
@@ -662,7 +662,7 @@ bool Purge_sys::update_undo_must_exist(trx_id_t trx_id) noexcept {
   return !m_view->sees_trx_id(trx_id);
 }
 
-void Purge_sys::add_update_undo_to_history(Trx *trx, page_t *undo_page, mtr_t *mtr) noexcept {
+void PurgeSys::add_update_undo_to_history(Trx *trx, page_t *undo_page, Mtr *mtr) noexcept {
   ulint hist_size;
 
   auto undo = trx->m_update_undo;
@@ -713,7 +713,7 @@ void Purge_sys::add_update_undo_to_history(Trx *trx, page_t *undo_page, mtr_t *m
   }
 }
 
-void Purge_sys::rec_release(trx_undo_inf_t *cell) noexcept {
+void PurgeSys::rec_release(TrxUndoInf *cell) noexcept {
   mutex_enter(&m_mutex);
 
   arr_remove_info(cell);
@@ -721,8 +721,8 @@ void Purge_sys::rec_release(trx_undo_inf_t *cell) noexcept {
   mutex_exit(&m_mutex);
 }
 
-ulint Purge_sys::run() noexcept {
-  que_thr_t *thr;
+ulint PurgeSys::run() noexcept {
+  QueThr *thr;
   ulint old_pages_handled;
 
   mutex_enter(&m_mutex);
@@ -812,8 +812,8 @@ ulint Purge_sys::run() noexcept {
   return m_n_pages_handled - old_pages_handled;
 }
 
-Trx_undo_record Purge_sys::fetch_next_rec(roll_ptr_t *roll_ptr, trx_undo_inf_t **cell, mem_heap_t *heap) noexcept {
-  Trx_undo_record undo_rec;
+TrxUndoRecord PurgeSys::fetch_next_rec(roll_ptr_t *roll_ptr, TrxUndoInf **cell, MemHeap *heap) noexcept {
+  TrxUndoRecord undo_rec;
 
   mutex_enter(&m_mutex);
 
@@ -822,7 +822,7 @@ Trx_undo_record Purge_sys::fetch_next_rec(roll_ptr_t *roll_ptr, trx_undo_inf_t *
 
     mutex_exit(&m_mutex);
 
-    return Trx_undo_record{};
+    return TrxUndoRecord{};
   }
 
   if (!m_next_stored) {
@@ -835,7 +835,7 @@ Trx_undo_record Purge_sys::fetch_next_rec(roll_ptr_t *roll_ptr, trx_undo_inf_t *
 
       mutex_exit(&m_mutex);
 
-      return Trx_undo_record{};
+      return TrxUndoRecord{};
     }
   }
 
@@ -847,7 +847,7 @@ Trx_undo_record Purge_sys::fetch_next_rec(roll_ptr_t *roll_ptr, trx_undo_inf_t *
 
     mutex_exit(&m_mutex);
 
-    return Trx_undo_record{};
+    return TrxUndoRecord{};
   }
 
   if (m_purge_trx_no >= m_view->m_low_limit_no) {
@@ -857,7 +857,7 @@ Trx_undo_record Purge_sys::fetch_next_rec(roll_ptr_t *roll_ptr, trx_undo_inf_t *
 
     mutex_exit(&m_mutex);
 
-    return Trx_undo_record{};
+    return TrxUndoRecord{};
   }
 
   *roll_ptr = trx_undo_build_roll_ptr(false, m_rseg->m_id, m_page_no, m_offset);
@@ -876,7 +876,7 @@ Trx_undo_record Purge_sys::fetch_next_rec(roll_ptr_t *roll_ptr, trx_undo_inf_t *
   return undo_rec;
 }
 
-std::string Purge_sys::to_string() noexcept {
+std::string PurgeSys::to_string() noexcept {
   auto str = m_view->to_string();
 
   str += std::format("Purge trx n:o {} undo n:o {}\n", m_purge_trx_no, m_purge_undo_no);

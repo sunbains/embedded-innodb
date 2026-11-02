@@ -45,7 +45,7 @@ constexpr uint32_t DYN_BLOCK_FULL_FLAG = 0x1000000UL;
  * as needed. It maintains a list of blocks where data is stored.
  */
 template <size_t N = DYN_ARRAY_DATA_SIZE>
-struct Dynamic_array {
+struct DynamicArray {
   /** @brief A block in a dynamically allocated array. */
   struct Block {
     Block() : m_used(0), m_magic_n(DYN_BLOCK_MAGIC_N) {}
@@ -91,10 +91,10 @@ struct Dynamic_array {
   UT_SLIST_NODE_GETTER_DEF(Block, m_node)
 
   /** Constructor */
-  Dynamic_array() : m_block() { m_blocks.push_back(&m_block); }
+  DynamicArray() : m_block() { m_blocks.push_back(&m_block); }
 
   /** Destructor */
-  ~Dynamic_array() {
+  ~DynamicArray() {
     ut_ad(m_block.m_magic_n == DYN_BLOCK_MAGIC_N);
     for (auto block : m_blocks) {
       call_destructor(block);
@@ -377,7 +377,7 @@ struct Dynamic_array {
 
   /** In the first block this is != nullptr if dynamic
   allocation has been needed */
-  mem_heap_t *m_heap{};
+  MemHeap *m_heap{};
 
   using Blocks = UT_SLIST_BASE_NODE_T(Block, m_node);
 
@@ -385,4 +385,4 @@ struct Dynamic_array {
   Blocks m_blocks;
 };
 
-using Dyn_array = Dynamic_array<DYN_ARRAY_DATA_SIZE>;
+using Dyn_array = DynamicArray<DYN_ARRAY_DATA_SIZE>;

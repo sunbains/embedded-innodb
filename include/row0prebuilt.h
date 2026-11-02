@@ -58,7 +58,7 @@ struct Prebuilt {
    * @param[in] table Table handle
    * @param[in] heap Memory heap from which the prebuilt struct is allocated
    */
-  Prebuilt(FSP *fsp, Btree *btree, Table *table, mem_heap_t *heap) noexcept;
+  Prebuilt(Fsp *fsp, Btree *btree, Table *table, MemHeap *heap) noexcept;
 
   /**
    * Destructor.
@@ -74,7 +74,7 @@ struct Prebuilt {
    *
    * @return own: a prebuilt struct
    */
-  [[nodiscard]] static Prebuilt *create(FSP *fsp, Btree *btree, Table *table) noexcept;
+  [[nodiscard]] static Prebuilt *create(Fsp *fsp, Btree *btree, Table *table) noexcept;
 
   /**
    * Free a prebuilt struct for a user table handle.
@@ -111,21 +111,21 @@ struct Prebuilt {
 
   /**
    * Updates the transaction pointers in query graphs stored in the prebuilt struct.
-   * Used by DDL to externalize the new index, see @m_index_is_usable.
+   * Used by Ddl to externalize the new index, see @m_index_is_usable.
    *
    * @param[in] trx transaction handle
    */
   void update_trx(Trx *trx) noexcept;
 
   /* Cached row. */
-  struct Cached_row {
+  struct CachedRow {
     /**
      * Add a row to the cache.
      *
      * @param[in] rec record
      * @param[in] offsets offsets
      */
-    void add_row(const Rec rec, const Rec_offs &offsets) noexcept {
+    void add_row(const Rec rec, const RecOffs &offsets) noexcept {
       /* Get the size of the physical record in the page */
       const auto rec_len = offsets.size();
 
@@ -178,7 +178,7 @@ struct Prebuilt {
   };
 
   /** Cache for rows fetched when positioning the cursor. */
-  struct Row_cache {
+  struct RowCache {
     /**
      * Clear the row cache.
      */
@@ -242,14 +242,14 @@ struct Prebuilt {
     * @param[in] rec record
     * @param[in] offsets offsets
     */
-    inline void add_row(const Rec rec, const Rec_offs &offsets) noexcept;
+    inline void add_row(const Rec rec, const RecOffs &offsets) noexcept;
 
     /** Memory heap for cached rows */
-    mem_heap_t *m_heap{};
+    MemHeap *m_heap{};
 
     /** A cache for fetched rows if we fetch many rows from
     the same cursor: it saves CPU time to fetch them in a batch. */
-    Cached_row *m_cached_rows{};
+    CachedRow *m_cached_rows{};
 
     /** Max size of the row cache. */
     uint16_t m_n_max{};
@@ -264,7 +264,7 @@ struct Prebuilt {
     uint16_t m_n_cached{};
 
     /** ROW_SEL_NEXT or ROW_SEL_PREV */
-    ib_cur_op_t m_direction{ROW_SEL_UNDEFINED};
+    IbCurOp m_direction{ROW_SEL_UNDEFINED};
   };
 
   /** This magic number is set to ROW_PREBUILT_ALLOCATED when
@@ -305,7 +305,7 @@ struct Prebuilt {
   uint8_t m_new_rec_locks{};
 
   /** Memory heap from which these auxiliary structures are allocated when needed */
-  mem_heap_t *m_heap{};
+  MemHeap *m_heap{};
 
   /** Table handle */
   Table *m_table{};
@@ -317,13 +317,13 @@ struct Prebuilt {
   Trx *m_trx{};
 
   /** Persistent cursor used in selects and updates */
-  Btree_pcursor *m_pcur{};
+  BtreePcursor *m_pcur{};
 
   /** Persistent cursor used in some selects and updates */
-  Btree_pcursor *m_clust_pcur{};
+  BtreePcursor *m_clust_pcur{};
 
   /** Dummy query graph used in selects */
-  que_fork_t *m_sel_graph{};
+  QueFork *m_sel_graph{};
 
   /** Prebuilt dtuple used in selects */
   DTuple *m_search_tuple{};
@@ -336,13 +336,13 @@ struct Prebuilt {
   DTuple *m_clust_ref{};
 
   /** LOCK_NONE, LOCK_S, or LOCK_X */
-  Lock_mode m_select_lock_type{LOCK_NONE};
+  LockMode m_select_lock_type{LOCK_NONE};
 
   /** Memory heap where a previous version is built in consistent read */
-  mem_heap_t *m_old_vers_heap{};
+  MemHeap *m_old_vers_heap{};
 
   /** Rows cached by select read ahead */
-  Row_cache m_row_cache{};
+  RowCache m_row_cache{};
 
   /** Result of the last compare in row_search_mvcc(). */
   int m_result{};

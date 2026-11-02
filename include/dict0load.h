@@ -29,8 +29,8 @@ Created 4/24/1996 Heikki Tuuri
 #include "srv0srv.h"
 #include "ut0byte.h"
 
-struct Dict_load {
-  explicit Dict_load(Dict *dict) noexcept : m_dict{dict} {}
+struct DictLoad {
+  explicit DictLoad(Dict *dict) noexcept : m_dict{dict} {}
 
   /**
    * In a crash recovery we already have all the tablespace objects created.
@@ -45,7 +45,7 @@ struct Dict_load {
    * 
    * @return DB_SUCCESS or error code.
    */
-  [[nodiscard]] db_err open(bool in_crash_recovery) noexcept;
+  [[nodiscard]] DbErr open(bool in_crash_recovery) noexcept;
 
   /**
    * Finds the first table name in the given database.
@@ -69,7 +69,7 @@ struct Dict_load {
    * .ibd file, but the file does not exist, then we set the
    * ibd_file_missing flag true in the table object we return
    */
-  [[nodiscard]] Table *load_table(ib_recovery_t recovery, const char *name) noexcept;
+  [[nodiscard]] Table *load_table(IbRecovery recovery, const char *name) noexcept;
 
   /**
    * Loads a table object based on the table id.
@@ -79,7 +79,7 @@ struct Dict_load {
    * 
    * @return Table object, nullptr if table does not exist
    */
-  [[nodiscard]] Table *load_table_on_id(ib_recovery_t recovery, Dict_id table_id) noexcept;
+  [[nodiscard]] Table *load_table_on_id(IbRecovery recovery, Dict_id table_id) noexcept;
 
   /**
    * @brief Loads system table index definitions.
@@ -90,7 +90,7 @@ struct Dict_load {
    *
    * @param[in] table System table to load index definitions for.
    */
-  [[nodiscard]] db_err load_sys_table(Table *table) noexcept;
+  [[nodiscard]] DbErr load_sys_table(Table *table) noexcept;
 
   /**
    * @brief Loads foreign key constraints where the table is either the foreign key
@@ -104,7 +104,7 @@ struct Dict_load {
    * 
    * @return DB_SUCCESS or error code
    */
-  [[nodiscard]] db_err load_foreigns(const char *table_name, bool check_charsets) noexcept;
+  [[nodiscard]] DbErr load_foreigns(const char *table_name, bool check_charsets) noexcept;
 
   /**
    * @brief Prints to the standard output information on all tables found in the data
@@ -119,7 +119,7 @@ struct Dict_load {
    * 
    * @return DB_SUCCESS if successful, error code otherwise.
    */
-  db_err load_system_tables() noexcept;
+  DbErr load_system_tables() noexcept;
 
 #ifndef UNIT_TEST
  private:
@@ -132,7 +132,7 @@ struct Dict_load {
    * 
    * @return DB_SUCCESS or error code.
    */
-  [[nodiscard]] db_err load_system_table(Table *table) noexcept;
+  [[nodiscard]] DbErr load_system_table(Table *table) noexcept;
 
   /**
    * @brief Compare the name of an index column.
@@ -161,7 +161,7 @@ struct Dict_load {
    * @param[in] table The table.
    * @param[in] heap The memory heap for temporary storage.
    */
-  [[nodiscard]] db_err load_columns(Table *table, mem_heap_t *heap) noexcept;
+  [[nodiscard]] DbErr load_columns(Table *table, MemHeap *heap) noexcept;
 
   /**
    * @brief Loads definitions for table foreign keys.
@@ -169,7 +169,7 @@ struct Dict_load {
    * @param[in] table The table.
    * @param[in] heap The memory heap for temporary storage.
    */
-  [[nodiscard]] db_err load_foreigns(Table *table, mem_heap_t *heap) noexcept;
+  [[nodiscard]] DbErr load_foreigns(Table *table, MemHeap *heap) noexcept;
 
   /**
    * @brief Loads definitions for index fields.
@@ -177,7 +177,7 @@ struct Dict_load {
    * @param[in] index The index whose fields to load.
    * @param[in] heap The memory heap for temporary storage.
    */
-  [[nodiscard]] db_err load_fields(Index *index, mem_heap_t *heap) noexcept;
+  [[nodiscard]] DbErr load_fields(Index *index, MemHeap *heap) noexcept;
 
   /**
    * @brief Loads definitions for table indexes. Adds them to the data dictionary cache.
@@ -188,7 +188,7 @@ struct Dict_load {
    * @return DB_SUCCESS if ok, DB_CORRUPTION if corruption of dictionary table or
    *   DB_UNSUPPORTED if table has unknown index type
    */
-  [[nodiscard]] db_err load_indexes(Table *table, mem_heap_t *heap) noexcept;
+  [[nodiscard]] DbErr load_indexes(Table *table, MemHeap *heap) noexcept;
 
   /**
    * @brief Loads foreign key constraint col names (also for the referenced table).
@@ -196,7 +196,7 @@ struct Dict_load {
    * @param[in] id foreign constraint id as a null-terminated string
    * @param[in,out] foreign foreign constraint object
    */
-  [[nodiscard]] db_err load_foreign_cols(const char *id, Foreign *foreign) noexcept;
+  [[nodiscard]] DbErr load_foreign_cols(const char *id, Foreign *foreign) noexcept;
 
   /**
    * @brief Loads a foreign key constraint to the dictionary cache.
@@ -206,7 +206,7 @@ struct Dict_load {
    *
    * @return DB_SUCCESS or error code.
    */
-  [[nodiscard]] db_err load_foreign(const char *id, bool check_charsets) noexcept;
+  [[nodiscard]] DbErr load_foreign(const char *id, bool check_charsets) noexcept;
 
  private:
 #ifndef UNIT_TEST

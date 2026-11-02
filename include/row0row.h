@@ -47,7 +47,7 @@ constexpr ulint ROW_COPY_POINTERS = 2;
  *
  * @param[in] rec Record
  * @param[in] index Clustered index
- * @param[in] offsets Phy_rec::get_col_offsets(rec, index)
+ * @param[in] offsets PhyRec::get_col_offsets(rec, index)
  *
  * @return Offset of DATA_TRX_ID
  */
@@ -58,7 +58,7 @@ ulint row_get_trx_id_offset(const Rec rec, const Index *index, const ulint *offs
  *
  * @param[in] rec Record
  * @param[in] index Clustered index
- * @param[in] offsets Phy_rec::get_col_offsets(rec, index)
+ * @param[in] offsets PhyRec::get_col_offsets(rec, index)
  *
  * @return Value of the trx id field
  */
@@ -69,7 +69,7 @@ inline trx_id_t row_get_rec_trx_id(const Rec rec, const Index *index, const ulin
  *
  * @param[in] rec Record
  * @param[in] index Clustered index
- * @param[in] offsets Phy_rec::get_col_offsets(rec, index)
+ * @param[in] offsets PhyRec::get_col_offsets(rec, index)
  *
  * @return Value of the roll pointer field
  */
@@ -88,7 +88,7 @@ inline roll_ptr_t row_get_rec_roll_ptr(const Rec rec, Index *index, const ulint 
  * externally stored columns in the clustered index record are
  * unavailable and ext != NULL.
  */
-DTuple *row_build_index_entry(const DTuple *row, row_ext_t *ext, const Index *index, mem_heap_t *heap);
+DTuple *row_build_index_entry(const DTuple *row, RowExt *ext, const Index *index, MemHeap *heap);
 
 /**
  * @brief An inverse function to row_build_index_entry. Builds a row from a
@@ -103,8 +103,8 @@ DTuple *row_build_index_entry(const DTuple *row, row_ext_t *ext, const Index *in
  *   directly into this record, therefore, the buffer page of this record must be at least s-latched and the latch held
  *   as long as the row dtuple is used!
  *
- * @param[in] offsets Phy_rec::get_col_offsets(rec,index) or NULL, in which case this function
- *   will invoke Phy_rec::get_col_offsets()
+ * @param[in] offsets PhyRec::get_col_offsets(rec,index) or NULL, in which case this function
+ *   will invoke PhyRec::get_col_offsets()
  *
  * @param[in] col_table Table, to check which * externally stored columns * occur in the ordering columns
  *   of an index, or NULL if * index->table should be * consulted instead; the user * columns in this table should be
@@ -116,7 +116,7 @@ DTuple *row_build_index_entry(const DTuple *row, row_ext_t *ext, const Index *in
  * @return own: row built; see the NOTE below!
  */
 DTuple *row_build(
-  ulint type, const Index *index, Rec rec, const Rec_offs &offsets, const Table *col_table, row_ext_t **ext, mem_heap_t *heap
+  ulint type, const Index *index, Rec rec, const RecOffs &offsets, const Table *col_table, RowExt **ext, MemHeap *heap
 );
 
 /**
@@ -124,13 +124,13 @@ DTuple *row_build(
  *
  * @param[in] rec Record in the index.
  * @param[in] index Index.
- * @param[in] offsets Phy_rec::get_col_offsets(rec, index).
+ * @param[in] offsets PhyRec::get_col_offsets(rec, index).
  * @param[out] n_ext Number of externally stored columns.
  * @param[in] heap Memory heap from which the memory needed is allocated.
  *
  * @return Index entry built; does not set info_bits, and the data fields in the entry will point directly to rec.
  */
-DTuple *row_rec_to_index_entry_low(const Rec rec, const Index *index, const Rec_offs &offsets, ulint *n_ext, mem_heap_t *heap);
+DTuple *row_rec_to_index_entry_low(const Rec rec, const Index *index, const RecOffs &offsets, ulint *n_ext, MemHeap *heap);
 
 /**
  * @brief Converts an index record to a typed data tuple.
@@ -145,14 +145,14 @@ DTuple *row_rec_to_index_entry_low(const Rec rec, const Index *index, const Rec_
  *   be at least s-latched and the latch held as long as the dtuple is used!
  *
  * @param[in] index Index
- * @param[in,out] offsets Phy_rec::get_col_offsets(rec)
+ * @param[in,out] offsets PhyRec::get_col_offsets(rec)
  * @param[out] n_ext Number of externally stored columns
  * @param[in] heap Memory heap from which the memory needed is allocated
  *
  * @return Index entry built; see the NOTE below!
  */
 DTuple *row_rec_to_index_entry(
-  ulint type, const Rec rec, const Index *index, const Rec_offs &offsets, ulint *n_ext, mem_heap_t *heap
+  ulint type, const Rec rec, const Index *index, const RecOffs &offsets, ulint *n_ext, MemHeap *heap
 );
 
 /**
@@ -172,7 +172,7 @@ DTuple *row_rec_to_index_entry(
  *
  * @return DTuple* Row reference built; see the NOTE below.
  */
-DTuple *row_build_row_ref(ulint type, const Index *index, Rec rec, mem_heap_t *heap);
+DTuple *row_build_row_ref(ulint type, const Index *index, Rec rec, MemHeap *heap);
 
 /**
  * @brief Builds from a secondary index record a row reference with which we can
@@ -185,10 +185,10 @@ DTuple *row_build_row_ref(ulint type, const Index *index, Rec rec, mem_heap_t *h
  *  the latch held as long as the row reference is used!
  *
  * @param[in] index Secondary index
- * @param[in] offsets Phy_rec::get_col_offsets(rec, index) or NULL
+ * @param[in] offsets PhyRec::get_col_offsets(rec, index) or NULL
  * @param[in] trx Transaction
  */
-void row_build_row_ref_in_tuple(DTuple *ref, Rec rec, const Index *index, const Rec_offs *offsets, Trx *trx);
+void row_build_row_ref_in_tuple(DTuple *ref, Rec rec, const Index *index, const RecOffs *offsets, Trx *trx);
 
 /**
  * @brief Builds from a secondary index record a row reference with which we can
@@ -197,7 +197,7 @@ void row_build_row_ref_in_tuple(DTuple *ref, Rec rec, const Index *index, const 
  * @param[in,out] ref Typed data tuple where the reference is built.
  * @param[in] map Array of field numbers in rec telling how ref should be built from the fields of rec.
  * @param[in] rec Record in the index; must be preserved while ref is used, as we do not copy field values to heap.
- * @param[in] offsets Array returned by Phy_rec::get_col_offsets().
+ * @param[in] offsets Array returned by PhyRec::get_col_offsets().
  */
 inline void row_build_row_ref_fast(DTuple *ref, const ulint *map, const Rec rec, const ulint *offsets);
 
@@ -212,7 +212,7 @@ inline void row_build_row_ref_fast(DTuple *ref, const ulint *map, const Rec rec,
  *
  * @return true if found.
  */
-bool row_search_on_row_ref(Btree_pcursor *pcur, ulint mode, const Table *table, const DTuple *ref, mtr_t *mtr);
+bool row_search_on_row_ref(BtreePcursor *pcur, ulint mode, const Table *table, const DTuple *ref, Mtr *mtr);
 
 /**
  * @brief Fetches the clustered index record for a secondary index record.
@@ -226,7 +226,7 @@ bool row_search_on_row_ref(Btree_pcursor *pcur, ulint mode, const Table *table, 
  *
  * @return Rec  Record or NULL, if no record found
  */
-Rec row_get_clust_rec(ulint mode, const Rec rec, const Index *index, Index **clust_index, mtr_t *mtr);
+Rec row_get_clust_rec(ulint mode, const Rec rec, const Index *index, Index **clust_index, Mtr *mtr);
 
 /**
  * @brief Searches an index record.
@@ -239,7 +239,7 @@ Rec row_get_clust_rec(ulint mode, const Rec rec, const Index *index, Index **clu
  *
  * @return true if found
  */
-bool row_search_index_entry(Index *index, const DTuple *entry, ulint mode, Btree_pcursor *pcur, mtr_t *mtr);
+bool row_search_index_entry(Index *index, const DTuple *entry, ulint mode, BtreePcursor *pcur, Mtr *mtr);
 
 /**
  * @brief The allowed latching order of index records is the following:
@@ -274,7 +274,7 @@ ulint row_raw_format(const char *data, ulint data_len, const Field *dict_field, 
  *
  * @param[in] rec Record
  * @param[in] index Clustered index
- * @param[in] offsets Phy_rec::get_col_offsets(rec, index)
+ * @param[in] offsets PhyRec::get_col_offsets(rec, index)
  *
  * @return Value of the field
  */
@@ -288,7 +288,7 @@ inline trx_id_t row_get_rec_trx_id(const Rec rec, const Index *index, const ulin
     offset = row_get_trx_id_offset(rec, index, offsets);
   }
 
-  return Trx_sys::read_trx_id(rec.get() + offset);
+  return TrxSys::read_trx_id(rec.get() + offset);
 }
 
 /**
@@ -296,7 +296,7 @@ inline trx_id_t row_get_rec_trx_id(const Rec rec, const Index *index, const ulin
  *
  * @param[in] rec Record
  * @param[in] index Clustered index
- * @param[in] offsets Phy_rec::get_col_offsets(rec, index)
+ * @param[in] offsets PhyRec::get_col_offsets(rec, index)
  *
  * @return Value of the field
  */
@@ -320,9 +320,9 @@ inline roll_ptr_t row_get_rec_roll_ptr(const Rec rec, Index *index, const ulint 
  * @param[in,out] ref    Typed data tuple where the reference is built
  * @param[in] map        Array of field numbers in rec telling how ref should be built from the fields of rec
  * @param[in] rec        Record in the index; must be preserved while ref is used, as we do not copy field values to heap
- * @param[in] offsets    Array returned by Phy_rec::get_col_offsets()
+ * @param[in] offsets    Array returned by PhyRec::get_col_offsets()
  */
-inline void row_build_row_ref_fast(DTuple *ref, const ulint *map, const Rec rec, const Rec_offs &offsets) {
+inline void row_build_row_ref_fast(DTuple *ref, const ulint *map, const Rec rec, const RecOffs &offsets) {
   ut_ad(rec.offs_validate(nullptr, offsets));
   ut_ad(!offsets.any_extern());
 

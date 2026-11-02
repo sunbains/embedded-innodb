@@ -118,7 +118,7 @@ static bool test_running = false;
 typedef struct dml_op_struct {
   int n_ops;                  /* Total ops performed */
   int n_errs;                 /* Total errors */
-  int errs[DB_DATA_MISMATCH]; /* This is taken from db_err.h
+  int errs[DB_DATA_MISMATCH]; /* This is taken from DbErr.h
                       and it is going to be a very sparse
                       array but we can live with it for
                       testing. */

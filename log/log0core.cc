@@ -37,7 +37,7 @@ constexpr ulint LOG_BUF_FLUSH_RATIO = 2;
 constexpr ulint LOG_BUF_WRITE_MARGIN = 4 * IB_FILE_BLOCK_SIZE;
 constexpr ulint LOG_BUF_FLUSH_MARGIN = LOG_BUF_WRITE_MARGIN + 4 * UNIV_PAGE_SIZE;
 
-Log_core::Log_core() noexcept {
+LogCore::LogCore() noexcept {
   m_lsn = LOG_START_LSN;
 
   // Allocate log buffer
@@ -59,14 +59,14 @@ Log_core::Log_core() noexcept {
   m_lsn = LOG_START_LSN + LOG_BLOCK_HDR_SIZE;
 }
 
-Log_core::~Log_core() noexcept {
+LogCore::~LogCore() noexcept {
   if (m_buf_ptr) {
     mem_free(m_buf_ptr);
     m_buf_ptr = nullptr;
   }
 }
 
-lsn_t Log_core::reserve_and_write_fast(const void *str, ulint len, lsn_t *start_lsn) noexcept {
+lsn_t LogCore::reserve_and_write_fast(const void *str, ulint len, lsn_t *start_lsn) noexcept {
   auto data_len = len + m_buf_free % IB_FILE_BLOCK_SIZE;
 
   if (data_len >= IB_FILE_BLOCK_SIZE - LOG_BLOCK_TRL_SIZE) {
@@ -86,7 +86,7 @@ lsn_t Log_core::reserve_and_write_fast(const void *str, ulint len, lsn_t *start_
   return m_lsn;
 }
 
-void Log_core::write_low(const byte *str, ulint str_len) noexcept {
+void LogCore::write_low(const byte *str, ulint str_len) noexcept {
   while (str_len > 0) {
     auto data_len = (m_buf_free % IB_FILE_BLOCK_SIZE) + str_len;
     ulint len;
@@ -122,44 +122,44 @@ void Log_core::write_low(const byte *str, ulint str_len) noexcept {
   }
 }
 
-void Log_core::block_init(byte *log_block, lsn_t lsn) noexcept {
+void LogCore::block_init(byte *log_block, lsn_t lsn) noexcept {
   const auto no = block_convert_lsn_to_no(lsn);
   block_set_hdr_no(log_block, no);
   block_set_data_len(log_block, LOG_BLOCK_HDR_SIZE);
   block_set_first_rec_group(log_block, 0);
 }
 
-ulint Log_core::block_convert_lsn_to_no(lsn_t lsn) noexcept {
+ulint LogCore::block_convert_lsn_to_no(lsn_t lsn) noexcept {
   return ((ulint)(lsn / IB_FILE_BLOCK_SIZE) & 0x3FFFFFFFUL) + 1;
 }
 
-void Log_core::block_set_hdr_no(byte *log_block, ulint n) noexcept {
+void LogCore::block_set_hdr_no(byte *log_block, ulint n) noexcept {
   ut_ad(n > 0);
   ut_ad(n < LOG_BLOCK_FLUSH_BIT_MASK);
   mach_write_to_4(log_block + LOG_BLOCK_HDR_NO, n);
 }
 
-ulint Log_core::block_get_hdr_no(const byte *log_block) noexcept {
+ulint LogCore::block_get_hdr_no(const byte *log_block) noexcept {
   return ~LOG_BLOCK_FLUSH_BIT_MASK & mach_read_from_4(log_block + LOG_BLOCK_HDR_NO);
 }
 
-void Log_core::block_set_data_len(byte *log_block, ulint len) noexcept {
+void LogCore::block_set_data_len(byte *log_block, ulint len) noexcept {
   mach_write_to_2(log_block + LOG_BLOCK_HDR_DATA_LEN, len);
 }
 
-ulint Log_core::block_get_data_len(const byte *log_block) noexcept {
+ulint LogCore::block_get_data_len(const byte *log_block) noexcept {
   return mach_read_from_2(log_block + LOG_BLOCK_HDR_DATA_LEN);
 }
 
-void Log_core::block_set_first_rec_group(byte *log_block, ulint offset) noexcept {
+void LogCore::block_set_first_rec_group(byte *log_block, ulint offset) noexcept {
   mach_write_to_2(log_block + LOG_BLOCK_FIRST_REC_GROUP, offset);
 }
 
-ulint Log_core::block_get_first_rec_group(const byte *log_block) noexcept {
+ulint LogCore::block_get_first_rec_group(const byte *log_block) noexcept {
   return mach_read_from_2(log_block + LOG_BLOCK_FIRST_REC_GROUP);
 }
 
-uint32_t Log_core::block_calc_checksum(const byte *block) noexcept {
+uint32_t LogCore::block_calc_checksum(const byte *block) noexcept {
   uint32_t sh = 0;
   uint32_t sum = 1;
 
@@ -177,39 +177,39 @@ uint32_t Log_core::block_calc_checksum(const byte *block) noexcept {
   return sum;
 }
 
-void Log_core::block_set_checksum(byte *log_block, ulint checksum) noexcept {
+void LogCore::block_set_checksum(byte *log_block, ulint checksum) noexcept {
   mach_write_to_4(log_block + IB_FILE_BLOCK_SIZE - LOG_BLOCK_CHECKSUM, checksum);
 }
 
-uint32_t Log_core::block_get_checksum(const byte *log_block) noexcept {
+uint32_t LogCore::block_get_checksum(const byte *log_block) noexcept {
   return mach_read_from_4(log_block + IB_FILE_BLOCK_SIZE - LOG_BLOCK_CHECKSUM);
 }
 
-void Log_core::block_store_checksum(byte *block) noexcept {
+void LogCore::block_store_checksum(byte *block) noexcept {
   block_set_checksum(block, block_calc_checksum(block));
 }
 
-lsn_t Log_core::get_lsn() const noexcept {
+lsn_t LogCore::get_lsn() const noexcept {
   return m_lsn;
 }
 
-ulint Log_core::get_buf_free() const noexcept {
+ulint LogCore::get_buf_free() const noexcept {
   return m_buf_free;
 }
 
-const byte *Log_core::get_buf() const noexcept {
+const byte *LogCore::get_buf() const noexcept {
   return m_buf;
 }
 
-ulint Log_core::get_buf_size() const noexcept {
+ulint LogCore::get_buf_size() const noexcept {
   return m_buf_size;
 }
 
-bool Log_core::is_buf_available(ulint len) const noexcept {
+bool LogCore::is_buf_available(ulint len) const noexcept {
   return m_buf_free + len <= m_buf_size;
 }
 
-void Log_core::reset() noexcept {
+void LogCore::reset() noexcept {
   m_lsn = LOG_START_LSN;
   memset(m_buf, '\0', LOG_BUFFER_SIZE);
 

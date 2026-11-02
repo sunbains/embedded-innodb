@@ -24,22 +24,22 @@ int ib_create_tempfile(const char *filename); /*!< in: temp filename prefix */
 thread */
 
 bool ib_handle_errors(
-  enum db_err *new_err, /*!< out: possible new error
+  enum DbErr *new_err, /*!< out: possible new error
                                               encountered in lock wait, or if
                                               no new error, the value of
                                               trx->error_state at the entry of
                                               this  function */
   Trx *trx,             /*!< in: transaction */
-  que_thr_t *thr,       /*!< in: query thread */
-  trx_savept_t *savept
+  QueThr *thr,       /*!< in: query thread */
+  TrxSavept *savept
 ); /*!< in: savepoint or nullptr */
 
 /** Sets a lock on a table.
 @return	error code or DB_SUCCESS */
-enum db_err ib_trx_lock_table_with_retry(
+enum DbErr ib_trx_lock_table_with_retry(
   Trx *trx,     /*!< in/out: transaction */
   Table *table, /*!< in: table to lock */
-  enum Lock_mode mode
+  enum LockMode mode
 ); /*!< in: lock mode */
 
 /** Updates the table modification counter and calculates new estimates

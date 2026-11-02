@@ -26,7 +26,7 @@ static const char S_innodb_tablespace_monitor[] = "innodb_tablespace_monitor";
 static const char S_innodb_table_monitor[] = "innodb_table_monitor";
 static const char S_innodb_mem_validate[] = "innodb_mem_validate";
 
-db_err DDL::drop_table_in_background(const char *name) noexcept {
+DbErr Ddl::drop_table_in_background(const char *name) noexcept {
   auto trx = srv_trx_sys->create_background_trx(nullptr);
 
   auto started = trx->start(ULINT_UNDEFINED);
@@ -56,7 +56,7 @@ db_err DDL::drop_table_in_background(const char *name) noexcept {
   return err;
 }
 
-ulint DDL::drop_tables_in_background() noexcept {
+ulint Ddl::drop_tables_in_background() noexcept {
   ulint n_tables_dropped{};
 
   for (;;) {
@@ -103,13 +103,13 @@ ulint DDL::drop_tables_in_background() noexcept {
   }
 }
 
-ulint DDL::get_background_drop_list_len() noexcept {
+ulint Ddl::get_background_drop_list_len() noexcept {
   ut_ad(mutex_own(&srv_trx_sys->m_mutex));
 
   return m_drop_list.size();
 }
 
-bool DDL::add_table_to_background_drop_list(const char *name) noexcept {
+bool Ddl::add_table_to_background_drop_list(const char *name) noexcept {
   mutex_enter(&srv_trx_sys->m_mutex);
 
   for (auto drop : m_drop_list) {
@@ -122,7 +122,7 @@ bool DDL::add_table_to_background_drop_list(const char *name) noexcept {
     }
   }
 
-  auto drop = static_cast<Drop_list *>(mem_alloc(sizeof(Drop_list)));
+  auto drop = static_cast<DropList *>(mem_alloc(sizeof(DropList)));
 
   drop->m_table_name = mem_strdup(name);
 
@@ -133,7 +133,7 @@ bool DDL::add_table_to_background_drop_list(const char *name) noexcept {
   return true;
 }
 
-db_err DDL::drop_table(const char *in_name, Trx *trx, bool drop_db) noexcept {
+DbErr Ddl::drop_table(const char *in_name, Trx *trx, bool drop_db) noexcept {
   ut_a(in_name != nullptr);
 
   if (srv_config.m_created_new_raw) {
@@ -195,7 +195,7 @@ db_err DDL::drop_table(const char *in_name, Trx *trx, bool drop_db) noexcept {
   ut_ad(rw_lock_own(&m_dict->m_lock, RW_LOCK_EX));
 #endif /* UNIV_SYNC_DEBUG */
 
-  auto func_exit = [trx](db_err err) -> auto {
+  auto func_exit = [trx](DbErr err) -> auto {
     trx->m_op_info = "";
 
     InnoDB::wake_master_thread();
@@ -418,7 +418,7 @@ db_err DDL::drop_table(const char *in_name, Trx *trx, bool drop_db) noexcept {
 #define STR_EQ(str1, str1_len, str2_onstack) \
   ((str1_len) == sizeof(str2_onstack) && memcmp(str1, str2_onstack, sizeof(str2_onstack)) == 0)
 
-db_err DDL::create_table(Table *table, Trx *trx) noexcept {
+DbErr Ddl::create_table(Table *table, Trx *trx) noexcept {
   IF_SYNC_DEBUG(ut_ad(rw_lock_own(&m_dict->m_lock, RW_LOCK_EX));)
 
   ut_ad(mutex_own(&m_dict->m_mutex));
@@ -512,11 +512,11 @@ db_err DDL::create_table(Table *table, Trx *trx) noexcept {
 
   trx->set_dict_operation(TRX_DICT_OP_TABLE);
 
-  auto node = Table_node::create(m_dict, table, heap, false);
+  auto node = TableNode::create(m_dict, table, heap, false);
 
   auto thr = pars_complete_graph_for_exec(node, trx, heap);
 
-  auto tmp = que_fork_start_command(static_cast<que_fork_t *>(que_node_get_parent(thr)));
+  auto tmp = que_fork_start_command(static_cast<QueFork *>(que_node_get_parent(thr)));
   ut_a(tmp == thr);
 
   que_run_threads(thr);
@@ -556,14 +556,14 @@ db_err DDL::create_table(Table *table, Trx *trx) noexcept {
       break;
   }
 
-  que_graph_free(static_cast<que_t *>(que_node_get_parent(thr)));
+  que_graph_free(static_cast<QueFork *>(que_node_get_parent(thr)));
 
   trx->m_op_info = "";
 
   return err;
 }
 
-db_err DDL::create_index(Index *index, Trx *trx) noexcept {
+DbErr Ddl::create_index(Index *index, Trx *trx) noexcept {
 #ifdef UNIV_SYNC_DEBUG
   ut_ad(rw_lock_own(&m_dict->m_lock, RW_LOCK_EX));
 #endif /* UNIV_SYNC_DEBUG */
@@ -571,9 +571,9 @@ db_err DDL::create_index(Index *index, Trx *trx) noexcept {
 
   /* This heap is destroyed when the query graph is freed. */
   auto heap = mem_heap_create(512);
-  auto node = Index_node::create(m_dict, index, heap, false);
+  auto node = IndexNode::create(m_dict, index, heap, false);
   auto thr = pars_complete_graph_for_exec(node, trx, heap);
-  auto tmp = que_fork_start_command(static_cast<que_fork_t *>(que_node_get_parent(thr)));
+  auto tmp = que_fork_start_command(static_cast<QueFork *>(que_node_get_parent(thr)));
 
   ut_a(thr == tmp);
 
@@ -581,12 +581,12 @@ db_err DDL::create_index(Index *index, Trx *trx) noexcept {
 
   const auto err = trx->m_error_state;
 
-  que_graph_free(static_cast<que_t *>(que_node_get_parent(thr)));
+  que_graph_free(static_cast<QueFork *>(que_node_get_parent(thr)));
 
   return err;
 }
 
-db_err DDL::truncate_table(Table *table, Trx *trx) noexcept {
+DbErr Ddl::truncate_table(Table *table, Trx *trx) noexcept {
   /* How do we prevent crashes caused by ongoing operations on
   the table? Old operations could try to access non-existent
   pages.
@@ -647,7 +647,7 @@ db_err DDL::truncate_table(Table *table, Trx *trx) noexcept {
   ut_ad(rw_lock_own(&m_dict->m_lock, RW_LOCK_EX));
 #endif /* UNIV_SYNC_DEBUG */
 
-  auto func_exit = [trx](db_err err) -> auto {
+  auto func_exit = [trx](DbErr err) -> auto {
     trx->m_op_info = "";
     InnoDB::wake_master_thread();
 
@@ -726,7 +726,7 @@ db_err DDL::truncate_table(Table *table, Trx *trx) noexcept {
         index->m_page_id.m_space_id = space_id;
       }
 
-      mtr_t mtr;
+      Mtr mtr;
 
       mtr.start();
 
@@ -747,11 +747,11 @@ db_err DDL::truncate_table(Table *table, Trx *trx) noexcept {
   auto sys_index = m_dict->m_sys_indexes->get_first_index();
   sys_index->copy_types(tuple, 1);
 
-  mtr_t mtr;
+  Mtr mtr;
 
   mtr.start();
 
-  Btree_pcursor pcur(fsp, m_dict->m_store.m_btree);
+  BtreePcursor pcur(fsp, m_dict->m_store.m_btree);
 
   /* Scan SYS_INDEXES for all indexes of the table */
   pcur.open_on_user_rec(sys_index, tuple, PAGE_CUR_GE, BTR_MODIFY_LEAF, &mtr, Current_location());
@@ -760,7 +760,7 @@ db_err DDL::truncate_table(Table *table, Trx *trx) noexcept {
 
     ulint len{ULINT_UNDEFINED};
     auto rec = pcur.get_rec();
-    Phy_rec record(sys_index, rec);
+    PhyRec record(sys_index, rec);
     auto offsets = record.get_col_offsets(nullptr, 1, &heap, Current_location());
     const auto field = rec.get_nth_field(offsets, 0, &len);
     ut_ad(len == 8);
@@ -799,7 +799,7 @@ db_err DDL::truncate_table(Table *table, Trx *trx) noexcept {
 
   mem_heap_free(heap);
 
-  const auto new_id = m_dict->m_store.hdr_get_new_id(Dict_id_type::TABLE_ID);
+  const auto new_id = m_dict->m_store.hdr_get_new_id(DictIdType::TABLE_ID);
 
   auto info = pars_info_create();
 
@@ -845,7 +845,7 @@ db_err DDL::truncate_table(Table *table, Trx *trx) noexcept {
   return func_exit(err);
 }
 
-db_err DDL::drop_index(Table *table, Index *index, Trx *trx) noexcept {
+DbErr Ddl::drop_index(Table *table, Index *index, Trx *trx) noexcept {
   /* We use the private SQL parser of Innobase to generate the
   query graphs needed in deleting the dictionary data from system
   tables in Innobase. Deleting a row from SYS_INDEXES table also
@@ -887,7 +887,7 @@ db_err DDL::drop_index(Table *table, Index *index, Trx *trx) noexcept {
   return err;
 }
 
-db_err DDL::delete_foreign_constraint(const char *id, Trx *trx) noexcept {
+DbErr Ddl::delete_foreign_constraint(const char *id, Trx *trx) noexcept {
   auto info = pars_info_create();
 
   pars_info_add_str_literal(info, "id", id);
@@ -904,7 +904,7 @@ db_err DDL::delete_foreign_constraint(const char *id, Trx *trx) noexcept {
   );
 }
 
-db_err DDL::delete_constraint(const char *id, const char *database_name, mem_heap_t *heap, Trx *trx) noexcept {
+DbErr Ddl::delete_constraint(const char *id, const char *database_name, MemHeap *heap, Trx *trx) noexcept {
   /* New format constraints have ids <databasename>/<constraintname>. */
   auto err = delete_foreign_constraint(mem_heap_strcat(heap, database_name, id), trx);
 
@@ -922,11 +922,11 @@ db_err DDL::delete_constraint(const char *id, const char *database_name, mem_hea
   return err;
 }
 
-db_err DDL::rename_table(const char *old_name, const char *new_name, Trx *trx) noexcept {
+DbErr Ddl::rename_table(const char *old_name, const char *new_name, Trx *trx) noexcept {
   ut_a(old_name != nullptr);
   ut_a(new_name != nullptr);
 
-  auto func_exit = [&](db_err err) -> auto {
+  auto func_exit = [&](DbErr err) -> auto {
     trx->m_op_info = "";
 
     return err;
@@ -1091,7 +1091,7 @@ db_err DDL::rename_table(const char *old_name, const char *new_name, Trx *trx) n
   return func_exit(err);
 }
 
-db_err DDL::rename_index(const char *table_name, const char *old_name, const char *new_name, Trx *trx) noexcept {
+DbErr Ddl::rename_index(const char *table_name, const char *old_name, const char *new_name, Trx *trx) noexcept {
   ut_a(old_name != nullptr);
   ut_a(old_name != nullptr);
   ut_a(table_name != nullptr);
@@ -1166,7 +1166,7 @@ db_err DDL::rename_index(const char *table_name, const char *old_name, const cha
   return err;
 }
 
-db_err DDL::drop_all_foreign_keys_in_db(const char *name, Trx *trx) noexcept {
+DbErr Ddl::drop_all_foreign_keys_in_db(const char *name, Trx *trx) noexcept {
   ut_a(name[strlen(name) - 1] == '/');
 
   auto info = pars_info_create();
@@ -1213,14 +1213,14 @@ db_err DDL::drop_all_foreign_keys_in_db(const char *name, Trx *trx) noexcept {
   return err;
 }
 
-db_err DDL::drop_database(const char *name, Trx *trx) noexcept {
+DbErr Ddl::drop_database(const char *name, Trx *trx) noexcept {
   const auto namelen = strlen(name);
 
   ut_a(name[namelen - 1] == '/');
 
   trx->m_op_info = "dropping database";
 
-  db_err err{DB_SUCCESS};
+  DbErr err{DB_SUCCESS};
 
   char *table_name;
 
@@ -1277,8 +1277,8 @@ db_err DDL::drop_database(const char *name, Trx *trx) noexcept {
   return err;
 }
 
-void DDL::drop_all_temp_indexes(ib_recovery_t recovery) noexcept {
-  Btree_pcursor pcur(m_dict->m_store.m_fsp, m_dict->m_store.m_btree);
+void Ddl::drop_all_temp_indexes(IbRecovery recovery) noexcept {
+  BtreePcursor pcur(m_dict->m_store.m_fsp, m_dict->m_store.m_btree);
 
   /* Load the table definitions that contain partially defined indexes, so that the data dictionary
   information can be checked * when accessing the tablename.ibd files. */
@@ -1289,7 +1289,7 @@ void DDL::drop_all_temp_indexes(ib_recovery_t recovery) noexcept {
   trx->m_op_info = "dropping partially created indexes";
   m_dict->lock_data_dictionary(trx);
 
-  mtr_t mtr;
+  Mtr mtr;
   auto heap = mem_heap_create(1000);
 
   mtr.start();
@@ -1307,7 +1307,7 @@ void DDL::drop_all_temp_indexes(ib_recovery_t recovery) noexcept {
 
     ulint len;
     const auto rec = pcur.get_rec();
-    Phy_rec record(sys_clustered_index, rec);
+    PhyRec record(sys_clustered_index, rec);
     auto offsets = record.get_col_offsets(nullptr, sys_clustered_index->get_n_fields(), &heap, Current_location());
     {
       const auto field = rec.get_nth_field(offsets, DICT_SYS_INDEXES_NAME_FIELD, &len);
@@ -1368,7 +1368,7 @@ void DDL::drop_all_temp_indexes(ib_recovery_t recovery) noexcept {
   srv_trx_sys->destroy_background_trx(trx);
 }
 
-void DDL::drop_all_temp_tables(ib_recovery_t recovery) noexcept {
+void Ddl::drop_all_temp_tables(IbRecovery recovery) noexcept {
   auto trx = srv_trx_sys->create_background_trx(nullptr);
 
   {
@@ -1381,11 +1381,11 @@ void DDL::drop_all_temp_tables(ib_recovery_t recovery) noexcept {
 
   auto heap = mem_heap_create(200);
 
-  mtr_t mtr;
+  Mtr mtr;
 
   mtr.start();
 
-  Btree_pcursor pcur(m_dict->m_store.m_fsp, m_dict->m_store.m_btree);
+  BtreePcursor pcur(m_dict->m_store.m_fsp, m_dict->m_store.m_btree);
 
   auto sys_clustered_index = m_dict->m_sys_tables->get_clustered_index();
   pcur.open_at_index_side(true, sys_clustered_index, BTR_SEARCH_LEAF, true, 0, &mtr);
@@ -1400,7 +1400,7 @@ void DDL::drop_all_temp_tables(ib_recovery_t recovery) noexcept {
 
     ulint len;
     const auto rec = pcur.get_rec();
-    Phy_rec record(sys_clustered_index, rec);
+    PhyRec record(sys_clustered_index, rec);
     auto offsets = record.get_col_offsets(nullptr, sys_clustered_index->get_n_fields(), &heap, Current_location());
 
     {

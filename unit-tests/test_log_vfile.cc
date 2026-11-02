@@ -40,11 +40,11 @@
   } while (0)
 
 bool test_constructor(const std::string &test_dir) {
-  log_info("Testing Log_vfile constructor...");
+  log_info("Testing LogVfile constructor...");
 
   // Test valid constructor
   try {
-    Log_vfile vfile(test_dir + "/test_log", 2, 1024 * 1024);
+    LogVfile vfile(test_dir + "/test_log", 2, 1024 * 1024);
     TEST_ASSERT(vfile.m_directory == test_dir + "/test_log");
     TEST_ASSERT(vfile.m_max_file_size == 1024 * 1024);
     TEST_ASSERT(vfile.m_files.size() == 2);
@@ -54,7 +54,7 @@ bool test_constructor(const std::string &test_dir) {
   }
 
   // Test invalid constructor (too few files)
-  TEST_ASSERT_THROWS(Log_vfile(test_dir + "/test_log", 1, 1024 * 1024), std::invalid_argument);
+  TEST_ASSERT_THROWS(LogVfile(test_dir + "/test_log", 1, 1024 * 1024), std::invalid_argument);
 
   return true;
 }
@@ -65,7 +65,7 @@ bool test_file_operations(const std::string &test_dir) {
   const std::string file_ops_dir = test_dir + "/test_log_vfile_" + std::to_string(getpid());
 
   try {
-    Log_vfile vfile(file_ops_dir, 3, 1024 * 1024);
+    LogVfile vfile(file_ops_dir, 3, 1024 * 1024);
 
     // Test open
     auto ret = vfile.open();
@@ -97,7 +97,7 @@ bool test_capacity_calculations(const std::string &test_dir) {
   log_info("Testing capacity calculations...");
 
   try {
-    Log_vfile vfile(test_dir + "/test_log", 2, 1024 * 1024);
+    LogVfile vfile(test_dir + "/test_log", 2, 1024 * 1024);
 
     // Test get_capacity
     auto capacity = vfile.get_capacity();
@@ -134,7 +134,7 @@ bool test_lsn_operations(const std::string &test_dir) {
   log_info("Testing LSN operations...");
 
   try {
-    Log_vfile vfile(test_dir + "/test_log", 2, 1024 * 1024);
+    LogVfile vfile(test_dir + "/test_log", 2, 1024 * 1024);
 
     // Test set_fields
     lsn_t test_lsn = 12345;
@@ -149,7 +149,7 @@ bool test_lsn_operations(const std::string &test_dir) {
     lsn_t first_header_lsn = 1000;
     auto coords = vfile.get_io_coordinates(first_header_lsn, test_lsn);
     TEST_ASSERT(coords.first != nullptr);
-    TEST_ASSERT(static_cast<uint64_t>(coords.second) >= Log_phy_file_header::HEADER_SIZE);
+    TEST_ASSERT(static_cast<uint64_t>(coords.second) >= LogPhyFileHeader::HEADER_SIZE);
 
     // Find the file index in the vector
     size_t file_no = 0;
@@ -173,7 +173,7 @@ bool test_string_representation(const std::string &test_dir) {
   log_info("Testing string representation...");
 
   try {
-    Log_vfile vfile(test_dir + "/test_log", 2, 1024 * 1024);
+    LogVfile vfile(test_dir + "/test_log", 2, 1024 * 1024);
 
     auto str = vfile.to_string();
     TEST_ASSERT(!str.empty());
@@ -195,7 +195,7 @@ bool test_checkpoint_operations(const std::string &test_dir) {
   log_info("Testing checkpoint operations...");
 
   try {
-    Log_vfile vfile(test_dir + "/test_log", 2, 1024 * 1024);
+    LogVfile vfile(test_dir + "/test_log", 2, 1024 * 1024);
 
     // Test checkpoint_set
     vfile.checkpoint_set(1, 1000);
@@ -222,7 +222,7 @@ bool test_sync_operations(const std::string &test_dir) {
   const std::string sync_test_dir = test_dir + "/test_log_vfile_sync_" + std::to_string(getpid());
 
   try {
-    Log_vfile vfile(sync_test_dir, 2, 1024 * 1024);
+    LogVfile vfile(sync_test_dir, 2, 1024 * 1024);
 
     // Open first
     auto ret = vfile.open();
@@ -262,7 +262,7 @@ bool test_lsn_calculation_functions(const std::string &test_dir) {
   log_info("Testing LSN calculation functions...");
 
   try {
-    Log_vfile vfile(test_dir + "/test_log", 3, 1024 * 1024);
+    LogVfile vfile(test_dir + "/test_log", 3, 1024 * 1024);
 
     // Test get_capacity
     auto capacity = vfile.get_capacity();
@@ -300,7 +300,7 @@ bool test_lsn_calculation_functions(const std::string &test_dir) {
       auto coords = vfile.get_io_coordinates(first_header_lsn, lsn);
 
       TEST_ASSERT(coords.first != nullptr);
-      TEST_ASSERT(static_cast<uint64_t>(coords.second) >= Log_phy_file_header::HEADER_SIZE);
+      TEST_ASSERT(static_cast<uint64_t>(coords.second) >= LogPhyFileHeader::HEADER_SIZE);
 
       // Find the file index in the vector
       size_t file_no = 0;
@@ -358,7 +358,7 @@ bool test_lsn_calculation_functions(const std::string &test_dir) {
       auto coords2 = vfile.get_io_coordinates(first_header_lsn, lsn);
 
       TEST_ASSERT(coords1.first != nullptr);
-      TEST_ASSERT(static_cast<uint64_t>(coords1.second) >= Log_phy_file_header::HEADER_SIZE);
+      TEST_ASSERT(static_cast<uint64_t>(coords1.second) >= LogPhyFileHeader::HEADER_SIZE);
 
       // Verify coordinates are consistent across multiple calls
       TEST_ASSERT(coords1.first == coords2.first);
@@ -388,10 +388,10 @@ bool test_lsn_calculation_functions(const std::string &test_dir) {
     }
 
     // Test boundary conditions
-    lsn_t boundary_lsn = first_header_lsn + capacity - sizeof(Log_phy_block);
+    lsn_t boundary_lsn = first_header_lsn + capacity - sizeof(LogPhyBlock);
     auto boundary_coords = vfile.get_io_coordinates(first_header_lsn, boundary_lsn);
     TEST_ASSERT(boundary_coords.first != nullptr);
-    TEST_ASSERT(static_cast<uint64_t>(boundary_coords.second) >= Log_phy_file_header::HEADER_SIZE);
+    TEST_ASSERT(static_cast<uint64_t>(boundary_coords.second) >= LogPhyFileHeader::HEADER_SIZE);
 
     size_t boundary_file_no = 0;
     for (size_t i = 0; i < vfile.m_files.size(); ++i) {
@@ -407,10 +407,10 @@ bool test_lsn_calculation_functions(const std::string &test_dir) {
     );
 
     // Test wrap-around scenarios
-    lsn_t wrap_lsn = first_header_lsn + capacity + sizeof(Log_phy_block);
+    lsn_t wrap_lsn = first_header_lsn + capacity + sizeof(LogPhyBlock);
     auto wrap_coords = vfile.get_io_coordinates(first_header_lsn, wrap_lsn);
     TEST_ASSERT(wrap_coords.first != nullptr);
-    TEST_ASSERT(static_cast<uint64_t>(wrap_coords.second) >= Log_phy_file_header::HEADER_SIZE);
+    TEST_ASSERT(static_cast<uint64_t>(wrap_coords.second) >= LogPhyFileHeader::HEADER_SIZE);
 
     size_t wrap_file_no = 0;
     for (size_t i = 0; i < vfile.m_files.size(); ++i) {
@@ -427,7 +427,7 @@ bool test_lsn_calculation_functions(const std::string &test_dir) {
     lsn_t negative_lsn = first_header_lsn - 1000;
     auto neg_coords = vfile.get_io_coordinates(first_header_lsn, negative_lsn);
     TEST_ASSERT(neg_coords.first != nullptr);
-    TEST_ASSERT(static_cast<uint64_t>(neg_coords.second) >= Log_phy_file_header::HEADER_SIZE);
+    TEST_ASSERT(static_cast<uint64_t>(neg_coords.second) >= LogPhyFileHeader::HEADER_SIZE);
 
     size_t neg_file_no = 0;
     for (size_t i = 0; i < vfile.m_files.size(); ++i) {
@@ -456,7 +456,7 @@ bool test_random_lsn_write_read(const std::string &test_dir) {
   const std::string write_read_dir = test_dir + "/test_log_vfile_write_read_" + std::to_string(getpid());
 
   try {
-    Log_vfile vfile(write_read_dir, 3, 1024 * 1024);
+    LogVfile vfile(write_read_dir, 3, 1024 * 1024);
 
     // Open the log vfile
     auto ret = vfile.open();
@@ -471,7 +471,7 @@ bool test_random_lsn_write_read(const std::string &test_dir) {
       {0x55, 0x55, 0x55, 0x55, 0xAA, 0xAA, 0xAA, 0xAA}
     };
 
-    // Random LSN locations (aligned to Log_phy_block boundaries)
+    // Random LSN locations (aligned to LogPhyBlock boundaries)
     const std::vector<lsn_t> test_lsns = {0x1000, 0x2000, 0x3000, 0x4000, 0x5000, 0x6000, 0x7000, 0x8000, 0x9000, 0xA000};
 
     // Write test data to random LSN locations
@@ -480,10 +480,10 @@ bool test_random_lsn_write_read(const std::string &test_dir) {
       const auto &pattern = test_patterns[i % test_patterns.size()];
 
       // Create a test buffer with the pattern repeated to fill a log block
-      std::vector<byte> test_data(sizeof(Log_phy_block));
+      std::vector<byte> test_data(sizeof(LogPhyBlock));
 
       // Fill with pattern repeated
-      for (size_t j = 0; j < sizeof(Log_phy_block); ++j) {
+      for (size_t j = 0; j < sizeof(LogPhyBlock); ++j) {
         test_data[j] = pattern[j % pattern.size()];
       }
 
@@ -504,7 +504,7 @@ bool test_random_lsn_write_read(const std::string &test_dir) {
       const auto &expected_pattern = test_patterns[i % test_patterns.size()];
 
       // Create read buffer
-      std::vector<byte> read_data(sizeof(Log_phy_block));
+      std::vector<byte> read_data(sizeof(LogPhyBlock));
 
       // Test sync_read with raw buffer
       auto ret = vfile.sync_read(read_data.data(), read_data.size(), 0);
@@ -512,7 +512,7 @@ bool test_random_lsn_write_read(const std::string &test_dir) {
 
       // Verify the read data matches expected pattern
       bool pattern_matches = true;
-      for (size_t j = 0; j < sizeof(Log_phy_block); ++j) {
+      for (size_t j = 0; j < sizeof(LogPhyBlock); ++j) {
         byte expected_byte = expected_pattern[j % expected_pattern.size()];
         if (read_data[j] != expected_byte) {
           pattern_matches = false;
@@ -538,7 +538,7 @@ bool test_random_lsn_write_read(const std::string &test_dir) {
       lsn_t first_header_lsn = 0x1000;  // Start LSN
       auto coords = vfile.get_io_coordinates(first_header_lsn, lsn);
       TEST_ASSERT(coords.first != nullptr);
-      TEST_ASSERT(static_cast<uint64_t>(coords.second) >= Log_phy_file_header::HEADER_SIZE);
+      TEST_ASSERT(static_cast<uint64_t>(coords.second) >= LogPhyFileHeader::HEADER_SIZE);
 
       // Find the file index in the vector
       size_t file_no = 0;
@@ -558,12 +558,12 @@ bool test_random_lsn_write_read(const std::string &test_dir) {
     TEST_ASSERT(capacity > 0);
 
     // Test LSN at the boundary
-    lsn_t boundary_lsn = 0x1000 + capacity - sizeof(Log_phy_block);
+    lsn_t boundary_lsn = 0x1000 + capacity - sizeof(LogPhyBlock);
     auto boundary_offset = vfile.calc_lsn_offset(boundary_lsn);
     TEST_ASSERT(boundary_offset >= 0);
 
     // Test wrap-around LSN (beyond capacity)
-    lsn_t wrap_lsn = 0x1000 + capacity + sizeof(Log_phy_block);
+    lsn_t wrap_lsn = 0x1000 + capacity + sizeof(LogPhyBlock);
     auto wrap_offset = vfile.calc_lsn_offset(wrap_lsn);
     TEST_ASSERT(wrap_offset >= 0);
 
@@ -622,7 +622,7 @@ void cleanup_test_directories(const std::string &test_dir) {
 }
 
 int main() {
-  log_info("Starting Log_vfile unit tests...");
+  log_info("Starting LogVfile unit tests...");
 
   // Set the base test directory - can be easily changed here
   const std::string test_dir = "/tmp/test_log_vfile_tests_" + std::to_string(getpid());

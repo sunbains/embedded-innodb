@@ -31,7 +31,7 @@ Created 12/7/1995 Heikki Tuuri
 #include "page0page.h"
 #include "trx0sys.h"
 
-void mlog_catenate_string(mtr_t *mtr, const byte *str, ulint len) {
+void mlog_catenate_string(Mtr *mtr, const byte *str, ulint len) {
   if (mtr->m_log_mode == MTR_LOG_NONE) {
     return;
   }
@@ -39,7 +39,7 @@ void mlog_catenate_string(mtr_t *mtr, const byte *str, ulint len) {
   mtr->m_log.push_string(str, len);
 }
 
-void mlog_write_initial_log_record(const byte *ptr, mlog_type_t type, mtr_t *mtr) {
+void mlog_write_initial_log_record(const byte *ptr, MlogType type, Mtr *mtr) {
   ut_ad(type <= MLOG_BIGGEST_TYPE);
   ut_ad(type > MLOG_8BYTES);
 
@@ -58,13 +58,13 @@ void mlog_write_initial_log_record(const byte *ptr, mlog_type_t type, mtr_t *mtr
   mlog_close(mtr, log_ptr);
 }
 
-byte *mlog_parse_initial_log_record(byte *ptr, byte *end_ptr, mlog_type_t *type, space_id_t *space, page_no_t *page_no) {
+byte *mlog_parse_initial_log_record(byte *ptr, byte *end_ptr, MlogType *type, space_id_t *space, page_no_t *page_no) {
   if (end_ptr < ptr + 1) {
 
     return nullptr;
   }
 
-  *type = static_cast<mlog_type_t>((ulint)*ptr & ~MLOG_SINGLE_REC_FLAG);
+  *type = static_cast<MlogType>((ulint)*ptr & ~MLOG_SINGLE_REC_FLAG);
   ut_ad(*type <= MLOG_BIGGEST_TYPE);
 
   ++ptr;
@@ -86,7 +86,7 @@ byte *mlog_parse_initial_log_record(byte *ptr, byte *end_ptr, mlog_type_t *type,
   return ptr;
 }
 
-byte *mlog_parse_nbytes(mlog_type_t type, byte *ptr, byte *end_ptr, byte *page) {
+byte *mlog_parse_nbytes(MlogType type, byte *ptr, byte *end_ptr, byte *page) {
   ulint val;
   uint64_t dval;
 
@@ -160,7 +160,7 @@ byte *mlog_parse_nbytes(mlog_type_t type, byte *ptr, byte *end_ptr, byte *page) 
   return ptr;
 }
 
-void mlog_write_ulint(byte *ptr, ulint val, mlog_type_t type, mtr_t *mtr) {
+void mlog_write_ulint(byte *ptr, ulint val, MlogType type, Mtr *mtr) {
   switch (type) {
     case MLOG_1BYTE:
       mach_write_to_1(ptr, val);
@@ -193,7 +193,7 @@ void mlog_write_ulint(byte *ptr, ulint val, mlog_type_t type, mtr_t *mtr) {
   mlog_close(mtr, log_ptr);
 }
 
-void mlog_write_uint64(byte *ptr, uint64_t val, mtr_t *mtr) {
+void mlog_write_uint64(byte *ptr, uint64_t val, Mtr *mtr) {
   mach_write_to_8(ptr, val);
 
   auto log_ptr = mlog_open(mtr, 11 + 2 + 9);
@@ -214,7 +214,7 @@ void mlog_write_uint64(byte *ptr, uint64_t val, mtr_t *mtr) {
   mlog_close(mtr, log_ptr);
 }
 
-void mlog_write_string(byte *ptr, const byte *str, ulint len, mtr_t *mtr) {
+void mlog_write_string(byte *ptr, const byte *str, ulint len, Mtr *mtr) {
   ut_a(len < UNIV_PAGE_SIZE);
 
   memcpy(ptr, str, len);
@@ -222,7 +222,7 @@ void mlog_write_string(byte *ptr, const byte *str, ulint len, mtr_t *mtr) {
   mlog_log_string(ptr, len, mtr);
 }
 
-void mlog_log_string(byte *ptr, ulint len, mtr_t *mtr) {
+void mlog_log_string(byte *ptr, ulint len, Mtr *mtr) {
   ut_ad(len <= UNIV_PAGE_SIZE);
 
   auto log_ptr = mlog_open(mtr, 30);
@@ -277,7 +277,7 @@ byte *mlog_parse_string(byte *ptr, byte *end_ptr, byte *page) {
   return ptr + len;
 }
 
-byte *mlog_open_and_write_index(mtr_t *mtr, const byte *rec, mlog_type_t type, ulint size) {
+byte *mlog_open_and_write_index(Mtr *mtr, const byte *rec, MlogType type, ulint size) {
   auto log_ptr = mlog_open(mtr, 11 + size);
 
   if (log_ptr == nullptr) {
@@ -312,7 +312,7 @@ byte *mlog_parse_index(byte *ptr, const byte *end_ptr, Index *&index) {
   return ptr;
 }
 
-byte *mlog_write_initial_log_record_fast(const byte *ptr, mlog_type_t type, byte *log_ptr, mtr_t *mtr) {
+byte *mlog_write_initial_log_record_fast(const byte *ptr, MlogType type, byte *log_ptr, Mtr *mtr) {
   ut_ad(mtr->memo_contains_page(ptr, MTR_MEMO_PAGE_X_FIX));
   ut_ad(type <= MLOG_BIGGEST_TYPE);
 

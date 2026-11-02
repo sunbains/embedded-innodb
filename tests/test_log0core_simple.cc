@@ -1,18 +1,18 @@
 /****************************************************************************
 Copyright (c) 2025 Sunny Bains. All rights reserved.
 
-Unit tests for Log_core class - simplified integration test
+Unit tests for LogCore class - simplified integration test
 *****************************************************************************/
 
 #include <iostream>
 #include <cassert>
 
-// Forward declaration - we'll use the public API instead of direct Log_core
+// Forward declaration - we'll use the public API instead of direct LogCore
 #include "innodb.h"
 
 // Simple integration test that verifies logging works through the public API
 int main() {
-  std::cout << "Running simplified Log_core integration test...\n";
+  std::cout << "Running simplified LogCore integration test...\n";
 
   ib_err_t err;
 
@@ -36,7 +36,7 @@ int main() {
   std::cout << "Database started successfully\n";
 
   // The fact that we can startup means the log system is working
-  // This tests the real Log_core functionality through the public API
+  // This tests the real LogCore functionality through the public API
 
   // Clean shutdown
   err = ib_shutdown(IB_SHUTDOWN_NORMAL);
@@ -46,7 +46,7 @@ int main() {
   }
 
   std::cout << "Database shutdown successfully\n";
-  std::cout << "Log_core integration test passed!\n";
+  std::cout << "LogCore integration test passed!\n";
 
   return 0;
 }

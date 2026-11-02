@@ -27,7 +27,7 @@ Created 3/26/1996 Heikki Tuuri
 #include "trx0rseg.h"
 #include "trx0undo.h"
 
-Trx_rseg *Trx_rseg::get_on_id(ulint id) {
+TrxRseg *TrxRseg::get_on_id(ulint id) {
   for (auto rseg : srv_trx_sys->m_rseg_list) {
     if (rseg->m_id == id) {
       return rseg;
@@ -36,7 +36,7 @@ Trx_rseg *Trx_rseg::get_on_id(ulint id) {
   return nullptr;
 }
 
-page_no_t Trx_rseg::header_create(space_id_t space, ulint max_size, ulint *slot_no, mtr_t *mtr) {
+page_no_t TrxRseg::header_create(space_id_t space, ulint max_size, ulint *slot_no, Mtr *mtr) {
   ut_ad(mutex_own(&srv_trx_sys->m_mutex));
   ut_ad(mtr->memo_contains(srv_fil->space_get_latch(space), MTR_MEMO_X_LOCK));
 
@@ -88,7 +88,7 @@ page_no_t Trx_rseg::header_create(space_id_t space, ulint max_size, ulint *slot_
   return page_no;
 }
 
-void Trx_rseg::memory_free() {
+void TrxRseg::memory_free() {
   mutex_free(&m_mutex);
 
   /* There can't be any active transactions. */
@@ -127,17 +127,17 @@ fields are read from the header. The object is inserted to the rseg
 list of the trx system object and a pointer is inserted in the rseg
 array in the trx system object.
 @return	own: rollback segment object */
-Trx_rseg *Trx_rseg::mem_create(
-  ib_recovery_t recovery, /*!< in: recovery flag */
+TrxRseg *TrxRseg::mem_create(
+  IbRecovery recovery, /*!< in: recovery flag */
   ulint id,               /*!< in: rollback segment id */
   ulint space,            /*!< in: space where the segment placed */
   ulint page_no,          /*!< in: page number of the segment header */
-  mtr_t *mtr
+  Mtr *mtr
 ) /*!< in: mtr */
 {
   ut_ad(mutex_own(&srv_trx_sys->m_mutex));
 
-  auto rseg = static_cast<Trx_rseg *>(mem_alloc(sizeof(Trx_rseg)));
+  auto rseg = static_cast<TrxRseg *>(mem_alloc(sizeof(TrxRseg)));
 
   rseg->m_id = id;
   rseg->m_space = space;
@@ -180,7 +180,7 @@ Trx_rseg *Trx_rseg::mem_create(
   return rseg;
 }
 
-void Trx_rseg::list_and_array_init(ib_recovery_t recovery, trx_sysf_t *sys_header, mtr_t *mtr) {
+void TrxRseg::list_and_array_init(IbRecovery recovery, trx_sysf_t *sys_header, Mtr *mtr) {
   UT_LIST_INIT(srv_trx_sys->m_rseg_list);
 
   srv_trx_sys->m_rseg_history_len = 0;

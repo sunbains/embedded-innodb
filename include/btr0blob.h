@@ -27,11 +27,11 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 #include "trx0types.h"
 
 struct Fil;
-struct FSP;
-struct mtr_t;
+struct Fsp;
+struct Mtr;
 struct Btree;
-struct Buf_pool;
-struct Buf_block;
+struct BufPool;
+struct BufBlock;
 struct Index;
 
 /** The structure of a BLOB part header */
@@ -98,19 +98,19 @@ struct Blob {
    *
    * @param[in] fsp             File space handler.
    */
-  explicit Blob(FSP *fsp, Btree *btree) : m_fsp{fsp}, m_btree(btree) {}
+  explicit Blob(Fsp *fsp, Btree *btree) : m_fsp{fsp}, m_btree(btree) {}
 
   /**
    * Sets the ownership bit of an externally stored field in a record.
    *
    * @param[in,out] rec         Clustered index record.
    * @param[in] index           Index of the page.
-   * @param[in] offsets         Array returned by Phy_rec::get_col_offsets().
+   * @param[in] offsets         Array returned by PhyRec::get_col_offsets().
    * @param[in] i               Field number.
    * @param[in] val             Value to set.
    * @param[in] mtr             Mini-transaction handle, or nullptr if not logged.
    */
-  void set_ownership_of_extern_field(Rec rec, const Index *index, const ulint *offsets, ulint i, bool val, mtr_t *mtr) noexcept;
+  void set_ownership_of_extern_field(Rec rec, const Index *index, const ulint *offsets, ulint i, bool val, Mtr *mtr) noexcept;
 
   /** Returns the length of a BLOB part stored on the header page.
    *
@@ -131,7 +131,7 @@ struct Blob {
    * @param[in,out] block       Block to free.
    * @param[in,out] mtr         Min-transaction.
    */
-  void blob_free(Buf_block *block, mtr_t *mtr) noexcept;
+  void blob_free(BufBlock *block, Mtr *mtr) noexcept;
 
   /** Frees the externally stored fields for a record, if the field is mentioned
    * in the update vector.
@@ -144,7 +144,7 @@ struct Blob {
    * @param[in] mtr             The mini-transaction handle which contains an X-latch to the record page and to the tree.
    */
   void free_updated_extern_fields(
-    const Index *index, Rec rec, const Rec_offs &offsets, const upd_t *update, trx_rb_ctx rb_ctx, mtr_t *mtr
+    const Index *index, Rec rec, const RecOffs &offsets, const Upd *update, TrxRbCtx rb_ctx, Mtr *mtr
   ) noexcept;
 
   /**
@@ -156,17 +156,17 @@ struct Blob {
    * @param[in] rb_ctx          The rollback context.
    * @param[in] mtr             The mini-transaction handle which contains an X-latch to record page and to the index tree
    */
-  void free_externally_stored_fields(Index *index, Rec rec, const Rec_offs &offsets, trx_rb_ctx rb_ctx, mtr_t *mtr) noexcept;
+  void free_externally_stored_fields(Index *index, Rec rec, const RecOffs &offsets, TrxRbCtx rb_ctx, Mtr *mtr) noexcept;
 
   /**
    * Gets the externally stored size of a record, in units of a database page.
    *
    * @param[in] rec             The record for which to calculate the length of externally stored data.
-   * @param[in] offsets         An array returned by Phy_rec::get_col_offsets().
+   * @param[in] offsets         An array returned by PhyRec::get_col_offsets().
    *
    * @return externally stored part, in units of a database page
    */
-  [[nodiscard]] ulint get_externally_stored_len(Rec rec, const Rec_offs &offsets) noexcept;
+  [[nodiscard]] ulint get_externally_stored_len(Rec rec, const RecOffs &offsets) noexcept;
 
   /**
    * Check the FIL_PAGE_TYPE on a BLOB page.
@@ -225,14 +225,14 @@ struct Blob {
    *
    * @return The whole field copied to heap
    */
-  [[nodiscard]] byte *copy_externally_stored_field(ulint *len, const byte *data, ulint local_len, mem_heap_t *heap) noexcept;
+  [[nodiscard]] byte *copy_externally_stored_field(ulint *len, const byte *data, ulint local_len, MemHeap *heap) noexcept;
 
   /**
    * Copies an externally stored field of a record to mem heap.
    * The clustered index record must be protected by a lock or a page latch.
    *
    * @param[in] rec       The record.
-   * @param[in] offsets   The array returned by Phy_rec::get_col_offsets().
+   * @param[in] offsets   The array returned by PhyRec::get_col_offsets().
    * @param[in] no        The field number.
    * @param[in] len       The length of the field.
    * @param[in] heap      The memory heap.
@@ -240,7 +240,7 @@ struct Blob {
    * @return The whole field copied to heap
    */
   [[nodiscard]] byte *copy_externally_stored_field(
-    const Rec rec, const Rec_offs &offsets, ulint no, ulint *len, mem_heap_t *heap
+    const Rec rec, const RecOffs &offsets, ulint no, ulint *len, MemHeap *heap
   ) noexcept;
 
   /**
@@ -251,11 +251,11 @@ struct Blob {
    *
    * @param[in] rec             Record
    * @param[in] index           Index of rec; the index tree MUST be X-latched
-   * @param[in] offsets         Phy_rec::get_col_offsets(rec, index)
+   * @param[in] offsets         PhyRec::get_col_offsets(rec, index)
    * @param[in] update          Update entry
    * @param[in] mtr             Mtr
    */
-  void mark_extern_inherited_fields(Rec rec, Index *index, const Rec_offs &offsets, const upd_t *update, mtr_t *mtr) noexcept;
+  void mark_extern_inherited_fields(Rec rec, Index *index, const RecOffs &offsets, const Upd *update, Mtr *mtr) noexcept;
 
   /**
    * The complement of the previous function: in an update entry may inherit
@@ -265,7 +265,7 @@ struct Blob {
    * @param[in,out] entry       Clustered index entry
    * @param[in] update          Update entry
    */
-  void mark_dtuple_inherited_extern(DTuple *entry, const upd_t *update) noexcept;
+  void mark_dtuple_inherited_extern(DTuple *entry, const Upd *update) noexcept;
 
   /**
    * Marks all extern fields in a dtuple as owned by the record.
@@ -282,15 +282,15 @@ struct Blob {
    * @param[in] index            Index of rec; the index tree MUST be X-latched
    * @param[in,out] rec_block    Block containing rec
    * @param[in] rec              Record
-   * @param[in] offsets          Phy_rec::get_col_offsets(rec, index); the "external storage" flags in offsets
+   * @param[in] offsets          PhyRec::get_col_offsets(rec, index); the "external storage" flags in offsets
    *                             will not correspond to rec when this function returns
    * @param[in] big_rec_vec      Vector containing fields to be stored externally
    * @param[in] local_mtr        Mtr containing the latch to rec and to the tree
    *
    * @return  DB_SUCCESS or error
    */
-  [[nodiscard]] db_err store_big_rec_extern_fields(
-    const Index *index, Buf_block *rec_block, Rec rec, const Rec_offs &offsets, big_rec_t big_rec_vec, mtr_t *local_mtr
+  [[nodiscard]] DbErr store_big_rec_extern_fields(
+    const Index *index, BufBlock *rec_block, Rec rec, const RecOffs &offsets, BigRec big_rec_vec, Mtr *local_mtr
   ) noexcept;
 
   /**
@@ -303,13 +303,13 @@ struct Blob {
    *                            where 'data' is located on an undo log page, not an index page)
    * @param[in,out] field_ref   Field reference
    * @param[in] rec             Record containing field_ref or nullptr
-   * @param[in] offsets         Phy_rec::get_col_offsets(rec, index), or nullptr
+   * @param[in] offsets         PhyRec::get_col_offsets(rec, index), or nullptr
    * @param[in] i               Field number of field_ref; ignored if rec == nullptr
    * @param[in] rb_ctx          Rollback context
    * @param[in] local_mtr       Mtr containing the latch to data an an X-latch to the index tree
    */
   void free_externally_stored_field(
-    const Index *index, byte *field_ref, const Rec rec, const ulint *offsets, ulint i, enum trx_rb_ctx rb_ctx, mtr_t *local_mtr
+    const Index *index, byte *field_ref, const Rec rec, const ulint *offsets, ulint i, enum TrxRbCtx rb_ctx, Mtr *local_mtr
   ) noexcept;
 
   /**
@@ -328,7 +328,7 @@ struct Blob {
    * Copies an externally stored field of a record to mem heap.
    *
    * @param[in] rec             Record in a clustered index; must be protected by a lock or a page latch
-   * @param[in] offsets         Array returned by Phy_rec::get_col_offsets()
+   * @param[in] offsets         Array returned by PhyRec::get_col_offsets()
    * @param[in] no              Field number
    * @param[out] len            Length of the field
    * @param[in] heap            Memory heap
@@ -336,7 +336,7 @@ struct Blob {
    * @return the field copied to heap
    */
   [[nodiscard]] byte *rec_copy_externally_stored_field(
-    const Rec rec, const ulint *offsets, ulint no, ulint *len, mem_heap_t *heap
+    const Rec rec, const ulint *offsets, ulint no, ulint *len, MemHeap *heap
   ) noexcept;
 
   /**
@@ -349,7 +349,7 @@ struct Blob {
    *
    * @return number of flagged external columns
    */
-  [[nodiscard]] ulint push_update_extern_fields(DTuple *tuple, const upd_t *update, mem_heap_t *heap) noexcept;
+  [[nodiscard]] ulint push_update_extern_fields(DTuple *tuple, const Upd *update, MemHeap *heap) noexcept;
 
   /**
    * Marks all extern fields in a record as owned by the record. This function
@@ -358,15 +358,15 @@ struct Blob {
    *
    * @param[in,out] rec         The record in a clustered index.
    * @param[in] index           The index of the page.
-   * @param[in] offsets         The array returned by Phy_rec::get_col_offsets().
+   * @param[in] offsets         The array returned by PhyRec::get_col_offsets().
    * @param[in] mtr             The mtr, or nullptr if not logged.
    */
-  void unmark_extern_fields(Rec rec, const Index *index, const Rec_offs &offsets, mtr_t *mtr) noexcept;
+  void unmark_extern_fields(Rec rec, const Index *index, const RecOffs &offsets, Mtr *mtr) noexcept;
 
   /**
    * The file space handler.
    */
-  FSP *m_fsp{};
+  Fsp *m_fsp{};
 
   /**
    * The B-tree handler.

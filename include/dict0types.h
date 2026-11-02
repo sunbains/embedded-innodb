@@ -37,20 +37,20 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 struct Table;
 struct Rec;
-struct que_common_t;
+struct QueCommon;
 
 /* A cluster is a table with the type field set to DICT_CLUSTERED */
-using dict_cluster_t = Table;
+struct Table;
 
 struct Dict;
 struct Field;
 struct Column;
 struct Index;
 struct Foreign;
-struct Insert_node;
-struct Commit_node;
-struct Index_node;
-struct Table_node;
+struct InsertNode;
+struct CommitNode;
+struct IndexNode;
+struct TableNode;
 
 /** Space id and page no where the dictionary header resides */
 constexpr space_id_t DICT_HDR_SPACE = SYS_TABLESPACE;
@@ -163,7 +163,7 @@ constexpr auto DICT_HDR = FSEG_PAGE_DATA;
 /** The latest assigned row id */
 constexpr Dict_id DICT_HDR_ROW_ID = 0;
 
-enum class Dict_id_type {
+enum class DictIdType {
   /** The latest assigned table id */
   TABLE_ID = 8,
 
@@ -229,7 +229,7 @@ constexpr char dict_ibfk[] = "_ibfk_";
 
 /** TBD: This needs to be implemented to fix a bug.
  *  The status of online index creation */
-enum class DDL_index_status {
+enum class DdlIndexStatus {
   /** The index is complete and ready for access */
   READY = 0,
 
@@ -284,7 +284,7 @@ struct Column {
    *
    * @param[in,out] type data type
    */
-  inline void copy_type(dtype_t *type) const noexcept {
+  inline void copy_type(Dtype *type) const noexcept {
     type->mtype = mtype;
     type->prtype = prtype;
     type->len = len;
@@ -300,7 +300,7 @@ struct Column {
    *
    * @return true
    */
-  [[nodiscard]] inline bool assert_equal(const dtype_t *type) const noexcept {
+  [[nodiscard]] inline bool assert_equal(const Dtype *type) const noexcept {
     ut_ad(mtype == type->mtype);
     ut_ad(prtype == type->prtype);
     ut_ad(len == type->len);
@@ -404,7 +404,7 @@ struct Index {
    * @param[in] type The index type (DICT_UNIQUE, DICT_CLUSTERED, ... ORed).
    * @param[in] n_fields The number of fields.
    */
-  Index(mem_heap_t *heap, Table *table, const char *index_name, Page_id page_id, ulint type, ulint n_fields) noexcept;
+  Index(MemHeap *heap, Table *table, const char *index_name, PageId page_id, ulint type, ulint n_fields) noexcept;
 
   /**
    * @brief Creates an index memory object.
@@ -417,7 +417,7 @@ struct Index {
    *
    * @return The created index object.
    */
-  [[nodiscard]] static Index *create(Table *table, const char *index_name, Page_id page_id, ulint type, ulint n_fields) noexcept;
+  [[nodiscard]] static Index *create(Table *table, const char *index_name, PageId page_id, ulint type, ulint n_fields) noexcept;
 
   /**
    * @brief Creates an instance of an index without a parent table. Used in the SQL parser.
@@ -431,7 +431,7 @@ struct Index {
    * @return The created index object.
    */
   [[nodiscard]] static Index *create(
-    const char *table_name, const char *index_name, Page_id page_id, ulint type, ulint n_fields
+    const char *table_name, const char *index_name, PageId page_id, ulint type, ulint n_fields
   ) noexcept;
 
   /**
@@ -439,7 +439,7 @@ struct Index {
    *
    * @param[in,out] index The index instance to destroy.
    */
-  static void destroy(Index *&index, Source_location loc) noexcept {
+  static void destroy(Index *&index, SourceLocation loc) noexcept {
     auto *heap = index->m_heap;
     call_destructor<Index>(index);
     mem_heap_free_func(heap, loc);
@@ -474,7 +474,7 @@ struct Index {
   *
   * @return The status.
   */
-  [[nodiscard]] DDL_index_status get_online_ddl_status() const noexcept;
+  [[nodiscard]] DdlIndexStatus get_online_ddl_status() const noexcept;
 
   /** Determines if a secondary index is being created online, or if the
   * table is being rebuilt online, allowing concurrent modifications
@@ -793,7 +793,7 @@ struct Index {
    *
    * @return The error code.
    */
-  [[nodiscard]] db_err add_to_cache(Table *table, page_no_t page_no, bool strict) noexcept;
+  [[nodiscard]] DbErr add_to_cache(Table *table, page_no_t page_no, bool strict) noexcept;
 
   /**
    * Calculates the minimum record length in an index.
@@ -807,7 +807,7 @@ struct Index {
    *
    * @return The read-write lock.
    */
-  [[nodiscard]] inline rw_lock_t *get_lock() const noexcept { return &m_lock; }
+  [[nodiscard]] inline RwLock *get_lock() const noexcept { return &m_lock; }
 
   /**
    * Builds a typed data tuple out of a physical record.
@@ -818,7 +818,7 @@ struct Index {
    *
    * @return own: data tuple
    */
-  [[nodiscard]] DTuple *build_data_tuple(Rec rec, ulint n_fields, mem_heap_t *heap) const noexcept;
+  [[nodiscard]] DTuple *build_data_tuple(Rec rec, ulint n_fields, MemHeap *heap) const noexcept;
 
   /**
    * Copies an initial segment of a physical record, long enough to specify an index entry uniquely.
@@ -842,7 +842,7 @@ struct Index {
    *
    * @return own: node pointer
    */
-  [[nodiscard]] DTuple *build_node_ptr(const Rec rec, ulint page_no, mem_heap_t *heap, ulint level) const noexcept;
+  [[nodiscard]] DTuple *build_node_ptr(const Rec rec, ulint page_no, MemHeap *heap, ulint level) const noexcept;
 
 #ifdef UNIV_DEBUG
   /**
@@ -908,7 +908,7 @@ struct Index {
   /** True if the index object is in the dictionary cache */
   unsigned m_cached : 1;
 
-  /** DDL_index_status. Transitions from IN_PROGRESS to SUCCESS are protected by
+  /** DdlIndexStatus. Transitions from IN_PROGRESS to SUCCESS are protected by
    * dict_operation_lock and dict_sys->mutex. Other changes are protected only by
    * the index->m_lock. */
   unsigned m_ddl_status : 2;
@@ -923,7 +923,7 @@ struct Index {
   Dict_id m_id;
 
   /** Memory heap */
-  mem_heap_t *m_heap;
+  MemHeap *m_heap;
 
   /** Index name */
   const char *m_name;
@@ -932,7 +932,7 @@ struct Index {
   Table *m_table;
 
   /** Space and root page number where the index tree is placed */
-  Page_id m_page_id{};
+  PageId m_page_id{};
 
   /** Array of field descriptions */
   Field *m_fields;
@@ -944,7 +944,7 @@ struct Index {
   Stats m_stats;
 
   /** read-write lock protecting the upper levels of the index tree */
-  mutable rw_lock_t m_lock;
+  mutable RwLock m_lock;
 
   /** Client compare context. For use defined column types and BLOBs
   the client is responsible for comparing the column values. This field
@@ -970,7 +970,7 @@ struct Foreign {
    *
    * @param[in] heap The memory heap.
    */
-  Foreign(mem_heap_t *heap) noexcept : m_heap(heap) {}
+  Foreign(MemHeap *heap) noexcept : m_heap(heap) {}
 
   /**
    * Destructor
@@ -1017,7 +1017,7 @@ struct Foreign {
   Foreign &operator=(const Foreign &) = delete;
 
   /** This object is allocated from this memory heap */
-  mem_heap_t *m_heap{};
+  MemHeap *m_heap{};
 
   /** id of the constraint as a null-terminated string */
   char *m_id{};
@@ -1067,8 +1067,8 @@ struct Foreign {
 /** List of locks that different transactions have acquired on a table. This
 list has a list node that is embedded in a nested union/structure. We have to
 generate a specific template for it. See lock0lock.cc for the implementation. */
-struct Table_lock_get_node;
-using Table_locks = ut_list_base<Lock, Table_lock_get_node>;
+struct TableLockGetNode;
+using Table_locks = UtListBase<Lock, TableLockGetNode>;
 
 /** Data structure for a database table.  Most fields will be
 initialized to 0, nullptr or false in dict_mem_table_create(). */
@@ -1086,7 +1086,7 @@ struct Table {
    *
     * @return The created table object.
    */
-  Table(mem_heap_t *heap, const char *name, space_id_t space, ulint n_cols, ulint flags, bool ibd_file_missing) noexcept;
+  Table(MemHeap *heap, const char *name, space_id_t space, ulint n_cols, ulint flags, bool ibd_file_missing) noexcept;
 
   /**
    * @brief Destructor.
@@ -1105,7 +1105,7 @@ struct Table {
     * @return The created table object.
    */
   [[nodiscard]] static Table *create(
-    const char *name, space_id_t space, ulint n_cols, ulint flags, bool ibd_file_missing, Source_location loc
+    const char *name, space_id_t space, ulint n_cols, ulint flags, bool ibd_file_missing, SourceLocation loc
   ) noexcept;
 
   /**
@@ -1113,7 +1113,7 @@ struct Table {
    *
    * @param[in] table The table object to be destroyed.
    */
-  static void destroy(Table *&table, Source_location loc) noexcept;
+  static void destroy(Table *&table, SourceLocation loc) noexcept;
 
   /**
    * Gets the name of a column.
@@ -1627,7 +1627,7 @@ struct Table {
   Dict_id m_id;
 
   /** Memory heap */
-  mem_heap_t *m_heap;
+  MemHeap *m_heap;
 
   /** Table name */
   const char *m_name;
@@ -1752,7 +1752,7 @@ inline void Foreign::drop_constraint() noexcept {
 }
 
 /** Table create node structure */
-struct Table_node {
+struct TableNode {
   /**
    * Creates a new table node.
    *
@@ -1763,10 +1763,10 @@ struct Table_node {
    *
    * @return The table node.
    */
-  [[nodiscard]] static Table_node *create(Dict *dict, Table *table, mem_heap_t *heap, bool commit) noexcept;
+  [[nodiscard]] static TableNode *create(Dict *dict, Table *table, MemHeap *heap, bool commit) noexcept;
 
   /** Node type: QUE_NODE_TABLE_CREATE */
-  que_common_t *m_common;
+  QueCommon *m_common;
 
   /** Table to create, built as a memory data structure
     * with dict_mem_... functions */
@@ -1774,14 +1774,14 @@ struct Table_node {
 
   /** Child node which does the insert of the table definition;
    * the row to be inserted is built by the parent node  */
-  Insert_node *m_tab_def{};
+  InsertNode *m_tab_def{};
 
   /** Child node which does the inserts of the column definitions;
    * the row to be inserted is built by the parent node  */
-  Insert_node *m_col_def{};
+  InsertNode *m_col_def{};
 
   /** Child node which performs a commit after a successful table creation */
-  Commit_node *m_commit_node{};
+  CommitNode *m_commit_node{};
 
   /*----------------------*/
   /* Local storage for this graph node */
@@ -1793,7 +1793,7 @@ struct Table_node {
   ulint m_col_no{};
 
   /** Memory heap used as auxiliary storage */
-  mem_heap_t *m_heap{};
+  MemHeap *m_heap{};
 };
 
 /* Table create node states */
@@ -1804,7 +1804,7 @@ constexpr ulint TABLE_ADD_TO_CACHE = 4;
 constexpr ulint TABLE_COMPLETED = 5;
 
 /* Index create node struct */
-struct Index_node {
+struct IndexNode {
   /**
    * Creates a new index node.
    *
@@ -1815,24 +1815,24 @@ struct Index_node {
    *
    * @return The index node.
    */
-  [[nodiscard]] static Index_node *create(Dict *dict, Index *index, mem_heap_t *heap, bool commit) noexcept;
+  [[nodiscard]] static IndexNode *create(Dict *dict, Index *index, MemHeap *heap, bool commit) noexcept;
 
   /** Node type: QUE_NODE_INDEX_CREATE */
-  que_common_t *m_common;
+  QueCommon *m_common;
 
   /** Index to create, built as a memory data structure with dict_mem_... functions */
   Index *m_index{};
 
   /* Child node which does the insert of the index definition;
    * the row to be inserted is built by the parent node  */
-  Insert_node *m_ind_def{};
+  InsertNode *m_ind_def{};
 
   /** Child node which does the inserts of the field definitions;
    * the row to be inserted is built by the parent node  */
-  Insert_node *m_field_def{};
+  InsertNode *m_field_def{};
 
   /** Child node which performs a commit after a successful index creation */
-  Commit_node *m_commit_node{};
+  CommitNode *m_commit_node{};
 
   /*----------------------*/
   /* Local storage for this graph node */
@@ -1853,7 +1853,7 @@ struct Index_node {
   ulint m_field_no{};
 
   /** Memory heap used as auxiliary storage */
-  mem_heap_t *m_heap{};
+  MemHeap *m_heap{};
 };
 
 /* Index create node states */

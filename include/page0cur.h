@@ -31,7 +31,7 @@ Created 10/4/1994 Heikki Tuuri
 #include "rem0rec.h"
 
 // Forward declarations
-struct dtuple_t;
+struct Dtuple;
 
 #define PAGE_CUR_ADAPT
 
@@ -54,7 +54,7 @@ constexpr auto PAGE_CUR_DBG = 6;
 #endif /* UNIV_SEARCH_DEBUG */
 
 /** Index page cursor */
-struct Page_cursor {
+struct PageCursor {
 
   /**
    * @brief Inserts a record next to page cursor on an uncompressed page.
@@ -64,11 +64,11 @@ struct Page_cursor {
    * @param current_rec Pointer to current record after which the new record is inserted.
    * @param index Record descriptor.
    * @param rec Pointer to a physical record.
-   * @param offsets In/out: Phy_rec::get_col_offsets(rec, index).
+   * @param offsets In/out: PhyRec::get_col_offsets(rec, index).
    * @param mtr Mini-transaction handle, or NULL.
    * @return Pointer to record if succeed, NULL otherwise.
    */
-  Rec insert_rec_low(Rec current_rec, const Index *index, const Rec rec, Rec_offs offsets, mtr_t *mtr);
+  Rec insert_rec_low(Rec current_rec, const Index *index, const Rec rec, RecOffs offsets, Mtr *mtr);
 
   /**
    * @brief Copies records from page to a newly created page, from a given record
@@ -79,17 +79,17 @@ struct Page_cursor {
    * @param index Record descriptor.
    * @param mtr MTR.
    */
-  static void copy_rec_list_end_to_created_page(page_t *new_page, Rec rec, const Index *index, mtr_t *mtr);
+  static void copy_rec_list_end_to_created_page(page_t *new_page, Rec rec, const Index *index, Mtr *mtr);
 
   /**
    * @brief Deletes a record at the page cursor. The cursor is moved to the
    * next record after the deleted one.
    *
    * @param index Record descriptor.
-   * @param offsets In: Phy_rec::get_col_offsets(rec, index).
+   * @param offsets In: PhyRec::get_col_offsets(rec, index).
    * @param mtr Mini-transaction handle.
    */
-  void delete_rec(const Index *index, const ulint *offsets, mtr_t *mtr);
+  void delete_rec(const Index *index, const ulint *offsets, Mtr *mtr);
 
   /**
    * @brief Searches the right position for a page cursor.
@@ -104,7 +104,7 @@ struct Page_cursor {
    * @param ilow_matched_bytes In/out: Already matched bytes in a field not yet completely matched.
    */
   void search_with_match(
-    const Buf_block *block, const Index *index, const DTuple *tuple, ulint mode, ulint *iup_matched_fields,
+    const BufBlock *block, const Index *index, const DTuple *tuple, ulint mode, ulint *iup_matched_fields,
     ulint *iup_matched_bytes, ulint *ilow_matched_fields, ulint *ilow_matched_bytes
   );
 
@@ -114,7 +114,7 @@ struct Page_cursor {
    *
    * @param block In: Page.
    */
-  void open_on_rnd_user_rec(Buf_block *block);
+  void open_on_rnd_user_rec(BufBlock *block);
 
   /**
    * @brief Parses a log record of a record insert on a page.
@@ -127,7 +127,7 @@ struct Page_cursor {
    * @param mtr In: MTR or NULL.
    * @return End of log record or NULL.
    */
-  static byte *parse_insert_rec(bool is_short, byte *ptr, byte *end_ptr, Buf_block *block, Index *index, mtr_t *mtr);
+  static byte *parse_insert_rec(bool is_short, byte *ptr, byte *end_ptr, BufBlock *block, Index *index, Mtr *mtr);
 
   /**
    * @brief Parses a log record of copying a record list end to a new created page.
@@ -139,7 +139,7 @@ struct Page_cursor {
    * @param mtr In: MTR or NULL.
    * @return End of log record or NULL.
    */
-  static byte *parse_copy_rec_list_to_created_page(byte *ptr, byte *end_ptr, Buf_block *block, Index *index, mtr_t *mtr);
+  static byte *parse_copy_rec_list_to_created_page(byte *ptr, byte *end_ptr, BufBlock *block, Index *index, Mtr *mtr);
 
   /**
    * @brief Parses log record of a record delete on a page.
@@ -151,7 +151,7 @@ struct Page_cursor {
    * @param mtr In: MTR or NULL.
    * @return Pointer to record end or NULL.
    */
-  static byte *parse_delete_rec(byte *ptr, byte *end_ptr, Buf_block *block, Index *index, mtr_t *mtr);
+  static byte *parse_delete_rec(byte *ptr, byte *end_ptr, BufBlock *block, Index *index, Mtr *mtr);
 
   /**
    * @brief Gets pointer to the page frame where the cursor is positioned.
@@ -169,7 +169,7 @@ struct Page_cursor {
    *
    * @return Buffer block.
    */
-  inline Buf_block *get_block() {
+  inline BufBlock *get_block() {
     ut_ad(m_rec.page_align() == m_block->get_frame());
 
     return m_block;
@@ -191,7 +191,7 @@ struct Page_cursor {
    *
    * @param block In: Index page.
    */
-  inline void set_before_first(Buf_block *block) {
+  inline void set_before_first(BufBlock *block) {
     m_block = block;
     m_rec = page_get_infimum_rec(m_block->get_frame());
   }
@@ -201,14 +201,14 @@ struct Page_cursor {
    *
    * @param block In: Index page.
    */
-  inline void set_before_first(const Buf_block *block) { set_before_first(const_cast<Buf_block *>(block)); }
+  inline void set_before_first(const BufBlock *block) { set_before_first(const_cast<BufBlock *>(block)); }
 
   /**
    * @brief Sets the cursor object to point after the last user record on the page.
    *
    * @param block In: Index page.
    */
-  inline void set_after_last(Buf_block *block) {
+  inline void set_after_last(BufBlock *block) {
     m_block = block;
     m_rec = page_get_supremum_rec(m_block->get_frame());
   }
@@ -218,7 +218,7 @@ struct Page_cursor {
    *
    * @param block In: Index page.
    */
-  inline void set_after_last(const Buf_block *block) { set_after_last(const_cast<Buf_block *>(block)); }
+  inline void set_after_last(const BufBlock *block) { set_after_last(const_cast<BufBlock *>(block)); }
 
   /**
    * @brief Returns true if the cursor is before the first user record on the page.
@@ -246,11 +246,11 @@ struct Page_cursor {
    * @param rec In: Record on a page.
    * @param block In: Buffer block containing the record.
    */
-  inline void position(const Rec rec, const Buf_block *block) {
+  inline void position(const Rec rec, const BufBlock *block) {
     ut_ad(rec.page_align() == block->get_frame());
 
     m_rec = rec;
-    m_block = const_cast<Buf_block *>(block);
+    m_block = const_cast<BufBlock *>(block);
   }
 
   /**
@@ -293,7 +293,7 @@ struct Page_cursor {
    * @param mode In: Search mode (PAGE_CUR_L, PAGE_CUR_LE, PAGE_CUR_G, or PAGE_CUR_GE).
    * @return Number of matched fields on the left.
    */
-  inline ulint search(const Buf_block *block, const Index *index, const DTuple *tuple, ulint mode) {
+  inline ulint search(const BufBlock *block, const Index *index, const DTuple *tuple, ulint mode) {
     ulint low_matched_fields{};
     ulint low_matched_bytes{};
     ulint up_matched_fields{};
@@ -318,13 +318,13 @@ struct Page_cursor {
    * @param mtr In: Mini-transaction handle, or NULL.
    * @return Pointer to the inserted record if successful, NULL otherwise.
    */
-  inline Rec tuple_insert(const DTuple *tuple, const Index *index, ulint n_ext, mtr_t *mtr) {
+  inline Rec tuple_insert(const DTuple *tuple, const Index *index, ulint n_ext, Mtr *mtr) {
     const auto size = rec_get_converted_size(index, tuple, n_ext);
     auto heap = mem_heap_create(size + (4 + REC_OFFS_HEADER_SIZE + dtuple_get_n_fields(tuple)) * sizeof(ulint));
     auto rec = Rec::convert_dtuple_to_rec((byte *)mem_heap_alloc(heap, size), index, tuple, n_ext);
 
     {
-      Phy_rec record(index, rec);
+      PhyRec record(index, rec);
 
       auto offsets = record.get_col_offsets(nullptr, ULINT_UNDEFINED, &heap, Current_location());
 
@@ -348,7 +348,7 @@ struct Page_cursor {
    * @param mtr In: Mini-transaction handle, or NULL.
    * @return Pointer to the inserted record if successful, NULL otherwise.
    */
-  inline Rec rec_insert(const Rec rec, Index *index, ulint *offsets, mtr_t *mtr) {
+  inline Rec rec_insert(const Rec rec, Index *index, ulint *offsets, Mtr *mtr) {
     return insert_rec_low(m_rec, index, rec, offsets, mtr);
   }
 
@@ -385,7 +385,7 @@ struct Page_cursor {
    * @return true on success
    */
   bool try_search_shortcut(
-    const Buf_block *block, const Index *index, const DTuple *tuple, ulint *iup_matched_fields, ulint *iup_matched_bytes,
+    const BufBlock *block, const Index *index, const DTuple *tuple, ulint *iup_matched_fields, ulint *iup_matched_bytes,
     ulint *ilow_matched_fields, ulint *ilow_matched_bytes
   );
 
@@ -398,11 +398,11 @@ struct Page_cursor {
    *
    * @param[in] tuple Data tuple
    * @param[in] rec Record
-   * @param[in] offsets Array returned by Phy_rec::get_col_offsets()
+   * @param[in] offsets Array returned by PhyRec::get_col_offsets()
    * @param[in] n Compare nth field
    * @return true if rec field extends tuple field
    */
-  bool rec_field_extends(const dtuple_t *tuple, const Rec rec, const ulint *offsets, ulint n);
+  bool rec_field_extends(const Dtuple *tuple, const Rec rec, const ulint *offsets, ulint n);
 
   /**
    * @brief Writes the log record of a record insert on a page.
@@ -413,7 +413,7 @@ struct Page_cursor {
    * @param[in] index Record descriptor.
    * @param[in] mtr Mini-transaction handle.
    */
-  static void insert_rec_write_log(Rec insert_rec, ulint rec_size, Rec cursor_rec, const Index *index, mtr_t *mtr);
+  static void insert_rec_write_log(Rec insert_rec, ulint rec_size, Rec cursor_rec, const Index *index, Mtr *mtr);
 
   /**
    * @brief Writes log record of a record delete on a page.
@@ -421,7 +421,7 @@ struct Page_cursor {
    * @param[in] rec Record to be deleted.
    * @param[in] mtr Mini-transaction handle.
    */
-  void delete_rec_write_log(Rec rec, mtr_t *mtr);
+  void delete_rec_write_log(Rec rec, Mtr *mtr);
 
 #ifdef PAGE_CUR_ADAPT
 #ifdef UNIV_SEARCH_PERF_STAT
@@ -440,8 +440,8 @@ struct Page_cursor {
   ulint *m_offsets{};
 
   /** Pointer to the current block containing rec. */
-  Buf_block *m_block{};
+  BufBlock *m_block{};
 };
 
 // Legacy typedef for backward compatibility
-using page_cur_t = Page_cursor;
+struct PageCursor;

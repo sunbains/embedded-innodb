@@ -39,20 +39,20 @@ Transaction undo log record class implementation
 
 // FIXME: There must be a better way
 // Forward declarations to avoid circular dependency
-extern byte *trx_undo_parse_add_undo_rec(byte *ptr, byte *end_ptr, Raw_page page);
+extern byte *trx_undo_parse_add_undo_rec(byte *ptr, byte *end_ptr, RawPage page);
 
-extern byte *trx_undo_parse_erase_page_end(byte *ptr, byte *end_ptr, Raw_page page, mtr_t *mtr);
+extern byte *trx_undo_parse_erase_page_end(byte *ptr, byte *end_ptr, RawPage page, Mtr *mtr);
 
-extern db_err trx_undo_report_row_operation(
-  ulint flags, ulint op_type, que_thr_t *thr, const Index *index, const DTuple *clust_entry, const upd_t *update, ulint cmpl_info,
+extern DbErr trx_undo_report_row_operation(
+  ulint flags, ulint op_type, QueThr *thr, const Index *index, const DTuple *clust_entry, const Upd *update, ulint cmpl_info,
   const Rec rec, roll_ptr_t *roll_ptr
 );
 
-byte *Trx_undo_record::get_pars(Trx_undo_record::Parsed &undo_rec_pars) const noexcept {
+byte *TrxUndoRecord::get_pars(TrxUndoRecord::Parsed &undo_rec_pars) const noexcept {
   return get_pars(m_undo_rec, undo_rec_pars);
 }
 
-byte *Trx_undo_record::get_pars(trx_undo_rec_t undo_rec, Trx_undo_record::Parsed &undo_rec_pars) noexcept {
+byte *TrxUndoRecord::get_pars(trx_undo_rec_t undo_rec, TrxUndoRecord::Parsed &undo_rec_pars) noexcept {
 
   auto ptr = undo_rec + 2;
   ulint type_cmpl = mach_read_from_1(ptr);
@@ -130,7 +130,7 @@ static byte *trx_undo_rec_get_col_val(byte *ptr, byte **field, ulint *len, ulint
   return ptr;
 }
 
-byte *Trx_undo_record::get_row_ref(byte *ptr, Index *index, DTuple **ref, mem_heap_t *heap) {
+byte *TrxUndoRecord::get_row_ref(byte *ptr, Index *index, DTuple **ref, MemHeap *heap) {
   ulint ref_len;
   ulint i;
 
@@ -144,7 +144,7 @@ byte *Trx_undo_record::get_row_ref(byte *ptr, Index *index, DTuple **ref, mem_he
   index->copy_types(*ref, ref_len);
 
   for (i = 0; i < ref_len; i++) {
-    dfield_t *dfield;
+    Dfield *dfield;
     byte *field;
     ulint len;
     ulint orig_len;
@@ -159,7 +159,7 @@ byte *Trx_undo_record::get_row_ref(byte *ptr, Index *index, DTuple **ref, mem_he
   return ptr;
 }
 
-byte *Trx_undo_record::skip_row_ref(byte *ptr, Index *index) {
+byte *TrxUndoRecord::skip_row_ref(byte *ptr, Index *index) {
   ulint ref_len;
   ulint i;
 
@@ -179,7 +179,7 @@ byte *Trx_undo_record::skip_row_ref(byte *ptr, Index *index) {
   return ptr;
 }
 
-byte *Trx_undo_record::update_rec_get_sys_cols(byte *ptr, trx_id_t *trx_id, roll_ptr_t *roll_ptr, ulint *info_bits) {
+byte *TrxUndoRecord::update_rec_get_sys_cols(byte *ptr, trx_id_t *trx_id, roll_ptr_t *roll_ptr, ulint *info_bits) {
   /* Read the state of the info bits */
   *info_bits = mach_read_from_1(ptr);
   ptr += 1;
@@ -230,9 +230,9 @@ inline byte *trx_undo_update_rec_get_field_no(
   return ptr;
 }
 
-byte *Trx_undo_record::update_rec_get_update(
-  byte *ptr, Index *index, ulint type, trx_id_t trx_id, roll_ptr_t roll_ptr, ulint info_bits, Trx *trx, mem_heap_t *heap,
-  upd_t **upd
+byte *TrxUndoRecord::update_rec_get_update(
+  byte *ptr, Index *index, ulint type, trx_id_t trx_id, roll_ptr_t roll_ptr, ulint info_bits, Trx *trx, MemHeap *heap,
+  Upd **upd
 ) {
   ulint n_fields;
   byte *buf;
@@ -245,7 +245,7 @@ byte *Trx_undo_record::update_rec_get_update(
     n_fields = 0;
   }
 
-  auto update = Row_update::upd_create(n_fields + 2, heap);
+  auto update = RowUpdate::upd_create(n_fields + 2, heap);
 
   update->m_info_bits = info_bits;
 
@@ -318,7 +318,7 @@ byte *Trx_undo_record::update_rec_get_update(
   return ptr;
 }
 
-byte *Trx_undo_record::get_partial_row(byte *ptr, Index *index, DTuple **row, bool ignore_prefix, mem_heap_t *heap) {
+byte *TrxUndoRecord::get_partial_row(byte *ptr, Index *index, DTuple **row, bool ignore_prefix, MemHeap *heap) {
   ut_ad(index);
   ut_ad(ptr);
   ut_ad(row);
@@ -370,29 +370,29 @@ byte *Trx_undo_record::get_partial_row(byte *ptr, Index *index, DTuple **row, bo
   return ptr;
 }
 
-Trx_undo_record Trx_undo_record::get_undo_rec_low(roll_ptr_t roll_ptr, mem_heap_t *heap) {
+TrxUndoRecord TrxUndoRecord::get_undo_rec_low(roll_ptr_t roll_ptr, MemHeap *heap) {
   ulint offset;
   ulint rseg_id;
   bool is_insert;
   page_no_t page_no;
 
   trx_undo_decode_roll_ptr(roll_ptr, &is_insert, &rseg_id, &page_no, &offset);
-  auto rseg = Trx_rseg::get_on_id(rseg_id);
+  auto rseg = TrxRseg::get_on_id(rseg_id);
 
-  mtr_t mtr;
+  Mtr mtr;
 
   mtr.start();
 
   auto undo_page = srv_undo->page_get_s_latched(rseg->m_space, page_no, &mtr);
 
-  auto undo_rec = Trx_undo_record(undo_page + offset).copy(heap);
+  auto undo_rec = TrxUndoRecord(undo_page + offset).copy(heap);
 
   mtr.commit();
 
   return undo_rec;
 }
 
-db_err Trx_undo_record::get_undo_rec(roll_ptr_t roll_ptr, trx_id_t trx_id, Trx_undo_record *undo_rec, mem_heap_t *heap) {
+DbErr TrxUndoRecord::get_undo_rec(roll_ptr_t roll_ptr, trx_id_t trx_id, TrxUndoRecord *undo_rec, MemHeap *heap) {
 #ifdef UNIV_SYNC_DEBUG
   ut_ad(rw_lock_own(&purge_sys->latch, RW_LOCK_SHARED));
 #endif /* UNIV_SYNC_DEBUG */
@@ -410,18 +410,18 @@ db_err Trx_undo_record::get_undo_rec(roll_ptr_t roll_ptr, trx_id_t trx_id, Trx_u
   return DB_SUCCESS;
 }
 
-db_err Trx_undo_record::prev_version_build(
-  const Rec index_rec, mtr_t *index_mtr __attribute__((unused)), const Rec rec, Index *index, Rec_offs offsets, mem_heap_t *heap,
+DbErr TrxUndoRecord::prev_version_build(
+  const Rec index_rec, Mtr *index_mtr __attribute__((unused)), const Rec rec, Index *index, RecOffs offsets, MemHeap *heap,
   Rec *old_vers
 ) {
   byte *buf;
-  upd_t *update;
+  Upd *update;
   DTuple *entry;
   ulint info_bits;
   trx_id_t trx_id;
   roll_ptr_t roll_ptr;
   roll_ptr_t old_roll_ptr;
-  Trx_undo_record undo_rec{};
+  TrxUndoRecord undo_rec{};
 
 #ifdef UNIV_SYNC_DEBUG
   ut_ad(rw_lock_own(&purge_sys->m_latch, RW_LOCK_SHARED));
@@ -470,7 +470,7 @@ db_err Trx_undo_record::prev_version_build(
     return err;
   }
 
-  Trx_undo_record::Parsed pars;
+  TrxUndoRecord::Parsed pars;
   auto ptr = undo_rec.get_pars(pars);
 
   ptr = update_rec_get_sys_cols(ptr, &trx_id, &roll_ptr, &info_bits);
@@ -582,17 +582,17 @@ db_err Trx_undo_record::prev_version_build(
 // Note: These functions delegate to the original implementations in trx0rec.cc
 // as they deal with page-level operations and are closely tied to existing undo log page management
 
-db_err Trx_undo_record::report_row_operation(
-  ulint flags, ulint op_type, que_thr_t *thr, const Index *index, const DTuple *clust_entry, const upd_t *update, ulint cmpl_info,
+DbErr TrxUndoRecord::report_row_operation(
+  ulint flags, ulint op_type, QueThr *thr, const Index *index, const DTuple *clust_entry, const Upd *update, ulint cmpl_info,
   const Rec rec, roll_ptr_t *roll_ptr
 ) {
   return ::trx_undo_report_row_operation(flags, op_type, thr, index, clust_entry, update, cmpl_info, rec, roll_ptr);
 }
 
-byte *Trx_undo_record::parse_add_undo_rec(byte *ptr, byte *end_ptr, page_t *page) {
+byte *TrxUndoRecord::parse_add_undo_rec(byte *ptr, byte *end_ptr, page_t *page) {
   return ::trx_undo_parse_add_undo_rec(ptr, end_ptr, page);
 }
 
-byte *Trx_undo_record::parse_erase_page_end(byte *ptr, byte *end_ptr, page_t *page, mtr_t *mtr) {
+byte *TrxUndoRecord::parse_erase_page_end(byte *ptr, byte *end_ptr, page_t *page, Mtr *mtr) {
   return ::trx_undo_parse_erase_page_end(ptr, end_ptr, page, mtr);
 }

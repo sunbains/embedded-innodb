@@ -32,12 +32,12 @@ Lock system validation and debugging
 #include "ut0dbg.h"
 
 // Node getters for ut_list iteration - these are defined in lock0lock.cc
-struct Table_lock_get_node {
-  static const ut_list_node<Lock> &get_node(const Lock &lock) { return lock.m_table.m_locks; }
+struct TableLockGetNode {
+  static const UtListNode<Lock> &get_node(const Lock &lock) { return lock.m_table.m_locks; }
 };
 
-struct Rec_lock_get_node {
-  static const ut_list_node<Lock> &get_node(const Lock &lock) { return lock.m_rec.m_rec_locks; }
+struct RecLockGetNode {
+  static const UtListNode<Lock> &get_node(const Lock &lock) { return lock.m_rec.m_rec_locks; }
 };
 
 /**
@@ -57,10 +57,10 @@ static inline void validate_trx_state(const Trx *trx) noexcept {
   }
 }
 
-Lock_validator::Lock_validator(Lock_sys *lock_sys) noexcept : m_lock_sys(lock_sys) {}
+LockValidator::LockValidator(LockSys *lock_sys) noexcept : m_lock_sys(lock_sys) {}
 
 #ifdef UNIV_DEBUG
-bool Lock_validator::validate() noexcept {
+bool LockValidator::validate() noexcept {
   mutex_enter(&m_lock_sys->m_trx_sys->m_mutex);
 
   auto trx_sys = m_lock_sys->m_trx_sys;
@@ -90,14 +90,14 @@ bool Lock_validator::validate() noexcept {
   return true;
 }
 
-bool Lock_validator::rec_validate_page(Page_id page_id) noexcept {
+bool LockValidator::rec_validate_page(PageId page_id) noexcept {
   ut_ad(!mutex_own(&m_lock_sys->m_trx_sys->m_mutex));
 
-  mtr_t mtr;
-  mem_heap_t *heap{};
+  Mtr mtr;
+  MemHeap *heap{};
   bool clean_up_called{};
 
-  auto clean_up = [&](mtr_t &mtr, mem_heap_t *heap) -> bool {
+  auto clean_up = [&](Mtr &mtr, MemHeap *heap) -> bool {
     if (heap != nullptr) {
       mem_heap_free(heap);
     }
@@ -113,7 +113,7 @@ bool Lock_validator::rec_validate_page(Page_id page_id) noexcept {
 
   auto buf_pool = m_lock_sys->m_buf_pool;
 
-  Buf_pool::Request req{.m_page_id = page_id, .m_mode = BUF_GET_NO_LATCH, .m_file = __FILE__, .m_line = __LINE__, .m_mtr = &mtr};
+  BufPool::Request req{.m_page_id = page_id, .m_mode = BUF_GET_NO_LATCH, .m_file = __FILE__, .m_line = __LINE__, .m_mtr = &mtr};
 
   auto block = buf_pool->get(req, nullptr);
 
@@ -153,7 +153,7 @@ bool Lock_validator::rec_validate_page(Page_id page_id) noexcept {
             holding a space->latch.  Deadlocks are possible due to
             latching order violation when UNIV_DEBUG is defined while
             UNIV_SYNC_DEBUG is not. */
-            const fil_space_t *space = fil_space_get_by_id(space_id);
+            const FilSpace *space = fil_space_get_by_id(space_id);
             if (space != nullptr && mutex_own(&space->m_latch)) {
               mutex_exit(&m_lock_sys->m_trx_sys->m_mutex);
               return clean_up(mtr, heap);
@@ -171,16 +171,16 @@ bool Lock_validator::rec_validate_page(Page_id page_id) noexcept {
             }
 
             std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
-            Rec_offs offsets(offsets_.data());
+            RecOffs offsets(offsets_.data());
 
             {
-              Phy_rec record{index, Rec(rec_cursor)};
+              PhyRec record{index, Rec(rec_cursor)};
               offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
             }
 
             mutex_exit(&m_lock_sys->m_trx_sys->m_mutex);
 
-            /* If this thread is holding the file space latch (fil_space_t::latch), the following
+            /* If this thread is holding the file space latch (FilSpace::latch), the following
               check WILL break the latching order and may cause a deadlock of threads. */
 
             (void)rec_queue_validate(block, Rec(rec_cursor), index, offsets);
@@ -201,7 +201,7 @@ bool Lock_validator::rec_validate_page(Page_id page_id) noexcept {
   return clean_up(mtr, heap);
 }
 
-bool Lock_validator::table_queue_validate(Table *table) noexcept {
+bool LockValidator::table_queue_validate(Table *table) noexcept {
   ut_ad(mutex_own(&m_lock_sys->m_trx_sys->m_mutex));
 
   for (auto lock : table->m_locks) {
@@ -216,7 +216,7 @@ bool Lock_validator::table_queue_validate(Table *table) noexcept {
   return true;
 }
 
-bool Lock_validator::rec_queue_validate(const Buf_block *block, const Rec rec, const Index *index, const ulint *offsets) noexcept {
+bool LockValidator::rec_queue_validate(const BufBlock *block, const Rec rec, const Index *index, const ulint *offsets) noexcept {
   ut_ad(block->get_frame() == rec.page_align());
   ut_ad(rec.offs_validate(index, offsets));
 
@@ -268,8 +268,8 @@ bool Lock_validator::rec_queue_validate(const Buf_block *block, const Rec rec, c
   return true;
 }
 
-const Lock *Lock_validator::rec_other_has_expl_req(
-  Page_id page_id, Lock_mode mode, ulint gap, ulint wait, ulint heap_no, const Trx *trx
+const Lock *LockValidator::rec_other_has_expl_req(
+  PageId page_id, LockMode mode, ulint gap, ulint wait, ulint heap_no, const Trx *trx
 ) const noexcept {
   ut_ad(mutex_own(&m_lock_sys->m_trx_sys->m_mutex));
   ut_ad(mode == LOCK_X || mode == LOCK_S);
@@ -294,7 +294,7 @@ const Lock *Lock_validator::rec_other_has_expl_req(
   return nullptr;
 }
 
-const Lock *Lock_validator::rec_exists(const Rec_locks &rec_locks, ulint heap_no) const noexcept {
+const Lock *LockValidator::rec_exists(const Rec_locks &rec_locks, ulint heap_no) const noexcept {
   ut_ad(mutex_own(&m_lock_sys->m_trx_sys->m_mutex));
 
   for (auto lock : rec_locks) {
@@ -308,11 +308,11 @@ const Lock *Lock_validator::rec_exists(const Rec_locks &rec_locks, ulint heap_no
 
 #endif /* UNIV_DEBUG */
 
-bool Lock_validator::print_info_summary(bool nowait) const noexcept {
+bool LockValidator::print_info_summary(bool nowait) const noexcept {
   // TODO: Implement this
   return true;
 }
 
-void Lock_validator::print_info_all_transactions() noexcept {
+void LockValidator::print_info_all_transactions() noexcept {
   // TODO: Implement this
 }

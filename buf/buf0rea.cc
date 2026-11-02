@@ -64,8 +64,8 @@ constexpr ulint BUF_READ_AHEAD_PEND_LIMIT = 2;
  * @return DB_SUCCESS if a request was posted to the IO layer, DB_FAIL the request was not posted
  *  or error code from the IO layer.
  */
-static db_err buf_read_page(IO_request io_request, bool batch, const Page_id &page_id, int64_t tablespace_version) {
-  ut_a(io_request == IO_request::Async_read || io_request == IO_request::Sync_read);
+static DbErr buf_read_page(IoRequest io_request, bool batch, const PageId &page_id, int64_t tablespace_version) {
+  ut_a(io_request == IoRequest::Async_read || io_request == IoRequest::Sync_read);
 
   if (srv_dblwr != nullptr && page_id.space_id() == TRX_SYS_SPACE && srv_dblwr->is_page_inside(page_id.page_no())) {
 
@@ -74,7 +74,7 @@ static db_err buf_read_page(IO_request io_request, bool batch, const Page_id &pa
     return DB_FAIL;
   }
 
-  db_err err;
+  DbErr err;
 
   /* The following call will also check if the tablespace does not exist
   or is being dropped; if we succeed in initing the page in the buffer
@@ -96,19 +96,19 @@ static db_err buf_read_page(IO_request io_request, bool batch, const Page_id &pa
 
   ut_a(err == DB_SUCCESS);
 
-  if (io_request == IO_request::Sync_read) {
+  if (io_request == IoRequest::Sync_read) {
     /* The i/o is already completed when we arrive from srv_fil->read */
     srv_buf_pool->io_complete(bpage);
   } else {
-    ut_a(io_request == IO_request::Async_read);
+    ut_a(io_request == IoRequest::Async_read);
   }
 
   return DB_SUCCESS;
 }
 
-bool buf_read_page(const Page_id &page_id) {
+bool buf_read_page(const PageId &page_id) {
   auto tablespace_version = srv_fil->space_get_version(page_id.space_id());
-  auto err = buf_read_page(IO_request::Sync_read, false, page_id, tablespace_version);
+  auto err = buf_read_page(IoRequest::Sync_read, false, page_id, tablespace_version);
 
   if (err == DB_SUCCESS) {
 
@@ -133,17 +133,17 @@ bool buf_read_page(const Page_id &page_id) {
   return err == DB_SUCCESS;
 }
 
-ulint buf_read_ahead_linear(Buf_pool *buf_pool, const Page_id &page_id) {
-  Buf_page *bpage;
+ulint buf_read_ahead_linear(BufPool *buf_pool, const PageId &page_id) {
+  BufPage *bpage;
   buf_frame_t *frame;
-  Buf_page *pred_bpage = nullptr;
+  BufPage *pred_bpage = nullptr;
   page_no_t pred_offset;
   page_no_t succ_offset;
   ulint count;
   int asc_or_desc;
   ulint new_offset;
   ulint fail_count;
-  db_err err;
+  DbErr err;
   ulint i;
   const ulint buf_read_ahead_linear_area = srv_buf_pool->get_read_ahead_area();
   ulint threshold;
@@ -164,7 +164,7 @@ ulint buf_read_ahead_linear(Buf_pool *buf_pool, const Page_id &page_id) {
     return 0;
   }
 
-  if (Trx_sys::is_hdr_page(space, offset)) {
+  if (TrxSys::is_hdr_page(space, offset)) {
     /* Don't do a read-ahead in the system area. Being cautious. */
     return 0;
   }
@@ -206,7 +206,7 @@ ulint buf_read_ahead_linear(Buf_pool *buf_pool, const Page_id &page_id) {
 
   fail_count = 0;
 
-  Page_id current_page_id(space, low);
+  PageId current_page_id(space, low);
 
   for (i = low; i < high; i++) {
     current_page_id.set_page_no(i);
@@ -310,7 +310,7 @@ ulint buf_read_ahead_linear(Buf_pool *buf_pool, const Page_id &page_id) {
     /* It is only sensible to do read-ahead in the non-sync
     aio mode: hence false as the first parameter */
 
-    err = buf_read_page(IO_request::Async_read, true, Page_id(space, i), tablespace_version);
+    err = buf_read_page(IoRequest::Async_read, true, PageId(space, i), tablespace_version);
 
     if (err == DB_SUCCESS) {
 
@@ -341,7 +341,7 @@ ulint buf_read_ahead_linear(Buf_pool *buf_pool, const Page_id &page_id) {
   return count;
 }
 
-void buf_read_recv_pages(bool sync, const Page_id &page_id, const page_no_t *page_nos, ulint n_stored) {
+void buf_read_recv_pages(bool sync, const PageId &page_id, const page_no_t *page_nos, ulint n_stored) {
   auto space = page_id.space_id();
   if (srv_fil->space_get_size(space) == ULINT_UNDEFINED) {
     /* It is a single table tablespace and the .ibd file is
@@ -372,9 +372,9 @@ void buf_read_recv_pages(bool sync, const Page_id &page_id, const page_no_t *pag
     }
 
     if ((i + 1 == n_stored) && sync) {
-      buf_read_page(IO_request::Sync_read, false, Page_id(space, page_nos[i]), tablespace_version);
+      buf_read_page(IoRequest::Sync_read, false, PageId(space, page_nos[i]), tablespace_version);
     } else {
-      buf_read_page(IO_request::Async_read, true, Page_id(space, page_nos[i]), tablespace_version);
+      buf_read_page(IoRequest::Async_read, true, PageId(space, page_nos[i]), tablespace_version);
     }
   }
 

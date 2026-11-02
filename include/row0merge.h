@@ -34,7 +34,7 @@ struct Trx;
 struct Table;
 
 /** Index field definition */
-struct merge_index_field_t {
+struct MergeIndexField {
   /** Column prefix length, or 0 if indexing the whole column */
   ulint prefix_len;
 
@@ -43,7 +43,7 @@ struct merge_index_field_t {
 };
 
 /** Definition of an index being created */
-struct merge_index_def_t {
+struct MergeIndexDef {
   /** Index name */
   const char *name;
 
@@ -54,7 +54,7 @@ struct merge_index_def_t {
   ulint n_fields;
 
   /** field definitions */
-  merge_index_field_t *fields;
+  MergeIndexField *fields;
 };
 
 /**
@@ -66,7 +66,7 @@ struct merge_index_def_t {
  *
  * @return error code or DB_SUCCESS
  */
-db_err row_merge_lock_table(Trx *trx, Table *table, Lock_mode mode);
+DbErr row_merge_lock_table(Trx *trx, Table *table, LockMode mode);
 
 /**
  * Drop an index from the InnoDB system tables. The data dictionary must
@@ -97,7 +97,7 @@ void row_merge_drop_indexes(Trx *trx, Table *table, Index **index, ulint num_cre
  *
  * @param recovery in: recovery level setting
  */
-void row_merge_drop_temp_indexes(ib_recovery_t recovery);
+void row_merge_drop_temp_indexes(IbRecovery recovery);
 
 /**
  * Rename the tables in the data dictionary. The data dictionary must
@@ -111,7 +111,7 @@ void row_merge_drop_temp_indexes(ib_recovery_t recovery);
  *
  * @return error code or DB_SUCCESS
  */
-db_err row_merge_rename_tables(Table *old_table, Table *new_table, const char *tmp_name, Trx *trx);
+DbErr row_merge_rename_tables(Table *old_table, Table *new_table, const char *tmp_name, Trx *trx);
 
 /**
  * Create a temporary table for creating a primary key, using the definition
@@ -124,7 +124,7 @@ db_err row_merge_rename_tables(Table *old_table, Table *new_table, const char *t
  *
  * @return table, or nullptr on error
  */
-Table *row_merge_create_temporary_table(const char *table_name, const merge_index_def_t *index_def, const Table *table, Trx *trx);
+Table *row_merge_create_temporary_table(const char *table_name, const MergeIndexDef *index_def, const Table *table, Trx *trx);
 
 /**
  * Rename the temporary indexes in the dictionary to permanent ones. The
@@ -136,7 +136,7 @@ Table *row_merge_create_temporary_table(const char *table_name, const merge_inde
  *
  * @return DB_SUCCESS if all OK
  */
-db_err row_merge_rename_indexes(Trx *trx, Table *table);
+DbErr row_merge_rename_indexes(Trx *trx, Table *table);
 
 /**
  * Create the index and load in to the dictionary.
@@ -147,7 +147,7 @@ db_err row_merge_rename_indexes(Trx *trx, Table *table);
  *
  * @return index, or nullptr on error
  */
-Index *row_merge_create_index(Trx *trx, Table *table, const merge_index_def_t *index_def);
+Index *row_merge_create_index(Trx *trx, Table *table, const MergeIndexDef *index_def);
 
 /**
  * Check if a transaction can use an index.
@@ -168,7 +168,7 @@ bool row_merge_is_index_usable(const Trx *trx, const Index *index);
  *
  * @return DB_SUCCESS or error code
  */
-db_err row_merge_drop_table(Trx *trx, Table *table);
+DbErr row_merge_drop_table(Trx *trx, Table *table);
 
 /**
  * Build indexes on a table by reading a clustered index,
@@ -185,6 +185,6 @@ db_err row_merge_drop_table(Trx *trx, Table *table);
  *
  * @return DB_SUCCESS or error code
  */
-db_err row_merge_build_indexes(
+DbErr row_merge_build_indexes(
   Trx *trx, Table *old_table, Table *new_table, Index **indexes, ulint n_indexes, table_handle_t table
 );

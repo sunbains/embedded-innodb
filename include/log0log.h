@@ -32,7 +32,7 @@ struct Log {
   /**
    * Constructor
    *
-   * @param[in] size The size of the log buffer in bytes. Must be a multiple of sizeof(Log_phy_block).
+   * @param[in] size The size of the log buffer in bytes. Must be a multiple of sizeof(LogPhyBlock).
    */
   explicit Log(size_t size) noexcept;
 
@@ -56,7 +56,7 @@ struct Log {
    *
    * @return True if the files are closed successfully, false otherwise.
    */
-  [[nodiscard]] lsn_t close(ib_recovery_t recovery) noexcept;
+  [[nodiscard]] lsn_t close(IbRecovery recovery) noexcept;
 
   /**
    * Acquire the log mutex.
@@ -84,7 +84,7 @@ struct Log {
    *
    * @return True if the log segment is read successfully, false otherwise.
    */
-  [[nodiscard]] bool read(Log_buffer &buffer, lsn_t start_lsn, lsn_t end_lsn, lsn_t *scanned_lsn) noexcept;
+  [[nodiscard]] bool read(LogBuffer &buffer, lsn_t start_lsn, lsn_t end_lsn, lsn_t *scanned_lsn) noexcept;
 
   /** Gets the current lsn.
   *
@@ -254,13 +254,13 @@ struct Log {
   std::atomic<lsn_t> m_lsn{};
 
   /** Log buffer for reading and writing log records. */
-  Log_buffer m_buffer;
+  LogBuffer m_buffer;
 
   /** Mutex protecting the log */
-  mutable mutex_t m_mutex{};
+  mutable Mutex m_mutex{};
 
   /** Log virtual file */
-  Log_vfile m_vfile;
+  LogVfile m_vfile;
 
   /** First LSN not yet written to the log file; for this
   to be advanced, it is enough that the write I/O has been completed. */
@@ -279,19 +279,19 @@ struct Log {
   running; a thread should wait for this without owning the log
   mutex, but NOTE that to set or reset this event, the thread MUST
   own the log mutex! */
-  Cond_var *m_no_flush_event{};
+  CondVar *m_no_flush_event{};
 
   /** This event is reset when the flush or write has not yet completed.
   When this is set; a thread should wait for this without owning
   the log mutex, but NOTE that to set or reset this event, the thread
   MUST own the log mutex! */
-  Cond_var *m_one_flushed_event{};
+  CondVar *m_one_flushed_event{};
 
   /** Total number of calls to append() */
   size_t m_log_write_requests{};
 
   /** Fields involved in checkpoints @{ */
-  Log_checkpoint m_checkpoint{};
+  LogCheckpoint m_checkpoint{};
 
   /** Disable writes to the log file */
   bool m_disable_writes{false};
@@ -300,13 +300,13 @@ struct Log {
    * Initialize the WAL backend.
    * @param[in] config Configuration for the WAL backend.
    */
-  void init_wal_backend(const Log_wal_backend::Config &config) noexcept;
+  void init_wal_backend(const LogWalBackend::Config &config) noexcept;
 
   /**
    * Get the WAL backend.
    * @return Pointer to the WAL backend, or nullptr if not initialized.
    */
-  [[nodiscard]] Log_wal_backend *get_wal_backend() noexcept { return m_wal_backend.get(); }
+  [[nodiscard]] LogWalBackend *get_wal_backend() noexcept { return m_wal_backend.get(); }
 
   // Methods used by callers - implemented using WAL-CPP
   void free_check() noexcept {}
@@ -322,7 +322,7 @@ struct Log {
   bool read_checkpoint([[maybe_unused]] lsn_t &lsn, [[maybe_unused]] uint64_t &no) noexcept { return false; }
 
   /** WAL backend using wal::Log */
-  std::unique_ptr<Log_wal_backend> m_wal_backend{};
+  std::unique_ptr<LogWalBackend> m_wal_backend{};
 
   /** Pending data for slow path (reserve_and_open/write_low/close) */
   std::vector<byte> m_pending_data{};
@@ -353,7 +353,7 @@ struct Log {
 
 extern Log *log_sys;
 
-using log_t = Log;
+struct Log;
 
 constexpr ulint LOG_WAIT_ONE_GROUP = 1;
 

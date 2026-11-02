@@ -16,9 +16,9 @@ using lock_word_t = std::atomic<bool>;
 constexpr ulint MUTEX_MAGIC_N = 979585;
 
 /** InnoDB mutex */
-struct mutex_t {
+struct Mutex {
 
-  mutex_t() = default;
+  Mutex() = default;
 
   void init() {
     ut_a(event == nullptr);
@@ -26,7 +26,7 @@ struct mutex_t {
   }
 
   /** Used by sync0arr.c for the wait queue */
-  Cond_var *event{};
+  CondVar *event{};
 
   /** lock_word is the target of the atomic test-and-set
   instruction when atomic operations are enabled. */
@@ -38,7 +38,7 @@ struct mutex_t {
 
   /** All allocated mutexes are put into a list. Pointers to the
   next and prev. */
-  UT_LIST_NODE_T(mutex_t) list{};
+  UT_LIST_NODE_T(Mutex) list{};
 
   /** File name where mutex created */
   const char *cfile_name{};
@@ -93,4 +93,4 @@ struct mutex_t {
 #endif /* UNIV_SYNC_DEBUG */
 };
 
-static_assert(std::is_standard_layout<mutex_t>::value, "mutex_t must have standard layout");
+static_assert(std::is_standard_layout<Mutex>::value, "Mutex must have standard layout");

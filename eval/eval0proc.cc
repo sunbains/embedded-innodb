@@ -28,12 +28,12 @@ Created 1/20/1998 Heikki Tuuri
 #include "eval0proc.ic"
 #endif
 
-que_thr_t *if_step(que_thr_t *thr) {
-  elsif_node_t *elsif_node;
+QueThr *if_step(QueThr *thr) {
+  ElsifNode *elsif_node;
 
   ut_ad(thr);
 
-  auto node = (if_node_t *)thr->run_node;
+  auto node = (IfNode *)thr->run_node;
   ut_ad(que_node_get_type(node) == QUE_NODE_IF);
 
   if (thr->prev_node == que_node_get_parent(node)) {
@@ -69,7 +69,7 @@ que_thr_t *if_step(que_thr_t *thr) {
           break;
         }
 
-        elsif_node = (elsif_node_t *)que_node_get_next(elsif_node);
+        elsif_node = (ElsifNode *)que_node_get_next(elsif_node);
 
         if (elsif_node == nullptr) {
           thr->run_node = nullptr;
@@ -97,11 +97,11 @@ que_thr_t *if_step(que_thr_t *thr) {
 /** Performs an execution step of a while-statement node.
 @return	query thread to run next or nullptr */
 
-que_thr_t *while_step(que_thr_t *thr) /*!< in: query thread */
+QueThr *while_step(QueThr *thr) /*!< in: query thread */
 {
   ut_ad(thr);
 
-  auto node = (while_node_t *)thr->run_node;
+  auto node = (WhileNode *)thr->run_node;
   ut_ad(que_node_get_type(node) == QUE_NODE_WHILE);
 
   ut_ad((thr->prev_node == que_node_get_parent(node)) || (que_node_get_next(thr->prev_node) == nullptr));
@@ -126,11 +126,11 @@ que_thr_t *while_step(que_thr_t *thr) /*!< in: query thread */
 /** Performs an execution step of an assignment statement node.
 @return	query thread to run next or nullptr */
 
-que_thr_t *assign_step(que_thr_t *thr) /*!< in: query thread */
+QueThr *assign_step(QueThr *thr) /*!< in: query thread */
 {
   ut_ad(thr);
 
-  auto node = (assign_node_t *)thr->run_node;
+  auto node = (AssignNode *)thr->run_node;
   ut_ad(que_node_get_type(node) == QUE_NODE_ASSIGNMENT);
 
   /* Evaluate the value to assign */
@@ -147,14 +147,14 @@ que_thr_t *assign_step(que_thr_t *thr) /*!< in: query thread */
 /** Performs an execution step of a for-loop node.
 @return	query thread to run next or nullptr */
 
-que_thr_t *for_step(que_thr_t *thr) /*!< in: query thread */
+QueThr *for_step(QueThr *thr) /*!< in: query thread */
 {
   que_node_t *parent;
   lint loop_var_value;
 
   ut_ad(thr);
 
-  auto node = (for_node_t *)thr->run_node;
+  auto node = (ForNode *)thr->run_node;
 
   ut_ad(que_node_get_type(node) == QUE_NODE_FOR);
 
@@ -203,13 +203,13 @@ que_thr_t *for_step(que_thr_t *thr) /*!< in: query thread */
 /** Performs an execution step of an exit statement node.
 @return	query thread to run next or nullptr */
 
-que_thr_t *exit_step(que_thr_t *thr) /*!< in: query thread */
+QueThr *exit_step(QueThr *thr) /*!< in: query thread */
 {
   que_node_t *loop_node;
 
   ut_ad(thr);
 
-  auto node = (exit_node_t *)thr->run_node;
+  auto node = (ExitNode *)thr->run_node;
 
   ut_ad(que_node_get_type(node) == QUE_NODE_EXIT);
 
@@ -230,13 +230,13 @@ que_thr_t *exit_step(que_thr_t *thr) /*!< in: query thread */
 /** Performs an execution step of a return-statement node.
 @return	query thread to run next or nullptr */
 
-que_thr_t *return_step(que_thr_t *thr) /*!< in: query thread */
+QueThr *return_step(QueThr *thr) /*!< in: query thread */
 {
   que_node_t *parent;
 
   ut_ad(thr);
 
-  auto node = (return_node_t *)thr->run_node;
+  auto node = (ReturnNode *)thr->run_node;
 
   ut_ad(que_node_get_type(node) == QUE_NODE_RETURN);
 

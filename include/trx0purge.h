@@ -41,7 +41,7 @@ Created 3/26/1996 Heikki Tuuri
  */
 extern trx_undo_rec_t trx_purge_dummy_rec;
 
-enum Purge_state {
+enum PurgeState {
   /** Unknown state. */
   PURGE_STATE_UNKNOWN = 0,
 
@@ -59,7 +59,7 @@ enum Purge_state {
  * @param[in,out] node_addr  File address of the history list node of the log.
  *
  * @return	file address of the log */
-inline Fil_addr trx_purge_get_log_from_hist(Fil_addr node_addr) noexcept {
+inline FilAddr trx_purge_get_log_from_hist(FilAddr node_addr) noexcept {
   node_addr.m_boffset -= TRX_UNDO_HISTORY_NODE;
 
   return node_addr;
@@ -68,19 +68,19 @@ inline Fil_addr trx_purge_get_log_from_hist(Fil_addr node_addr) noexcept {
 /**
  * The control structure used in the purge operation
  */
-struct Purge_sys {
+struct PurgeSys {
 
   /**
    * Constructor.
    *
    * @param trx Transaction instance permanently assigned for the purge
    */
-  explicit Purge_sys(Trx *trx) noexcept;
+  explicit PurgeSys(Trx *trx) noexcept;
 
   /**
    * Destructor.
    */
-  ~Purge_sys() noexcept;
+  ~PurgeSys() noexcept;
 
   /**
    * Checks if trx_id is >= purge_view: then it is guaranteed that its update
@@ -101,7 +101,7 @@ struct Purge_sys {
    * @param[in] undo_page         Update undo log header page, x-latched.
    * @param[in] mtr               Mini-transaction.
    */
-  static void add_update_undo_to_history(Trx *trx, page_t *undo_page, mtr_t *mtr) noexcept;
+  static void add_update_undo_to_history(Trx *trx, page_t *undo_page, Mtr *mtr) noexcept;
 
   /**
    * Fetches the next undo log record from the history list to purge. It must be
@@ -114,14 +114,14 @@ struct Purge_sys {
    * @return copy of an undo log record or pointer to trx_purge_dummy_rec,
    *  if the whole undo log can skipped in purge; nullptr if none left
    */
-  Trx_undo_record fetch_next_rec(roll_ptr_t *roll_ptr, trx_undo_inf_t **cell, mem_heap_t *heap) noexcept;
+  TrxUndoRecord fetch_next_rec(roll_ptr_t *roll_ptr, TrxUndoInf **cell, MemHeap *heap) noexcept;
 
   /**
    * Releases a reserved purge undo record.
    *
    * @praam[in,out] cell          Storage cell
    */
-  void rec_release(trx_undo_inf_t *cell) noexcept;
+  void rec_release(TrxUndoInf *cell) noexcept;
 
   /**
    * This function runs a purge batch.
@@ -143,14 +143,14 @@ struct Purge_sys {
    * @param[in] undo_no           Undo number.
    *
    * @return	pointer to the storage cell */
-  trx_undo_inf_t *arr_store_info(trx_id_t trx_no, undo_no_t undo_no) noexcept;
+  TrxUndoInf *arr_store_info(trx_id_t trx_no, undo_no_t undo_no) noexcept;
 
   /**
    * Removes info of an undo log record during a purge.
    *
    * @param[in] cell              Pointer to storage cell.
    */
-  void arr_remove_info(trx_undo_inf_t *cell) noexcept;
+  void arr_remove_info(TrxUndoInf *cell) noexcept;
 
   /**
    * Builds a purge 'query' graph. The actual purge is performed by executing
@@ -158,7 +158,7 @@ struct Purge_sys {
    *
    * @return	own: the query graph
    */
-  que_t *graph_build() noexcept;
+  QueFork *graph_build() noexcept;
 
   /**
    * Frees an undo log segment which is in the history list. Cuts the end of the
@@ -169,7 +169,7 @@ struct Purge_sys {
    * @param[in] n_removed_logs    Count of how many undo logs we will cut off from the
    *                              end of the history list.
    */
-  void free_segment(Trx_rseg *rseg, Fil_addr hdr_addr, ulint n_removed_logs) noexcept;
+  void free_segment(TrxRseg *rseg, FilAddr hdr_addr, ulint n_removed_logs) noexcept;
 
   /**
    * Removes unnecessary history data from a rollback segment.
@@ -181,7 +181,7 @@ struct Purge_sys {
    *                              limit_trx_no, truncate undo records
    *                              with undo mumber < limit_undo_no
    */
-  void truncate_rseg_history(Trx_rseg *rseg, trx_id_t limit_trx_no, undo_no_t limit_undo_no) noexcept;
+  void truncate_rseg_history(TrxRseg *rseg, trx_id_t limit_trx_no, undo_no_t limit_undo_no) noexcept;
 
   /**
    * Removes unnecessary history data from rollback segments. NOTE that when this
@@ -204,7 +204,7 @@ struct Purge_sys {
    * @param[in] rseg              Rollback segment.
    *
    */
-  void rseg_get_next_history_log(Trx_rseg *rseg) noexcept;
+  void rseg_get_next_history_log(TrxRseg *rseg) noexcept;
 
   /**
    * Chooses the next undo log to purge and updates the info in purge_sys. This
@@ -221,11 +221,11 @@ struct Purge_sys {
    *
    * @return	copy of an undo log record or pointer to the dummy undo log record
    */
-  Trx_undo_record get_next_rec(mem_heap_t *heap) noexcept;
+  TrxUndoRecord get_next_rec(MemHeap *heap) noexcept;
 
  public:
   /** Purge system state */
-  Purge_state m_state{PURGE_STATE_UNKNOWN};
+  PurgeState m_state{PURGE_STATE_UNKNOWN};
 
   /** System session running the purge query */
   Session *m_sess{};
@@ -235,18 +235,18 @@ struct Purge_sys {
   Trx *m_trx{};
 
   /** The query graph which will do the parallelized purge operation */
-  que_t *m_query{};
+  QueFork *m_query{};
 
   /** The latch protecting the purge view. A purge operation must acquire
    * an x-latch here for the instant at which it changes the purge view:
    * an undo log operation can prevent this by obtaining an s-latch here. */
-  mutable rw_lock_t m_latch;
+  mutable RwLock m_latch;
 
   /** The purge will not remove undo logs which are >= this view (purge view) */
-  Read_view *m_view{};
+  ReadView *m_view{};
 
   /** Mutex protecting the fields below */
-  mutable mutex_t m_mutex{};
+  mutable Mutex m_mutex{};
 
   /** Approximate number of undo log pages processed in purge */
   ulint m_n_pages_handled{};
@@ -269,7 +269,7 @@ struct Purge_sys {
   bool m_next_stored{};
 
   /** Rollback segment for the next undo record to purge */
-  Trx_rseg *m_rseg{};
+  TrxRseg *m_rseg{};
 
   /** Page number for the next undo record to purge, page number
    * of the log header, if dummy record */
@@ -286,9 +286,9 @@ struct Purge_sys {
 
   /** Array of transaction numbers and undo numbers of the undo records
    * currently under processing in purge */
-  trx_undo_arr_t *m_arr{};
+  TrxUndoArr *m_arr{};
 
   /** Temporary storage used during a purge: can be emptied after
    * purge completes */
-  mem_heap_t *m_heap{};
+  MemHeap *m_heap{};
 };

@@ -38,37 +38,37 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 #include "ut0mem.h"
 
 /** Transaction system. */
-struct Trx_sys;
+struct TrxSys;
 
 /** Mini-transaction. */
-struct mtr_t;
+struct Mtr;
 
 /** The buffer pool page flusher. */
-struct Buf_flush;
+struct BufFlush;
 
 /** Buffer pool LRU implementation. */
-struct Buf_LRU;
+struct BufLru;
 
 /** Buffer page (uncompressed or compressed) */
-struct Buf_page;
+struct BufPage;
 
 /** Buffer block for which an uncompressed page exists */
-struct Buf_block;
+struct BufBlock;
 
 /** Buffer pool chunk comprising buf_block_t */
-struct buf_chunk_t;
+struct BufChunk;
 
-/** Buffer pool comprising buf_chunk_t */
-struct Buf_pool;
+/** Buffer pool comprising BufChunk */
+struct BufPool;
 
 /** Buffer pool statistics struct */
-struct buf_pool_stat_t;
+struct BufPoolStat;
 
 /** A buffer frame. @see page_t */
 using buf_frame_t = byte;
 
 /** Flags for flush types */
-enum buf_flush {
+enum BufFlushType {
 
   /** Flush via the LRU list */
   BUF_FLUSH_LRU = 0,
@@ -84,7 +84,7 @@ enum buf_flush {
 };
 
 /** Flags for io_fix types */
-enum buf_io_fix {
+enum BufIoFix {
   /** No pending I/O */
   BUF_IO_NONE = 0,
 
@@ -95,9 +95,9 @@ enum buf_io_fix {
   BUF_IO_WRITE
 };
 
-struct Fil_addr;
+struct FilAddr;
 
-/** @name Modes for Buf_pool::get */
+/** @name Modes for BufPool::get */
 /* @{ */
 
 /** Get always */
@@ -123,7 +123,7 @@ constexpr ulint BUF_KEEP_OLD = 52;
 /* @} */
 
 /** The buffer pool of the database */
-extern Buf_pool *srv_buf_pool;
+extern BufPool *srv_buf_pool;
 
 #ifdef UNIV_DEBUG
 /*! If this is set true, the program prints info whenever read or flush occurs */
@@ -142,13 +142,13 @@ constexpr ulint BUF_NO_CHECKSUM_MAGIC = 0xDEADBEEFUL;
 
 /** Simple allocator using ut_new and ut_free */
 template <typename T>
-struct ut_allocator {
+struct UtAllocator {
   using value_type = T;
 
-  ut_allocator() noexcept = default;
+  UtAllocator() noexcept = default;
 
   template <class U>
-  explicit ut_allocator(const ut_allocator<U> &) noexcept {}
+  explicit UtAllocator(const UtAllocator<U> &) noexcept {}
 
   T *allocate(std::size_t n) { return new (ut_new(sizeof(T) * n)) T[n]; }
 
@@ -159,27 +159,27 @@ struct ut_allocator {
 };
 
 template <class T, class U>
-constexpr bool operator==(const ut_allocator<T> &, const ut_allocator<U> &) noexcept {
+constexpr bool operator==(const UtAllocator<T> &, const UtAllocator<U> &) noexcept {
   return true;
 }
 
 template <class T, class U>
-constexpr bool operator!=(const ut_allocator<T> &, const ut_allocator<U> &) noexcept {
+constexpr bool operator!=(const UtAllocator<T> &, const UtAllocator<U> &) noexcept {
   return false;
 }
 
 /* set typedefs for buffer_page_t */
-using Buf_page_set_cmp_t = std::function<bool(Buf_page *, Buf_page *)>;
+using Buf_page_set_cmp_t = std::function<bool(BufPage *, BufPage *)>;
 
-using Buf_page_set = std::set<Buf_page *, Buf_page_set_cmp_t, ut_allocator<Buf_page *>>;
+using Buf_page_set = std::set<BufPage *, Buf_page_set_cmp_t, UtAllocator<BufPage *>>;
 
 using Buf_page_set_itr = typename Buf_page_set::iterator;
 
 /** @brief States of a control block
-@see Buf_page
+@see BufPage
 
 The enumeration values must be 0..7. */
-enum Buf_page_state {
+enum BufPageState {
   /** Is in the free list */
   BUF_BLOCK_NOT_USED,
 
@@ -198,7 +198,7 @@ enum Buf_page_state {
 
 /** The common buffer control block structure
 for compressed and uncompressed frames */
-struct Buf_page {
+struct BufPage {
 
   /**
    * Reads the freed_page_clock of the buffer page.
@@ -237,7 +237,7 @@ struct Buf_page {
    *
    * @return Page id.
    */
-  [[nodiscard]] Page_id get_page_id() const noexcept { return {get_space(), get_page_no()}; }
+  [[nodiscard]] PageId get_page_id() const noexcept { return {get_space(), get_page_no()}; }
 
   /**
   * Gets the state of a block.
@@ -245,13 +245,13 @@ struct Buf_page {
   * @param bpage Pointer to the control block.
   * @return The state of the block.
   */
-  [[nodiscard]] Buf_page_state get_state() const;
+  [[nodiscard]] BufPageState get_state() const;
 
-  /** @return cast the instance to a Buf_page pointer. */
-  [[nodiscard]] Buf_block *get_block() { return reinterpret_cast<Buf_block *>(this); }
+  /** @return cast the instance to a BufPage pointer. */
+  [[nodiscard]] BufBlock *get_block() { return reinterpret_cast<BufBlock *>(this); }
 
-  /** @return cast the instance to a Buf_page pointer. */
-  const Buf_block *get_block() const { return reinterpret_cast<const Buf_block *>(this); }
+  /** @return cast the instance to a BufPage pointer. */
+  const BufBlock *get_block() const { return reinterpret_cast<const BufBlock *>(this); }
 
   /**
    * Determines if a block is mapped to a tablespace.
@@ -289,15 +289,15 @@ struct Buf_page {
   /** state of the control block; also protected by buf_pool_mutex.
   State transitions from BUF_BLOCK_READY_FOR_USE to BUF_BLOCK_MEMORY
   need not be protected by buf_page_get_mutex().
-  @see enum Buf_page_state */
+  @see enum BufPageState */
   unsigned m_state : 3;
 
   /** if this block is currently being flushed to disk, this tells the
-   * flush_type.  @see enum buf_flush */
+   * flush_type.  @see enum BufFlushType */
   unsigned m_flush_type : 2;
 
   /** type of pending I/O operation; also protected by buf_pool_mutex
-  @see enum * buf_io_fix */
+  @see enum * BufIoFix */
   unsigned m_io_fix : 2;
 
   /** count of how manyfold this block is currently bufferfixed */
@@ -306,7 +306,7 @@ struct Buf_page {
 
   bool m_old;
 
-  /** the value of Buf_pool::freed_page_clock when this block was the last time
+  /** the value of BufPool::freed_page_clock when this block was the last time
   put to the head of the LRU list; a thread is allowed to read this for
   heuristic purposes without holding any mutex or latch */
   unsigned m_freed_page_clock : 31;
@@ -318,7 +318,7 @@ struct Buf_page {
   /** @name Page flushing fields
   All these are protected by buf_pool_mutex. */
   /* @{ */
-  UT_LIST_NODE_T(Buf_page) m_list;
+  UT_LIST_NODE_T(BufPage) m_list;
 
   /** based on state, this is a list node, protected only by buf_pool_mutex, in
   one of the following lists in buf_pool:
@@ -347,19 +347,19 @@ struct Buf_page {
   /* @{ */
 
   /** node of the LRU list */
-  UT_LIST_NODE_T(Buf_page) m_LRU_list;
+  UT_LIST_NODE_T(BufPage) m_LRU_list;
 
   /* @} */
 
 #ifdef UNIV_DEBUG
-  /** true if in Buf_pool::page_hash */
+  /** true if in BufPool::page_hash */
   bool m_in_page_hash;
 
-  /** true if in Buf_pool::flush_list; when buf_pool_mutex is free, the
+  /** true if in BufPool::flush_list; when buf_pool_mutex is free, the
   following should hold: in_flush_list == (state == BUF_BLOCK_FILE_PAGE) */
   bool m_in_flush_list;
 
-  /** true if in Buf_pool::free; when buf_pool_mutex is free, the following
+  /** true if in BufPool::free; when buf_pool_mutex is free, the following
   should hold: in_free_list == (state == BUF_BLOCK_NOT_USED) */
   bool m_in_free_list;
 
@@ -372,11 +372,11 @@ struct Buf_page {
 #endif /* UNIV_DEBUG */
 };
 
-/** We need this to alias a buf_block_t from a Buf_page. */
-static_assert(std::is_standard_layout<Buf_page>::value, "Buf_page must have a standard layout");
+/** We need this to alias a buf_block_t from a BufPage. */
+static_assert(std::is_standard_layout<BufPage>::value, "BufPage must have a standard layout");
 
 /** The buffer control block structure */
-struct Buf_block {
+struct BufBlock {
   /**
    * Gets the freed_page_clock of the buffer block.
    *
@@ -407,14 +407,14 @@ struct Buf_block {
    *
    * @return The page id.
    */
-  [[nodiscard]] Page_id get_page_id() const noexcept { return {get_space(), get_page_no()}; }
+  [[nodiscard]] PageId get_page_id() const noexcept { return {get_space(), get_page_no()}; }
 
   /**
   * Gets the state of a block.
   *
   * @return The state of the block.
   */
-  [[nodiscard]] Buf_page_state get_state() const;
+  [[nodiscard]] BufPageState get_state() const;
 
   /**
    * @brief Decrements the buffer fix count.
@@ -443,8 +443,8 @@ struct Buf_block {
   /* @{ */
 
   /** page information; this must be the first field, so that
-  Buf_pool::page_hash can point to Buf_page or buf_block_t */
-  Buf_page m_page;
+  BufPool::page_hash can point to BufPage or buf_block_t */
+  BufPage m_page;
 
   /** pointer to buffer frame which is of size UNIV_PAGE_SIZE, and
   aligned to an address divisible by UNIV_PAGE_SIZE */
@@ -452,10 +452,10 @@ struct Buf_block {
 
   /** mutex protecting this block: state (also protected by the buffer
   pool mutex), io_fix, buf_fix_count, and accessed. */
-  mutable mutex_t m_mutex;
+  mutable Mutex m_mutex;
 
   /** RW lock protoecting the buffer frame state changes. */
-  mutable rw_lock_t m_rw_lock;
+  mutable RwLock m_rw_lock;
 
   /** true if we know that this is an index page, and want the database
   to check its consistency before flush; note that there may be pages in the
@@ -487,7 +487,7 @@ struct Buf_block {
   /* @{ */
   /** in the debug version, each thread which bufferfixes the block
   acquires an s-latch here; so we can use the debug utilities in sync0rw */
-  rw_lock_t debug_latch;
+  RwLock debug_latch;
   /* @} */
 #endif /* UNIV_SYNC_DEBUG */
 };
@@ -499,7 +499,7 @@ struct Buf_block {
   (buf_block_get_state(block) >= BUF_BLOCK_NOT_USED && (buf_block_get_state(block) <= BUF_BLOCK_REMOVE_HASH))
 
 /** @brief The buffer pool statistics structure. */
-struct buf_pool_stat_t {
+struct BufPoolStat {
   /** number of page gets performed; this field is NOT protected
   by the buffer pool mutex */
   ulint n_page_gets{};
@@ -532,18 +532,18 @@ struct buf_pool_stat_t {
 
 NOTE! The definition appears here only for other modules of this
 directory (buf) to see it. Do not use from outside! */
-struct Buf_pool {
-  using page_hash_t = Page_id_hash<Buf_page *>;
+struct BufPool {
+  using page_hash_t = Page_id_hash<BufPage *>;
 
   struct Request {
     /** RW_S_LATCH or RW_X_LATCH */
     ulint m_rw_latch{};
 
     union {
-      Page_id m_page_id{};
+      PageId m_page_id{};
 
       /** Known or guessed block. */
-      Buf_block *m_guess;
+      BufBlock *m_guess;
     };
 
     union {
@@ -561,20 +561,20 @@ struct Buf_pool {
     ulint m_line{};
 
     /** Mini-transaction to track the latches. */
-    mtr_t *m_mtr{};
+    Mtr *m_mtr{};
   };
 
   static_assert(std::is_standard_layout<Request>::value, "Request must have a standard layout");
 
   /** Default constructor. */
-  Buf_pool();
+  BufPool();
 
   /** Destructor. */
-  ~Buf_pool() noexcept;
+  ~BufPool() noexcept;
 
   [[nodiscard]] bool open(uint64_t pool_size);
 
-  void set_trx_sys(Trx_sys *trx_sys) { m_trx_sys = trx_sys; }
+  void set_trx_sys(TrxSys *trx_sys) { m_trx_sys = trx_sys; }
 
   /** Returns the number of pending buf pool ios.
   @return number of pending I/O operations */
@@ -635,7 +635,7 @@ struct Buf_pool {
   the kernel mutex.
   @param[in,out] req       Request
   @return page or nullptr */
-  const Buf_block *try_get_by_page_id(Request &req);
+  const BufBlock *try_get_by_page_id(Request &req);
 
   /**
    * This is the general function used to get access to a database page.
@@ -645,19 +645,19 @@ struct Buf_pool {
    *
    * @return          pointer to the block or nullptr
    */
-  Buf_block *get(Request &req, Buf_block *guess);
+  BufBlock *get(Request &req, BufBlock *guess);
 
   /**
    * @brief Initializes a page to the buffer buf_pool. The page is usually not read
    * from a file even if it cannot be found in the buffer buf_pool. This is
    * one of the functions which perform to a block a state transition
-   * NOT_USED => FILE_PAGE (the other is Buf_pool::get).
+   * NOT_USED => FILE_PAGE (the other is BufPool::get).
    *
    * @param page_id   in: page ID containing space and page number
    * @param mtr       in: mini-transaction handle
    * @return          pointer to the block, page bufferfixed
    */
-  [[nodiscard]] Buf_block *create(const Page_id &page_id, mtr_t *mtr);
+  [[nodiscard]] BufBlock *create(const PageId &page_id, Mtr *mtr);
 
   /**
    * @brief Inits a page to the buffer buf_pool.
@@ -665,7 +665,7 @@ struct Buf_pool {
    * @param page_id in: page ID containing space and page number
    * @param block in: block to init
    */
-  void page_init(const Page_id &page_id, Buf_block *block);
+  void page_init(const PageId &page_id, BufBlock *block);
 
   /**
    * Moves a page to the start of the buffer pool LRU list. This high-level
@@ -674,14 +674,14 @@ struct Buf_pool {
    *
    * @param bpage     in: buffer block of a file page
    */
-  void make_young(Buf_page *bpage);
+  void make_young(BufPage *bpage);
 
   /**
    * Resets the check_index_page_at_flush field of a page if found in the buffer pool.
    *
    * @param page_id   in: page ID containing space and page number
    */
-  void check_index_page_at_flush(const Page_id &page_id);
+  void check_index_page_at_flush(const PageId &page_id);
 
   /**
    * Gets the current size of the buffer pool in bytes.
@@ -705,14 +705,14 @@ struct Buf_pool {
 
   /** Allocates a buffer block.
   @return own: the allocated block, in state BUF_BLOCK_MEMORY */
-  [[nodiscard]] Buf_block *block_alloc();
+  [[nodiscard]] BufBlock *block_alloc();
 
   /**
    * @brief Frees a buffer block which does not contain a file page.
    *
    * @param block Pointer to the buffer block to be freed.
    */
-  void block_free(Buf_block *block);
+  void block_free(BufBlock *block);
 
   /**
    * @brief Decrements the bufferfix count of a buffer control block and releases a latch, if specified.
@@ -721,7 +721,7 @@ struct Buf_pool {
    * @param rw_latch The type of latch (RW_S_LATCH, RW_X_LATCH, RW_NO_LATCH).
    * @param mtr The mtr.
    */
-  void release(Buf_block *block, ulint rw_latch, mtr_t *mtr);
+  void release(BufBlock *block, ulint rw_latch, Mtr *mtr);
 
   /**
    * Checks if a page is corrupt.
@@ -740,7 +740,7 @@ struct Buf_pool {
    * @param page_id The page ID containing space and page number.
    * @return The control block of the file page, nullptr if not found.
   */
-  [[nodiscard]] Buf_page *hash_get_page(const Page_id &page_id);
+  [[nodiscard]] BufPage *hash_get_page(const PageId &page_id);
 
   /**
    * @brief Returns the control block of a file page.
@@ -750,7 +750,7 @@ struct Buf_pool {
    * @param page_id The page ID containing space and page number.
    * @return The control block of the file page, nullptr if not found.
    */
-  [[nodiscard]] Buf_block *hash_get_block(const Page_id &page_id);
+  [[nodiscard]] BufBlock *hash_get_block(const PageId &page_id);
 
   /**
    * @brief Checks if the page can be found in the buffer pool hash table.
@@ -760,7 +760,7 @@ struct Buf_pool {
    * @param page_id The page ID containing space and page number.
    * @return true if found in the page hash table, false otherwise.
    */
-  [[nodiscard]] bool peek(const Page_id &page_id);
+  [[nodiscard]] bool peek(const PageId &page_id);
 
   /** Gets the current length of the free list of buffer blocks.
   @return	length of the free list */
@@ -769,7 +769,7 @@ struct Buf_pool {
   /** Gets the block to whose frame the pointer is pointing to.
   @param[in] ptr                 Pointer to a frame.
   @return pointer to block, never nullptr */
-  [[nodiscard]] Buf_block *block_align(const byte *ptr);
+  [[nodiscard]] BufBlock *block_align(const byte *ptr);
 
   /** Find out if a pointer belongs to a buf_block_t. It can be a pointer to
   the buf_block_t itself or a member of it
@@ -791,14 +791,14 @@ struct Buf_pool {
    *  tablespace in case we have done DISCARD + IMPORT.
    * @return Pointer to the block or nullptr.
    */
-  Buf_page *init_for_read(db_err *err, const Page_id &page_id, int64_t tablespace_version);
+  BufPage *init_for_read(DbErr *err, const PageId &page_id, int64_t tablespace_version);
 
   /**
    * @brief Completes an asynchronous read or write request of a file page to or from the buffer pool.
    *
    * @param bpage Pointer to the block in question.
    */
-  void io_complete(Buf_page *bpage);
+  void io_complete(BufPage *bpage);
 
   /**
    * @brief Acquires the buffer pool mutex.
@@ -817,7 +817,7 @@ struct Buf_pool {
    * @param page_id   in: page ID containing space and page number
    * @return          control block if found in page hash table, otherwise nullptr
    */
-  Buf_page *set_file_page_was_freed(const Page_id &page_id);
+  BufPage *set_file_page_was_freed(const PageId &page_id);
 
   /** Returns the number of latched pages in the buffer pool.
   @return        number of latched pages */
@@ -876,7 +876,7 @@ struct Buf_pool {
    * @param bpage Buffer block of a file page (in/out)
    * @param access_time Access time of the page (in: bpage->m_access_time read under mutex protection, or 0 if unknown)
    */
-  void set_accessed_make_young(Buf_page *bpage, unsigned access_time);
+  void set_accessed_make_young(BufPage *bpage, unsigned access_time);
 
   /**
    * @brief Inits a page to the buffer buf_pool.
@@ -885,13 +885,13 @@ struct Buf_pool {
    * @param page_no in: Page number within space
    * @param block in: block to init
    */
-  void page_init(space_id_t space, page_no_t page_no, Buf_block *block);
+  void page_init(space_id_t space, page_no_t page_no, BufBlock *block);
 
   /** Recommends a move of a block to the start of the LRU list if there is danger
    * of dropping from the buffer pool. NOTE: does not reserve the buffer pool mutex.
    * @param[in,out] bpage            Block to make younger.
    * @return true if should be made younger */
-  bool peek_if_too_old(const Buf_page *bpage);
+  bool peek_if_too_old(const BufPage *bpage);
 
   /**
    * @brief Allocates a chunk of buffer frames.
@@ -902,7 +902,7 @@ struct Buf_pool {
    * @param[in] mem_size Requested size of the memory block in bytes.
    * @return Pointer to the initialized buffer chunk, or nullptr on failure.
    */
-  buf_chunk_t *chunk_init(buf_chunk_t *chunk, ulint mem_size);
+  BufChunk *chunk_init(BufChunk *chunk, ulint mem_size);
 
   /**
    * @brief Checks that all file pages in the buffer chunk are in a replaceable state.
@@ -910,7 +910,7 @@ struct Buf_pool {
    * @param[in] chunk Chunk being checked.
    * @return Address of a non-free block, or nullptr if all freed.
    */
-  const Buf_block *chunk_not_freed(buf_chunk_t *chunk);
+  const BufBlock *chunk_not_freed(BufChunk *chunk);
 
   /**
    * @brief Initializes a buffer control block when the buf_pool is created.
@@ -918,22 +918,22 @@ struct Buf_pool {
    * @param block Pointer to the control block.
    * @param frame Pointer to the buffer frame.
    */
-  void block_init(Buf_block *block, byte *frame);
+  void block_init(BufBlock *block, byte *frame);
 
   /**
    * @brief Initialize some fields of a control block.
    *
    * @param bpage The block to initialize.
    */
-  void page_init_low(Buf_page *bpage);
+  void page_init_low(BufPage *bpage);
 
  public:
   /** The transaction system. */
-  Trx_sys *m_trx_sys{};
+  TrxSys *m_trx_sys{};
 
   /** mutex protecting the buffer pool struct and control blocks, except the
   read-write lock in them */
-  mutable mutex_t m_mutex{};
+  mutable Mutex m_mutex{};
 
 #if defined UNIV_DEBUG || defined UNIV_BUF_DEBUG
   /** This is used to insert validation operations in excution in the debug version */
@@ -952,13 +952,13 @@ struct Buf_pool {
   ulint m_n_chunks{};
 
   /** buffer pool chunks */
-  buf_chunk_t *m_chunks{};
+  BufChunk *m_chunks{};
 
   /** current pool size in pages */
   ulint m_curr_size{};
 
-  /** hash table of Buf_page or buf_block_t file pages,
-  Buf_page::in_file() == true, indexed by (m_nspace_id, m_page_no) */
+  /** hash table of BufPage or buf_block_t file pages,
+  BufPage::in_file() == true, indexed by (m_nspace_id, m_page_no) */
   page_hash_t *m_page_hash{};
 
   /** Number of pending read operations */
@@ -968,10 +968,10 @@ struct Buf_pool {
   time_t m_last_printout_time;
 
   /** current statistics */
-  buf_pool_stat_t m_stat;
+  BufPoolStat m_stat;
 
   /** old statistics */
-  buf_pool_stat_t m_old_stat;
+  BufPoolStat m_old_stat;
 
   /* @} */
 
@@ -980,7 +980,7 @@ struct Buf_pool {
   /* @{ */
 
   /** base node of the modified block list */
-  UT_LIST_BASE_NODE_T(Buf_page, m_list) m_flush_list;
+  UT_LIST_BASE_NODE_T(BufPage, m_list) m_flush_list;
 
   /** this is true when a flush of the given type is being initialized */
   bool m_init_flush[BUF_FLUSH_N_TYPES];
@@ -990,7 +990,7 @@ struct Buf_pool {
 
   /** this is in the set state when there is no flush batch of the given type
    * running */
-  Cond_var *m_no_flush[BUF_FLUSH_N_TYPES];
+  CondVar *m_no_flush[BUF_FLUSH_N_TYPES];
 
   /** A red-black tree is used exclusively during recovery to speed up
   insertions in the flush_list. This tree contains blocks in order of
@@ -1014,15 +1014,15 @@ struct Buf_pool {
   /* @{ */
 
   /** base node of the free block list */
-  UT_LIST_BASE_NODE_T(Buf_page, m_list) m_free_list {};
+  UT_LIST_BASE_NODE_T(BufPage, m_list) m_free_list {};
 
   /** base node of the LRU list */
-  UT_LIST_BASE_NODE_T(Buf_page, m_LRU_list) m_LRU_list {};
+  UT_LIST_BASE_NODE_T(BufPage, m_LRU_list) m_LRU_list {};
 
   /** pointer to the about m_LRU->old_ratio/BUF_LRU_RATIO_DIV oldest
   blocks in the LRU list; nullptr if LRU length less than BUF_LRU_MIN_LEN;
   NOTE: when LRU_old != nullptr, its length should always equal LRU_old_len */
-  Buf_page *m_LRU_old{};
+  BufPage *m_LRU_old{};
 
   /** length of the LRU list from the block to which LRU_old points onward,
   including that block; see buf0lru.c for the restrictions on this value;
@@ -1034,18 +1034,18 @@ struct Buf_pool {
   ulint m_write_requests{};
 
   /** LRU replacement algorithm */
-  std::unique_ptr<Buf_LRU> m_LRU{};
+  std::unique_ptr<BufLru> m_LRU{};
 
   /** Page flushing algorithm */
-  std::unique_ptr<Buf_flush> m_flusher{};
+  std::unique_ptr<BufFlush> m_flusher{};
 };
 
-/** We need this to alias a buf_block_t from a Buf_page. */
-static_assert(std::is_standard_layout<Buf_block>::value, "buf_block_t must have a standard layout");
+/** We need this to alias a buf_block_t from a BufPage. */
+static_assert(std::is_standard_layout<BufBlock>::value, "buf_block_t must have a standard layout");
 
 /** Create an instance of set for buffer_page_t */
 inline Buf_page_set *flush_set_create(Buf_page_set_cmp_t cmp) {
-  return new Buf_page_set(std::move(cmp), ut_allocator<Buf_page *>{});
+  return new Buf_page_set(std::move(cmp), UtAllocator<BufPage *>{});
 }
 
 /** Free te instance of set for buffer_page_t */
@@ -1056,13 +1056,13 @@ inline void flush_set_destroy(Buf_page_set *&tree) {
 
 /** Insert buf_page in the set.
 @return pair of inserted node if successful. success is determined by second element of pair. */
-inline std::pair<Buf_page_set_itr, bool> flush_set_insert(Buf_page_set *tree, Buf_page *t) {
+inline std::pair<Buf_page_set_itr, bool> flush_set_insert(Buf_page_set *tree, BufPage *t) {
   return tree->emplace(t);
 }
 
 /** Delete buf_page from the set.
 @return pair of inserted node if successful. success is determined by second element of pair. */
-inline bool flush_set_erase(Buf_page_set *tree, Buf_page *t) {
+inline bool flush_set_erase(Buf_page_set *tree, BufPage *t) {
   auto delete_count = tree->erase(t);
   return delete_count > 0;
 }

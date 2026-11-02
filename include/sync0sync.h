@@ -55,12 +55,12 @@ necessary only if the memory block containing it is freed. */
 location (which must be appropriately aligned). The mutex is initialized
 in the reset state. Explicit freeing of the mutex with mutex_free is
 necessary only if the memory block containing it is freed. */
-void mutex_create(mutex_t *mutex, IF_DEBUG(const char *cmutex_name, ) IF_SYNC_DEBUG(ulint level, ) Source_location loc);
+void mutex_create(Mutex *mutex, IF_DEBUG(const char *cmutex_name, ) IF_SYNC_DEBUG(ulint level, ) SourceLocation loc);
 
 /** Calling this function is obligatory only if the memory buffer containing
 the mutex is freed. Removes a mutex object from the mutex list. The mutex
 is checked to be in the reset state. */
-void mutex_free(mutex_t *mutex); /** in: mutex */
+void mutex_free(Mutex *mutex); /** in: mutex */
 
 /** NOTE! The following macro should be used in mutex locking, not the
 corresponding function. */
@@ -81,7 +81,7 @@ corresponding function. */
 directly. Tries to lock the mutex for the current thread. If the lock is not
 acquired immediately, returns with return value 1.
 @return	0 if succeed, 1 if not */
-ulint mutex_enter_nowait_func(mutex_t *mutex IF_SYNC_DEBUG(, const char *file_name, ulint line));
+ulint mutex_enter_nowait_func(Mutex *mutex IF_SYNC_DEBUG(, const char *file_name, ulint line));
 
 #ifdef UNIV_SYNC_DEBUG
 /** Returns true if no mutex or rw-lock is currently locked.
@@ -101,12 +101,12 @@ void sync_print(ib_stream_t ib_stream); /** in: stream where to print */
 #ifdef UNIV_DEBUG
 /** Checks that the mutex has been initialized.
 @return	true */
-bool mutex_validate(const mutex_t *mutex); /** in: mutex */
+bool mutex_validate(const Mutex *mutex); /** in: mutex */
 
 /** Checks that the current thread owns the mutex. Works only
 in the debug version.
 @return	true if owns */
-bool mutex_own(const mutex_t *mutex) /** in: mutex */
+bool mutex_own(const Mutex *mutex) /** in: mutex */
   __attribute__((warn_unused_result));
 
 #endif /* UNIV_DEBUG */
@@ -148,7 +148,7 @@ void *sync_thread_levels_nonempty_gen(bool dict_mutex_allowed); /** in: true if 
 
 /** Gets the debug information for a reserved mutex. */
 void mutex_get_debug_info(
-  mutex_t *mutex,         /** in: mutex */
+  Mutex *mutex,         /** in: mutex */
   const char **file_name, /** out: file where requested */
   ulint *line,            /** out: line where requested */
   os_thread_id_t *thread_id
@@ -261,7 +261,7 @@ File space management latch		    If a mini-transaction must allocate
 │					                        because it keeps the x-latch to the
 │					                        file space management in its memo.
 ▼
-File system pages                 FSP mutex
+File system pages                 Fsp mutex
 │
 ▼
 Kernel mutex				              If a kernel operation needs a file
@@ -394,7 +394,7 @@ implementation of a mutual exclusion semaphore. */
 
 /** The global array of wait cells for implementation of the databases own
 mutexes and read-write locks. */
-extern Sync_check *sync_primary_wait_array;
+extern SyncCheck *sync_primary_wait_array;
 
 /** Constant determining how long spin wait is continued before suspending
 the thread. A value 600 rounds on a 1995 100 MHz Pentium seems to correspond
@@ -415,13 +415,13 @@ extern bool sync_order_checks_on;
 extern bool sync_initialized;
 
 /** Global list of database mutexes (not OS mutexes) created. */
-using ut_mutex_list_base_node_t = UT_LIST_BASE_NODE_T(mutex_t, list);
+using ut_mutex_list_base_node_t = UT_LIST_BASE_NODE_T(Mutex, list);
 
 /** Global list of database mutexes (not OS mutexes) created. */
 extern ut_mutex_list_base_node_t mutex_list;
 
 /** Mutex protecting the mutex_list variable */
-extern mutex_t mutex_list_mutex;
+extern Mutex mutex_list_mutex;
 
 /**
  * Sets the waiters field in a mutex.
@@ -429,7 +429,7 @@ extern mutex_t mutex_list_mutex;
  * @param mutex - mutex
  * @param n - value to set
  */
-void mutex_set_waiters(mutex_t *mutex, ulint n);
+void mutex_set_waiters(Mutex *mutex, ulint n);
 
 /**
  * Reserves a mutex for the current thread. If the mutex is reserved, the
@@ -440,7 +440,7 @@ void mutex_set_waiters(mutex_t *mutex, ulint n);
  * @param file_name - file name where mutex requested
  * @param line - line where requested
  */
-void mutex_spin_wait(mutex_t *mutex, const char *file_name, ulint line);
+void mutex_spin_wait(Mutex *mutex, const char *file_name, ulint line);
 
 #ifdef UNIV_SYNC_DEBUG
 /**
@@ -450,7 +450,7 @@ void mutex_spin_wait(mutex_t *mutex, const char *file_name, ulint line);
  * @param file_name - file where requested
  * @param line - line where requested
  */
-void mutex_set_debug_info(mutex_t *mutex, const char *file_name, ulint line);
+void mutex_set_debug_info(Mutex *mutex, const char *file_name, ulint line);
 #endif /* UNIV_SYNC_DEBUG */
 
 /**
@@ -458,7 +458,7 @@ void mutex_set_debug_info(mutex_t *mutex, const char *file_name, ulint line);
  *
  * @param mutex - mutex
  */
-void mutex_signal_object(mutex_t *mutex);
+void mutex_signal_object(Mutex *mutex);
 
 /**
  * Performs an atomic test-and-set instruction to the lock_word field of a mutex.
@@ -466,13 +466,13 @@ void mutex_signal_object(mutex_t *mutex);
  * @param mutex - mutex
  * @return the previous value of lock_word: 0 or 1
  */
-inline byte mutex_test_and_set(mutex_t *mutex) {
+inline byte mutex_test_and_set(Mutex *mutex) {
   return mutex->lock_word.exchange(true);
 }
 
 /** Performs a reset instruction to the lock_word field of a mutex. This
 instruction also serializes memory operations to the program order. */
-inline void mutex_reset_lock_word(mutex_t *mutex) /*!< in: mutex */
+inline void mutex_reset_lock_word(Mutex *mutex) /*!< in: mutex */
 {
 
   mutex->lock_word.store(false);
@@ -484,14 +484,14 @@ inline void mutex_reset_lock_word(mutex_t *mutex) /*!< in: mutex */
  * @param mutex - mutex
  * @return the value of the lock word
  */
-inline lock_word_t mutex_get_lock_word(const mutex_t *mutex) {
+inline lock_word_t mutex_get_lock_word(const Mutex *mutex) {
   return mutex->lock_word.load();
 }
 
 /** Gets the waiters field in a mutex.
 @param[in] mutex                Get the waiters or this mutex.
 @return	value to set */
-inline ulint mutex_get_waiters(const mutex_t *mutex) {
+inline ulint mutex_get_waiters(const Mutex *mutex) {
   return mutex->m_waiters.load();
 }
 
@@ -500,7 +500,7 @@ inline ulint mutex_get_waiters(const mutex_t *mutex) {
  *
  * @param mutex - pointer to mutex
  */
-inline void mutex_exit(mutex_t *mutex) {
+inline void mutex_exit(Mutex *mutex) {
   ut_ad(mutex_own(mutex));
   ut_d(mutex->thread_id = (os_thread_id_t)ULINT_UNDEFINED);
 
@@ -535,7 +535,7 @@ inline void mutex_exit(mutex_t *mutex) {
  * @param file_name - file name where locked
  * @param line - line where locked
  */
-inline void mutex_enter_func(mutex_t *mutex, const char *file_name, ulint line) {
+inline void mutex_enter_func(Mutex *mutex, const char *file_name, ulint line) {
   ut_ad(mutex_validate(mutex));
   ut_ad(!mutex_own(mutex));
 

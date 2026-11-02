@@ -25,10 +25,10 @@ Record lock management
 
 #include "lock0types.h"
 
-struct Buf_block;
+struct BufBlock;
 struct Index;
 struct Lock;
-struct que_thr_t;
+struct QueThr;
 struct Rec ;
 
 /** Safety margin when creating a new record lock: this many extra records
@@ -42,13 +42,13 @@ constexpr ulint LOCK_PAGE_BITMAP_MARGIN = 64;
  * This class provides functionality to manage record-level locks including
  * lock creation, queuing, granting, and conflict detection.
  */
-struct Record_lock_manager {
+struct RecordLockManager {
   /**
-   * @brief Constructor for Record_lock_manager
+   * @brief Constructor for RecordLockManager
    * 
    * @param[in] lock_sys Pointer to the main lock system
    */
-  explicit Record_lock_manager(Lock_sys *lock_sys) noexcept;
+  explicit RecordLockManager(LockSys *lock_sys) noexcept;
 
   /**
    * @brief Removes a granted record lock of a transaction from the queue.
@@ -62,7 +62,7 @@ struct Record_lock_manager {
    * @param[in] rec Record for which the lock is set.
    * @param[in] lock_mode Lock mode, either LOCK_S or LOCK_X.
    */
-  void unlock(Trx *trx, const Buf_block *block, const Rec rec, Lock_mode lock_mode) noexcept;
+  void unlock(Trx *trx, const BufBlock *block, const Rec rec, LockMode lock_mode) noexcept;
 
   /**
    * @brief Checks if there are explicit record locks on a page.
@@ -74,7 +74,7 @@ struct Record_lock_manager {
    *
    * @return true if there are explicit record locks on the page, false otherwise.
    */
-  [[nodiscard]] bool expl_exist_on_page(Page_id page_id) noexcept;
+  [[nodiscard]] bool expl_exist_on_page(PageId page_id) noexcept;
 
   /**
    * @brief Gets the previous record lock set on a record.
@@ -99,7 +99,7 @@ struct Record_lock_manager {
    * 
    * @return A pointer to the lock if found, or nullptr if no such lock exists.
    */
-  [[nodiscard]] const Lock *has_expl(Page_id page_id, ulint precise_mode, ulint heap_no, const Trx *trx) const noexcept;
+  [[nodiscard]] const Lock *has_expl(PageId page_id, ulint precise_mode, ulint heap_no, const Trx *trx) const noexcept;
 
   /**
    * @brief Checks if some other transaction has a conflicting explicit lock request in the queue.
@@ -114,7 +114,7 @@ struct Record_lock_manager {
    * 
    * @return A pointer to the conflicting lock if found, or nullptr if no such lock exists.
    */
-  [[nodiscard]] Lock *other_has_conflicting(Page_id page_id, Lock_mode mode, ulint heap_no, Trx *trx) noexcept;
+  [[nodiscard]] Lock *other_has_conflicting(PageId page_id, LockMode mode, ulint heap_no, Trx *trx) noexcept;
 
   /**
    * @brief Finds a similar record lock on the same page for the same transaction.
@@ -130,7 +130,7 @@ struct Record_lock_manager {
    * 
    * @return A pointer to the similar lock if found, or nullptr if no such lock exists.
    */
-  [[nodiscard]] Lock *find_similar_on_page(Lock_mode type_mode, ulint heap_no, Lock *lock, const Trx *trx) noexcept;
+  [[nodiscard]] Lock *find_similar_on_page(LockMode type_mode, ulint heap_no, Lock *lock, const Trx *trx) noexcept;
 
   /**
    * @brief Creates a new record lock and inserts it into the lock queue.
@@ -150,7 +150,7 @@ struct Record_lock_manager {
    * @return A pointer to the created lock.
    */
   [[nodiscard]] Lock *create_lock_low(
-    Page_id page_id, Lock_mode type_mode, ulint heap_no, ulint n_bits, const Index *index, Trx *trx
+    PageId page_id, LockMode type_mode, ulint heap_no, ulint n_bits, const Index *index, Trx *trx
   ) noexcept;
 
   /**
@@ -169,7 +169,7 @@ struct Record_lock_manager {
    * @return The created lock.
    */
   [[nodiscard]] Lock *create_lock(
-    Lock_mode type_mode, const Buf_block *block, ulint heap_no, const Index *index, const Trx *trx
+    LockMode type_mode, const BufBlock *block, ulint heap_no, const Index *index, const Trx *trx
   ) noexcept;
 
   /**
@@ -189,7 +189,7 @@ struct Record_lock_manager {
    * @return Lock where the bit was set.
    */
   [[nodiscard]] Lock *add_to_queue(
-    Lock_mode type_mode, const Buf_block *block, ulint heap_no, const Index *index, const Trx *trx
+    LockMode type_mode, const BufBlock *block, ulint heap_no, const Index *index, const Trx *trx
   ) noexcept;
 
   /**
@@ -212,7 +212,7 @@ struct Record_lock_manager {
    * @return true if locking succeeded.
    */
   [[nodiscard]] bool lock_fast(
-    bool impl, Lock_mode mode, const Buf_block *block, ulint heap_no, const Index *index, que_thr_t *thr
+    bool impl, LockMode mode, const BufBlock *block, ulint heap_no, const Index *index, QueThr *thr
   ) noexcept;
 
   /**
@@ -233,8 +233,8 @@ struct Record_lock_manager {
    * 
    * @return DB_SUCCESS, DB_LOCK_WAIT, or an error code.
    */
-  [[nodiscard]] db_err lock_slow(
-    bool impl, Lock_mode mode, const Buf_block *block, ulint heap_no, const Index *index, que_thr_t *thr
+  [[nodiscard]] DbErr lock_slow(
+    bool impl, LockMode mode, const BufBlock *block, ulint heap_no, const Index *index, QueThr *thr
   ) noexcept;
 
   /**
@@ -256,8 +256,8 @@ struct Record_lock_manager {
    * 
    * @return DB_SUCCESS, DB_LOCK_WAIT, or an error code.
    */
-  [[nodiscard]] db_err lock_record(
-    bool impl, Lock_mode mode, const Buf_block *block, ulint heap_no, const Index *index, que_thr_t *thr
+  [[nodiscard]] DbErr lock_record(
+    bool impl, LockMode mode, const BufBlock *block, ulint heap_no, const Index *index, QueThr *thr
   ) noexcept;
 
   /**
@@ -279,8 +279,8 @@ struct Record_lock_manager {
    * @return DB_QUE_THR_SUSPENDED if the query thread should be stopped.
    * @return DB_SUCCESS if there was a deadlock but another transaction was chosen as a victim, and the lock was granted immediately.
    */
-  [[nodiscard]] db_err enqueue_waiting(
-    Lock_mode type_mode, const Buf_block *block, ulint heap_no, const Index *index, que_thr_t *thr
+  [[nodiscard]] DbErr enqueue_waiting(
+    LockMode type_mode, const BufBlock *block, ulint heap_no, const Index *index, QueThr *thr
   ) noexcept;
 
   /**
@@ -355,7 +355,7 @@ struct Record_lock_manager {
    *
    * @param[in] page_id The page id to be discarded.
    */
-  void free_all_from_discard_page(Page_id page_id) noexcept;
+  void free_all_from_discard_page(PageId page_id) noexcept;
 
   /**
    * @brief Resets the lock bits for a single record and releases transactions waiting for lock requests.
@@ -366,7 +366,7 @@ struct Record_lock_manager {
    * @param[in] page_id  The page id containing the record.
    * @param[in] heap_no  The heap number of the record.
    */
-  void reset_and_release_wait(Page_id page_id, ulint heap_no) noexcept;
+  void reset_and_release_wait(PageId page_id, ulint heap_no) noexcept;
 
 #ifdef UNIV_DEBUG
   /**
@@ -381,10 +381,10 @@ struct Record_lock_manager {
    * 
    * @return The first lock on the specified record, or nullptr if none exists.
    */
-  [[nodiscard]] Lock *get_first(Page_id page_id, ulint heap_no) noexcept;
+  [[nodiscard]] Lock *get_first(PageId page_id, ulint heap_no) noexcept;
 #endif /* UNIV_DEBUG */
 
  private:
   /** Pointer to the main lock system */
-  Lock_sys *m_lock_sys;
+  LockSys *m_lock_sys;
 };

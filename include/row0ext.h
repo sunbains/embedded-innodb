@@ -35,7 +35,7 @@ Created September 2006 Marko Makela
 /** Creates a cache of column prefixes of externally stored columns.
 @return	own: column prefix cache */
 
-row_ext_t *row_ext_create(
+RowExt *row_ext_create(
   ulint n_ext,         /*!< in: number of externally stored columns */
   const ulint *ext,    /*!< in: col_no's of externally stored columns
                            in the InnoDB table object, as reported by
@@ -47,11 +47,11 @@ row_ext_t *row_ext_create(
                            the clustered index record must be
                            covered by a lock or a page latch
                            to prevent deletion (rollback or purge). */
-  mem_heap_t *heap
+  MemHeap *heap
 ); /*!< in: heap where created */
 
 /** Prefixes of externally stored columns */
-struct row_ext_struct {
+struct RowExt {
   ulint n_ext;      /*!< number of externally stored columns */
   const ulint *ext; /*!< col_no's of externally stored columns */
   byte *buf;        /*!< backing store of the column prefix cache */
@@ -62,7 +62,7 @@ struct row_ext_struct {
 @return column prefix, or NULL if the column is not stored externally,
 or pointer to field_ref_zero if the BLOB pointer is unset */
 inline const byte *row_ext_lookup_ith(
-  const row_ext_t *ext, /*!< in/out: column prefix cache */
+  const RowExt *ext, /*!< in/out: column prefix cache */
   ulint i,              /*!< in: index of ext->ext[] */
   ulint *len
 ) /*!< out: length of prefix, in bytes,
@@ -86,7 +86,7 @@ inline const byte *row_ext_lookup_ith(
 @return column prefix, or NULL if the column is not stored externally,
 or pointer to field_ref_zero if the BLOB pointer is unset */
 inline const byte *row_ext_lookup(
-  const row_ext_t *ext, /*!< in: column prefix cache */
+  const RowExt *ext, /*!< in: column prefix cache */
   ulint col,            /*!< in: column number in the InnoDB
                                      table object, as reported by
                                      dict_col_get_no(); NOT relative to the

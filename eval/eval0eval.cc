@@ -73,7 +73,7 @@ void eval_node_free_val_buf(que_node_t *node) {
   }
 }
 
-bool eval_cmp(func_node_t *cmp_node) {
+bool eval_cmp(FuncNode *cmp_node) {
   ut_ad(que_node_get_type(cmp_node) == QUE_NODE_FUNC);
 
   auto arg1 = cmp_node->args;
@@ -116,7 +116,7 @@ bool eval_cmp(func_node_t *cmp_node) {
 }
 
 /** Evaluates a logical operation node. */
-inline void eval_logical(func_node_t *logical_node) /*!< in: logical operation node */
+inline void eval_logical(FuncNode *logical_node) /*!< in: logical operation node */
 {
   ut_ad(que_node_get_type(logical_node) == QUE_NODE_FUNC);
 
@@ -148,7 +148,7 @@ inline void eval_logical(func_node_t *logical_node) /*!< in: logical operation n
 }
 
 /** Evaluates an arithmetic operation node. */
-inline void eval_arith(func_node_t *arith_node) /*!< in: arithmetic operation node */
+inline void eval_arith(FuncNode *arith_node) /*!< in: arithmetic operation node */
 {
   ut_ad(que_node_get_type(arith_node) == QUE_NODE_FUNC);
 
@@ -182,7 +182,7 @@ inline void eval_arith(func_node_t *arith_node) /*!< in: arithmetic operation no
 }
 
 /** Evaluates an aggregate operation node. */
-inline void eval_aggregate(func_node_t *node) /*!< in: aggregate operation node */
+inline void eval_aggregate(FuncNode *node) /*!< in: aggregate operation node */
 {
   que_node_t *arg;
   lint arg_val;
@@ -209,7 +209,7 @@ inline void eval_aggregate(func_node_t *node) /*!< in: aggregate operation node 
 
 /** Evaluates a predefined function node where the function is not relevant
 in benchmarks. */
-static void eval_predefined_2(func_node_t *func_node) /*!< in: predefined function node */
+static void eval_predefined_2(FuncNode *func_node) /*!< in: predefined function node */
 {
   que_node_t *arg;
   que_node_t *arg1;
@@ -288,10 +288,10 @@ static void eval_predefined_2(func_node_t *func_node) /*!< in: predefined functi
 }
 
 /** Evaluates a notfound-function node. */
-inline void eval_notfound(func_node_t *func_node) /*!< in: function node */
+inline void eval_notfound(FuncNode *func_node) /*!< in: function node */
 {
   bool bool_val;
-  sel_node_t *sel_node;
+  SelNode *sel_node;
 
   auto arg1 = func_node->args;
 
@@ -299,7 +299,7 @@ inline void eval_notfound(func_node_t *func_node) /*!< in: function node */
 
   ut_ad(func_node->func == PARS_NOTFOUND_TOKEN);
 
-  auto cursor = (sym_node_t *)arg1;
+  auto cursor = (SymNode *)arg1;
 
   ut_ad(que_node_get_type(cursor) == QUE_NODE_SYMBOL);
 
@@ -322,12 +322,12 @@ inline void eval_notfound(func_node_t *func_node) /*!< in: function node */
 }
 
 /** Evaluates a substr-function node. */
-inline void eval_substr(func_node_t *func_node) /*!< in: function node */
+inline void eval_substr(FuncNode *func_node) /*!< in: function node */
 {
   que_node_t *arg1;
   que_node_t *arg2;
   que_node_t *arg3;
-  dfield_t *dfield;
+  Dfield *dfield;
   byte *str1;
   ulint len1;
   ulint len2;
@@ -350,7 +350,7 @@ inline void eval_substr(func_node_t *func_node) /*!< in: function node */
 }
 
 /** Evaluates a replstr-procedure node. */
-static void eval_replstr(func_node_t *func_node) /*!< in: function node */
+static void eval_replstr(FuncNode *func_node) /*!< in: function node */
 {
   que_node_t *arg1;
   que_node_t *arg2;
@@ -384,12 +384,12 @@ static void eval_replstr(func_node_t *func_node) /*!< in: function node */
 }
 
 /** Evaluates an instr-function node. */
-static void eval_instr(func_node_t *func_node) /*!< in: function node */
+static void eval_instr(FuncNode *func_node) /*!< in: function node */
 {
   que_node_t *arg1;
   que_node_t *arg2;
-  dfield_t *dfield1;
-  dfield_t *dfield2;
+  Dfield *dfield1;
+  Dfield *dfield2;
   lint int_val;
   byte *str1;
   byte *str2;
@@ -451,10 +451,10 @@ match_found:
 }
 
 /** Evaluates a predefined function node. */
-inline void eval_binary_to_number(func_node_t *func_node) /*!< in: function node */
+inline void eval_binary_to_number(FuncNode *func_node) /*!< in: function node */
 {
   que_node_t *arg1;
-  dfield_t *dfield;
+  Dfield *dfield;
   byte *str1;
   byte *str2;
   ulint len1;
@@ -484,10 +484,10 @@ inline void eval_binary_to_number(func_node_t *func_node) /*!< in: function node
 }
 
 /** Evaluates a predefined function node. */
-static void eval_concat(func_node_t *func_node) /*!< in: function node */
+static void eval_concat(FuncNode *func_node) /*!< in: function node */
 {
   que_node_t *arg;
-  dfield_t *dfield;
+  Dfield *dfield;
   byte *data;
   ulint len;
   ulint len1;
@@ -525,11 +525,11 @@ this function looks at the second argument which is the integer length in
 bytes, and converts the integer to a VARCHAR.
 If the first argument is of some other type, this function converts it to
 BINARY. */
-inline void eval_to_binary(func_node_t *func_node) /*!< in: function node */
+inline void eval_to_binary(FuncNode *func_node) /*!< in: function node */
 {
   que_node_t *arg1;
   que_node_t *arg2;
-  dfield_t *dfield;
+  Dfield *dfield;
   byte *str1;
   ulint len;
   ulint len1;
@@ -564,7 +564,7 @@ inline void eval_to_binary(func_node_t *func_node) /*!< in: function node */
 }
 
 /** Evaluates a predefined function node. */
-inline void eval_predefined(func_node_t *func_node) /*!< in: function node */
+inline void eval_predefined(FuncNode *func_node) /*!< in: function node */
 {
   que_node_t *arg1;
   lint int_val;
@@ -650,7 +650,7 @@ inline void eval_predefined(func_node_t *func_node) /*!< in: function node */
 
 /** Evaluates a function node. */
 
-void eval_func(func_node_t *func_node) /*!< in: function node */
+void eval_func(FuncNode *func_node) /*!< in: function node */
 {
   que_node_t *arg;
   ulint func_class;

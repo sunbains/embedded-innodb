@@ -33,7 +33,7 @@ Created 3/26/1996 Heikki Tuuri
 #include "usr0types.h"
 
 struct Lock;
-struct Read_view;
+struct ReadView;
 
 /*
  * The transaction handle; every session has a trx object which is freed only
@@ -48,7 +48,7 @@ struct Trx {
    * @param[in] sess The session.
    * @param[in] arg Any context that needs to be passed to the trx.
    */
-  explicit Trx(Trx_sys *trx_sys, Session *sess, void *arg) noexcept;
+  explicit Trx(TrxSys *trx_sys, Session *sess, void *arg) noexcept;
 
   /**
    * Destructs a transaction object.
@@ -72,7 +72,7 @@ struct Trx {
    *
    * @return The transaction object.
    */
-  [[nodiscard]] static Trx *create(Trx_sys *trx_sys, Session *sess, void *arg) noexcept;
+  [[nodiscard]] static Trx *create(TrxSys *trx_sys, Session *sess, void *arg) noexcept;
 
   /**
    * Destroys a transaction instance..
@@ -196,8 +196,8 @@ struct Trx {
    *
    * @return Dictionary operation mode.
    */
-  [[nodiscard]] inline trx_dict_op_t get_dict_operation() const noexcept {
-    const auto op = static_cast<trx_dict_op_t>(m_dict_operation);
+  [[nodiscard]] inline TrxDictOp get_dict_operation() const noexcept {
+    const auto op = static_cast<TrxDictOp>(m_dict_operation);
 
 #ifdef UNIV_DEBUG
     switch (op) {
@@ -209,7 +209,7 @@ struct Trx {
     ut_error;
 #endif /* UNIV_DEBUG */
 
-    return static_cast<trx_dict_op_t>(expect(op, TRX_DICT_OP_NONE));
+    return static_cast<TrxDictOp>(expect(op, TRX_DICT_OP_NONE));
   }
 
   /**
@@ -217,7 +217,7 @@ struct Trx {
    *
    * @param[in] op Operation, not TRX_DICT_OP_NONE.
    */
-  inline void set_dict_operation(trx_dict_op_t op) noexcept {
+  inline void set_dict_operation(TrxDictOp op) noexcept {
 #ifdef UNIV_DEBUG
     const auto old_op = get_dict_operation();
 
@@ -274,7 +274,7 @@ struct Trx {
    *
    * @return Consistent read view.
    */
-  [[nodiscard]] Read_view *assign_read_view() noexcept;
+  [[nodiscard]] ReadView *assign_read_view() noexcept;
 
   /**
    * The transaction must be in the TRX_QUE_LOCK_WAIT state. Puts it to
@@ -296,7 +296,7 @@ struct Trx {
    *   passed in is a pointer to a nullptr pointer, then the calling function can
    *   start running a new query thread; if the parameter is nullptr, it is ignored.
    */
-  void sig_send(ulint type, ulint sender, que_thr_t *receiver_thr, trx_savept_t *savept, que_thr_t *&next_thr) noexcept;
+  void sig_send(ulint type, ulint sender, QueThr *receiver_thr, TrxSavept *savept, QueThr *&next_thr) noexcept;
 
   /**
    * Send the reply message when a signal in the queue of the trx has
@@ -306,14 +306,14 @@ struct Trx {
    * @param[in,out] next_thr Next query thread to run; if the value which is passed in is
    *   a pointer to a nullptr pointer, then the calling function can start running a new query thread.
    */
-  static void sig_reply(trx_sig_t *sig, que_thr_t *&next_thr) noexcept;
+  static void sig_reply(TrxSig *sig, QueThr *&next_thr) noexcept;
 
   /**
    * Removes the signal object from a trx signal queue.
    *
    * @param[in] sig Signal object.
    */
-  void sig_remove(trx_sig_t *&sig) noexcept;
+  void sig_remove(TrxSig *&sig) noexcept;
 
   /**
    * Starts handling of a trx signal.
@@ -321,7 +321,7 @@ struct Trx {
    * @param[in,out] next_thr Next query thread to run; if the value which is passed in is
    *   a pointer to a nullptr pointer, then the calling function can start running a new query thread.
    */
-  void sig_start_handling(que_thr_t *&next_thr) noexcept;
+  void sig_start_handling(QueThr *&next_thr) noexcept;
 
   /**
    * Ends signal handling. If the session is in the error state, and
@@ -339,7 +339,7 @@ struct Trx {
    *
    * @return Commit node struct.
    */
-  [[nodiscard]] static Commit_node *commit_node_create(mem_heap_t *heap) noexcept;
+  [[nodiscard]] static CommitNode *commit_node_create(MemHeap *heap) noexcept;
 
   /**
    * Performs an execution step for a commit type node in a query graph.
@@ -348,7 +348,7 @@ struct Trx {
    *
    * @return Query thread to run next, or nullptr.
    */
-  [[nodiscard]] static que_thr_t *commit_step(que_thr_t *thr) noexcept;
+  [[nodiscard]] static QueThr *commit_step(QueThr *thr) noexcept;
 
   /**
    * Prints info about a transaction to the given file. The caller must own the
@@ -384,7 +384,7 @@ struct Trx {
    *
    * @return DB_SUCCESS or error number.
    */
-  [[nodiscard]] db_err commit() noexcept;
+  [[nodiscard]] DbErr commit() noexcept;
 
   /**
    * Frees a transaction object for client.
@@ -413,7 +413,7 @@ struct Trx {
    * @param[in,out] next_thr Next query thread to run. If the value passed in is a pointer to
    *  a nullptr pointer, then the calling function can start running a new query thread.
    */
-  void handle_commit_sig_off_kernel(que_thr_t *&next_thr) noexcept;
+  void handle_commit_sig_off_kernel(QueThr *&next_thr) noexcept;
 
   /**
    * @brief checks the compatibility of a new signal with the other signals in the queue.
@@ -472,10 +472,10 @@ struct Trx {
 
   /** State of the trx from the point of view of concurrency control:
    * TRX_ACTIVE, TRX_COMMITTED_IN_MEMORY, ... */
-  Trx_status m_conc_state{TRX_NOT_STARTED};
+  TrxStatus m_conc_state{TRX_NOT_STARTED};
 
   /** TRX_ISO_REPEATABLE_READ, ... */
-  Trx_isolation m_isolation_level{TRX_ISO_REPEATABLE_READ};
+  TrxIsolation m_isolation_level{TRX_ISO_REPEATABLE_READ};
 
   /** Normally true, but if the user wants to suppress foreign key
   checks, (in table imports, for example) we set this false */
@@ -483,7 +483,7 @@ struct Trx {
 
 #ifdef WITH_XOPEN
   /** X/Open XA transaction identification to identify a transaction branch */
-  XID m_xid{};
+  Xid m_xid{};
 
   /** Normally we do the XA two-phase commit steps, but by setting this to
   false, one can save CPU time and about 150 bytes in the undo log size
@@ -507,7 +507,7 @@ struct Trx {
   bool m_deadlock_mark{};
 
   /** @see trx_dict_op */
-  trx_dict_op_t m_dict_operation{TRX_DICT_OP_NONE};
+  TrxDictOp m_dict_operation{TRX_DICT_OP_NONE};
 
   /* Fields protected by the srv_conc_mutex. */
 
@@ -569,7 +569,7 @@ struct Trx {
   /*!< 0 if no error, otherwise error number; NOTE That ONLY the
   thread doing the transaction is allowed to set this field: this
   is NOT protected by the kernel mutex */
-  db_err m_error_state{DB_SUCCESS};
+  DbErr m_error_state{DB_SUCCESS};
 
   /** If the error number indicates a duplicate key error, a
    pointer to the problematic index is stored here */
@@ -586,25 +586,25 @@ struct Trx {
   /** Query currently run in the session, or nullptr if none; NOTE that the query
   belongs to the session, and it can survive over a transaction commit, if
   it is a stored procedure with a COMMIT WORK statement, for instance */
-  que_t *m_graph{};
+  QueFork *m_graph{};
 
   /** Number of active query threads */
   ulint m_n_active_thrs{};
 
   /** Value of graph when signal handling for this trx started: this is used to
   return control to the original query graph for error processing */
-  que_t *m_graph_before_signal_handling{};
+  QueFork *m_graph_before_signal_handling{};
 
   /** One signal object can be allocated in this space, avoiding mem_alloc */
-  trx_sig_t m_sig{};
+  TrxSig m_sig{};
 
   /** Queue of processed or pending signals to the trx */
-  UT_LIST_BASE_NODE_T(trx_sig_t, signals) m_signals;
+  UT_LIST_BASE_NODE_T(TrxSig, signals) m_signals;
 
   /** List of signals sent by the query threads of this trx
   for which a thread is waiting for a reply; if this trx is killed,
   the reply requests in the list must be canceled */
-  UT_LIST_BASE_NODE_T(trx_sig_t, reply_signals) m_reply_signals;
+  UT_LIST_BASE_NODE_T(TrxSig, reply_signals) m_reply_signals;
 
   /** If trx execution state is TRX_QUE_LOCK_WAIT, this points to the
   lock request, otherwise this is nullptr */
@@ -619,32 +619,32 @@ struct Trx {
   time_t m_wait_started{};
 
   /** Query threads belonging to this trx that are in the QUE_THR_LOCK_WAIT state */
-  UT_LIST_BASE_NODE_T_EXTERN(que_thr_t, trx_thrs) m_wait_thrs;
+  UT_LIST_BASE_NODE_T_EXTERN(QueThr, trx_thrs) m_wait_thrs;
 
   /** Memory heap for the locks of the transaction */
-  mem_heap_t *m_lock_heap{};
+  MemHeap *m_lock_heap{};
 
   /** Locks reserved by the transaction */
   UT_LIST_BASE_NODE_T_EXTERN(Lock, m_trx_locks) m_trx_locks;
 
   /** Memory heap for the global read view */
-  mem_heap_t *m_global_read_view_heap;
+  MemHeap *m_global_read_view_heap;
 
   /** Consistent read view associated to a transaction or nullptr */
-  Read_view *m_global_read_view{};
+  ReadView *m_global_read_view{};
 
   /** Consistent read view used in the transaction or nullptr, this
   read view if defined can be normal read view associated to a transaction
   (i.e.  same as global_read_view) or read view associated to a cursor */
-  Read_view *m_read_view{};
+  ReadView *m_read_view{};
 
   /** Savepoints set with SAVEPOINT ..., oldest first */
-  UT_LIST_BASE_NODE_T_EXTERN(trx_named_savept_t, trx_savepoints) m_trx_savepoints;
+  UT_LIST_BASE_NODE_T_EXTERN(TrxNamedSavept, trx_savepoints) m_trx_savepoints;
 
   /** Mutex protecting the fields in this section (down to undo_no_arr),
   EXCEPT last_sql_stat_start, which can be accessed only when we know
   that there cannot be any activity in the undo logs! */
-  mutable mutex_t m_undo_mutex{};
+  mutable Mutex m_undo_mutex{};
 
   /** Next undo log record number to assign; since the undo log is private
   for a transaction, this is a simple ascending sequence with no gaps;
@@ -653,16 +653,16 @@ struct Trx {
 
   /** Undo_no when the last sql statement was started: in case of an error,
   trx is rolled back down to this undo number; see note at undo_mutex! */
-  trx_savept_t m_last_sql_stat_start{};
+  TrxSavept m_last_sql_stat_start{};
 
   /*!< rollback segment assigned to the transaction, or nullptr if not assigned yet */
-  Trx_rseg *m_rseg{};
+  TrxRseg *m_rseg{};
 
   /** Pointer to the insert undo log, or nullptr if no inserts performed yet */
-  trx_undo_t *m_insert_undo{};
+  TrxUndo *m_insert_undo{};
 
   /** Pointer to the update undo log, or nullptr if no update performed yet */
-  trx_undo_t *m_update_undo{};
+  TrxUndo *m_update_undo{};
 
   /** Least undo number to undo during a rollback */
   undo_no_t m_roll_limit{};
@@ -672,13 +672,13 @@ struct Trx {
 
   /** Array of undo numbers of undo log records which are currently processed
   by a rollback operation */
-  trx_undo_arr_t *m_undo_no_arr{};
+  TrxUndoArr *m_undo_no_arr{};
 
   /** Detailed error message for last error, or empty. */
   std::array<char, 256> m_detailed_error{};
 
   /** Pointer to the parent trx system */
-  Trx_sys *m_trx_sys{};
+  TrxSys *m_trx_sys{};
 };
 
 UT_LIST_NODE_GETTER_DEFINITION(Trx, m_trx_list);

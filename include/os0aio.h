@@ -19,7 +19,7 @@ limitations under the License.
 
 #include "innodb0types.h"
 
-struct fil_node_t;
+struct FilNode;
 
 namespace aio {
 
@@ -32,7 +32,7 @@ using Queue_id = ulint;
 }  // namespace aio
 
 /** Types for aio operations @{ */
-enum class IO_request {
+enum class IoRequest {
   None,
   Async_read,
   Async_write,
@@ -46,16 +46,16 @@ enum class IO_request {
   Sync_log_flush,
 };
 
-struct IO_ctx {
+struct IoCtx {
   void validate() const noexcept;
 
   bool is_sync_request() const noexcept {
     switch (m_io_request) {
-      case IO_request::Sync_read:
-      case IO_request::Sync_write:
-      case IO_request::Sync_log_read:
-      case IO_request::Sync_log_write:
-      case IO_request::Sync_log_flush:
+      case IoRequest::Sync_read:
+      case IoRequest::Sync_write:
+      case IoRequest::Sync_log_read:
+      case IoRequest::Sync_log_write:
+      case IoRequest::Sync_log_flush:
         return true;
       default:
         return false;
@@ -64,12 +64,12 @@ struct IO_ctx {
 
   bool is_log_request() const noexcept {
     switch (m_io_request) {
-      case IO_request::Async_log_read:
-      case IO_request::Async_log_write:
-      case IO_request::Async_log_flush:
-      case IO_request::Sync_log_read:
-      case IO_request::Sync_log_write:
-      case IO_request::Sync_log_flush:
+      case IoRequest::Async_log_read:
+      case IoRequest::Async_log_write:
+      case IoRequest::Async_log_flush:
+      case IoRequest::Sync_log_read:
+      case IoRequest::Sync_log_write:
+      case IoRequest::Sync_log_flush:
         return true;
       default:
         return false;
@@ -78,24 +78,24 @@ struct IO_ctx {
 
   bool is_read_request() const noexcept {
     switch (m_io_request) {
-      case IO_request::Async_read:
-      case IO_request::Async_log_read:
-      case IO_request::Sync_read:
-      case IO_request::Sync_log_read:
+      case IoRequest::Async_read:
+      case IoRequest::Async_log_read:
+      case IoRequest::Sync_read:
+      case IoRequest::Sync_log_read:
         return true;
       default:
         return false;
     }
   }
 
-  bool is_shutdown() const noexcept { return m_io_request == IO_request::None && m_fil_node == nullptr && m_ret == 0; }
+  bool is_shutdown() const noexcept { return m_io_request == IoRequest::None && m_fil_node == nullptr && m_ret == 0; }
 
   void shutdown() noexcept {
     m_ret = 0;
     m_batch = false;
     m_fil_node = nullptr;
     m_msg = nullptr;
-    m_io_request = IO_request::None;
+    m_io_request = IoRequest::None;
   }
 
   /** IO file operation result. */
@@ -105,16 +105,16 @@ struct IO_ctx {
   bool m_batch{};
 
   /** File meta data. */
-  fil_node_t *m_fil_node{};
+  FilNode *m_fil_node{};
 
   /** User defined message. */
   void *m_msg{};
 
   /** Request type. */
-  IO_request m_io_request{};
+  IoRequest m_io_request{};
 };
 
-struct AIO {
+struct Aio {
   /**
   * @brief Initializes the asynchronous io system.
   * Note: The log uses a single thread for IO.
@@ -123,17 +123,17 @@ struct AIO {
   * @param[in] n_read_queues    Number of queues for read operations
   * @param[in] n_write_queues   Number of queues for write operations
   * 
-  * @retval AIO* Pointer to the created instance. Call destroy() below to delete it.
+  * @retval Aio* Pointer to the created instance. Call destroy() below to delete it.
   */
-  static AIO *create(ulint n_slots, ulint n_read_queues, ulint n_write_queues) noexcept;
+  static Aio *create(ulint n_slots, ulint n_read_queues, ulint n_write_queues) noexcept;
 
-  /** Destroy an instance that was created using AIO::create()
+  /** Destroy an instance that was created using Aio::create()
    * @param[own] aio The instance to destroy.
    */
-  static void destroy(AIO *&aio) noexcept;
+  static void destroy(Aio *&aio) noexcept;
 
   /** Destructor */
-  virtual ~AIO() = default;
+  virtual ~Aio() = default;
 
   /**
   * @brief Submit a request
@@ -145,7 +145,7 @@ struct AIO {
   *                             to read or write.
   * @return DB_SUCCESS or error code.
   */
-  [[nodiscard]] virtual db_err submit(IO_ctx &&io_ctx, void *buf, ulint n, off_t off) noexcept = 0;
+  [[nodiscard]] virtual DbErr submit(IoCtx &&io_ctx, void *buf, ulint n, off_t off) noexcept = 0;
 
   /**
   * @brief Reaps requests that have completed. It's a blocking function.
@@ -154,7 +154,7 @@ struct AIO {
   * @param[out] io_ctx          Context of the i/o operation.
   * @return DB_SUCCESS or error code.
   */
-  [[nodiscard]] virtual db_err reap(aio::Queue_id queue_id, IO_ctx &io_ctx) noexcept = 0;
+  [[nodiscard]] virtual DbErr reap(aio::Queue_id queue_id, IoCtx &io_ctx) noexcept = 0;
 
   /**
   * @brief Waits until there are no pending operations
@@ -174,39 +174,39 @@ struct AIO {
   virtual std::string to_string() noexcept = 0;
 };
 
-inline const char *to_string(IO_request request) noexcept {
+inline const char *to_string(IoRequest request) noexcept {
   switch (request) {
-    case IO_request::None:
+    case IoRequest::None:
       return "None";
       break;
-    case IO_request::Async_read:
+    case IoRequest::Async_read:
       return "Async_read";
       break;
-    case IO_request::Async_write:
+    case IoRequest::Async_write:
       return "Async_write";
       break;
-    case IO_request::Async_log_read:
+    case IoRequest::Async_log_read:
       return "Async_log_read";
       break;
-    case IO_request::Async_log_write:
+    case IoRequest::Async_log_write:
       return "Async_log_write";
       break;
-    case IO_request::Async_log_flush:
+    case IoRequest::Async_log_flush:
       return "Async_log_flush";
       break;
-    case IO_request::Sync_read:
+    case IoRequest::Sync_read:
       return "Sync_read";
       break;
-    case IO_request::Sync_write:
+    case IoRequest::Sync_write:
       return "Sync_write";
       break;
-    case IO_request::Sync_log_read:
+    case IoRequest::Sync_log_read:
       return "Sync_log_read";
       break;
-    case IO_request::Sync_log_write:
+    case IoRequest::Sync_log_write:
       return "Sync_log_write";
       break;
-    case IO_request::Sync_log_flush:
+    case IoRequest::Sync_log_flush:
       return "Sync_log_flush";
       break;
   }

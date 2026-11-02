@@ -30,9 +30,9 @@ Deadlock detection and resolution
 #include "ut0dbg.h"
 #include "ut0logger.h"
 
-Deadlock_detector::Deadlock_detector(Lock_sys *lock_sys) noexcept : m_lock_sys(lock_sys) {}
+DeadlockDetector::DeadlockDetector(LockSys *lock_sys) noexcept : m_lock_sys(lock_sys) {}
 
-bool Deadlock_detector::check_deadlock(Lock *lock, Trx *trx) noexcept {
+bool DeadlockDetector::check_deadlock(Lock *lock, Trx *trx) noexcept {
   ulint ret;
   ulint cost{};
 
@@ -78,7 +78,7 @@ retry:
   return true;
 }
 
-ulint Deadlock_detector::search_iterative(Trx *start, Trx *trx, Lock *wait_lock, ulint *cost, ulint depth) noexcept {
+ulint DeadlockDetector::search_iterative(Trx *start, Trx *trx, Lock *wait_lock, ulint *cost, ulint depth) noexcept {
   ut_ad(mutex_own(&m_lock_sys->m_trx_sys->m_mutex));
 
   // Clear the stack before starting
@@ -245,7 +245,7 @@ ulint Deadlock_detector::search_iterative(Trx *start, Trx *trx, Lock *wait_lock,
   return 0;
 }
 
-Trx *Deadlock_detector::choose_victim(Trx *trx1, Trx *trx2) noexcept {
+Trx *DeadlockDetector::choose_victim(Trx *trx1, Trx *trx2) noexcept {
   /* Choose the transaction with fewer locks as victim to minimize the amount of work needed for rollback */
 
   ulint trx1_locks = 0;
@@ -269,7 +269,7 @@ Trx *Deadlock_detector::choose_victim(Trx *trx1, Trx *trx2) noexcept {
   }
 }
 
-void Deadlock_detector::report_deadlock(Trx *victim, Lock *wait_lock) noexcept {
+void DeadlockDetector::report_deadlock(Trx *victim, Lock *wait_lock) noexcept {
   log_info("*** DEADLOCK DETECTED ***");
   log_info("\nVictim transaction:");
   log_info(victim->to_string(3000));

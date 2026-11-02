@@ -5,14 +5,14 @@
 #include "innodb0types.h"
 
 /** The info structure stored at the beginning of a heap block */
-struct mem_block_info_t;
+struct MemHeap;
 
 /** A block of a memory heap consists of the info structure
 followed by an area of memory */
-using mem_block_t = mem_block_info_t;
+struct MemHeap;
 
 /* A memory heap is a nonempty linear list of memory blocks */
-using mem_heap_t = mem_block_t;
+struct MemHeap;
 
 /* Types of allocation for memory heaps: DYNAMIC means allocation from the
 dynamic memory pool of the C compiler, BUFFER means allocation from the

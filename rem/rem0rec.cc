@@ -105,7 +105,7 @@ the corresponding canonical strings have the same property. */
  * @return true if the record is valid, false otherwise.
  */
 
-void Phy_rec::get_col_offsets(Rec_offs offsets) const noexcept {
+void PhyRec::get_col_offsets(RecOffs offsets) const noexcept {
   ulint offs{};
   ulint any_ext{};
   ulint null_mask{1};
@@ -189,7 +189,7 @@ void Phy_rec::get_col_offsets(Rec_offs offsets) const noexcept {
   offsets[0] = (m_rec - (lens + 1)) | any_ext;
 }
 
-Rec_offs Phy_rec::get_col_offsets(ulint *offsets, ulint n_fields, mem_heap_t **heap, Source_location sl) const noexcept {
+RecOffs PhyRec::get_col_offsets(ulint *offsets, ulint n_fields, MemHeap **heap, SourceLocation sl) const noexcept {
   auto n = m_rec.get_n_fields();
 
   if (unlikely(n_fields < n)) {
@@ -203,10 +203,10 @@ Rec_offs Phy_rec::get_col_offsets(ulint *offsets, ulint n_fields, mem_heap_t **h
       *heap = mem_heap_create_func(size * sizeof(ulint), MEM_HEAP_DYNAMIC, std::move(sl));
     }
     offsets = reinterpret_cast<ulint *>(mem_heap_alloc(*heap, size * sizeof(ulint)));
-    Rec_offs(offsets).set_n_alloc(size);
+    RecOffs(offsets).set_n_alloc(size);
   }
 
-  Rec_offs(offsets).set_n_fields(n);
+  RecOffs(offsets).set_n_fields(n);
 
   /* The following sets the offsets to each field in the record in the offsets
   array. The offsets are written to a previously allocated array of ulint,
@@ -227,10 +227,10 @@ Rec_offs Phy_rec::get_col_offsets(ulint *offsets, ulint n_fields, mem_heap_t **h
   high-order bit of the offset at [i+1] is set (REC_OFFS_EXTERNAL), the
   field i is being stored externally.  */
 
-  Rec_offs rec_offs(offsets);
+  RecOffs rec_offs(offsets);
   ut_d(m_rec.offs_make_valid(m_index, rec_offs));
 
-  ut_a(n == Rec_offs(offsets).n_fields());
+  ut_a(n == RecOffs(offsets).n_fields());
 
   auto col_offsets{offsets};
 
@@ -275,10 +275,10 @@ Rec_offs Phy_rec::get_col_offsets(ulint *offsets, ulint n_fields, mem_heap_t **h
     }
   }
 
-  return Rec_offs(offsets);
+  return RecOffs(offsets);
 }
 
-void Phy_rec::encode(Index *index, Rec rec, ulint status, const DFields &dfields) noexcept {
+void PhyRec::encode(Index *index, Rec rec, ulint status, const DFields &dfields) noexcept {
   ulint null_mask = 1;
   ulint n_node_ptr_field;
 
@@ -394,7 +394,7 @@ void Phy_rec::encode(Index *index, Rec rec, ulint status, const DFields &dfields
   }
 }
 
-Phy_rec::Size Phy_rec::get_encoded_size(Index *index, ulint, const DFields &dfields) noexcept {
+PhyRec::Size PhyRec::get_encoded_size(Index *index, ulint, const DFields &dfields) noexcept {
   Size size{UT_BITS_IN_BYTES(index->m_n_nullable), 0};
 
   ut_ad(dfields.second > 0);
@@ -607,23 +607,23 @@ Rec rec_convert_dtuple_to_rec(rec_t *buf, const Index *index, const DTuple *dtup
 
 #ifdef UNIV_DEBUG
   {
-    mem_heap_t *heap{};
+    MemHeap *heap{};
     std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
     auto offsets = offsets_.data();
 
     rec_offs_init(offsets_);
 
     {
-      Phy_rec record{index, rec};
+      PhyRec record{index, rec};
 
       offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
     }
 
     ut_ad(rec.validate(offsets));
-    ut_ad(dtuple_get_n_fields(dtuple) == Rec_offs(offsets).n_fields());
+    ut_ad(dtuple_get_n_fields(dtuple) == RecOffs(offsets).n_fields());
 
-    for (ulint i{}; i < Rec_offs(offsets).n_fields(); ++i) {
-      ut_ad(!dfield_is_ext(dtuple_get_nth_field(dtuple, i)) == !Rec_offs(offsets).nth_extern(i));
+    for (ulint i{}; i < RecOffs(offsets).n_fields(); ++i) {
+      ut_ad(!dfield_is_ext(dtuple_get_nth_field(dtuple, i)) == !RecOffs(offsets).nth_extern(i));
     }
 
     if (unlikely(heap != nullptr)) {
@@ -635,14 +635,14 @@ Rec rec_convert_dtuple_to_rec(rec_t *buf, const Index *index, const DTuple *dtup
   return rec;
 }
 
-void rec_copy_prefix_to_dtuple(DTuple *tuple, const Rec &rec, const Index *index, ulint n_fields, mem_heap_t *heap) noexcept {
+void rec_copy_prefix_to_dtuple(DTuple *tuple, const Rec &rec, const Index *index, ulint n_fields, MemHeap *heap) noexcept {
   std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
   auto offsets = offsets_.data();
 
   rec_offs_init(offsets_);
 
   {
-    Phy_rec record{index, rec};
+    PhyRec record{index, rec};
 
     offsets = record.get_col_offsets(offsets, n_fields, &heap, Current_location());
   }
@@ -701,7 +701,7 @@ Rec rec_copy_prefix_to_buf(const Rec &rec, const Index *index, ulint n_fields, b
   return copy_rec;
 }
 
-bool rec_validate(const Rec &rec, const Rec_offs &offsets) noexcept {
+bool rec_validate(const Rec &rec, const RecOffs &offsets) noexcept {
   ulint len_sum{};
   const auto n_fields = offsets.n_fields();
 
@@ -841,11 +841,11 @@ void Rec::log_record_info() const noexcept {
   rec_info_info(*this);
 }
 
-bool Rec::validate(const Rec_offs &offsets) const noexcept {
+bool Rec::validate(const RecOffs &offsets) const noexcept {
   return rec_validate(*this, offsets);
 }
 
-bool Rec::offs_validate(const Index *index, const Rec_offs &offsets) const noexcept {
+bool Rec::offs_validate(const Index *index, const RecOffs &offsets) const noexcept {
   ulint last = ULINT_MAX;
   ulint i = offsets.n_fields();
 
@@ -874,7 +874,7 @@ Rec Rec::copy_prefix_to_buf(const Index *index, ulint n_fields, byte *&buf, ulin
   return rec_copy_prefix_to_buf(*this, index, n_fields, buf, buf_size);
 }
 
-void Rec::copy_prefix_to_dtuple(DTuple *tuple, const Index *index, ulint n_fields, mem_heap_t *heap) const noexcept {
+void Rec::copy_prefix_to_dtuple(DTuple *tuple, const Index *index, ulint n_fields, MemHeap *heap) const noexcept {
   rec_copy_prefix_to_dtuple(tuple, *this, index, n_fields, heap);
 }
 
