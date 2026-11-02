@@ -24,6 +24,8 @@ Created July 16, 2007 Vasil Dimov
 
 #pragma once
 
+class System;
+
 #include "innodb0types.h"
 #include "lock0types.h"
 
@@ -37,7 +39,7 @@ struct LockSys;
  * provides methods to move forward or backward in the queue.
  */
 struct LockIterator {
-  explicit LockIterator(LockSys *lock_sys) noexcept : m_lock_sys(lock_sys) {}
+  explicit LockIterator(System &sys) noexcept : m_sys(sys) {}
 
   /**
    * @brief Initialize lock queue iterator.
@@ -75,6 +77,6 @@ struct LockIterator {
   /** The current lock in the lock queue. */
   const Lock *m_current_lock{nullptr};
 
-  /** The lock system. */
-  LockSys *m_lock_sys{};
+  /** The instance this lock system part belongs to. */
+  System &m_sys;
 };

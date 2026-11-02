@@ -23,6 +23,8 @@ Record lock management
 
 #pragma once
 
+class System;
+
 #include "lock0types.h"
 
 struct BufBlock;
@@ -46,9 +48,9 @@ struct RecordLockManager {
   /**
    * @brief Constructor for RecordLockManager
    * 
-   * @param[in] lock_sys Pointer to the main lock system
+   * @param[in] sys The instance.
    */
-  explicit RecordLockManager(LockSys *lock_sys) noexcept;
+  explicit RecordLockManager(System &sys) noexcept;
 
   /**
    * @brief Removes a granted record lock of a transaction from the queue.
@@ -385,6 +387,6 @@ struct RecordLockManager {
 #endif /* UNIV_DEBUG */
 
  private:
-  /** Pointer to the main lock system */
-  LockSys *m_lock_sys;
+  /** The instance this lock system part belongs to. */
+  System &m_sys;
 };

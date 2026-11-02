@@ -44,7 +44,6 @@ void trx_setup(System &sys, Trx *trx, int n_row_locks) {
     if (!(i % 50)) {
       mode = LOCK_X;
     }
-    ut_a(trx->m_trx_sys == sys.m_trx_sys.get());
 
     mutex_enter(&sys.m_trx_sys->m_mutex);
     std::cout << "REC LOCK CREATE: " << i << "\n";

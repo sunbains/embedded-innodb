@@ -552,8 +552,8 @@ const Table *Lock::table() const noexcept {
   }
 }
 
-std::string Lock::table_to_string() const noexcept {
-  ut_ad(mutex_own(&m_trx->m_trx_sys->m_mutex));
+std::string Lock::table_to_string(System &sys) const noexcept {
+  ut_ad(mutex_own(&sys.m_trx_sys->m_mutex));
   ut_a(type() == LOCK_TABLE);
 
   auto str = std::format("TABLE LOCK table {} trx id {}", m_table.m_table->m_name, m_trx->m_id);
@@ -669,7 +669,7 @@ std::string Lock::to_string(System &sys) const noexcept {
     (void *)this,
     get_type_str(),
     get_mode_str(),
-    type() == LOCK_REC ? rec_to_string(sys) : table_to_string()
+    type() == LOCK_REC ? rec_to_string(sys) : table_to_string(sys)
   );
 }
 
@@ -2666,7 +2666,7 @@ void LockSys::print_info_all_transactions() noexcept {
       } else {
         ut_ad(lock->type() == LOCK_TABLE);
 
-        log_info(lock->table_to_string());
+        log_info(lock->table_to_string(m_sys));
       }
 
       load_page_first = true;

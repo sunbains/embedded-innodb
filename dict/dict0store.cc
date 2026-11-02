@@ -1010,7 +1010,7 @@ DbErr DictStore::create_or_check_foreign_constraint_tables() noexcept {
   m_sys.m_dict->mutex_release();
 
   auto trx = m_sys.m_trx_sys->create_user_trx(nullptr);
-  auto started = trx->start(ULINT_UNDEFINED);
+  auto started = trx->start(m_sys, ULINT_UNDEFINED);
   ut_a(started);
 
   trx->m_op_info = "creating foreign key sys tables";
@@ -1035,7 +1035,7 @@ DbErr DictStore::create_or_check_foreign_constraint_tables() noexcept {
     ut_a(err_commit == DB_SUCCESS);
   }
 
-  (void)trx->start_if_not_started();
+  (void)trx->start_if_not_started(m_sys);
 
   log_info("Creating foreign key constraint system tables");
 
@@ -1086,7 +1086,7 @@ DbErr DictStore::create_or_check_foreign_constraint_tables() noexcept {
 }
 
 DbErr DictStore::foreign_eval_sql(ParsInfo *info, const char *sql, Table *table, Foreign *foreign, Trx *trx) noexcept {
-  (void)trx->start_if_not_started();
+  (void)trx->start_if_not_started(m_sys);
 
   auto err = que_eval_sql(m_sys, info, sql, false, trx);
 

@@ -738,7 +738,7 @@ void TrxRollback::finish_error_processing(System &sys, Trx *trx) {
 
     if (sig->type == TRX_SIG_ERROR_OCCURRED) {
 
-      trx->sig_remove(sig);
+      trx->sig_remove(sys, sig);
     }
 
     sig = next_sig;
@@ -764,7 +764,7 @@ void TrxRollback::finish_partial_rollback_off_kernel(System &sys, Trx *trx, QueT
   /* Remove the signal from the signal queue and send reply message to it */
 
   Trx::sig_reply(sys, sig, *next_thr);
-  trx->sig_remove(sig);
+  trx->sig_remove(sys, sig);
 
   trx->m_que_state = TRX_QUE_RUNNING;
 }
@@ -804,7 +804,7 @@ void TrxRollback::finish_rollback_off_kernel(System &sys, QueFork *graph, Trx *t
     if (sig->type == TRX_SIG_TOTAL_ROLLBACK) {
 
       Trx::sig_reply(sys, sig, *next_thr);
-      trx->sig_remove(sig);
+      trx->sig_remove(sys, sig);
     }
 
     sig = next_sig;

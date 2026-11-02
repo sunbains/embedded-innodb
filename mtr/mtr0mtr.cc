@@ -92,7 +92,9 @@ static void mtr_memo_pop_all(System &sys, Mtr *mtr) noexcept {
  * @param[in,out] log           Log to write to
  * @param[in] recovery          recovery flag
  */
-static void mtr_log_reserve_and_write(Mtr *mtr, Log *log, ulint recovery) noexcept {
+static void mtr_log_reserve_and_write(System &sys, Mtr *mtr) noexcept {
+  auto &log = *sys.m_log;
+
   auto mlog = &mtr->m_log;
   auto first_data = mlog->get_data();
 
@@ -104,29 +106,29 @@ static void mtr_log_reserve_and_write(Mtr *mtr, Log *log, ulint recovery) noexce
 
   if (mlog->single_block()) {
 
-    log->acquire();
+    log.acquire();
 
-    mtr->m_end_lsn = log->reserve_and_write_fast(first_data, mlog->get_used(mlog->get_first_block()), &mtr->m_start_lsn);
+    mtr->m_end_lsn = log.reserve_and_write_fast(first_data, mlog->get_used(mlog->get_first_block()), &mtr->m_start_lsn);
 
     if (mtr->m_end_lsn != 0) {
       /* We were able to successfully write to the log. */
       return;
     }
 
-    log->release();
+    log.release();
   }
 
   auto data_size = mlog->get_data_size();
 
   /* Open the database log for log_write_low */
-  mtr->m_start_lsn = log->reserve_and_open(data_size);
+  mtr->m_start_lsn = log.reserve_and_open(data_size);
 
   if (mtr->m_log_mode == MTR_LOG_ALL) {
 
     auto block = mlog->get_first_block();
 
     while (block != nullptr) {
-      log->write_low(mlog->get_data(block), mlog->get_used(block));
+      log.write_low(mlog->get_data(block), mlog->get_used(block));
       block = mlog->get_next_block(block);
     }
   } else {
@@ -134,7 +136,7 @@ static void mtr_log_reserve_and_write(Mtr *mtr, Log *log, ulint recovery) noexce
     /* Do nothing */
   }
 
-  mtr->m_end_lsn = log->close(IbRecovery(recovery));
+  mtr->m_end_lsn = log.close(sys.m_config.m_recv.m_force_recovery);
 }
 
 void Mtr::commit(System &sys) noexcept {
@@ -146,7 +148,7 @@ void Mtr::commit(System &sys) noexcept {
   const auto write_log = m_modifications > 0 && m_n_log_recs > 0;
 
   if (write_log) {
-    mtr_log_reserve_and_write(this, sys.m_log.get(), sys.m_config.m_recv.m_force_recovery);
+    mtr_log_reserve_and_write(sys, this);
   }
 
   /* We first update the modification info to buffer pages, and only

@@ -273,7 +273,7 @@ DbErr TrxSys::create_system_tablespace() noexcept {
 Trx *TrxSys::create_trx(void *arg) noexcept {
   /* There is a circular reference between the session and the transaction. */
   auto session = Session::create(nullptr);
-  auto trx = Trx::create(this, session, arg);
+  auto trx = Trx::create(session, arg);
 
   session->m_trx = trx;
 
@@ -464,7 +464,7 @@ void TrxSys::init_at_db_start(IbRecovery recovery) noexcept {
       auto trx = get_on_id(undo->m_trx_id);
 
       if (trx == nullptr) {
-        trx = Trx::create(this, nullptr, nullptr);
+        trx = Trx::create(nullptr, nullptr);
 
         trx->m_is_recovered = true;
         trx->m_id = undo->m_trx_id;

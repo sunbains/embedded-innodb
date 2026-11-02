@@ -619,7 +619,7 @@ PurgeSys::PurgeSys(System &sys, Trx *trx) noexcept : m_sys(sys), m_trx(trx) {
 
   m_trx->m_is_purge = true;
 
-  auto success = m_trx->start_low(ULINT_UNDEFINED);
+  auto success = m_trx->start_low(sys, ULINT_UNDEFINED);
   ut_a(success);
 
   m_query = graph_build();

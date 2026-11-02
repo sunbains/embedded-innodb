@@ -56,9 +56,9 @@ struct DeadlockDetector {
   /**
    * @brief Constructor for DeadlockDetector
    *
-   * @param[in] lock_sys Pointer to the main lock system
+   * @param[in] sys The instance.
    */
-  explicit DeadlockDetector(LockSys *lock_sys) noexcept;
+  explicit DeadlockDetector(System &sys) noexcept;
 
   /**
    * @brief Checks if a lock request results in a deadlock.
@@ -146,8 +146,8 @@ struct DeadlockDetector {
    */
   void report_deadlock(Trx *victim, Lock *wait_lock) noexcept;
 
-  /** Pointer to the main lock system */
-  LockSys *m_lock_sys;
+  /** The instance this lock system part belongs to. */
+  System &m_sys;
 
   /** Stack for iterative deadlock detection */
   std::stack<SearchFrame> m_search_stack;

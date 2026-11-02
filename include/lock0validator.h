@@ -43,9 +43,9 @@ struct LockValidator {
   /**
    * @brief Constructor for LockValidator
    * 
-   * @param[in] lock_sys Pointer to the main lock system
+   * @param[in] sys The instance.
    */
-  explicit LockValidator(LockSys *lock_sys) noexcept;
+  explicit LockValidator(System &sys) noexcept;
 
 #ifdef UNIV_DEBUG
   /**
@@ -154,6 +154,6 @@ struct LockValidator {
   void print_info_all_transactions() noexcept;
 
  private:
-  /** Pointer to the main lock system */
-  LockSys *m_lock_sys;
+  /** The instance this lock system part belongs to. */
+  System &m_sys;
 };

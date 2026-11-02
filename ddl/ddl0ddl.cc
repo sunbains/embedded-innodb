@@ -29,7 +29,7 @@ static const char S_innodb_mem_validate[] = "innodb_mem_validate";
 DbErr Ddl::drop_table_in_background(const char *name) noexcept {
   auto trx = m_sys.m_trx_sys->create_background_trx(nullptr);
 
-  auto started = trx->start(ULINT_UNDEFINED);
+  auto started = trx->start(m_sys, ULINT_UNDEFINED);
   ut_a(started);
 
   /* If the original transaction was dropping a table referenced by
@@ -835,7 +835,7 @@ DbErr Ddl::drop_index(Table *table, Index *index, Trx *trx) noexcept {
 
   pars_info_add_uint64_literal(info, "indexid", index->m_id);
 
-  (void)trx->start_if_not_started();
+  (void)trx->start_if_not_started(m_sys);
   trx->m_op_info = "dropping index";
 
   ut_a(trx->m_dict_operation_lock_mode == RW_X_LATCH);
@@ -1250,7 +1250,7 @@ void Ddl::drop_all_temp_indexes(IbRecovery recovery) noexcept {
   /* Load the table definitions that contain partially defined indexes, so that the data dictionary
   information can be checked * when accessing the tablename.ibd files. */
   auto trx = m_sys.m_trx_sys->create_background_trx(nullptr);
-  auto started = trx->start(ULINT_UNDEFINED);
+  auto started = trx->start(m_sys, ULINT_UNDEFINED);
   ut_a(started);
 
   trx->m_op_info = "dropping partially created indexes";
@@ -1339,7 +1339,7 @@ void Ddl::drop_all_temp_tables(IbRecovery recovery) noexcept {
   auto trx = m_sys.m_trx_sys->create_background_trx(nullptr);
 
   {
-    const auto success = trx->start(ULINT_UNDEFINED);
+    const auto success = trx->start(m_sys, ULINT_UNDEFINED);
     ut_a(success);
   }
 

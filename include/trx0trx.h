@@ -46,11 +46,10 @@ struct Trx {
   /**
    * Constructs a transaction object.
    *
-   * @param[in] trx_sys The owning transaction system.
    * @param[in] sess The session.
    * @param[in] arg Any context that needs to be passed to the trx.
    */
-  explicit Trx(TrxSys *trx_sys, Session *sess, void *arg) noexcept;
+  Trx(Session *sess, void *arg) noexcept;
 
   /**
    * Destructs a transaction object.
@@ -68,13 +67,12 @@ struct Trx {
   /**
    * Creates and initializes a transaction object.
    *
-   * @param[in] trx_sys The owning transaction system.
    * @param[in] sess The session.
    * @param[in] arg Any context that needs to be passed to the trx.
    *
    * @return The transaction object.
    */
-  [[nodiscard]] static Trx *create(TrxSys *trx_sys, Session *sess, void *arg) noexcept;
+  [[nodiscard]] static Trx *create(Session *sess, void *arg) noexcept;
 
   /**
    * Destroys a transaction instance..
@@ -98,7 +96,7 @@ struct Trx {
    *
    * @return true if success, false if the rollback segment could not support this many transactions.
    */
-  [[nodiscard]] bool start_low(ulint rseg_id) noexcept;
+  [[nodiscard]] bool start_low(System &sys, ulint rseg_id) noexcept;
 
   /**
    * Starts a new transaction.
@@ -107,7 +105,7 @@ struct Trx {
    *  the system chooses the rollback segment automatically in a round-robin fashion.
    * @return true if success, false if the rollback segment could not support this many transactions.
    */
-  [[nodiscard]] bool start(ulint rseg_id) noexcept;
+  [[nodiscard]] bool start(System &sys, ulint rseg_id) noexcept;
 
   /**
    * Commits a transaction.
@@ -145,11 +143,11 @@ struct Trx {
    *
    * @return True if the transaction was started, false if it was already started.
    */
-  [[nodiscard]] inline bool start_if_not_started() noexcept {
+  [[nodiscard]] inline bool start_if_not_started(System &sys) noexcept {
     ut_ad(m_conc_state != TRX_COMMITTED_IN_MEMORY);
 
     if (m_conc_state == TRX_NOT_STARTED) {
-      return start(ULINT_UNDEFINED);
+      return start(sys, ULINT_UNDEFINED);
     } else {
       return true;
     }
@@ -315,7 +313,7 @@ struct Trx {
    *
    * @param[in] sig Signal object.
    */
-  void sig_remove(TrxSig *&sig) noexcept;
+  void sig_remove(System &sys, TrxSig *&sig) noexcept;
 
   /**
    * Starts handling of a trx signal.
@@ -425,7 +423,7 @@ struct Trx {
    *
    * @return true if the signal can be queued, false otherwise.
    */
-  bool sig_is_compatible(ulint type, ulint sender) noexcept;
+  bool sig_is_compatible(System &sys, ulint type, ulint sender) noexcept;
 
   /**
    * @brief Moves the query threads in the lock wait list to the SUSPENDED state.
@@ -436,14 +434,14 @@ struct Trx {
    *
    * @param[in] trx The transaction in the TRX_QUE_LOCK_WAIT state.
    */
-  void lock_wait_to_suspended() noexcept;
+  void lock_wait_to_suspended(System &sys) noexcept;
 
   /**
    * @brief Moves the query threads in the sig reply wait list of trx to the SUSPENDED state.
    *
    * @param[in] trx The transaction.
    */
-  void sig_reply_wait_to_suspended() noexcept;
+  void sig_reply_wait_to_suspended(System &sys) noexcept;
 
   /**
    * @brief Returns the approximate number of record locks for a transaction.
@@ -679,8 +677,6 @@ struct Trx {
   /** Detailed error message for last error, or empty. */
   std::array<char, 256> m_detailed_error{};
 
-  /** Pointer to the parent trx system */
-  TrxSys *m_trx_sys{};
 };
 
 UT_LIST_NODE_GETTER_DEFINITION(Trx, m_trx_list);

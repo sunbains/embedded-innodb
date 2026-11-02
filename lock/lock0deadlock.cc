@@ -30,7 +30,7 @@ Deadlock detection and resolution
 #include "ut0dbg.h"
 #include "ut0logger.h"
 
-DeadlockDetector::DeadlockDetector(LockSys *lock_sys) noexcept : m_lock_sys(lock_sys) {}
+DeadlockDetector::DeadlockDetector(System &sys) noexcept : m_sys(sys) {}
 
 bool DeadlockDetector::check_deadlock(System &sys, Lock *lock, Trx *trx) noexcept {
   ulint ret;
@@ -73,7 +73,7 @@ retry:
       return false;
   }
 
-  m_lock_sys->set_deadlock_found();
+  m_sys.m_lock_sys->set_deadlock_found();
 
   return true;
 }
@@ -96,7 +96,7 @@ ulint DeadlockDetector::search_iterative(System &sys, Trx *start, Trx *trx, Lock
 
     auto page_id = wait_lock->page_id();
 
-    if (auto it = m_lock_sys->m_rec_locks.find(page_id); it != m_lock_sys->m_rec_locks.end()) {
+    if (auto it = m_sys.m_lock_sys->m_rec_locks.find(page_id); it != m_sys.m_lock_sys->m_rec_locks.end()) {
       found_lock = UT_LIST_GET_LAST(it->second);
     }
   } else {
@@ -137,7 +137,7 @@ ulint DeadlockDetector::search_iterative(System &sys, Trx *start, Trx *trx, Lock
 
         auto page_id = frame.wait_lock->page_id();
 
-        if (auto it = m_lock_sys->m_rec_locks.find(page_id); it != m_lock_sys->m_rec_locks.end()) {
+        if (auto it = m_sys.m_lock_sys->m_rec_locks.find(page_id); it != m_sys.m_lock_sys->m_rec_locks.end()) {
           frame.found_lock = UT_LIST_GET_LAST(it->second);
         }
       } else {
@@ -174,7 +174,7 @@ ulint DeadlockDetector::search_iterative(System &sys, Trx *start, Trx *trx, Lock
           log_info(frame.wait_lock->m_trx->to_string(3000));
 
           log_info("*** (1) HOLDS THE LOCK(S):");
-          log_info(m_lock_sys->lock_to_string(frame.wait_lock));
+          log_info(m_sys.m_lock_sys->lock_to_string(frame.wait_lock));
 
           /* It is possible that the transaction has also locks on tables and records */
 
@@ -182,17 +182,17 @@ ulint DeadlockDetector::search_iterative(System &sys, Trx *start, Trx *trx, Lock
           log_info(lock_trx->to_string(3000));
 
           log_info("*** (2) HOLDS THE LOCK(S):");
-          log_info(m_lock_sys->lock_to_string(frame.found_lock));
+          log_info(m_sys.m_lock_sys->lock_to_string(frame.found_lock));
 
           log_info("*** (2) WAITING FOR THIS LOCK TO BE GRANTED:");
-          log_info(m_lock_sys->lock_to_string(frame.wait_lock));
+          log_info(m_sys.m_lock_sys->lock_to_string(frame.wait_lock));
 
           if (*cost > LOCK_MAX_N_STEPS_IN_DEADLOCK_CHECK) {
             /* If the search was too long, we choose 'start' as the victim and roll back it */
             return LOCK_VICTIM_IS_START;
           }
 
-          m_lock_sys->set_deadlock_found();
+          m_sys.m_lock_sys->set_deadlock_found();
 
           /* Let us choose the transaction of wait_lock as a victim to try
           to avoid deadlocking our search starting point transaction */
@@ -201,7 +201,7 @@ ulint DeadlockDetector::search_iterative(System &sys, Trx *start, Trx *trx, Lock
 
           frame.wait_lock->m_trx->m_was_chosen_as_deadlock_victim = true;
 
-          m_lock_sys->cancel_waiting_and_release(frame.wait_lock);
+          m_sys.m_lock_sys->cancel_waiting_and_release(frame.wait_lock);
 
           /* Since trx and wait_lock are no longer in the waits-for graph, we can return false;
           note that our selective algorithm can choose several transactions as victims, but still
@@ -226,7 +226,7 @@ ulint DeadlockDetector::search_iterative(System &sys, Trx *start, Trx *trx, Lock
 
               auto page_id = lock_trx->m_wait_lock->page_id();
 
-              if (auto it = m_lock_sys->m_rec_locks.find(page_id); it != m_lock_sys->m_rec_locks.end()) {
+              if (auto it = m_sys.m_lock_sys->m_rec_locks.find(page_id); it != m_sys.m_lock_sys->m_rec_locks.end()) {
                 new_found_lock = UT_LIST_GET_LAST(it->second);
               }
             } else {
@@ -274,5 +274,5 @@ void DeadlockDetector::report_deadlock(Trx *victim, Lock *wait_lock) noexcept {
   log_info("\nVictim transaction:");
   log_info(victim->to_string(3000));
   log_info("\nWaiting for lock:");
-  log_info(m_lock_sys->lock_to_string(wait_lock));
+  log_info(m_sys.m_lock_sys->lock_to_string(wait_lock));
 }

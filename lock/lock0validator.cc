@@ -57,7 +57,7 @@ static inline void validate_trx_state(const Trx *trx) noexcept {
   }
 }
 
-LockValidator::LockValidator(LockSys *lock_sys) noexcept : m_lock_sys(lock_sys) {}
+LockValidator::LockValidator(System &sys) noexcept : m_sys(sys) {}
 
 #ifdef UNIV_DEBUG
 bool LockValidator::validate(System &sys) noexcept {
@@ -76,7 +76,7 @@ bool LockValidator::validate(System &sys) noexcept {
   }
 
   /* Iterate over all record locks and validate each page */
-  for (auto &[page_id, rec_locks] : m_lock_sys->m_rec_locks) {
+  for (auto &[page_id, rec_locks] : m_sys.m_lock_sys->m_rec_locks) {
 
     mutex_exit(&sys.m_trx_sys->m_mutex);
 
@@ -139,7 +139,7 @@ bool LockValidator::rec_validate_page(System &sys, PageId page_id) noexcept {
 
         mutex_enter(&sys.m_trx_sys->m_mutex);
 
-        if (auto it = m_lock_sys->m_rec_locks.find(page_id); it != m_lock_sys->m_rec_locks.end()) {
+        if (auto it = m_sys.m_lock_sys->m_rec_locks.find(page_id); it != m_sys.m_lock_sys->m_rec_locks.end()) {
           auto heap_no = page_rec_get_heap_no(rec_cursor);
 
           for (auto lock : it->second) {
@@ -155,7 +155,7 @@ bool LockValidator::rec_validate_page(System &sys, PageId page_id) noexcept {
             UNIV_SYNC_DEBUG is not. */
             const FilSpace *space = fil_space_get_by_id(space_id);
             if (space != nullptr && mutex_own(&space->m_latch)) {
-              mutex_exit(&m_lock_sys->m_trx_sys->m_mutex);
+              mutex_exit(&m_sys.m_lock_sys->m_trx_sys->m_mutex);
               return clean_up(mtr, heap);
             }
 #endif /* UNIV_SYNC_DEBUG */
@@ -209,7 +209,7 @@ bool LockValidator::table_queue_validate(System &sys, Table *table) noexcept {
 
     if (!lock->is_waiting()) {
 
-      ut_ad(!m_lock_sys->table_has_to_wait_in_queue(lock));
+      ut_ad(!m_sys.m_lock_sys->table_has_to_wait_in_queue(lock));
     }
   }
 
@@ -225,7 +225,7 @@ bool LockValidator::rec_queue_validate(System &sys, const BufBlock *block, const
   auto page_id = block->get_page_id();
   auto heap_no = page_rec_get_heap_no(rec);
 
-  if (auto it = m_lock_sys->m_rec_locks.find(page_id); it != m_lock_sys->m_rec_locks.end()) {
+  if (auto it = m_sys.m_lock_sys->m_rec_locks.find(page_id); it != m_sys.m_lock_sys->m_rec_locks.end()) {
     for (auto lock : it->second) {
 
       ut_ad(lock->type() == LOCK_REC);
@@ -234,14 +234,13 @@ bool LockValidator::rec_queue_validate(System &sys, const BufBlock *block, const
         continue;
       }
 
-      ut_ad(lock->m_trx->m_trx_sys == sys.m_trx_sys.get());
 
       validate_trx_state(lock->m_trx);
       ut_ad(sys.m_trx_sys->in_trx_list(lock->m_trx));
 
       if (lock->is_waiting()) {
 
-        ut_ad(m_lock_sys->rec_has_to_wait_in_queue(it->second, lock, heap_no));
+        ut_ad(m_sys.m_lock_sys->rec_has_to_wait_in_queue(it->second, lock, heap_no));
       }
     }
 
@@ -276,7 +275,7 @@ const Lock *LockValidator::rec_other_has_expl_req(System &sys,
   ut_ad(gap == 0 || gap == LOCK_GAP);
   ut_ad(wait == 0 || wait == LOCK_WAIT);
 
-  if (auto it = m_lock_sys->m_rec_locks.find(page_id); it != m_lock_sys->m_rec_locks.end()) {
+  if (auto it = m_sys.m_lock_sys->m_rec_locks.find(page_id); it != m_sys.m_lock_sys->m_rec_locks.end()) {
     for (auto lock : it->second) {
 
       if (trx && lock->m_trx == trx) {

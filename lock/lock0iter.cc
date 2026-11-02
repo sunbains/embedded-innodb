@@ -55,7 +55,7 @@ const Lock *LockIterator::prev() noexcept {
 
   switch (m_current_lock->type()) {
     case LOCK_REC:
-      prev_lock = m_lock_sys->rec_get_prev(m_current_lock, m_bit_no);
+      prev_lock = m_sys.m_lock_sys->rec_get_prev(m_current_lock, m_bit_no);
       break;
     case LOCK_TABLE:
       prev_lock = UT_LIST_GET_PREV(m_table.m_locks, m_current_lock);

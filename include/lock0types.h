@@ -565,7 +565,7 @@ struct Lock {
    *
    * @return A string representation of the table lock object.
    */
-  std::string table_to_string() const noexcept;
+  std::string table_to_string(System &sys) const noexcept;
 
   /**
    * @brief Converts the record lock object to a string representation.
