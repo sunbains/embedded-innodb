@@ -620,7 +620,6 @@ void Srv::refresh_innodb_monitor_stats() noexcept {
 
   m_last_monitor_time = time(nullptr);
 
-  os_file_refresh_stats();
 
   m_sys.m_log->refresh_stats();
 
@@ -802,13 +801,13 @@ bool Srv::printf_innodb_monitor(FILE *ib_stream, bool nowait, ulint *trx_start, 
 void Srv::export_innodb_status() noexcept {
   mutex_enter(&m_innodb_monitor_mutex);
 
-  m_export_vars.innodb_data_pending_reads = os_n_pending_reads;
-  m_export_vars.innodb_data_pending_writes = os_n_pending_writes;
+  m_export_vars.innodb_data_pending_reads = m_sys.m_buf_pool->m_n_pend_reads;
+  m_export_vars.innodb_data_pending_writes = m_sys.m_buf_pool->get_n_pending_ios() - m_sys.m_buf_pool->m_n_pend_reads;
   m_export_vars.innodb_data_pending_fsyncs = m_sys.m_fil->get_pending_log_flushes() + m_sys.m_fil->get_pending_tablespace_flushes();
-  m_export_vars.innodb_data_fsyncs = os_n_fsyncs;
+  m_export_vars.innodb_data_fsyncs = m_sys.m_fil->get_log_flushes();
   m_export_vars.innodb_data_read = m_stats.m_data_read;
-  m_export_vars.innodb_data_reads = os_n_file_reads;
-  m_export_vars.innodb_data_writes = os_n_file_writes;
+  m_export_vars.innodb_data_reads = m_sys.m_buf_pool->m_stat.n_pages_read;
+  m_export_vars.innodb_data_writes = m_sys.m_buf_pool->m_stat.n_pages_written;
   m_export_vars.innodb_data_written = m_stats.m_data_written;
   m_export_vars.innodb_buffer_pool_read_requests = m_sys.m_buf_pool->m_stat.n_page_gets;
   m_export_vars.innodb_buffer_pool_write_requests = m_sys.m_buf_pool->m_write_requests;

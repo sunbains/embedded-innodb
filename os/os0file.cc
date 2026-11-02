@@ -53,52 +53,8 @@ Created 10/21/1995 Heikki Tuuri
 /** Umask for creating files */
 constexpr lint CREATE_MASK = S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP;
 
-/** If the following is true, read i/o handler threads try to
-wait until a batch of new read requests have been posted */
-static bool os_aio_recommend_sleep_for_read_threads = false;
-
-ulint os_n_file_reads = 0;
-ulint os_bytes_read_since_printout = 0;
-ulint os_n_file_writes = 0;
-ulint os_n_fsyncs = 0;
-ulint os_n_file_reads_old = 0;
-ulint os_n_file_writes_old = 0;
-ulint os_n_fsyncs_old = 0;
-time_t os_last_printout;
-
-bool os_has_said_disk_full = false;
-
-/** Number of pending os_file_pread() operations */
-std::atomic<ulint> os_file_n_pending_preads{};
-
-/** Number of pending os_file_pwrite() operations */
-std::atomic<ulint> os_file_n_pending_pwrites{};
-
-/** Number of pending write operations */
-std::atomic<ulint> os_n_pending_writes{};
-
-/** Number of pending read operations */
-std::atomic<ulint> os_n_pending_reads{};
-
 /* Array of English strings describing the current state of an
 i/o handler thread */
-
-void os_file_var_init() {
-  os_aio_recommend_sleep_for_read_threads = false;
-  os_n_file_reads = 0;
-  os_bytes_read_since_printout = 0;
-  os_n_file_writes = 0;
-  os_n_fsyncs = 0;
-  os_n_file_reads_old = 0;
-  os_n_file_writes_old = 0;
-  os_n_fsyncs_old = 0;
-  os_last_printout = 0;
-  os_has_said_disk_full = false;
-  os_file_n_pending_preads = 0;
-  os_file_n_pending_pwrites = 0;
-  os_n_pending_writes = 0;
-  os_n_pending_reads = 0;
-}
 
 ulint os_file_get_last_error(bool report_all_errors) {
   if (report_all_errors || (errno != ENOSPC && errno != EEXIST)) {
@@ -149,20 +105,11 @@ static bool os_file_handle_error_cond_exit(const char *name, const char *operati
   auto err = os_file_get_last_error(false);
 
   if (err == OS_FILE_DISK_FULL) {
-    /* We only print a warning about disk full once */
-
-    if (os_has_said_disk_full) {
-
-      return false;
-    }
-
     if (name != nullptr) {
       log_err("Encountered a problem with file ", name);
     }
 
     log_err("Disk is full. Try to clean the disk to free space.");
-
-    os_has_said_disk_full = true;
 
     return false;
 
@@ -598,8 +545,6 @@ static int os_file_fsync(os_file_t file) {
   do {
     ret = fsync(file);
 
-    ++os_n_fsyncs;
-
     if (ret == -1 && errno == ENOLCK) {
       if (failures % 100 == 0) {
 
@@ -651,17 +596,7 @@ static ssize_t os_file_pread(os_file_t file, void *buf, ulint n, off_t off) {
   /* If off_t is > 4 bytes in size, then we assume we can pass a
   64-bit address */
 
-  ++os_n_file_reads;
-
-  os_file_n_pending_preads.fetch_add(1, std::memory_order_relaxed);
-
-  os_n_pending_reads.fetch_add(1, std::memory_order_relaxed);
-
   auto n_bytes = pread(file, buf, (ssize_t)n, off);
-
-  os_file_n_pending_preads.fetch_sub(1, std::memory_order_relaxed);
-
-  os_n_pending_reads.fetch_sub(1, std::memory_order_relaxed);
 
   return n_bytes;
 }
@@ -678,25 +613,14 @@ static ssize_t os_file_pread(os_file_t file, void *buf, ulint n, off_t off) {
  * @return Number of bytes written, -1 if error.
  */
 static ssize_t os_file_pwrite(os_file_t file, const void *buf, ulint n, off_t off) {
-  ++os_n_file_writes;
-
-  os_file_n_pending_pwrites.fetch_add(1, std::memory_order_relaxed);
-
-  os_n_pending_writes.fetch_add(1, std::memory_order_relaxed);
 
   auto n_bytes = pwrite(file, buf, (ssize_t)n, off);
-
-  os_file_n_pending_pwrites.fetch_sub(1, std::memory_order_relaxed);
-
-  os_n_pending_writes.fetch_sub(1, std::memory_order_relaxed);
 
   return n_bytes;
 }
 
 bool os_file_read(os_file_t file, void *p, ulint n, off_t off) {
   auto ptr = static_cast<char *>(p);
-
-  os_bytes_read_since_printout += n;
 
   do {
     auto n_bytes = os_file_pread(file, ptr, n, off);
@@ -725,8 +649,6 @@ bool os_file_read(os_file_t file, void *p, ulint n, off_t off) {
 
 bool os_file_read_no_error_handling(os_file_t file, void *p, ulint n, off_t off) {
   auto ptr = static_cast<char *>(p);
-
-  os_bytes_read_since_printout += n;
 
   do {
     auto n_bytes = os_file_pread(file, ptr, n, off);
@@ -777,7 +699,7 @@ bool os_file_write(const char *name, os_file_t file, const void *p, ulint n, off
           continue;
         default:
           if (os_file_handle_error(name, "write")) {
-            if (!os_has_said_disk_full) {
+            {
               log_err(std::format(
                 "Write to file {} failed at offset {}. {} bytes should have been written,"
                 " only {} were written. Operating system error number {} - '{}'."
@@ -791,7 +713,6 @@ bool os_file_write(const char *name, os_file_t file, const void *p, ulint n, off
               ));
             }
 
-            os_has_said_disk_full = true;
             continue;
 
           } else {
@@ -929,13 +850,4 @@ bool os_file_create_subdirs_if_needed(const char *path) {
   mem_free(subdir);
 
   return success;
-}
-
-void os_file_refresh_stats() {
-  os_n_file_reads_old = os_n_file_reads;
-  os_n_file_writes_old = os_n_file_writes;
-  os_n_fsyncs_old = os_n_fsyncs;
-  os_bytes_read_since_printout = 0;
-
-  os_last_printout = time(nullptr);
 }

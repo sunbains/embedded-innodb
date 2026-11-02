@@ -347,16 +347,14 @@ loop:
       "number of fsyncs in diagnostic info below.\n"
       "Pending flushes (fsync) log: %lu;"
       " buffer pool: %lu\n"
-      "%lu OS file reads, %lu OS file writes,"
-      " %lu OS fsyncs\n"
+      "%lu page reads, %lu page writes\n"
       "Starting InnoDB Monitor to print further\n"
       "diagnostics to the standard output.\n",
       (ulong)n_iterations,
       (ulong)m_sys.m_fil->get_pending_log_flushes(),
       (ulong)m_sys.m_fil->get_pending_tablespace_flushes(),
-      (ulong)os_n_file_reads,
-      (ulong)os_n_file_writes,
-      (ulong)os_n_fsyncs
+      (ulong)m_sys.m_buf_pool->m_stat.n_pages_read,
+      (ulong)m_sys.m_buf_pool->m_stat.n_pages_written
     );
 
     mon_value_was = m_sys.m_srv->m_print_innodb_monitor;

@@ -745,7 +745,6 @@ bool sync_array_print_long_waits(System &sys) {
     call hanging inside the operating system, let us print right
     now the values of pending calls of these. */
 
-    ib_logger(stderr, "Pending preads %lu, pwrites %lu\n", (ulong)os_file_n_pending_preads, (ulong)os_file_n_pending_pwrites);
 
     sys.m_srv->m_print_innodb_monitor = true;
 

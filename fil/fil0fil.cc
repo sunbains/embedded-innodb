@@ -2073,8 +2073,6 @@ bool Fil::extend_space_to_desired_size(page_no_t *actual_size, space_id_t space_
     if (success) {
       node->m_size_in_pages += n_pages;
       space->m_size_in_pages += n_pages;
-
-      os_has_said_disk_full = false;
     } else {
       /* Let us measure the size of the file to determine how much we were able
        * to extend it */

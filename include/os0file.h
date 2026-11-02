@@ -43,19 +43,10 @@ Created 10/21/1995 Heikki Tuuri
 /** File node of a tablespace or the log data space */
 struct FilNode;
 
-extern bool os_has_said_disk_full;
 
-/** Number of pending os_file_pread() operations */
-extern std::atomic<ulint> os_file_n_pending_preads;
 
-/** Number of pending os_file_pwrite() operations */
-extern std::atomic<ulint> os_file_n_pending_pwrites;
 
-/** Number of pending read operations */
-extern std::atomic<ulint> os_n_pending_reads;
 
-/** Number of pending write operations */
-extern std::atomic<ulint> os_n_pending_writes;
 
 /** Convert a C file descriptor to a native file handle
 @param fd	file descriptor
@@ -108,9 +99,6 @@ constexpr ulint OS_FILE_OPERATION_ABORTED = 79;
 
 /* @} */
 
-extern ulint os_n_file_reads;
-extern ulint os_n_file_writes;
-extern ulint os_n_fsyncs;
 
 /* File types for directory entry data type */
 
@@ -434,13 +422,7 @@ void os_file_free();
  */
 bool os_file_get_status(const char *path, OsFileStat *stat_info);
 
-/**
- * @brief Resets the variables.
- */
-void os_file_var_init();
 
-/** Get the ifile system statistics. */
-void os_file_refresh_stats();
 
 /** @return a text version of the path type. */
 [[nodiscard]] inline const char *get_path_status(const std::filesystem::path &path) noexcept {

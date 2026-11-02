@@ -366,9 +366,8 @@ void buf_read_recv_pages(System &sys, bool sync, const PageId &page_id, const pa
 
         log_err(std::format(
           "Waited for 10 seconds for pending reads to the buffer pool to"
-          " be finished. Number of pending reads {}. pending pread calls {}",
-          sys.m_buf_pool->m_n_pend_reads,
-          os_file_n_pending_preads.load()
+          " be finished. Number of pending reads {}",
+          sys.m_buf_pool->m_n_pend_reads
         ));
       }
     }
