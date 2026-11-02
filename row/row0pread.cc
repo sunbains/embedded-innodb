@@ -39,7 +39,6 @@ Created 2018-01-27 by Sunny Bains */
 #include "row0vers.h"
 #include "ut0logger.h"
 
-std::atomic_size_t ParallelReader::s_active_threads{};
 
 /** Tree depth at which we decide to split blocks further. */
 static constexpr size_t SPLIT_THRESHOLD{3};
@@ -84,9 +83,6 @@ ParallelReader::ScanCtx::Iter::~Iter() {
 ParallelReader::~ParallelReader() {
   mutex_free(&m_mutex);
   CondVar::destroy(m_event);
-  if (!m_sync) {
-    release_unused_threads(m_n_threads);
-  }
   for (auto thread_ctx : m_thread_ctxs) {
     if (thread_ctx != nullptr) {
       delete thread_ctx;
@@ -94,7 +90,9 @@ ParallelReader::~ParallelReader() {
   }
 }
 
-size_t ParallelReader::available_threads(size_t n_required, bool use_reserved) {
+size_t ParallelReader::available_threads(System &sys, size_t n_required, bool use_reserved) {
+  auto &s_active_threads = sys.m_srv->m_n_parallel_read_threads;
+
   auto max_threads = MAX_THREADS;
   constexpr auto SEQ_CST = std::memory_order_seq_cst;
   auto active = s_active_threads.fetch_add(n_required, SEQ_CST);
@@ -1260,7 +1258,7 @@ DbErr ParallelReader::spawn(System &sys, size_t n_threads) noexcept {
   m_n_threads = n_threads;
 
   if (max_threads() > m_n_threads) {
-    release_unused_threads(max_threads() - m_n_threads);
+    release_unused_threads(sys, max_threads() - m_n_threads);
   }
 
   parallel_read(sys);
@@ -1290,6 +1288,10 @@ DbErr ParallelReader::run(System &sys, size_t n_threads) {
     return is_error_set() ? m_err.load() : DB_SUCCESS;
   } else {
     join();
+
+    /* The worker threads have exited: give them back to the instance. */
+    release_unused_threads(sys, m_n_threads);
+    m_n_threads = 0;
 
     if (err != DB_SUCCESS) {
       return err;

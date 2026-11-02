@@ -672,5 +672,15 @@ struct TrxSys {
 
   /** Purge system. */
   PurgeSys *m_purge{};
+
+  /** The recovered transaction being rolled back in crash recovery, for
+  reporting the rollback progress. */
+  Trx *m_recv_rollback_trx{};
+
+  /** Undo number of m_recv_rollback_trx when its rollback started. */
+  int64_t m_recv_rollback_max_undo_no{};
+
+  /** Last rollback progress percentage reported. */
+  ulint m_recv_rollback_printed_pct{};
 };
 

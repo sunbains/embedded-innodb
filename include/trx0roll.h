@@ -79,7 +79,7 @@ struct TrxRollback {
    * @return true if trx is an incomplete transaction that is being rolled
    * back in crash recovery
    */
-  static bool is_recv_trx(const Trx *trx);
+  static bool is_recv_trx(System &sys, const Trx *trx);
 
   /**
    * @brief Returns a transaction savepoint taken at this point in time.
@@ -259,7 +259,7 @@ inline TrxUndoInf *trx_undo_arr_get_nth_info(TrxUndoArr *arr, ulint n) {
 // Legacy function wrappers for backward compatibility
 #define trx_roll_free_all_savepoints(s) TrxRollback::savepoints_free((s), nullptr)
 
-inline bool trx_is_recv(const Trx *trx) { return TrxRollback::is_recv_trx(trx); }
+inline bool trx_is_recv(System &sys, const Trx *trx) { return TrxRollback::is_recv_trx(sys, trx); }
 inline TrxSavept trx_savept_take(Trx *trx) { return TrxRollback::savept_take(trx); }
 inline TrxUndoArr *trx_undo_arr_create(void) { return TrxRollback::undo_arr_create(); }
 inline void trx_undo_arr_free(TrxUndoArr *arr) { TrxRollback::undo_arr_free(arr); }

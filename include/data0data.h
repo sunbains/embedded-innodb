@@ -154,7 +154,8 @@ void dfield_var_init();
 /** Dummy variable to catch access to uninitialized fields.  In the
 debug version, dtuple_create() will make all fields of Dtuple point
 to data_error. */
-extern byte data_error;
+/** Points to this when a field is set to an error value, never written to. */
+inline constexpr byte data_error{};
 #endif /* UNIV_DEBUG */
 
 /** Gets pointer to the type struct of SQL data field.
@@ -407,7 +408,7 @@ inline DTuple *dtuple_create(MemHeap *heap, ulint n_fields) {
       auto field = dtuple_get_nth_field(tuple, i);
 
       dfield_set_len(field, UNIV_SQL_NULL);
-      field->data = &data_error;
+      field->data = const_cast<byte *>(&data_error);
       dfield_get_type(field)->mtype = DATA_ERROR;
     }
   }

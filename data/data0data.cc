@@ -34,14 +34,8 @@ Created 5/30/1994 Heikki Tuuri
 #include <algorithm>
 
 #ifdef UNIV_DEBUG
-/** Dummy variable to catch access to uninitialized fields.  In the
-debug version, dtuple_create() will make all fields of Dtuple point
-to data_error. */
-byte data_error;
 
 #ifndef UNIV_DEBUG_VALGRIND
-/** this is used to fool the compiler in dtuple_validate */
-ulint data_dummy;
 #endif /* !UNIV_DEBUG_VALGRIND */
 #endif /* UNIV_DEBUG */
 
@@ -49,9 +43,7 @@ ulint data_dummy;
 
 void dfield_var_init(void) {
 #ifdef UNIV_DEBUG
-  data_error = 0;
 #ifndef UNIV_DEBUG_VALGRIND
-  data_dummy = 0;
 #endif /* !UNIV_DEBUG_VALGRIND */
 #endif /* UNIV_DEBUG */
 }
@@ -205,9 +197,11 @@ bool dtuple_validate(const DTuple *tuple) {
 
       auto data = static_cast<const byte *>(dfield_get_data(field));
 #ifndef UNIV_DEBUG_VALGRIND
+      /* Read every byte, to trap on a bad pointer. */
+      volatile byte sum{};
+
       for (ulint j = 0; j < len; j++, ++data) {
-        /* fool the compiler not to optimize out this code */
-        data_dummy += *data;
+        sum = sum + *data;
       }
 #endif /* !UNIV_DEBUG_VALGRIND */
 

@@ -41,7 +41,11 @@ Created 3/26/1996 Heikki Tuuri
  * A dummy undo record used as a return value when we have a whole undo log
  * which needs no purge
  */
-extern trx_undo_rec_t trx_purge_dummy_rec;
+/** The undo record returned for an undo log that has nothing to purge: a
+distinct address that is never dereferenced, unlike a null record which means
+that there is nothing left to purge at all. */
+inline constexpr byte trx_purge_dummy_byte{};
+inline const trx_undo_rec_t trx_purge_dummy_rec = const_cast<byte *>(&trx_purge_dummy_byte);
 
 enum PurgeState {
   /** Unknown state. */

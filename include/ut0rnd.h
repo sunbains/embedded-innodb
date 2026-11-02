@@ -111,7 +111,8 @@ constexpr ulint UT_XOR_RND1 = 187678878;
 constexpr ulint UT_XOR_RND2 = 143537923;
 
 /** Seed value of ut_rnd_gen_ulint() */
-extern ulint ut_rnd_ulint_counter;
+/** State of the pseudo random number generator, per thread. */
+inline thread_local ulint ut_rnd_ulint_counter = 65654363;
 
 /** This is used to set the random number seed. */
 inline void ut_rnd_set_seed(ulint seed) /*!< in: seed */

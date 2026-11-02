@@ -1326,7 +1326,7 @@ DbErr BtreeCursor::pessimistic_update(System &sys,
 
     ut_ad(big_rec_vec.n_fields == 0);
 
-    blob.free_updated_extern_fields(sys, index, rec, offsets, update, trx_is_recv(trx) ? RB_RECOVERY : RB_NORMAL, mtr);
+    blob.free_updated_extern_fields(sys, index, rec, offsets, update, trx_is_recv(sys, trx) ? RB_RECOVERY : RB_NORMAL, mtr);
   }
 
   /* We have to set appropriate extern storage bits in the new

@@ -34,8 +34,6 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include "srv0srv.h"
 #include "trx0roll.h"
 
-/* If set then we rollback the transaction on DB_LOCK_WAIT_TIMEOUT error. */
-bool ses_rollback_on_timeout = false;
 
 int ib_create_tempfile(const char *) {
   int fh = -1;
@@ -62,7 +60,7 @@ bool ib_handle_errors(System &sys, DbErr *new_err, Trx *trx, QueThr *thr, TrxSav
 
     switch (err) {
       case DB_LOCK_WAIT_TIMEOUT:
-        if (ses_rollback_on_timeout) {
+        if (sys.m_config.m_lock.m_rollback_on_timeout) {
           trx_general_rollback(sys, trx, false, nullptr);
           break;
         }

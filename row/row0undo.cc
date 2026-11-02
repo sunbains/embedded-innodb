@@ -323,7 +323,7 @@ DbErr UndoNode::remove_cluster_rec(System &sys) noexcept {
     }
 
     {
-      const auto rb_ctx = trx_is_recv(m_trx) ? RB_RECOVERY : RB_NORMAL;
+      const auto rb_ctx = trx_is_recv(sys, m_trx) ? RB_RECOVERY : RB_NORMAL;
       err = btr_cur->pessimistic_delete(sys, false, rb_ctx, &mtr);
     }
 
@@ -449,7 +449,7 @@ DbErr UndoNode::undo_insert(System &sys) noexcept {
       are inserted after the clustered index record, we may assume that the secondary index record
       does not exist.  However, this situation may only occur during the rollback of incomplete
       transactions. */
-      ut_a(trx_is_recv(m_trx));
+      ut_a(trx_is_recv(sys, m_trx));
     } else {
       const auto err = remove_secondary_index_entry(sys, index, entry);
 
@@ -548,7 +548,7 @@ DbErr UndoNode::remove_clustered_index_record(System &sys, QueThr *thr, Mtr *mtr
 
     /* This operation is analogous to purge, we can free also inherited externally stored fields */
 
-    const auto rb_ctx = thr_is_recv(thr) ? RB_RECOVERY_PURGE_REC : RB_NONE;
+    const auto rb_ctx = thr_is_recv(sys, thr) ? RB_RECOVERY_PURGE_REC : RB_NONE;
 
     err = btr_cur->pessimistic_delete(sys, false, rb_ctx, mtr);
 
@@ -583,7 +583,7 @@ DbErr UndoNode::remove_clustered_index_record_low(System &sys, QueThr *thr, Mtr 
 
     /* This operation is analogous to purge, we can free also inherited externally stored fields */
 
-    return btr_cur->pessimistic_delete(sys, false, thr_is_recv(thr) ? RB_RECOVERY_PURGE_REC : RB_NONE, mtr);
+    return btr_cur->pessimistic_delete(sys, false, thr_is_recv(sys, thr) ? RB_RECOVERY_PURGE_REC : RB_NONE, mtr);
 
     /* The delete operation may fail if we have little file space left: TODO: easiest to crash the database
     and restart with more file space */
@@ -828,7 +828,7 @@ DbErr UndoNode::undo_delete_in_secondary_indexes(System &sys, QueThr *thr) noexc
       are inserted after the clustered index record, we may assume that the secondary index record
       does not exist.  However, this situation may only occur during the rollback of incomplete
       transactions. */
-      ut_a(thr_is_recv(thr));
+      ut_a(thr_is_recv(sys, thr));
 
     } else {
 

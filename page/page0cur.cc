@@ -36,8 +36,8 @@ uint64_t PageCursor::lcg_prng() {
   constexpr uint64_t LCG_c{12345};
   constexpr uint64_t LCG_a{1103515245};
 
-  static bool initialized{};
-  static uint64_t lcg_current{};
+  static thread_local bool initialized{};
+  static thread_local uint64_t lcg_current{};
 
   if (!initialized) {
     lcg_current = (uint64_t)ut_time_us(nullptr);

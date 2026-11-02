@@ -33,12 +33,10 @@ this installation to this global variable. If we have < 4.1.2 format
 column definitions, or records in the insert buffer, we use this
 charset-collation code for them. */
 
-ulint data_client_default_charset_coll;
 
 /** Reset dtype variables. */
 
 void dtype_var_init(void) {
-  data_client_default_charset_coll = 0;
 }
 
 /** Determine how many bytes the first n characters of the given string occupy.

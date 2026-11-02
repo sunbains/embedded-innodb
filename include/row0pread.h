@@ -287,12 +287,12 @@ class ParallelReader {
   @param[in] use_reserved true if reserved threads needs to be considered
   while checking for availability of threads
   @return number of threads available. */
-  [[nodiscard]] static size_t available_threads(size_t n_required, bool use_reserved);
+  [[nodiscard]] static size_t available_threads(System &sys, size_t n_required, bool use_reserved);
 
   /** Release the parallel read threads. */
-  static void release_threads(size_t n_threads) {
+  static void release_threads(System &sys, size_t n_threads) {
     const auto SEQ_CST = std::memory_order_seq_cst;
-    auto active = s_active_threads.fetch_sub(n_threads, SEQ_CST);
+    auto active = sys.m_srv->m_n_parallel_read_threads.fetch_sub(n_threads, SEQ_CST);
     ut_a(active >= n_threads);
   }
 
@@ -363,9 +363,9 @@ class ParallelReader {
  private:
   /** Release unused threads back to the pool.
   @param[in] unused_threads     Number of threads to "release". */
-  void release_unused_threads(size_t unused_threads) {
+  void release_unused_threads(System &sys, size_t unused_threads) {
     ut_a(m_max_threads >= unused_threads);
-    release_threads(unused_threads);
+    release_threads(sys, unused_threads);
   }
 
   /** Add an execution context to the run queue.
@@ -441,8 +441,6 @@ class ParallelReader {
   /** List of threads used for paralle_read purpose. */
   std::vector<std::thread> m_parallel_read_threads;
 
-  /** Number of threads currently doing parallel reads. */
-  static std::atomic_size_t s_active_threads;
 
   /** If the caller wants to wait for the parallel_read to finish it's run */
   bool m_sync;
@@ -597,7 +595,7 @@ class ParallelReader::ScanCtx {
 
   /** Release unused threads back to the pool.
   @param[in] unused_threads     Number of threads to "release". */
-  void release_threads(size_t unused_threads) { m_reader->release_threads(unused_threads); }
+  void release_threads(System &sys, size_t unused_threads) { m_reader->release_threads(sys, unused_threads); }
 
   /** S lock the index. */
   void index_s_lock();

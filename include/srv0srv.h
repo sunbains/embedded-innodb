@@ -478,6 +478,9 @@ struct Srv {
   /** Number of active threads by type, protected by the trx_sys mutex. */
   std::array<ulint, SRV_MASTER + 1> m_n_threads_active{};
 
+  /** Threads used by parallel reads, across all ParallelReader instances. */
+  std::atomic_size_t m_n_parallel_read_threads{};
+
   /** Counters, exported as status variables. */
   SrvStats m_stats{};
 

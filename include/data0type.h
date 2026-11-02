@@ -31,7 +31,8 @@ Created 1/16/1996 Heikki Tuuri
 #include "mach0data.h"
 
 struct Dtype;
-extern ulint data_client_default_charset_coll;
+/** Charset-collation code of the client default charset. */
+constexpr ulint DATA_CLIENT_DEFAULT_CHARSET_COLL = 0;
 
 /**
  * Determine how many bytes the first n characters of the given string occupy.
@@ -328,7 +329,7 @@ inline void dtype_read_for_order_and_null_size(Dtype *type, const byte *buf) {
 
   type->len = mach_read_from_2(buf + 2);
 
-  type->prtype = dtype_form_prtype(type->prtype, data_client_default_charset_coll);
+  type->prtype = dtype_form_prtype(type->prtype, DATA_CLIENT_DEFAULT_CHARSET_COLL);
   dtype_set_mblen(type);
 }
 

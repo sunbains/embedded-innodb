@@ -38,7 +38,6 @@ Created 3/26/1996 Heikki Tuuri
 #include "usr0sess.h"
 
 /* Threads with unknown id. */
-os_thread_id_t NULL_THREAD_ID;
 
 Trx::Trx(Session *sess, void *arg) noexcept : m_client_ctx(arg), m_sess(sess) {
 

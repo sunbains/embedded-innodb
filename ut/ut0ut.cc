@@ -45,7 +45,6 @@ Created 5/11/1994 Heikki Tuuri
 #include "trx0trx.h"
 #include "ut0ut.h"
 
-static bool ut_always_false = false;
 
 #include <sys/time.h>
 
@@ -168,17 +167,12 @@ void ut_sprintf_timestamp(char *buf) noexcept {
 }
 
 ulint ut_delay(ulint delay) noexcept {
-  ulint i, j;
+  /* volatile: the loop is the delay, it must not be optimized away. */
+  volatile ulint j{};
 
-  j = 0;
-
-  for (i = 0; i < delay * 50; i++) {
-    j += i;
+  for (ulint i{}; i < delay * 50; ++i) {
+    j = j + i;
     UT_RELAX_CPU();
-  }
-
-  if (ut_always_false) {
-    ut_always_false = (bool)j;
   }
 
   return j;

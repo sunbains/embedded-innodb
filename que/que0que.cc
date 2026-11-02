@@ -44,7 +44,6 @@ Created 5/27/1996 Heikki Tuuri
 #ifdef UNIV_DEBUG
 /* If the following flag is set true, the module will print trace info
 of SQL execution in the UNIV_SQL_DEBUG version */
-bool que_trace_on = false;
 #endif /* UNIV_DEBUG */
 
 /* Short introduction to query graphs
@@ -119,7 +118,6 @@ starts running again. */
 
 void que_var_init() {
 #ifdef UNIV_DEBUG
-  que_trace_on = false;
 #endif /* UNIV_DEBUG */
 }
 
@@ -916,12 +914,6 @@ inline QueThr *que_thr_step(System &sys, QueThr *thr) {
 
   auto old_thr = thr;
 
-#ifdef UNIV_DEBUG
-  if (que_trace_on) {
-    ib_logger(stderr, "To execute: ");
-    que_node_print_info(node);
-  }
-#endif /* UNIV_DEBUG */
   if (type & QUE_NODE_CONTROL_STAT) {
     if (thr->prev_node != que_node_get_parent(node) && que_node_get_next(thr->prev_node)) {
 

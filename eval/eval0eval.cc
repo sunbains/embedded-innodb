@@ -29,12 +29,14 @@ Created 12/29/1997 Heikki Tuuri
 #include "row0sel.h"
 
 /** The RND function seed */
-static ulint eval_rnd = 128367121;
+/** State of the RND() and RND_STR() SQL functions, per thread. */
+static thread_local ulint eval_rnd = 128367121;
 
 /** Dummy adress used when we should allocate a buffer of size 0 in
 eval_node_alloc_val_buf */
 
-static byte eval_dummy;
+/** Value buffer of a zero length value, never written to. */
+static constexpr byte eval_dummy{};
 
 byte *eval_node_alloc_val_buf(que_node_t *node, ulint size) {
   ut_ad(que_node_get_type(node) == QUE_NODE_SYMBOL || que_node_get_type(node) == QUE_NODE_FUNC);
@@ -47,7 +49,7 @@ byte *eval_node_alloc_val_buf(que_node_t *node, ulint size) {
   }
 
   if (size == 0) {
-    data = &eval_dummy;
+    data = const_cast<byte *>(&eval_dummy);
   } else {
     data = (byte *)mem_alloc(size);
   }

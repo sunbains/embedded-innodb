@@ -8,8 +8,6 @@
 #include "sync0sync.h"
 
 #ifdef UNIV_DEBUG
-/** Flag: enable debug output when writing to the log? */
-extern bool log_debug_writes;
 #endif /* UNIV_DEBUG */
 
 

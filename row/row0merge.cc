@@ -62,13 +62,6 @@ Completed by Sunny Bains and Marko Makela
 #ifdef UNIV_DEBUG
 /** Set these in order ot enable debug printout. */
 /* @{ */
-/** Log the outcome of each row_merge_cmp() call, comparing records. */
-static bool row_merge_print_cmp;
-/** Log each record write to temporary file. */
-static bool row_merge_print_write;
-/** Log each row_merge_blocks() call, merging two blocks of records to
-a bigger one. */
-static bool row_merge_print_block;
 /* @} */
 #endif /* UNIV_DEBUG */
 
@@ -823,9 +816,6 @@ static byte *row_merge_write_eof(
   ut_ad(b < block[1]);
   ut_ad(foffs);
 #ifdef UNIV_DEBUG
-  if (row_merge_print_write) {
-    ib_logger(stderr, "row_merge_write %p,%p,%d,%lu EOF\n", (void *)b, (void *)block, fd, (ulong)*foffs);
-  }
 #endif /* UNIV_DEBUG */
 
   *b++ = 0;
@@ -862,13 +852,6 @@ static int row_merge_cmp(
   cmp = cmp_rec_rec_simple(Rec(mrec1), Rec(mrec2), offsets1, offsets2, index);
 
 #ifdef UNIV_DEBUG
-  if (row_merge_print_cmp) {
-    log_err("row_merge_cmp1 ");
-    log_err(Rec(mrec1).to_string());
-    log_err("row_merge_cmp2 ");
-    log_err(Rec(mrec2).to_string());
-    log_err("row_merge_cmp=%d", cmp);
-  }
 #endif /* UNIV_DEBUG */
 
   return (cmp);
@@ -1170,19 +1153,6 @@ static DbErr row_merge_blocks(
   ulint *offsets1;   /* offsets of mrec1 */
 
 #ifdef UNIV_DEBUG
-  if (row_merge_print_block) {
-    ib_logger(
-      stderr,
-      "row_merge_blocks fd=%d ofs=%lu + fd=%d ofs=%lu"
-      " = fd=%d ofs=%lu\n",
-      file->fd,
-      (ulong)*foffs0,
-      file->fd,
-      (ulong)*foffs1,
-      of->fd,
-      (ulong)of->offset
-    );
-  }
 #endif /* UNIV_DEBUG */
 
   heap = row_merge_heap_create(index, &offsets0, &offsets1);
@@ -1272,17 +1242,6 @@ static bool row_merge_blocks_copy(
   ulint *offsets1;   /* dummy offsets */
 
 #ifdef UNIV_DEBUG
-  if (row_merge_print_block) {
-    ib_logger(
-      stderr,
-      "row_merge_blocks_copy fd=%d ofs=%lu"
-      " = fd=%d ofs=%lu\n",
-      file->fd,
-      (ulong)foffs0,
-      of->fd,
-      (ulong)of->offset
-    );
-  }
 #endif /* UNIV_DEBUG */
 
   heap = row_merge_heap_create(index, &offsets0, &offsets1);

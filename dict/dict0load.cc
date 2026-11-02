@@ -394,7 +394,7 @@ DbErr DictLoad::load_columns(Table *table, MemHeap *heap) noexcept {
         /* Use the default charset for
         other than binary columns. */
 
-        prtype = dtype_form_prtype(prtype, data_client_default_charset_coll);
+        prtype = dtype_form_prtype(prtype, DATA_CLIENT_DEFAULT_CHARSET_COLL);
       }
     }
 

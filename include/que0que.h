@@ -40,7 +40,6 @@ class System;
 
 /* If the following flag is set true, the module will print trace info
 of SQL execution in the UNIV_SQL_DEBUG version */
-extern bool que_trace_on;
 
 /** Adds a query graph to the session's list of graphs. */
 
@@ -189,9 +188,8 @@ inline Trx *thr_get_trx(QueThr *thr) /*!< in: query thread */
 in crash recovery.
 @return true if thr is rolling back an incomplete transaction in crash
 recovery */
-inline bool thr_is_recv(const QueThr *thr) /*!< in: query thread */
-{
-  return (trx_is_recv(thr->graph->trx));
+inline bool thr_is_recv(System &sys, const QueThr *thr) {
+  return (trx_is_recv(sys, thr->graph->trx));
 }
 
 /** Gets the first thr in a fork. */

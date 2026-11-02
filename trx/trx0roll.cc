@@ -44,15 +44,8 @@ Created 3/26/1996 Heikki Tuuri
 rollback */
 static constexpr ulint TRX_ROLL_TRUNC_THRESHOLD = 1;
 
-/** In crash recovery, the current trx to be rolled back */
-static Trx *trx_roll_crash_recv_trx = nullptr;
 
-/** In crash recovery we set this to the undo n:o of the current trx to be
-rolled back. Then we can print how many % the rollback has progressed. */
-static int64_t trx_roll_max_undo_no;
 
-/** Auxiliary variable which tells the previous progress % we printed */
-static ulint trx_roll_progress_printed_pct;
 
 TrxRollback::TrxRollback(MemHeap *heap) {
   m_common.type = QUE_NODE_ROLLBACK;
@@ -137,8 +130,8 @@ in crash recovery.
 @return true if trx is an incomplete transaction that is being rolled
 back in crash recovery */
 
-bool TrxRollback::is_recv_trx(const Trx *trx) {
-  return trx == trx_roll_crash_recv_trx;
+bool TrxRollback::is_recv_trx(System &sys, const Trx *trx) {
+  return trx == sys.m_trx_sys->m_recv_rollback_trx;
 }
 
 /** Returns a transaction savepoint taken at this point in time.
@@ -185,10 +178,10 @@ void TrxRollback::rollback_active(System &sys,
 
   ut_a(thr == que_fork_start_command(fork));
 
-  trx_roll_crash_recv_trx = trx;
-  trx_roll_max_undo_no = trx->m_undo_no;
-  trx_roll_progress_printed_pct = 0;
-  rows_to_undo = trx_roll_max_undo_no;
+  sys.m_trx_sys->m_recv_rollback_trx = trx;
+  sys.m_trx_sys->m_recv_rollback_max_undo_no = trx->m_undo_no;
+  sys.m_trx_sys->m_recv_rollback_printed_pct = 0;
+  rows_to_undo = sys.m_trx_sys->m_recv_rollback_max_undo_no;
 
   if (rows_to_undo > 1000000000) {
     rows_to_undo = rows_to_undo / 1000000;
@@ -249,7 +242,7 @@ void TrxRollback::rollback_active(System &sys,
 
   mem_heap_free(heap);
 
-  trx_roll_crash_recv_trx = nullptr;
+  sys.m_trx_sys->m_recv_rollback_trx = nullptr;
 }
 
 void TrxRollback::rollback_or_clean_recovered(System &sys, bool all) {
@@ -586,12 +579,12 @@ try_again:
   /* We print rollback progress info if we are in a crash recovery
   and the transaction has at least 1000 row operations to undo. */
 
-  if (trx == trx_roll_crash_recv_trx && trx_roll_max_undo_no > 1000) {
+  if (trx == sys.m_trx_sys->m_recv_rollback_trx && sys.m_trx_sys->m_recv_rollback_max_undo_no > 1000) {
 
-    progress_pct = 100 - (ulint)((undo_no * 100) / trx_roll_max_undo_no);
+    progress_pct = 100 - (ulint)((undo_no * 100) / sys.m_trx_sys->m_recv_rollback_max_undo_no);
 
-    if (progress_pct != trx_roll_progress_printed_pct) {
-      if (trx_roll_progress_printed_pct == 0) {
+    if (progress_pct != sys.m_trx_sys->m_recv_rollback_printed_pct) {
+      if (sys.m_trx_sys->m_recv_rollback_printed_pct == 0) {
         ib_logger(
           stderr,
           "\nProgress in percents:"
@@ -601,7 +594,7 @@ try_again:
       } else {
         ib_logger(stderr, " %lu", (ulong)progress_pct);
       }
-      trx_roll_progress_printed_pct = progress_pct;
+      sys.m_trx_sys->m_recv_rollback_printed_pct = progress_pct;
     }
   }
 

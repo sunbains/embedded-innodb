@@ -602,7 +602,7 @@ bool Dict::col_name_is_reserved(const char *name) noexcept {
   the program, it should be dealt with here. */
   static_assert(DATA_N_SYS_COLS == 3, "error DATA_N_SYS_COLS != 3");
 
-  static const char *reserved_names[] = {"DB_ROW_ID", "DB_TRX_ID", "DB_ROLL_PTR"};
+  static constexpr const char *reserved_names[] = {"DB_ROW_ID", "DB_TRX_ID", "DB_ROLL_PTR"};
 
   for (ulint i{}; i < std::size(reserved_names); ++i) {
     if (strcasecmp(name, reserved_names[i]) == 0) {
