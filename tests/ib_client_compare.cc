@@ -47,7 +47,7 @@ static row_t in_rows[] = {{"a", "t", 1},  {"b", "u", 2}, {"c", "b", 3},
 #define COL_LEN(n) (sizeof(((row_t *)0)->n))
 
 /** Create an InnoDB database (sub-directory). */
-static ib_err_t create_database(const char *name) {
+static DbErr create_database(const char *name) {
   bool err;
 
   err = ib_database_create(name);
@@ -61,14 +61,14 @@ static ib_err_t create_database(const char *name) {
         c2	VARCHAR(n),
         c3	INT,
         PRIMARY KEY(c1, c2); */
-static ib_err_t create_table(const char *dbname, /*!< in: database name */
+static DbErr create_table(const char *dbname, /*!< in: database name */
                              const char *name)   /*!< in: table name */
 {
-  ib_trx_t ib_trx;
-  ib_id_t table_id = 0;
-  ib_err_t err = DB_SUCCESS;
-  ib_tbl_sch_t ib_tbl_sch = nullptr;
-  ib_idx_sch_t ib_idx_sch = nullptr;
+  Trx * ib_trx;
+  uint64_t table_id = 0;
+  DbErr err = DB_SUCCESS;
+  TableSchema * ib_tbl_sch = nullptr;
+  IndexSchema * ib_idx_sch = nullptr;
   char table_name[IB_MAX_TABLE_NAME_LEN];
 
   snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
@@ -125,12 +125,12 @@ static ib_err_t create_table(const char *dbname, /*!< in: database name */
 }
 
 /** Open a table and return a cursor for the table. */
-static ib_err_t open_table(const char *dbname, /*!< in: database name */
+static DbErr open_table(const char *dbname, /*!< in: database name */
                            const char *name,   /*!< in: table name */
-                           ib_trx_t ib_trx,    /*!< in: transaction */
-                           ib_crsr_t *crsr)    /*!< out: innodb cursor */
+                           Trx * ib_trx,    /*!< in: transaction */
+                           Cursor **crsr)    /*!< out: innodb cursor */
 {
-  ib_err_t err = DB_SUCCESS;
+  DbErr err = DB_SUCCESS;
   char table_name[IB_MAX_TABLE_NAME_LEN];
 
   snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
@@ -141,12 +141,12 @@ static ib_err_t open_table(const char *dbname, /*!< in: database name */
 }
 
 /** INSERT INTO T VALUE('c1', 'c2', c3); */
-static ib_err_t
-insert_rows(ib_crsr_t crsr) /*!< in, out: cursor to use for write */
+static DbErr
+insert_rows(Cursor * crsr) /*!< in, out: cursor to use for write */
 {
   row_t *row;
-  ib_tpl_t tpl = nullptr;
-  ib_err_t err = DB_ERROR;
+  Tuple * tpl = nullptr;
+  DbErr err = DB_ERROR;
 
   tpl = ib_clust_read_tuple_create(crsr);
   assert(tpl != nullptr);
@@ -176,12 +176,12 @@ insert_rows(ib_crsr_t crsr) /*!< in, out: cursor to use for write */
 }
 
 /** UPDATE T SET c3 = c3 + 100 WHERE c1 = 'a'; */
-static ib_err_t update_a_row(ib_crsr_t crsr) {
-  ib_err_t err;
+static DbErr update_a_row(Cursor * crsr) {
+  DbErr err;
   int res = ~0L;
-  ib_tpl_t key_tpl;
-  ib_tpl_t old_tpl = nullptr;
-  ib_tpl_t new_tpl = nullptr;
+  Tuple * key_tpl;
+  Tuple * old_tpl = nullptr;
+  Tuple * new_tpl = nullptr;
 
   /* Create a tuple for searching an index. */
   key_tpl = ib_sec_search_tuple_create(crsr);
@@ -217,7 +217,7 @@ static ib_err_t update_a_row(ib_crsr_t crsr) {
     uint32_t c3;
     ulint c1_len;
     ulint data_len;
-    ib_col_meta_t col_meta;
+    ColMeta col_meta;
 
     err = ib_cursor_read_row(crsr, old_tpl);
     assert(err == DB_SUCCESS);
@@ -278,10 +278,10 @@ static ib_err_t update_a_row(ib_crsr_t crsr) {
 }
 
 /** DELETE RFOM T WHERE c1 = 'b' and c2 = 'z'; */
-static ib_err_t delete_a_row(ib_crsr_t crsr) {
-  ib_err_t err;
+static DbErr delete_a_row(Cursor * crsr) {
+  DbErr err;
   int res = ~0L;
-  ib_tpl_t key_tpl;
+  Tuple * key_tpl;
 
   /* Create a tuple for searching an index. */
   key_tpl = ib_sec_search_tuple_create(crsr);
@@ -312,9 +312,9 @@ static ib_err_t delete_a_row(ib_crsr_t crsr) {
 }
 
 /** SELECT * FROM T; */
-static ib_err_t do_query(ib_crsr_t crsr) {
-  ib_err_t err;
-  ib_tpl_t tpl;
+static DbErr do_query(Cursor * crsr) {
+  DbErr err;
+  Tuple * tpl;
 
   tpl = ib_clust_read_tuple_create(crsr);
   assert(tpl != nullptr);
@@ -368,10 +368,10 @@ static ib_err_t do_query(ib_crsr_t crsr) {
 int reverse_compare(
     /*!< out: 1, 0, -1, if a is greater,
     equal, less than b, respectively */
-    const ib_col_meta_t *col_meta, /*!< in: column meta data */
-    const ib_byte_t *p1,           /*!< in: key */
+    const ColMeta *col_meta, /*!< in: column meta data */
+    const byte *p1,           /*!< in: key */
     ulint p1_len,                  /*!< in: key length */
-    const ib_byte_t *p2,           /*!< in: key */
+    const byte *p2,           /*!< in: key */
     ulint p2_len)                  /*!< in: key length */
 {
   int ret;
@@ -388,9 +388,9 @@ int reverse_compare(
 }
 
 int main(int argc, char *argv[]) {
-  ib_err_t err;
-  ib_crsr_t crsr;
-  ib_trx_t ib_trx;
+  DbErr err;
+  Cursor * crsr;
+  Trx * ib_trx;
   uint64_t version;
 
   (void)argc;

@@ -36,7 +36,7 @@ static void get_all(void) {
   int64_t val;
 
   for (ptr = var_names; *ptr; ++ptr) {
-    ib_err_t err;
+    DbErr err;
 
     err = ib_status_get_i64(*ptr, &val);
     assert(err == DB_SUCCESS);
@@ -46,7 +46,7 @@ static void get_all(void) {
 }
 
 int main(int argc, char **argv) {
-  ib_err_t err;
+  DbErr err;
 
   (void)argc;
   (void)argv;

@@ -37,7 +37,7 @@ typedef struct row_t {
 
 #define COL_LEN(n) (sizeof(((row_t *)0)->n))
 /** Create an InnoDB database (sub-directory). */
-static ib_err_t create_database(const char *name) {
+static DbErr create_database(const char *name) {
   bool err;
 
   err = ib_database_create(name);
@@ -51,14 +51,14 @@ static ib_err_t create_database(const char *name) {
         c2	VARCHAR(n),
         c3	INT,
         PRIMARY KEY(c1, c2); */
-static ib_err_t create_table(const char *dbname, /*!< in: database name */
+static DbErr create_table(const char *dbname, /*!< in: database name */
                              const char *name)   /*!< in: table name */
 {
-  ib_trx_t ib_trx;
-  ib_id_t table_id = 0;
-  ib_err_t err = DB_SUCCESS;
-  ib_tbl_sch_t ib_tbl_sch = nullptr;
-  ib_idx_sch_t ib_idx_sch = nullptr;
+  Trx * ib_trx;
+  uint64_t table_id = 0;
+  DbErr err = DB_SUCCESS;
+  TableSchema * ib_tbl_sch = nullptr;
+  IndexSchema * ib_idx_sch = nullptr;
   char table_name[IB_MAX_TABLE_NAME_LEN];
 
   snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
@@ -114,12 +114,12 @@ static ib_err_t create_table(const char *dbname, /*!< in: database name */
   return (err);
 }
 /** Open a table and return a cursor for the table. */
-static ib_err_t open_table(const char *dbname, /*!< in: database name */
+static DbErr open_table(const char *dbname, /*!< in: database name */
                            const char *name,   /*!< in: table name */
-                           ib_trx_t ib_trx,    /*!< in: transaction */
-                           ib_crsr_t *crsr)    /*!< out: innodb cursor */
+                           Trx * ib_trx,    /*!< in: transaction */
+                           Cursor **crsr)    /*!< out: innodb cursor */
 {
-  ib_err_t err = DB_SUCCESS;
+  DbErr err = DB_SUCCESS;
   char table_name[IB_MAX_TABLE_NAME_LEN];
 
   snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
@@ -130,9 +130,9 @@ static ib_err_t open_table(const char *dbname, /*!< in: database name */
 }
 
 int main(int argc, char *argv[]) {
-  ib_err_t err;
-  ib_crsr_t crsr;
-  ib_trx_t ib_trx;
+  DbErr err;
+  Cursor * crsr;
+  Trx * ib_trx;
   uint64_t version;
 
   (void)argc;
@@ -167,7 +167,7 @@ int main(int argc, char *argv[]) {
   assert(err == DB_SUCCESS);
 
   printf("Test ib_cursor_open_index_using_name doesn't segv");
-  ib_crsr_t index_crsr;
+  Cursor * index_crsr;
   err = ib_cursor_open_index_using_name(crsr, "foobar", &index_crsr);
 
   assert(err == DB_TABLE_NOT_FOUND);

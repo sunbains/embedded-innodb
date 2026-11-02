@@ -43,7 +43,7 @@ including the system tables.
 
 typedef struct visitor_arg {
   FILE *fp;
-  ib_trx_t ib_trx;
+  Trx * ib_trx;
   const char *table_name;
   int cur_col;
   int n_indexes;
@@ -59,7 +59,7 @@ static int visit_tables(void *arg,        /*!< in: callback argument */
 /** Callback functions to list table nams. */
 static int visit_table_list(void *arg,            /*!< User callback arg */
                             const char *name,     /*!< Table name */
-                            ib_tbl_fmt_t tbl_fmt, /*!< Table type */
+                            TableFormat tbl_fmt, /*!< Table type */
                             ulint page_size,      /*!< Table page size */
                             int n_cols,           /*!< No. of cols defined */
                             int n_indexes)        /*!< No. of indexes defined */
@@ -77,7 +77,7 @@ static int visit_table_list(void *arg,            /*!< User callback arg */
 /** Callback functions to traverse a table's schema. */
 static int visit_table(void *arg,            /*!< User callback arg */
                        const char *name,     /*!< Table name */
-                       ib_tbl_fmt_t tbl_fmt, /*!< Table type */
+                       TableFormat tbl_fmt, /*!< Table type */
                        ulint page_size,      /*!< Table page size */
                        int n_cols,           /*!< No. of cols defined */
                        int n_indexes)        /*!< No. of indexes defined */
@@ -109,9 +109,9 @@ static int visit_table(void *arg,            /*!< User callback arg */
 /** Callback functions to traverse a table's schema. */
 static int visit_table_col(void *arg,              /*!< User callback arg */
                            const char *name,       /*!< Column name */
-                           ib_col_type_t col_type, /*!< Column type */
+                           ColType col_type, /*!< Column type */
                            ulint len,              /*!< Column len */
-                           ib_col_attr_t attr)     /*!< Column attributes */
+                           ColAttr attr)     /*!< Column attributes */
 {
   visitor_arg_t *visitor_arg = (visitor_arg_t *)arg;
   FILE *fp = (FILE *)visitor_arg->fp;
@@ -252,7 +252,7 @@ int visit_index_col(void *arg,        /*!< User callback arg */
 }
 
 /** Create an InnoDB database (sub-directory). */
-static ib_err_t create_database(const char *name) {
+static DbErr create_database(const char *name) {
   bool err;
 
   err = ib_database_create(name);
@@ -262,15 +262,15 @@ static ib_err_t create_database(const char *name) {
 }
 
 /** Create a table using InnoDB's internal SQL parser. */
-static ib_err_t create_table(const char *dbname, /*!< in: database name */
+static DbErr create_table(const char *dbname, /*!< in: database name */
                              const char *name,   /*!< in: table name */
                              int n)              /*!< in: table suffix */
 {
-  ib_trx_t ib_trx;
-  ib_id_t table_id = 0;
-  ib_err_t err = DB_SUCCESS;
-  ib_tbl_sch_t ib_tbl_sch = nullptr;
-  ib_idx_sch_t ib_idx_sch = nullptr;
+  Trx * ib_trx;
+  uint64_t table_id = 0;
+  DbErr err = DB_SUCCESS;
+  TableSchema * ib_tbl_sch = nullptr;
+  IndexSchema * ib_idx_sch = nullptr;
   char table_name[IB_MAX_TABLE_NAME_LEN];
 
   snprintf(table_name, sizeof(table_name), "%s/%s%d", dbname, name, n);
@@ -328,15 +328,15 @@ static ib_err_t create_table(const char *dbname, /*!< in: database name */
 }
 
 /* Check whether NULL callbacks work. */
-static const ib_schema_visitor_t table_visitor = {
-    ib_schema_visitor_t::Version::TABLE_AND_INDEX_COL, visit_table_list,
+static const SchemaVisitor table_visitor = {
+    SchemaVisitor::Version::TABLE_AND_INDEX_COL, visit_table_list,
     nullptr, nullptr, nullptr};
 
 /** Read table names only. */
 static int visit_tables_list(void *arg, const char *name, int len)
 /*!< out: 0 on success, nonzero on error */
 {
-  ib_err_t err;
+  DbErr err;
   char *ptr = new char[len + 1];
   visitor_arg_t *visitor_arg = (visitor_arg_t *)arg;
 
@@ -351,15 +351,15 @@ static int visit_tables_list(void *arg, const char *name, int len)
   return (err == DB_SUCCESS ? 0 : -1);
 }
 
-static const ib_schema_visitor_t visitor = {
-    ib_schema_visitor_t::TABLE_AND_INDEX_COL, visit_table, visit_table_col,
+static const SchemaVisitor visitor = {
+    SchemaVisitor::TABLE_AND_INDEX_COL, visit_table, visit_table_col,
     visit_index, visit_index_col};
 
 /** Read a table's schema and print it. */
 static int visit_tables(void *arg, const char *name, int len)
 /*!< out: 0 on success, nonzero on error */
 {
-  ib_err_t err;
+  DbErr err;
   char *ptr = new char[len + 1];
   visitor_arg_t *visitor_arg = (visitor_arg_t *)arg;
 
@@ -377,9 +377,9 @@ static int visit_tables(void *arg, const char *name, int len)
 /** Read the system tables  schema and print it.
 @return	0 on success, nonzero on error */
 static int visit_sys_tables(void) {
-  ib_err_t err;
+  DbErr err;
   visitor_arg_t arg;
-  ib_trx_t ib_trx;
+  Trx * ib_trx;
 
   ib_trx = ib_trx_begin(IB_TRX_SERIALIZABLE);
 
@@ -411,8 +411,8 @@ static int visit_sys_tables(void) {
 /** Iterate over all the tables in the InnoDB data dictionary and print
 their schemas.
 @return	DB_SUCCESS or error code */
-static ib_err_t print_entire_schema(void) {
-  ib_err_t err;
+static DbErr print_entire_schema(void) {
+  DbErr err;
   visitor_arg_t arg;
 
   memset(&arg, 0x0, sizeof(arg));
@@ -436,12 +436,12 @@ static ib_err_t print_entire_schema(void) {
 
 /** Drop the table.
 @return	DB_SUCCESS or error code */
-static ib_err_t drop_table_n(const char *dbname, /*!< in: database name */
+static DbErr drop_table_n(const char *dbname, /*!< in: database name */
                              const char *name,   /*!< in: table to drop */
                              int n)              /*!< in: count */
 {
-  ib_trx_t ib_trx;
-  ib_err_t err = DB_SUCCESS;
+  Trx * ib_trx;
+  DbErr err = DB_SUCCESS;
   char table_name[IB_MAX_TABLE_NAME_LEN];
 
   snprintf(table_name, sizeof(table_name), "%s/%s%d", dbname, name, n);
@@ -463,7 +463,7 @@ static ib_err_t drop_table_n(const char *dbname, /*!< in: database name */
 
 int main(int argc, char *argv[]) {
   int i;
-  ib_err_t err;
+  DbErr err;
 
   (void)argc;
   (void)argv;

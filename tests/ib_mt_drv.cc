@@ -141,14 +141,14 @@ static int num_tables = 0;
 
 /* These are going to be configurable parameters for table
 creation */
-static constexpr ib_tbl_fmt_t tbl_format = IB_TBL_V1;
+static constexpr TableFormat tbl_format = IB_TBL_V1;
 static ulint page_size = 0;
 
 /* Datastructure to hold error statistics for DML and Ddl operations */
 static op_err_t dml_op_errs[DML_OP_TYPE_MAX];
 static op_err_t ddl_op_errs[DDL_OP_TYPE_MAX];
 
-void update_err_stats(op_err_t *e, ib_err_t err) {
+void update_err_stats(op_err_t *e, DbErr err) {
   pthread_mutex_lock(&e->mutex);
   e->n_ops++;
   if (err != DB_SUCCESS) {
@@ -159,7 +159,7 @@ void update_err_stats(op_err_t *e, ib_err_t err) {
 }
 
 /** Create an InnoDB database (sub-directory). */
-static ib_err_t create_database(const char *name) {
+static DbErr create_database(const char *name) {
   bool err;
 
   err = ib_database_create(name);
@@ -169,9 +169,9 @@ static ib_err_t create_database(const char *name) {
 }
 
 /** Drop the database. */
-static ib_err_t drop_database(const char *dbname) /*!< in: db to drop */
+static DbErr drop_database(const char *dbname) /*!< in: db to drop */
 {
-  ib_err_t err;
+  DbErr err;
   err = ib_database_drop(dbname);
 
   return (err);
@@ -180,7 +180,7 @@ static ib_err_t drop_database(const char *dbname) /*!< in: db to drop */
 /** Create test tables at startup */
 static void create_test_table(tbl_class_t *tbl) /*!< in: table to create */
 {
-  ib_err_t err;
+  DbErr err;
   cb_args_t args;
 
   args.trx = nullptr;
@@ -196,8 +196,8 @@ static void create_test_table(tbl_class_t *tbl) /*!< in: table to create */
 /** Seed test table with initial data */
 static void seed_test_table(tbl_class_t *tbl) /*!< in: table to populate */
 {
-  ib_err_t err;
-  ib_trx_t trx;
+  DbErr err;
+  Trx * trx;
   cb_args_t args;
   int i;
 
@@ -207,7 +207,7 @@ static void seed_test_table(tbl_class_t *tbl) /*!< in: table to populate */
   args.tbl = tbl;
 
   for (i = 0; i < n_rows; ++i) {
-    trx = ib_trx_begin(ib_trx_level_t(isolation_level));
+    trx = ib_trx_begin(TrxLevel(isolation_level));
     assert(trx != nullptr);
 
     args.trx = trx;
@@ -247,7 +247,7 @@ static void drop_test_tables(void) {
     args.isolation_level = isolation_level;
     args.err_st = &ddl_op_errs[DDL_OP_TYPE_DROP];
 
-    ib_err_t err = tbl->ddl_fn[DDL_OP_TYPE_DROP](&args);
+    DbErr err = tbl->ddl_fn[DDL_OP_TYPE_DROP](&args);
     assert(err == DB_SUCCESS);
   }
 }
@@ -255,9 +255,9 @@ static void drop_test_tables(void) {
 /** Depending on rollback_percent decides whether to commit or rollback a
 given transaction */
 static void
-commit_or_rollback(ib_trx_t trx, /*!< in: trx to commit or rollback */
+commit_or_rollback(Trx * trx, /*!< in: trx to commit or rollback */
                    int cnt,      /*!< in: trx counter */
-                   ib_err_t err) /*!< in: err from last operation */
+                   DbErr err) /*!< in: err from last operation */
 {
 
   /* We have set rollback_on_timeout therefore we need not to
@@ -280,8 +280,8 @@ commit_or_rollback(ib_trx_t trx, /*!< in: trx to commit or rollback */
 randomly chosen table */
 static void *dml_worker(void *dummy) /*!< in: unused */
 {
-  ib_err_t err;
-  ib_trx_t trx;
+  DbErr err;
+  Trx * trx;
   tbl_class_t *tbl;
   cb_args_t args;
   int j;
@@ -294,7 +294,7 @@ static void *dml_worker(void *dummy) /*!< in: unused */
   args.isolation_level = isolation_level;
   args.batch_size = batch_size;
   do {
-    trx = ib_trx_begin(ib_trx_level_t(isolation_level));
+    trx = ib_trx_begin(TrxLevel(isolation_level));
     assert(trx != nullptr);
 
     /* choose a table randomly */
@@ -342,7 +342,7 @@ static void *ddl_worker(void *dummy) /*!< in: unused */
   args.isolation_level = isolation_level;
   do {
     int j;
-    ib_err_t err;
+    DbErr err;
     tbl_class_t *tbl;
 
     /* wait for Ddl interval */
@@ -509,10 +509,10 @@ static void check_test_tables(void) {
   /* Initialize all table classes as dummy table */
   for (i = 0; i < num_tables; ++i) {
     tbl_class_t *tbl;
-    ib_trx_t trx;
-    ib_err_t err;
+    Trx * trx;
+    DbErr err;
 
-    trx = ib_trx_begin(ib_trx_level_t(isolation_level));
+    trx = ib_trx_begin(TrxLevel(isolation_level));
     assert(trx != nullptr);
 
     tbl = &tbl_array[i];
@@ -533,7 +533,7 @@ static void check_test_tables(void) {
 int main(int argc, char *argv[]) {
   int i;
   void *res;
-  ib_err_t err;
+  DbErr err;
 
   (void)argc;
   (void)argv;

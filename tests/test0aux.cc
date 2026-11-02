@@ -53,7 +53,7 @@ static void create_directory(const char *path) {
 /** Read a value from an integer column in an InnoDB tuple.
 @return	column value */
 
-uint64_t read_int_from_tuple(ib_tpl_t tpl, const ib_col_meta_t *col_meta,
+uint64_t read_int_from_tuple(Tuple * tpl, const ColMeta *col_meta,
                              int i) {
   uint64_t ival = 0;
 
@@ -97,9 +97,9 @@ uint64_t read_int_from_tuple(ib_tpl_t tpl, const ib_col_meta_t *col_meta,
 
 /** Print all columns in a tuple. */
 
-void print_int_col(FILE *stream, const ib_tpl_t tpl, int i,
-                   ib_col_meta_t *col_meta) {
-  ib_err_t err = DB_SUCCESS;
+void print_int_col(FILE *stream, const Tuple * tpl, int i,
+                   ColMeta *col_meta) {
+  DbErr err = DB_SUCCESS;
 
   switch (col_meta->type_len) {
   case 1: {
@@ -175,12 +175,12 @@ void print_char_array(FILE *stream, const char *array, int len) {
 }
 
 /** Print all columns in a tuple. */
-void print_tuple(FILE *stream, const ib_tpl_t tpl) {
+void print_tuple(FILE *stream, const Tuple * tpl) {
   int n_cols = ib_tuple_get_n_cols(tpl);
 
   for (int i = 0; i < n_cols; ++i) {
     ulint data_len;
-    ib_col_meta_t col_meta;
+    ColMeta col_meta;
 
     data_len = ib_col_get_meta(tpl, i, &col_meta);
 
@@ -199,7 +199,7 @@ void print_tuple(FILE *stream, const ib_tpl_t tpl) {
       }
       case IB_FLOAT: {
         float v;
-        ib_err_t err;
+        DbErr err;
 
         err = ib_tuple_read_float(tpl, i, &v);
         assert(err == DB_SUCCESS);
@@ -208,7 +208,7 @@ void print_tuple(FILE *stream, const ib_tpl_t tpl) {
       }
       case IB_DOUBLE: {
         double v;
-        ib_err_t err;
+        DbErr err;
 
         err = ib_tuple_read_double(tpl, i, &v);
         assert(err == DB_SUCCESS);
@@ -240,7 +240,7 @@ void print_tuple(FILE *stream, const ib_tpl_t tpl) {
 
 /** Setup the InnoDB configuration parameters. */
 void test_configure() {
-  ib_err_t err;
+  DbErr err;
 
   create_directory(log_group_home_dir);
 
@@ -363,8 +363,8 @@ void print_usage(const char *progname) {
 }
 
 /** Set the runtime global options. */
-ib_err_t set_global_option(int opt, const char *arg) {
-  ib_err_t err = DB_ERROR;
+DbErr set_global_option(int opt, const char *arg) {
+  DbErr err = DB_ERROR;
 
   /* FIXME: Change numbers to enums or #defines */
   switch (opt) {
@@ -536,23 +536,23 @@ static int config_skip_line(FILE *fp) {
 }
 
 /** Add an element to the config. */
-static void config_add_elem(ib_config_t *config, const ib_string_t *key,
-                            const ib_string_t *val) {
-  ib_var_t *var;
+static void config_add_elem(TestConfig *config, const TestString *key,
+                            const TestString *val) {
+  TestVar *var;
 
   if (config->n_count == 0) {
     int size;
 
     config->n_count = 4;
 
-    size = config->n_count * sizeof(ib_var_t);
-    config->elems = (ib_var_t *)malloc(size);
+    size = config->n_count * sizeof(TestVar);
+    config->elems = (TestVar *)malloc(size);
   } else if (config->n_elems == config->n_count - 1) {
     int size;
 
     config->n_count *= 2;
-    size = config->n_count * sizeof(ib_var_t);
-    config->elems = (ib_var_t *)realloc(config->elems, size);
+    size = config->n_count * sizeof(TestVar);
+    config->elems = (TestVar *)realloc(config->elems, size);
   }
 
   assert(config->n_elems < config->n_count);
@@ -563,13 +563,13 @@ static void config_add_elem(ib_config_t *config, const ib_string_t *key,
   assert(key->ptr != nullptr);
 
   var->name.len = key->len;
-  var->name.ptr = (ib_byte_t *)malloc(var->name.len);
+  var->name.ptr = (byte *)malloc(var->name.len);
   memcpy(var->name.ptr, key->ptr, var->name.len);
 
   /* Value can be NULL for boolean variables */
   if (val->len > 0) {
     var->value.len = val->len;
-    var->value.ptr = (ib_byte_t *)malloc(var->value.len);
+    var->value.ptr = (byte *)malloc(var->value.len);
     memcpy(var->value.ptr, val->ptr, var->value.len);
   }
 
@@ -581,14 +581,14 @@ Lines beginning with '#' are ignored. Characters after '#' (inclusive)
 are also ignored.  Empty lines are also ignored. Variable syntax is:
   \s*var_name\s*=\s*value\s*\n */
 
-int config_parse_file(const char *filename, ib_config_t *config) {
+int config_parse_file(const char *filename, TestConfig *config) {
   int ch;
   FILE *fp;
-  ib_string_t key;
-  ib_string_t val;
-  ib_string_t *str;
-  ib_byte_t name[BUFSIZ];
-  ib_byte_t value[BUFSIZ];
+  TestString key;
+  TestString val;
+  TestString *str;
+  byte name[BUFSIZ];
+  byte value[BUFSIZ];
 
   fp = fopen(filename, "r");
 
@@ -677,7 +677,7 @@ int config_parse_file(const char *filename, ib_config_t *config) {
 
 /** Print the elements. */
 
-void config_print(const ib_config_t *config) {
+void config_print(const TestConfig *config) {
   ulint i;
 
   for (i = 0; i < config->n_elems; ++i) {
@@ -692,7 +692,7 @@ void config_print(const ib_config_t *config) {
 }
 
 /** Free the the elements. */
-void config_free(ib_config_t *config) {
+void config_free(TestConfig *config) {
   ulint i;
 
   for (i = 0; i < config->n_elems; ++i) {
@@ -705,9 +705,9 @@ void config_free(ib_config_t *config) {
 }
 
 /** Drop the table. */
-ib_err_t drop_table(const char *dbname, const char *name) {
-  ib_err_t err;
-  ib_trx_t ib_trx;
+DbErr drop_table(const char *dbname, const char *name) {
+  DbErr err;
+  Trx * ib_trx;
   char table_name[IB_MAX_TABLE_NAME_LEN];
 
   snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
@@ -728,13 +728,13 @@ ib_err_t drop_table(const char *dbname, const char *name) {
 }
 
 /** Truncate the table. */
-ib_err_t truncate_table(const char *dbname, const char *name) {
-  ib_err_t err;
+DbErr truncate_table(const char *dbname, const char *name) {
+  DbErr err;
   char table_name[IB_MAX_TABLE_NAME_LEN];
 
   snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
 
-  ib_id_t table_id;
+  uint64_t table_id;
   err = ib_table_get_id(table_name, &table_id);
   assert(err == DB_SUCCESS);
 

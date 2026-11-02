@@ -1975,7 +1975,7 @@ DbErr RowSel::unlock_for_client(Prebuilt *prebuilt, bool has_latches_on_recs) no
 }
 
 DbErr RowSel::mvcc_fetch(
-  IbRecovery recovery, ib_srch_mode_t mode, Prebuilt *prebuilt, IbMatch match_mode, IbCurOp direction
+  IbRecovery recovery, SearchMode mode, Prebuilt *prebuilt, IbMatch match_mode, IbCurOp direction
 ) noexcept {
   auto index = prebuilt->m_index;
   const auto search_tuple = prebuilt->m_search_tuple;
@@ -2796,7 +2796,7 @@ lock_wait_or_error:
       prebuilt->m_new_rec_locks = 0;
     }
 
-    mode = static_cast<ib_srch_mode_t>(pcur->m_search_mode);
+    mode = static_cast<SearchMode>(pcur->m_search_mode);
 
     goto rec_loop;
   }

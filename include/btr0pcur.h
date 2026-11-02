@@ -78,7 +78,7 @@ struct BtreePcursor {
   struct Ctx {
     Index *m_index{};
     const DTuple *m_tuple{};
-    ib_srch_mode_t m_search_mode{};
+    SearchMode m_search_mode{};
     ulint m_latch_mode{};
     Mtr *m_mtr{};
     SourceLocation m_loc{Current_location()};
@@ -121,7 +121,7 @@ struct BtreePcursor {
    * @param[in] loc             The callers location
    */
   void open_on_user_rec(System &sys, 
-    Index *index, const DTuple *tuple, ib_srch_mode_t mode, ulint latch_mode, Mtr *mtr, SourceLocation loc
+    Index *index, const DTuple *tuple, SearchMode mode, ulint latch_mode, Mtr *mtr, SourceLocation loc
   ) noexcept;
 
   /** Allows setting the persistent cursor manually.
@@ -130,7 +130,7 @@ struct BtreePcursor {
     * @param[in] mode           PAGE_CUR_L, ...
     * @param[in] latch_mode     BTR_SEARCH_LEAF or BTR_MODIFY_LEAF
     */
-  void open_on_user_rec(const PageCursor &page_cursor, ib_srch_mode_t mode, ulint latch_mode) noexcept;
+  void open_on_user_rec(const PageCursor &page_cursor, SearchMode mode, ulint latch_mode) noexcept;
 
   /**
    * @brief Stores the position of the cursor.
@@ -419,7 +419,7 @@ struct BtreePcursor {
    * @param[in] loc             The source location.
    */
   void open(System &sys, 
-    const Index *index, const DTuple *tuple, ib_srch_mode_t search_mode, ulint latch_mode, Mtr *mtr, SourceLocation loc
+    const Index *index, const DTuple *tuple, SearchMode search_mode, ulint latch_mode, Mtr *mtr, SourceLocation loc
   ) noexcept;
 
   /**
@@ -434,7 +434,7 @@ struct BtreePcursor {
    * @param[in] loc             The source location.
    */
   void open_with_no_init(System &sys, 
-    const Index *index, const DTuple *tuple, ib_srch_mode_t search_mode, ulint latch_mode, ulint has_search_latch, Mtr *mtr,
+    const Index *index, const DTuple *tuple, SearchMode search_mode, ulint latch_mode, ulint has_search_latch, Mtr *mtr,
     SourceLocation loc
   ) noexcept;
 
@@ -529,7 +529,7 @@ struct BtreePcursor {
   BtrPcurPositioned m_pos_state{BtrPcurPositioned::UNSET};
 
   /** PAGE_CUR_G, ... */
-  ib_srch_mode_t m_search_mode{};
+  SearchMode m_search_mode{};
 
   /** the transaction, if we know it; otherwise this field is not defined;
   can ONLY BE USED in error prints in fatal assertion failures! */
@@ -814,7 +814,7 @@ inline void BtreePcursor::init(ulint read_level) noexcept {
 }
 
 inline void BtreePcursor::open(System &sys, 
-  const Index *index, const DTuple *tuple, ib_srch_mode_t search_mode, ulint latch_mode, Mtr *mtr, SourceLocation loc
+  const Index *index, const DTuple *tuple, SearchMode search_mode, ulint latch_mode, Mtr *mtr, SourceLocation loc
 ) noexcept {
 
   init(0);
@@ -831,7 +831,7 @@ inline void BtreePcursor::open(System &sys,
 }
 
 inline void BtreePcursor::open_with_no_init(System &sys, 
-  const Index *index, const DTuple *tuple, ib_srch_mode_t search_mode, ulint latch_mode, ulint has_search_latch, Mtr *mtr,
+  const Index *index, const DTuple *tuple, SearchMode search_mode, ulint latch_mode, ulint has_search_latch, Mtr *mtr,
   SourceLocation loc
 ) noexcept {
 

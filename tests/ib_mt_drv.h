@@ -25,7 +25,7 @@ enum ddl_op_type_t {
 };
 
 /* Call back function definition for various DML and Ddl operations */
-typedef ib_err_t fn(void *);
+typedef DbErr fn(void *);
 
 /* to hold statistics of a particular type of operation */
 struct op_err_t {
@@ -53,7 +53,7 @@ struct op_err_t {
 struct tbl_class_t {
   std::string m_name{};
   std::string m_db_name{};
-  ib_tbl_fmt_t format;
+  TableFormat format;
   ulint page_size;
   fn *dml_fn[DML_OP_TYPE_MAX];
   fn *ddl_fn[DDL_OP_TYPE_MAX];
@@ -63,7 +63,7 @@ struct tbl_class_t {
 struct cb_args_t {
   cb_args_t() = default;
 
-  ib_trx_t trx{};
+  Trx * trx{};
   int isolation_level{};
   int run_number{};
   int batch_size{};
@@ -75,4 +75,4 @@ struct cb_args_t {
 /*** Update the error stats
 @param[in,out] e                Error statistics
 @param[in]                      Error code.  */
-void update_err_stats(op_err_t *e, ib_err_t err);
+void update_err_stats(op_err_t *e, DbErr err);

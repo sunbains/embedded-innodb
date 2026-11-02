@@ -793,60 +793,60 @@ bool Srv::printf_innodb_monitor(FILE *ib_stream, bool nowait, ulint *trx_start, 
 void Srv::export_innodb_status() noexcept {
   mutex_enter(&m_innodb_monitor_mutex);
 
-  m_export_vars.innodb_data_pending_reads = m_sys.m_buf_pool->m_n_pend_reads;
-  m_export_vars.innodb_data_pending_writes = m_sys.m_buf_pool->get_n_pending_ios() - m_sys.m_buf_pool->m_n_pend_reads;
-  m_export_vars.innodb_data_pending_fsyncs = m_sys.m_fil->get_pending_log_flushes() + m_sys.m_fil->get_pending_tablespace_flushes();
-  m_export_vars.innodb_data_fsyncs = m_sys.m_fil->get_log_flushes();
-  m_export_vars.innodb_data_read = m_stats.m_data_read;
-  m_export_vars.innodb_data_reads = m_sys.m_buf_pool->m_stat.n_pages_read;
-  m_export_vars.innodb_data_writes = m_sys.m_buf_pool->m_stat.n_pages_written;
-  m_export_vars.innodb_data_written = m_stats.m_data_written;
-  m_export_vars.innodb_buffer_pool_read_requests = m_sys.m_buf_pool->m_stat.n_page_gets;
-  m_export_vars.innodb_buffer_pool_write_requests = m_sys.m_buf_pool->m_write_requests;
-  m_export_vars.innodb_buffer_pool_wait_free = m_stats.m_buf_pool_wait_free;
-  m_export_vars.innodb_buffer_pool_pages_flushed = m_stats.m_buf_pool_flushed;
-  m_export_vars.innodb_buffer_pool_reads = m_stats.m_buf_pool_reads;
-  m_export_vars.innodb_buffer_pool_read_ahead = m_sys.m_buf_pool->m_stat.n_ra_pages_read;
-  m_export_vars.innodb_buffer_pool_read_ahead_evicted = m_sys.m_buf_pool->m_stat.n_ra_pages_evicted;
-  m_export_vars.innodb_buffer_pool_pages_data = UT_LIST_GET_LEN(m_sys.m_buf_pool->m_LRU_list);
-  m_export_vars.innodb_buffer_pool_pages_dirty = UT_LIST_GET_LEN(m_sys.m_buf_pool->m_flush_list);
-  m_export_vars.innodb_buffer_pool_pages_free = UT_LIST_GET_LEN(m_sys.m_buf_pool->m_free_list);
+  m_export_vars.m_data_pending_reads = m_sys.m_buf_pool->m_n_pend_reads;
+  m_export_vars.m_data_pending_writes = m_sys.m_buf_pool->get_n_pending_ios() - m_sys.m_buf_pool->m_n_pend_reads;
+  m_export_vars.m_data_pending_fsyncs = m_sys.m_fil->get_pending_log_flushes() + m_sys.m_fil->get_pending_tablespace_flushes();
+  m_export_vars.m_data_fsyncs = m_sys.m_fil->get_log_flushes();
+  m_export_vars.m_data_read = m_stats.m_data_read;
+  m_export_vars.m_data_reads = m_sys.m_buf_pool->m_stat.n_pages_read;
+  m_export_vars.m_data_writes = m_sys.m_buf_pool->m_stat.n_pages_written;
+  m_export_vars.m_data_written = m_stats.m_data_written;
+  m_export_vars.m_buffer_pool_read_requests = m_sys.m_buf_pool->m_stat.n_page_gets;
+  m_export_vars.m_buffer_pool_write_requests = m_sys.m_buf_pool->m_write_requests;
+  m_export_vars.m_buffer_pool_wait_free = m_stats.m_buf_pool_wait_free;
+  m_export_vars.m_buffer_pool_pages_flushed = m_stats.m_buf_pool_flushed;
+  m_export_vars.m_buffer_pool_reads = m_stats.m_buf_pool_reads;
+  m_export_vars.m_buffer_pool_read_ahead = m_sys.m_buf_pool->m_stat.n_ra_pages_read;
+  m_export_vars.m_buffer_pool_read_ahead_evicted = m_sys.m_buf_pool->m_stat.n_ra_pages_evicted;
+  m_export_vars.m_buffer_pool_pages_data = UT_LIST_GET_LEN(m_sys.m_buf_pool->m_LRU_list);
+  m_export_vars.m_buffer_pool_pages_dirty = UT_LIST_GET_LEN(m_sys.m_buf_pool->m_flush_list);
+  m_export_vars.m_buffer_pool_pages_free = UT_LIST_GET_LEN(m_sys.m_buf_pool->m_free_list);
 
-  ut_d(m_export_vars.innodb_buffer_pool_pages_latched = m_sys.m_buf_pool->get_latched_pages_number());
+  ut_d(m_export_vars.m_buffer_pool_pages_latched = m_sys.m_buf_pool->get_latched_pages_number());
 
-  m_export_vars.innodb_buffer_pool_pages_total = m_sys.m_buf_pool->m_curr_size;
+  m_export_vars.m_buffer_pool_pages_total = m_sys.m_buf_pool->m_curr_size;
 
-  m_export_vars.innodb_buffer_pool_pages_misc =
+  m_export_vars.m_buffer_pool_pages_misc =
     m_sys.m_buf_pool->m_curr_size - UT_LIST_GET_LEN(m_sys.m_buf_pool->m_LRU_list) - UT_LIST_GET_LEN(m_sys.m_buf_pool->m_free_list);
 
-  m_export_vars.innodb_have_atomic_builtins = 1;
-  m_export_vars.innodb_page_size = UNIV_PAGE_SIZE;
-  m_export_vars.innodb_log_waits = m_stats.m_log_waits;
-  m_export_vars.innodb_os_log_written = m_stats.m_os_log_written;
-  m_export_vars.innodb_os_log_fsyncs = m_sys.m_fil->get_log_flushes();
-  m_export_vars.innodb_os_log_pending_fsyncs = m_sys.m_fil->get_pending_log_flushes();
-  m_export_vars.innodb_os_log_pending_writes = m_stats.m_os_log_pending_writes;
-  m_export_vars.innodb_log_write_requests = m_stats.m_log_write_requests;
-  m_export_vars.innodb_log_writes = m_stats.m_log_writes;
-  m_export_vars.innodb_dblwr_pages_written = m_stats.m_dblwr_pages_written;
-  m_export_vars.innodb_dblwr_writes = m_stats.m_dblwr_writes;
-  m_export_vars.innodb_pages_created = m_sys.m_buf_pool->m_stat.n_pages_created;
-  m_export_vars.innodb_pages_read = m_sys.m_buf_pool->m_stat.n_pages_read;
-  m_export_vars.innodb_pages_written = m_sys.m_buf_pool->m_stat.n_pages_written;
-  m_export_vars.innodb_row_lock_waits = m_stats.m_n_lock_wait_count;
-  m_export_vars.innodb_row_lock_current_waits = m_stats.m_n_lock_wait_current_count;
-  m_export_vars.innodb_row_lock_time = m_stats.m_n_lock_wait_time / 1000;
+  m_export_vars.m_have_atomic_builtins = 1;
+  m_export_vars.m_page_size = UNIV_PAGE_SIZE;
+  m_export_vars.m_log_waits = m_stats.m_log_waits;
+  m_export_vars.m_os_log_written = m_stats.m_os_log_written;
+  m_export_vars.m_os_log_fsyncs = m_sys.m_fil->get_log_flushes();
+  m_export_vars.m_os_log_pending_fsyncs = m_sys.m_fil->get_pending_log_flushes();
+  m_export_vars.m_os_log_pending_writes = m_stats.m_os_log_pending_writes;
+  m_export_vars.m_log_write_requests = m_stats.m_log_write_requests;
+  m_export_vars.m_log_writes = m_stats.m_log_writes;
+  m_export_vars.m_dblwr_pages_written = m_stats.m_dblwr_pages_written;
+  m_export_vars.m_dblwr_writes = m_stats.m_dblwr_writes;
+  m_export_vars.m_pages_created = m_sys.m_buf_pool->m_stat.n_pages_created;
+  m_export_vars.m_pages_read = m_sys.m_buf_pool->m_stat.n_pages_read;
+  m_export_vars.m_pages_written = m_sys.m_buf_pool->m_stat.n_pages_written;
+  m_export_vars.m_row_lock_waits = m_stats.m_n_lock_wait_count;
+  m_export_vars.m_row_lock_current_waits = m_stats.m_n_lock_wait_current_count;
+  m_export_vars.m_row_lock_time = m_stats.m_n_lock_wait_time / 1000;
 
   if (m_stats.m_n_lock_wait_count > 0) {
-    m_export_vars.innodb_row_lock_time_avg = (ulint)(m_stats.m_n_lock_wait_time / 1000 / m_stats.m_n_lock_wait_count);
+    m_export_vars.m_row_lock_time_avg = (ulint)(m_stats.m_n_lock_wait_time / 1000 / m_stats.m_n_lock_wait_count);
   } else {
-    m_export_vars.innodb_row_lock_time_avg = 0;
+    m_export_vars.m_row_lock_time_avg = 0;
   }
-  m_export_vars.innodb_row_lock_time_max = m_stats.m_n_lock_max_wait_time / 1000;
-  m_export_vars.innodb_rows_read = m_stats.m_n_rows_read;
-  m_export_vars.innodb_rows_inserted = m_stats.m_n_rows_inserted;
-  m_export_vars.innodb_rows_updated = m_stats.m_n_rows_updated;
-  m_export_vars.innodb_rows_deleted = m_stats.m_n_rows_deleted;
+  m_export_vars.m_row_lock_time_max = m_stats.m_n_lock_max_wait_time / 1000;
+  m_export_vars.m_rows_read = m_stats.m_n_rows_read;
+  m_export_vars.m_rows_inserted = m_stats.m_n_rows_inserted;
+  m_export_vars.m_rows_updated = m_stats.m_n_rows_updated;
+  m_export_vars.m_rows_deleted = m_stats.m_n_rows_deleted;
 
   mutex_exit(&m_innodb_monitor_mutex);
 }

@@ -394,7 +394,7 @@ inline ulint opt_calc_n_fields_from_goodness(ulint goodness) noexcept {
  *
  * @return The corresponding search mode.
  */
-inline ib_srch_mode_t opt_op_to_search_mode(bool asc, ulint op) noexcept {
+inline SearchMode opt_op_to_search_mode(bool asc, ulint op) noexcept {
   if (op == '=') {
     if (asc) {
       return PAGE_CUR_GE;

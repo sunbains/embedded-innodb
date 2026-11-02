@@ -89,7 +89,7 @@ class System {
   reverse creation order.
   @param[in] shutdown           How much work to do before stopping.
   @return DB_SUCCESS or error code. */
-  [[nodiscard]] DbErr shutdown(ib_shutdown_t shutdown) noexcept;
+  [[nodiscard]] DbErr shutdown(ShutdownMode shutdown) noexcept;
 
   /** The configuration this instance was initialized with, normalized by
   init(). Read only after init(). */

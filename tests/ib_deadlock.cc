@@ -59,7 +59,7 @@ static uint32_t n_threads = 2;
 static pthread_barrier_t barrier;
 
 /** Create an InnoDB database (sub-directory). */
-static ib_err_t create_database(const char *name) {
+static DbErr create_database(const char *name) {
   bool err;
 
   err = ib_database_create(name);
@@ -69,15 +69,15 @@ static ib_err_t create_database(const char *name) {
 }
 
 /** CREATE TABLE T (c1 INT, c2 INT, PRIMARY KEY(c1)); */
-static ib_err_t create_table(const char *dbname, /*!< in: database name */
+static DbErr create_table(const char *dbname, /*!< in: database name */
                              const char *name)   /*!< in: table name */
 {
-  ib_trx_t ib_trx;
-  ib_id_t table_id = 0;
-  ib_err_t err = DB_SUCCESS;
-  ib_tbl_sch_t ib_tbl_sch = nullptr;
-  ib_idx_sch_t ib_idx_sch = nullptr;
-  ib_tbl_fmt_t tbl_fmt = IB_TBL_V1;
+  Trx * ib_trx;
+  uint64_t table_id = 0;
+  DbErr err = DB_SUCCESS;
+  TableSchema * ib_tbl_sch = nullptr;
+  IndexSchema * ib_idx_sch = nullptr;
+  TableFormat tbl_fmt = IB_TBL_V1;
   char table_name[IB_MAX_TABLE_NAME_LEN];
 
   snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
@@ -124,12 +124,12 @@ static ib_err_t create_table(const char *dbname, /*!< in: database name */
 }
 
 /** Open a table and return a cursor for the table. */
-static ib_err_t open_table(const char *dbname, /*!< in: database name */
+static DbErr open_table(const char *dbname, /*!< in: database name */
                            const char *name,   /*!< in: table name */
-                           ib_trx_t ib_trx,    /*!< in: transaction */
-                           ib_crsr_t *crsr)    /*!< out: innodb cursor */
+                           Trx * ib_trx,    /*!< in: transaction */
+                           Cursor **crsr)    /*!< out: innodb cursor */
 {
-  ib_err_t err = DB_SUCCESS;
+  DbErr err = DB_SUCCESS;
   char table_name[IB_MAX_TABLE_NAME_LEN];
 
   snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
@@ -140,15 +140,15 @@ static ib_err_t open_table(const char *dbname, /*!< in: database name */
 }
 
 /** INSERT INTO T VALUE(i, i); */
-static ib_err_t
-insert_rows(ib_crsr_t crsr,    /*!< in, out: cursor to use for write */
+static DbErr
+insert_rows(Cursor * crsr,    /*!< in, out: cursor to use for write */
             uint32_t start,    /*!< in: start of column value */
             uint32_t n_values, /*!< in: no. of values to insert */
             int thread_id)     /*!< in: id of thread doing insert */
 {
   uint32_t i;
-  ib_tpl_t tpl;
-  ib_err_t err = DB_SUCCESS;
+  Tuple * tpl;
+  DbErr err = DB_SUCCESS;
 
   tpl = ib_clust_read_tuple_create(crsr);
   assert(tpl != nullptr);
@@ -178,10 +178,10 @@ insert_rows(ib_crsr_t crsr,    /*!< in, out: cursor to use for write */
 /** Run the test. */
 static void *worker_thread(void *arg) {
   int ret;
-  ib_err_t err;
-  ib_trx_t ib_trx;
-  ib_crsr_t crsr1 = nullptr;
-  ib_crsr_t crsr2 = nullptr;
+  DbErr err;
+  Trx * ib_trx;
+  Cursor * crsr1 = nullptr;
+  Cursor * crsr2 = nullptr;
   bool deadlock = false;
   int thread_id = *(int *)arg;
 
@@ -360,8 +360,8 @@ static void set_options(int argc, char *argv[]) {
 
 /** Create the tables required for the test
 @return DB_SUCCESS if all went well.*/
-static ib_err_t create_tables(void) {
-  ib_err_t err;
+static DbErr create_tables(void) {
+  DbErr err;
 
   err = create_table(DATABASE, "T1");
   assert(err == DB_SUCCESS);
@@ -374,8 +374,8 @@ static ib_err_t create_tables(void) {
 
 /** Drop the tables required for the test
 @return DB_SUCCESS if all went well.*/
-static ib_err_t drop_tables(void) {
-  ib_err_t err;
+static DbErr drop_tables(void) {
+  DbErr err;
 
   err = drop_table(DATABASE, "T1");
   assert(err == DB_SUCCESS);
@@ -388,7 +388,7 @@ static ib_err_t drop_tables(void) {
 
 int main(int argc, char *argv[]) {
   int ret;
-  ib_err_t err;
+  DbErr err;
   pthread_t *pthreads;
 
   err = ib_init();

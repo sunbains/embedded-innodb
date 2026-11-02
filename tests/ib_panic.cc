@@ -46,7 +46,7 @@ void db_panic(void *data, int er, char *msg, ...) {
 }
 
 int main(int argc, char **argv) {
-  ib_err_t err;
+  DbErr err;
 
   (void)argc;
   (void)argv;

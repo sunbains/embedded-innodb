@@ -70,7 +70,7 @@ static void get_all() {
 
 /** Function to test our simple config file parser. */
 static void test_config_parser() {
-  ib_config_t config;
+  TestConfig config;
   const char *filename = "test.conf";
 
   memset(&config, 0x0, sizeof(config));

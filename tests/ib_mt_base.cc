@@ -51,12 +51,12 @@ register_test_table() in mt_drv.c
 #endif
 
 /** Open a table and return a cursor for the table. */
-ib_err_t open_table(const char *dbname, /*!< in: database name */
+DbErr open_table(const char *dbname, /*!< in: database name */
                     const char *name,   /*!< in: table name */
-                    ib_trx_t ib_trx,    /*!< in: transaction */
-                    ib_crsr_t *crsr)    /*!< out: innodb cursor */
+                    Trx * ib_trx,    /*!< in: transaction */
+                    Cursor **crsr)    /*!< out: innodb cursor */
 {
-  ib_err_t err = DB_SUCCESS;
+  DbErr err = DB_SUCCESS;
   char table_name[IB_MAX_TABLE_NAME_LEN];
 
   snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
@@ -68,14 +68,14 @@ ib_err_t open_table(const char *dbname, /*!< in: database name */
 #if 0
 /** SELECT * from t */
 static
-ib_err_t
+DbErr
 select_base(
 	void*	arg)	/*!< in: arguments for callback */
 {
-	ib_err_t	err;
-	ib_err_t	err2;
-	ib_tpl_t	tpl = NULL;
-	ib_crsr_t	crsr = NULL;
+	DbErr	err;
+	DbErr	err2;
+	Tuple *	tpl = NULL;
+	Cursor *	crsr = NULL;
 	cb_args_t*	cb_arg = (cb_args_t *)arg;
 	tbl_class_t*	tbl = cb_arg->tbl;
 
@@ -141,17 +141,17 @@ err_exit:
 #endif
 
 /** stub for SELECT * from t */
-ib_err_t select_stub(void *arg) /*!< in: arguments for callback */
+DbErr select_stub(void *arg) /*!< in: arguments for callback */
 {
   (void)arg;
   // usleep(100000);
   return (DB_SUCCESS);
 }
 /** DROP TABLE t */
-static ib_err_t drop_base(void *arg) /*!< in: arguments for callback */
+static DbErr drop_base(void *arg) /*!< in: arguments for callback */
 {
-  ib_err_t err;
-  ib_trx_t ib_trx;
+  DbErr err;
+  Trx * ib_trx;
   char table_name[IB_MAX_TABLE_NAME_LEN];
   cb_args_t *cb_arg = (cb_args_t *)arg;
   tbl_class_t *tbl = cb_arg->tbl;
@@ -180,10 +180,10 @@ static ib_err_t drop_base(void *arg) /*!< in: arguments for callback */
 }
 
 /** TRUNCATE TABLE t */
-static ib_err_t truncate_base(void *arg) /*!< in: arguments for callback */
+static DbErr truncate_base(void *arg) /*!< in: arguments for callback */
 {
-  ib_err_t err;
-  ib_id_t table_id;
+  DbErr err;
+  uint64_t table_id;
   char table_name[IB_MAX_TABLE_NAME_LEN];
   cb_args_t *cb_arg = (cb_args_t *)arg;
   tbl_class_t *tbl = cb_arg->tbl;
@@ -199,7 +199,7 @@ static ib_err_t truncate_base(void *arg) /*!< in: arguments for callback */
 }
 
 /** Function stub */
-static ib_err_t update_base(void *arg) /*!< in: arguments for callback */
+static DbErr update_base(void *arg) /*!< in: arguments for callback */
 {
   (void)arg;
   // fprintf(stderr, "base: UPDATE\n");
@@ -208,7 +208,7 @@ static ib_err_t update_base(void *arg) /*!< in: arguments for callback */
 }
 
 /** Function stub */
-static ib_err_t insert_base(void *arg) /*!< in: arguments for callback */
+static DbErr insert_base(void *arg) /*!< in: arguments for callback */
 {
   (void)arg;
   // fprintf(stderr, "base: INSERT\n");
@@ -217,7 +217,7 @@ static ib_err_t insert_base(void *arg) /*!< in: arguments for callback */
 }
 
 /** Function stub */
-static ib_err_t delete_base(void *arg) /*!< in: arguments for callback */
+static DbErr delete_base(void *arg) /*!< in: arguments for callback */
 {
   (void)arg;
   // fprintf(stderr, "base: DELETE\n");
@@ -226,7 +226,7 @@ static ib_err_t delete_base(void *arg) /*!< in: arguments for callback */
 }
 
 /** Function stub */
-static ib_err_t create_base(void *arg) /*!< in: arguments for callback */
+static DbErr create_base(void *arg) /*!< in: arguments for callback */
 {
   (void)arg;
   // fprintf(stderr, "base: CREATE\n");
@@ -235,7 +235,7 @@ static ib_err_t create_base(void *arg) /*!< in: arguments for callback */
 }
 
 /** Function stub */
-static ib_err_t alter_base(void *arg) /*!< in: arguments for callback */
+static DbErr alter_base(void *arg) /*!< in: arguments for callback */
 {
   (void)arg;
   // fprintf(stderr, "base: ALTER\n");

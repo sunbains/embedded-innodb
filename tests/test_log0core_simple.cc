@@ -14,7 +14,7 @@ Unit tests for LogCore class - simplified integration test
 int main() {
   std::cout << "Running simplified LogCore integration test...\n";
 
-  ib_err_t err;
+  DbErr err;
 
   // Initialize the database
   err = ib_init();

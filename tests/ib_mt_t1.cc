@@ -62,14 +62,14 @@ CREATE TABLE t1
 
 /** CREATE TABLE t1...
 @return DB_SUCCESS or error code */
-static ib_err_t create_t1(void *arg) /*!< in: arguments for callback */
+static DbErr create_t1(void *arg) /*!< in: arguments for callback */
 {
-  ib_trx_t ib_trx;
-  ib_id_t table_id = 0;
-  ib_err_t err = DB_SUCCESS;
-  ib_err_t err2 = DB_SUCCESS;
-  ib_tbl_sch_t ib_tbl_sch = nullptr;
-  ib_idx_sch_t ib_idx_sch = nullptr;
+  Trx * ib_trx;
+  uint64_t table_id = 0;
+  DbErr err = DB_SUCCESS;
+  DbErr err2 = DB_SUCCESS;
+  TableSchema * ib_tbl_sch = nullptr;
+  IndexSchema * ib_idx_sch = nullptr;
   char table_name[IB_MAX_TABLE_NAME_LEN];
   cb_args_t *cb_arg = (cb_args_t *)arg;
   tbl_class_t *tbl = cb_arg->tbl;
@@ -124,7 +124,7 @@ static ib_err_t create_t1(void *arg) /*!< in: arguments for callback */
   assert(err == DB_SUCCESS);
 
   /* create table */
-  ib_trx = ib_trx_begin(ib_trx_level_t(cb_arg->isolation_level));
+  ib_trx = ib_trx_begin(TrxLevel(cb_arg->isolation_level));
   err = ib_schema_lock_exclusive(ib_trx);
   assert(err == DB_SUCCESS);
 
@@ -144,7 +144,7 @@ static ib_err_t create_t1(void *arg) /*!< in: arguments for callback */
 /** ALTER TABLE ...
 TODO: This should have FIC stuff. No-op for now.
 @return DB_SUCCESS or error code */
-static ib_err_t alter_t1(void *arg) /*!< in: arguments for callback */
+static DbErr alter_t1(void *arg) /*!< in: arguments for callback */
 {
   (void)arg;
   // fprintf(stderr, "t1: ALTER\n");
@@ -153,14 +153,14 @@ static ib_err_t alter_t1(void *arg) /*!< in: arguments for callback */
 
 /** INSERT INTO t1 VALUES (<rand 1 char>, <rand 1 char>, 0, run_number, 0)
 @return DB_SUCCESS or error code */
-static ib_err_t insert_t1(void *arg) /*!< in: arguments for callback */
+static DbErr insert_t1(void *arg) /*!< in: arguments for callback */
 {
   int i;
-  ib_err_t err;
+  DbErr err;
   int val = 0;
   int zero = 0;
-  ib_crsr_t crsr = nullptr;
-  ib_tpl_t tpl = nullptr;
+  Cursor * crsr = nullptr;
+  Tuple * tpl = nullptr;
   char *ptr = (char *)malloc(8192);
   cb_args_t *cb_arg = (cb_args_t *)arg;
   tbl_class_t *tbl = cb_arg->tbl;
@@ -223,7 +223,7 @@ static ib_err_t insert_t1(void *arg) /*!< in: arguments for callback */
   }
 
   if (crsr != nullptr) {
-    ib_err_t cur_err;
+    DbErr cur_err;
 
     cur_err = ib_cursor_close(crsr);
     assert(cur_err == DB_SUCCESS);
@@ -238,14 +238,14 @@ static ib_err_t insert_t1(void *arg) /*!< in: arguments for callback */
 /** UPDATE t1 SET score = score + 100 AND upd_run = run_number
 WHERE first == 'a'
 @return DB_SUCCESS or error code */
-static ib_err_t update_t1(void *arg) /*!< in: arguments for callback */
+static DbErr update_t1(void *arg) /*!< in: arguments for callback */
 {
-  ib_err_t err;
+  DbErr err;
   int res = ~0L;
-  ib_tpl_t key_tpl = nullptr;
-  ib_tpl_t old_tpl = nullptr;
-  ib_tpl_t new_tpl = nullptr;
-  ib_crsr_t crsr = nullptr;
+  Tuple * key_tpl = nullptr;
+  Tuple * old_tpl = nullptr;
+  Tuple * new_tpl = nullptr;
+  Cursor * crsr = nullptr;
   cb_args_t *cb_arg = (cb_args_t *)arg;
   tbl_class_t *tbl = cb_arg->tbl;
 
@@ -301,7 +301,7 @@ static ib_err_t update_t1(void *arg) /*!< in: arguments for callback */
     uint32_t score;
     const char *first;
     ulint data_len;
-    ib_col_meta_t col_meta;
+    ColMeta col_meta;
 
     err = ib_cursor_read_row(crsr, old_tpl);
     assert(err == DB_SUCCESS);
@@ -368,7 +368,7 @@ clean_exit:
   }
 
   if (crsr != nullptr) {
-    ib_err_t err2;
+    DbErr err2;
 
     err2 = ib_cursor_close(crsr);
     assert(err2 == DB_SUCCESS);
@@ -380,12 +380,12 @@ clean_exit:
 
 /** DELETE FROM t1 WHERE first == 'x' AND last == 'z'
 @return DB_SUCCESS or error code */
-static ib_err_t delete_t1(void *arg) /*!< in: arguments for callback */
+static DbErr delete_t1(void *arg) /*!< in: arguments for callback */
 {
-  ib_err_t err;
+  DbErr err;
   int res = ~0L;
-  ib_tpl_t key_tpl = nullptr;
-  ib_crsr_t crsr = nullptr;
+  Tuple * key_tpl = nullptr;
+  Cursor * crsr = nullptr;
   cb_args_t *cb_arg = (cb_args_t *)arg;
   tbl_class_t *tbl = cb_arg->tbl;
 
@@ -443,7 +443,7 @@ clean_exit:
   }
 
   if (crsr != nullptr) {
-    ib_err_t err2;
+    DbErr err2;
 
     err2 = ib_cursor_close(crsr);
     assert(err2 == DB_SUCCESS);

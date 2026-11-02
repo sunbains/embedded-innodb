@@ -39,7 +39,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #define TABLE "ib_table_statistics"
 
 /** Create an InnoDB database (sub-directory). */
-static ib_err_t create_database(const char *name) {
+static DbErr create_database(const char *name) {
   bool err;
 
   err = ib_database_create(name);
@@ -56,17 +56,17 @@ static ib_err_t create_database(const char *name) {
         INDEX (a),
         INDEX (b),
 ; */
-static ib_err_t create_table_t2(const char *dbname, /*!< in: database name */
+static DbErr create_table_t2(const char *dbname, /*!< in: database name */
                                 const char *name)   /*!< in: table name */
 {
-  ib_trx_t ib_trx;
-  ib_id_t table_id = 0;
-  ib_err_t err = DB_SUCCESS;
-  ib_tbl_sch_t ib_tbl_sch = nullptr;
-  ib_idx_sch_t ib_idx_sch = nullptr;
-  ib_idx_sch_t ib_idx_sch_a = nullptr;
-  ib_idx_sch_t ib_idx_sch_b = nullptr;
-  ib_tbl_fmt_t tbl_fmt = IB_TBL_V1;
+  Trx * ib_trx;
+  uint64_t table_id = 0;
+  DbErr err = DB_SUCCESS;
+  TableSchema * ib_tbl_sch = nullptr;
+  IndexSchema * ib_idx_sch = nullptr;
+  IndexSchema * ib_idx_sch_a = nullptr;
+  IndexSchema * ib_idx_sch_b = nullptr;
+  TableFormat tbl_fmt = IB_TBL_V1;
   char table_name[IB_MAX_TABLE_NAME_LEN];
 
   snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
@@ -135,12 +135,12 @@ static ib_err_t create_table_t2(const char *dbname, /*!< in: database name */
 }
 
 /** Open a table and return a cursor for the table. */
-static ib_err_t open_table(const char *dbname, /*!< in: database name */
+static DbErr open_table(const char *dbname, /*!< in: database name */
                            const char *name,   /*!< in: table name */
-                           ib_trx_t ib_trx,    /*!< in: transaction */
-                           ib_crsr_t *crsr)    /*!< out: innodb cursor */
+                           Trx * ib_trx,    /*!< in: transaction */
+                           Cursor **crsr)    /*!< out: innodb cursor */
 {
-  ib_err_t err = DB_SUCCESS;
+  DbErr err = DB_SUCCESS;
   char table_name[IB_MAX_TABLE_NAME_LEN];
 
   snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
@@ -151,10 +151,10 @@ static ib_err_t open_table(const char *dbname, /*!< in: database name */
 }
 
 /** INSERT INTO T VALUE(int); */
-static ib_err_t insert_rows(ib_crsr_t crsr, int start, int count) {
+static DbErr insert_rows(Cursor * crsr, int start, int count) {
   int i;
-  ib_err_t err;
-  ib_tpl_t tpl = nullptr;
+  DbErr err;
+  Tuple * tpl = nullptr;
   char *ptr = reinterpret_cast<char *>(malloc(8192));
 
   tpl = ib_clust_read_tuple_create(crsr);
@@ -187,9 +187,9 @@ static ib_err_t insert_rows(ib_crsr_t crsr, int start, int count) {
   return (err);
 }
 
-static void display_table_stats(ib_crsr_t crsr) {
-  ib_err_t err;
-  ib_table_stats_t tstats;
+static void display_table_stats(Cursor * crsr) {
+  DbErr err;
+  TableStats tstats;
   err = ib_get_table_statistics(crsr, &tstats, sizeof(tstats));
   assert(err == DB_SUCCESS);
 
@@ -236,9 +236,9 @@ static void display_table_stats(ib_crsr_t crsr) {
 
 int main(int argc, char *argv[]) {
   int i;
-  ib_err_t err;
-  ib_crsr_t crsr;
-  ib_trx_t ib_trx;
+  DbErr err;
+  Cursor * crsr;
+  Trx * ib_trx;
 
   err = ib_init();
   assert(err == DB_SUCCESS);
@@ -266,7 +266,7 @@ int main(int argc, char *argv[]) {
 
   insert_rows(crsr, 1, 100);
 
-  ib_table_stats_t tstats;
+  TableStats tstats;
   err = ib_get_table_statistics(crsr, &tstats, sizeof(tstats));
   assert(err == DB_SUCCESS);
 
@@ -288,7 +288,7 @@ int main(int argc, char *argv[]) {
     display_table_stats(crsr);
   }
 
-  ib_table_stats_t tstats2;
+  TableStats tstats2;
   err = ib_get_table_statistics(crsr, &tstats2, sizeof(tstats2));
   assert(err == DB_SUCCESS);
 

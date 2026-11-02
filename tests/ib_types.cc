@@ -50,7 +50,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #define TABLE "t"
 
 /** Create an InnoDB database (sub-directory). */
-static ib_err_t create_database(const char *name) {
+static DbErr create_database(const char *name) {
   bool err;
 
   err = ib_database_create(name);
@@ -67,14 +67,14 @@ static ib_err_t create_database(const char *name) {
         c5 BLOB,
         c6 DECIMAL,
         PK(c1));  */
-static ib_err_t create_table(const char *dbname, /*!< in: database name */
+static DbErr create_table(const char *dbname, /*!< in: database name */
                              const char *name)   /*!< in: table name */
 {
-  ib_trx_t ib_trx;
-  ib_id_t table_id = 0;
-  ib_err_t err = DB_SUCCESS;
-  ib_tbl_sch_t ib_tbl_sch = nullptr;
-  ib_idx_sch_t ib_idx_sch = nullptr;
+  Trx * ib_trx;
+  uint64_t table_id = 0;
+  DbErr err = DB_SUCCESS;
+  TableSchema * ib_tbl_sch = nullptr;
+  IndexSchema * ib_idx_sch = nullptr;
   char table_name[IB_MAX_TABLE_NAME_LEN];
 
   snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
@@ -137,12 +137,12 @@ static ib_err_t create_table(const char *dbname, /*!< in: database name */
 }
 
 /** Open a table and return a cursor for the table. */
-static ib_err_t open_table(const char *dbname, /*!< in: database name */
+static DbErr open_table(const char *dbname, /*!< in: database name */
                            const char *name,   /*!< in: table name */
-                           ib_trx_t ib_trx,    /*!< in: transaction */
-                           ib_crsr_t *crsr)    /*!< out: innodb cursor */
+                           Trx * ib_trx,    /*!< in: transaction */
+                           Cursor **crsr)    /*!< out: innodb cursor */
 {
-  ib_err_t err = DB_SUCCESS;
+  DbErr err = DB_SUCCESS;
   char table_name[IB_MAX_TABLE_NAME_LEN];
 
   snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
@@ -153,11 +153,11 @@ static ib_err_t open_table(const char *dbname, /*!< in: database name */
 }
 
 /** INSERT INTO T VALUE(c1, c2, c3, c4, c5, c6); */
-static ib_err_t
-insert_rows(ib_crsr_t crsr) /*!< in, out: cursor to use for write */
+static DbErr
+insert_rows(Cursor * crsr) /*!< in, out: cursor to use for write */
 {
-  ib_err_t err;
-  ib_tpl_t tpl = nullptr;
+  DbErr err;
+  Tuple * tpl = nullptr;
 
   tpl = ib_clust_read_tuple_create(crsr);
   assert(tpl != nullptr);
@@ -194,9 +194,9 @@ insert_rows(ib_crsr_t crsr) /*!< in, out: cursor to use for write */
 }
 
 /** SELECT * FROM T; */
-static ib_err_t do_query(ib_crsr_t crsr) {
-  ib_err_t err;
-  ib_tpl_t tpl;
+static DbErr do_query(Cursor * crsr) {
+  DbErr err;
+  Tuple * tpl;
 
   tpl = ib_clust_read_tuple_create(crsr);
   assert(tpl != nullptr);
@@ -236,9 +236,9 @@ static ib_err_t do_query(ib_crsr_t crsr) {
 }
 
 int main(int argc, char *argv[]) {
-  ib_err_t err;
-  ib_crsr_t crsr;
-  ib_trx_t ib_trx;
+  DbErr err;
+  Cursor * crsr;
+  Trx * ib_trx;
 
   (void)argc;
   (void)argv;

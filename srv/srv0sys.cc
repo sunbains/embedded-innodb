@@ -485,7 +485,7 @@ static bool threads_shutdown(System &sys) noexcept {
  * @param[in] sys               The instance.
  * @param[in] shutdown          How much work to do before stopping.
  */
-static void prepare_for_shutdown(System &sys, ib_shutdown_t shutdown) noexcept {
+static void prepare_for_shutdown(System &sys, ShutdownMode shutdown) noexcept {
   auto &srv = *sys.m_srv;
   auto &log = *sys.m_log;
   auto &trx_sys = *sys.m_trx_sys;
@@ -956,7 +956,7 @@ DbErr System::startup() noexcept {
   return DB_SUCCESS;
 }
 
-DbErr System::shutdown(ib_shutdown_t shutdown) noexcept {
+DbErr System::shutdown(ShutdownMode shutdown) noexcept {
   ut_a(m_srv != nullptr && m_srv->m_was_started);
 
   /* Tell the master thread how much work to do. */

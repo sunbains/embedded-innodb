@@ -221,6 +221,7 @@ ELSE(NOT DISABLE_XA)
 ENDIF(NOT DISABLE_XA)
 
 SET(INNODB_SOURCES
+      api/api0api.cc
       btr/btr0blob.cc btr/btr0btr.cc btr/btr0cur.cc btr/btr0pcur.cc
       buf/buf0buf.cc buf/buf0dblwr.cc
       buf/buf0flu.cc buf/buf0lru.cc buf/buf0rea.cc

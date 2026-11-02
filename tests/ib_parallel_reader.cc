@@ -92,7 +92,7 @@ static void gen_random_data(int n) {
   }
 }
 
-static ib_err_t create_database(const char *name) {
+static DbErr create_database(const char *name) {
   auto err = ib_database_create(name);
 
   ut_a(err);
@@ -100,19 +100,19 @@ static ib_err_t create_database(const char *name) {
   return DB_SUCCESS;
 }
 
-static ib_err_t drop_database(const char *dbname) {
+static DbErr drop_database(const char *dbname) {
   return ib_database_drop(dbname);
 }
 
-static ib_err_t create_table(const char *dbname, const char *name) {
-  ib_id_t table_id = 0;
+static DbErr create_table(const char *dbname, const char *name) {
+  uint64_t table_id = 0;
   char table_name[IB_MAX_TABLE_NAME_LEN];
 
   snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
 
   /* Pass a table page size of 0, ie., use default page size. */
-  ib_tbl_sch_t ib_tbl_sch = nullptr;
-  ib_tbl_fmt_t tbl_fmt = IB_TBL_V1;
+  TableSchema * ib_tbl_sch = nullptr;
+  TableFormat tbl_fmt = IB_TBL_V1;
   auto err = ib_table_schema_create(table_name, &ib_tbl_sch, tbl_fmt, 0);
 
   ut_a(err == DB_SUCCESS);
@@ -125,7 +125,7 @@ static ib_err_t create_table(const char *dbname, const char *name) {
   ut_a(err == DB_SUCCESS);
 
   /* Add primary key */
-  ib_idx_sch_t idx_sch = nullptr;
+  IndexSchema * idx_sch = nullptr;
   err = ib_table_schema_add_index(ib_tbl_sch, "PRIMARY", &idx_sch);
   ut_a(err == DB_SUCCESS);
 
@@ -165,8 +165,8 @@ static ib_err_t create_table(const char *dbname, const char *name) {
   return err;
 }
 
-static ib_err_t open_table(const char *dbname, const char *name,
-                           ib_trx_t ib_trx, ib_crsr_t *crsr) {
+static DbErr open_table(const char *dbname, const char *name,
+                           Trx * ib_trx, Cursor **crsr) {
   char table_name[IB_MAX_TABLE_NAME_LEN];
 
   snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
@@ -176,7 +176,7 @@ static ib_err_t open_table(const char *dbname, const char *name,
   return err;
 }
 
-static void commit(ib_trx_t trx) {
+static void commit(Trx * trx) {
   ut_a(ib_trx_state(trx) != IB_TRX_NOT_STARTED);
   log_info("Commit transaction");
   auto err = ib_trx_commit(trx);
@@ -185,7 +185,7 @@ static void commit(ib_trx_t trx) {
 
 /** Inserts one row into the table.
 @return	error from insert row */
-static ib_err_t insert_one_row(ib_crsr_t crsr, ib_tpl_t tpl, Generator g) {
+static DbErr insert_one_row(Cursor * crsr, Tuple * tpl, Generator g) {
 
   auto err = ib_tuple_write_u32(tpl, 0, g());
   ut_a(err == DB_SUCCESS);
@@ -200,7 +200,7 @@ static ib_err_t insert_one_row(ib_crsr_t crsr, ib_tpl_t tpl, Generator g) {
 
 /** Insert one batch of rows which constitute one transactions.
 @return	an error code or success. */
-static ib_err_t insert_row_batch(ib_crsr_t crsr, int n_rows, Generator g) {
+static DbErr insert_row_batch(Cursor * crsr, int n_rows, Generator g) {
   ut_a(n_rows <= NUMBER_OF_ROWS);
 
   auto tpl = ib_clust_read_tuple_create(crsr);
@@ -234,12 +234,12 @@ static void insert_rows(int n_rows, int batch_size, Generator g) {
 
   log_info("Starting insert of ", n_rows, " rows");
 
-  ib_trx_t trx;
+  Trx * trx;
 
   for (int i = 0; i < n_rows; i += batch_size) {
-    ib_crsr_t crsr;
+    Cursor * crsr;
 
-    trx = ib_trx_begin(ib_trx_level_t(ISOLATION_LEVEL));
+    trx = ib_trx_begin(TrxLevel(ISOLATION_LEVEL));
     ut_a(trx != nullptr);
 
     auto err = open_table(DATABASE, TABLE, trx, &crsr);
@@ -261,7 +261,7 @@ static void insert_rows(int n_rows, int batch_size, Generator g) {
   log_info("Total : ", n_rows, " inserted");
 }
 
-static lint do_query(ib_crsr_t crsr) {
+static lint do_query(Cursor * crsr) {
   auto tpl = ib_clust_read_tuple_create(crsr);
   ut_a(tpl != nullptr);
 
@@ -303,10 +303,10 @@ static lint do_query(ib_crsr_t crsr) {
 static void select_all_rows() {
   log_info("SELECT * FROM ", std::format("{}.{}", DATABASE, TABLE));
 
-  auto trx = ib_trx_begin(ib_trx_level_t(ISOLATION_LEVEL));
+  auto trx = ib_trx_begin(TrxLevel(ISOLATION_LEVEL));
   ut_a(trx != nullptr);
 
-  ib_crsr_t crsr;
+  Cursor * crsr;
   auto err = open_table(DATABASE, TABLE, trx, &crsr);
   ut_a(err == DB_SUCCESS);
 
@@ -331,14 +331,14 @@ static void select_all_rows() {
 static void select_count_star() {
   log_info("SELECT COUNT(*) FROM ", std::format("{}.{}", DATABASE, TABLE));
 
-  auto trx = ib_trx_begin(ib_trx_level_t(ISOLATION_LEVEL));
+  auto trx = ib_trx_begin(TrxLevel(ISOLATION_LEVEL));
   ut_a(trx != nullptr);
 
-  ib_crsr_t crsr;
+  Cursor * crsr;
   auto err = open_table(DATABASE, TABLE, trx, &crsr);
   ut_a(err == DB_SUCCESS);
 
-  std::vector<ib_crsr_t> crsrs;
+  std::vector<Cursor *> crsrs;
 
   crsrs.push_back(crsr);
 

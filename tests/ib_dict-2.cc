@@ -56,7 +56,7 @@ directory. */
 /**
  * Create an InnoDB database (sub-directory).
  */
-static ib_err_t create_database(const char *name) noexcept {
+static DbErr create_database(const char *name) noexcept {
   const auto success = ib_database_create(name);
   assert(success);
 
@@ -68,15 +68,15 @@ static ib_err_t create_database(const char *name) noexcept {
  *
  * @param[in] dbname Database name.
  */
-static ib_err_t drop_database(const char *dbname) noexcept {
+static DbErr drop_database(const char *dbname) noexcept {
   return ib_database_drop(dbname);
 }
 
-static ib_err_t create_table(const char *dbname, const char *name) {
-  ib_id_t table_id{};
-  ib_idx_sch_t idx_sch{};
-  ib_tbl_sch_t ib_tbl_sch{};
-  ib_tbl_fmt_t tbl_fmt = IB_TBL_V1;
+static DbErr create_table(const char *dbname, const char *name) {
+  uint64_t table_id{};
+  IndexSchema * idx_sch{};
+  TableSchema * ib_tbl_sch{};
+  TableFormat tbl_fmt = IB_TBL_V1;
   char table_name[IB_MAX_TABLE_NAME_LEN];
 
   snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);

@@ -45,7 +45,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #define TABLE "ib_ddl"
 
 /** Create an InnoDB database (sub-directory). */
-static ib_err_t create_database(const char *name) {
+static DbErr create_database(const char *name) {
   bool err;
 
   err = ib_database_create(name);
@@ -55,13 +55,13 @@ static ib_err_t create_database(const char *name) {
 }
 
 /** CREATE TABLE T(C1 INT, C2 VARCHAR(10), C3 BLOB); */
-static ib_err_t create_table(const char *dbname, /*!< in: database name */
+static DbErr create_table(const char *dbname, /*!< in: database name */
                              const char *name)   /*!< in: table name */
 {
-  ib_trx_t ib_trx;
-  ib_id_t table_id = 0;
-  ib_err_t err = DB_SUCCESS;
-  ib_tbl_sch_t ib_tbl_sch = nullptr;
+  Trx * ib_trx;
+  uint64_t table_id = 0;
+  DbErr err = DB_SUCCESS;
+  TableSchema * ib_tbl_sch = nullptr;
   char table_name[IB_MAX_TABLE_NAME_LEN];
 
   snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
@@ -107,12 +107,12 @@ static ib_err_t create_table(const char *dbname, /*!< in: database name */
 }
 
 /** Open a table and return a cursor for the table. */
-static ib_err_t open_table(const char *dbname, /*!< in: database name */
+static DbErr open_table(const char *dbname, /*!< in: database name */
                            const char *name,   /*!< in: table name */
-                           ib_trx_t ib_trx,    /*!< in: transaction */
-                           ib_crsr_t *crsr)    /*!< out: innodb cursor */
+                           Trx * ib_trx,    /*!< in: transaction */
+                           Cursor **crsr)    /*!< out: innodb cursor */
 {
-  ib_err_t err = DB_SUCCESS;
+  DbErr err = DB_SUCCESS;
   char table_name[IB_MAX_TABLE_NAME_LEN];
 
   snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
@@ -124,12 +124,12 @@ static ib_err_t open_table(const char *dbname, /*!< in: database name */
 }
 
 /** INSERT INTO T VALUE(0, RANDOM(TEXT), RANDOM(TEXT)); ... 100 */
-static ib_err_t
-insert_random_rows(ib_crsr_t crsr) /*!< in, out: cursor to use for write */
+static DbErr
+insert_random_rows(Cursor * crsr) /*!< in, out: cursor to use for write */
 {
   int32_t i;
-  ib_err_t err;
-  ib_tpl_t tpl;
+  DbErr err;
+  Tuple * tpl;
   char *ptr = new char[8192];
 
   tpl = ib_clust_read_tuple_create(crsr);
@@ -167,14 +167,14 @@ insert_random_rows(ib_crsr_t crsr) /*!< in, out: cursor to use for write */
 
 /** Create a secondary indexes on a table.
 @return	DB_SUCCESS or error code */
-static ib_err_t create_sec_index(const char *table_name, /*!< in: table name */
+static DbErr create_sec_index(const char *table_name, /*!< in: table name */
                                  const char *col_name,   /*!< in: column name */
                                  int prefix_len) /*!< in: prefix index length */
 
 {
-  ib_err_t err;
-  ib_trx_t ib_trx;
-  ib_idx_sch_t ib_idx_sch = nullptr;
+  DbErr err;
+  Trx * ib_trx;
+  IndexSchema * ib_idx_sch = nullptr;
   char index_name[IB_MAX_TABLE_NAME_LEN];
 
   ib_trx = ib_trx_begin(IB_TRX_REPEATABLE_READ);
@@ -190,7 +190,7 @@ static ib_err_t create_sec_index(const char *table_name, /*!< in: table name */
   err = ib_index_schema_add_col(ib_idx_sch, col_name, prefix_len);
   assert(err == DB_SUCCESS);
 
-  ib_id_t index_id = 0;
+  uint64_t index_id = 0;
 
   err = ib_index_create(ib_idx_sch, &index_id);
   assert(index_id > 0);
@@ -211,10 +211,10 @@ static ib_err_t create_sec_index(const char *table_name, /*!< in: table name */
 }
 
 /** Create secondary indexes on T(C1), T(C2), T(C3). */
-static ib_err_t create_sec_index_1(const char *dbname, /*!< in: database name */
+static DbErr create_sec_index_1(const char *dbname, /*!< in: database name */
                                    const char *name)   /*!< in: table to drop */
 {
-  ib_err_t err;
+  DbErr err;
   char table_name[IB_MAX_TABLE_NAME_LEN];
 
   snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
@@ -233,12 +233,12 @@ static ib_err_t create_sec_index_1(const char *dbname, /*!< in: database name */
 }
 
 /** Open the secondary index. */
-static ib_err_t
-open_sec_index(ib_crsr_t crsr,         /*!< in: table cusor */
+static DbErr
+open_sec_index(Cursor * crsr,         /*!< in: table cusor */
                const char *index_name) /*!< in: sec. index to open */
 {
-  ib_err_t err;
-  ib_crsr_t idx_crsr;
+  DbErr err;
+  Cursor * idx_crsr;
 
   err = ib_cursor_open_index_using_name(crsr, index_name, &idx_crsr);
   assert(err == DB_SUCCESS);
@@ -249,12 +249,12 @@ open_sec_index(ib_crsr_t crsr,         /*!< in: table cusor */
   return (err);
 }
 /** Open the secondary indexes on T(C1), T(C2), T(C3). */
-static ib_err_t open_sec_index_1(const char *dbname, /*!< in: database name */
+static DbErr open_sec_index_1(const char *dbname, /*!< in: database name */
                                  const char *name)   /*!< in: table name */
 {
-  ib_crsr_t crsr;
-  ib_trx_t ib_trx;
-  ib_err_t err = DB_SUCCESS;
+  Cursor * crsr;
+  Trx * ib_trx;
+  DbErr err = DB_SUCCESS;
   char index_name[IB_MAX_TABLE_NAME_LEN];
   char table_name[IB_MAX_TABLE_NAME_LEN];
 
@@ -290,14 +290,14 @@ static ib_err_t open_sec_index_1(const char *dbname, /*!< in: database name */
 
 /** Tests creating a index with a name that InnoDB uses for temporary indexs
 @return	DB_SUCCESS or error code */
-static ib_err_t
+static DbErr
 test_create_temp_index(const char *dbname,
                        const char *name,     /*!< in: table name */
                        const char *col_name) /*!< in: column name */
 {
-  ib_err_t err;
-  ib_trx_t ib_trx;
-  ib_idx_sch_t ib_idx_sch = nullptr;
+  DbErr err;
+  Trx * ib_trx;
+  IndexSchema * ib_idx_sch = nullptr;
   char index_name[IB_MAX_TABLE_NAME_LEN];
   char table_name[IB_MAX_TABLE_NAME_LEN];
 
@@ -330,9 +330,9 @@ test_create_temp_index(const char *dbname,
 }
 
 int main(int argc, char *argv[]) {
-  ib_err_t err;
-  ib_crsr_t crsr;
-  ib_trx_t ib_trx;
+  DbErr err;
+  Cursor * crsr;
+  Trx * ib_trx;
 
   (void)argc;
   (void)argv;

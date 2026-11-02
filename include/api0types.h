@@ -25,11 +25,8 @@ modes. */
 
 #include <cstdint>
 
-/** A character set pointer */
-using ib_charset_t = void *;
-
-/** @enum ib_col_type_t  column types that are supported. */
-enum ib_col_type_t : int {
+/** @enum ColType  column types that are supported. */
+enum ColType : int {
   /** Character varying length. The column is not padded. */
   IB_VARCHAR =  1,
 
@@ -70,16 +67,16 @@ enum ib_col_type_t : int {
   IB_CHAR_ANYCHARSET =  13
 };
 
-/** @enum ib_tbl_fmt_t InnoDB table format types */
-enum ib_tbl_fmt_t {
+/** @enum TableFormat InnoDB table format types */
+enum TableFormat {
   IB_TBL_UNKNOWN = 0,
 
   /** Default row format. */
   IB_TBL_V1,
 };
 
-/** @enum ib_col_attr_t InnoDB column attributes */
-enum ib_col_attr_t {
+/** @enum ColAttr InnoDB column attributes */
+enum ColAttr {
   /** No special attributes. */
   IB_COL_NONE = 0,
 
@@ -106,8 +103,8 @@ enum ib_col_attr_t {
 };
 
 /* Note: must match lock0types.h */
-/** @enum ib_lck_mode_t InnoDB lock modes. */
-enum ib_lck_mode_t {
+/** @enum CursorLockMode InnoDB lock modes. */
+enum CursorLockMode {
   /** Intention shared, an intention lock should be used to lock tables */
   IB_LOCK_IS = 0,
 
@@ -130,9 +127,9 @@ enum ib_lck_mode_t {
   IB_LOCK_NUM = IB_LOCK_NONE
 };
 
-/** @enum ib_srch_mode_t InnoDB cursor search modes for ib_cursor_moveto().
+/** @enum SearchMode InnoDB cursor search modes for ib_cursor_moveto().
 Note: Values must match those found in page0cur.h */
-enum ib_srch_mode_t {
+enum SearchMode {
     /** Unsupported. */
     IB_CUR_UNSUPP = 0,
 
@@ -153,8 +150,8 @@ enum ib_srch_mode_t {
   IB_CUR_LE = 4
 };
 
-/** @enum ib_match_mode_t Various match modes used by ib_cursor_moveto() */
-enum ib_match_mode_t {
+/** @enum MatchMode Various match modes used by ib_cursor_moveto() */
+enum MatchMode {
   /** Closest match possible */
   IB_CLOSEST_MATCH,
 
@@ -167,13 +164,13 @@ enum ib_match_mode_t {
   IB_EXACT_PREFIX
 };
 
-/** @struct ib_col_meta_t InnoDB column meta data. */
-struct ib_col_meta_t {
+/** @struct ColMeta InnoDB column meta data. */
+struct ColMeta {
   /** Type of the column */
-  ib_col_type_t  type;
+  ColType  type;
 
   /** Column attributes */
-  ib_col_attr_t  attr;
+  ColAttr  attr;
 
   /** Length of type in bytes. */
   uint32_t  type_len;
@@ -182,16 +179,16 @@ struct ib_col_meta_t {
   uint16_t  client_type;
 
   /** Column charset */
-  ib_charset_t*  charset;
+  void **  charset;
 };
 
 /* Note: Must be in sync with trx0trx.h */
-/** @enum ib_trx_state_t The transaction state can be queried using the
+/** @enum TrxState The transaction state can be queried using the
  * ib_trx_state() function. The InnoDB deadlock monitor can roll back a
  * transaction and users should be prepared for this, especially where there
  * is high contention. The way to determine the state of the transaction is to
  * query it's state and check. */
-enum ib_trx_state_t {
+enum TrxState {
   /** Has not started yet, the transaction has not ben started yet.*/
   IB_TRX_NOT_STARTED,
 
@@ -207,8 +204,8 @@ enum ib_trx_state_t {
 };
 
 /* Note: Must be in sync with TrxIsolation in trx0types.h */
-/** @enum ib_trx_level_t Transaction isolation levels */
-enum ib_trx_level_t {
+/** @enum TrxLevel Transaction isolation levels */
+enum TrxLevel {
   /** Dirty read: non-locking SELECTs are performed so that we do not
    * look at a possible earlier version of a record; thus they are not
    * 'consistent' reads under this isolation level; otherwise like level 2 */
@@ -229,10 +226,10 @@ enum ib_trx_level_t {
   IB_TRX_SERIALIZABLE = 3
 };
 
-/** @enum ib_shutdown_t When ib_shutdown() is called InnoDB may take a long
+/** @enum ShutdownMode When ib_shutdown() is called InnoDB may take a long
  * time to shutdown because of background tasks e.g., purging deleted records.
  * The following flags allow the user to control the shutdown behavior. */
-enum ib_shutdown_t {
+enum ShutdownMode {
   /** Normal shutdown, do insert buffer merge and purge before complete shutdown. */
   IB_SHUTDOWN_NORMAL,
 

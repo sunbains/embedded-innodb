@@ -171,7 +171,7 @@ struct RowSel {
    *         DB_LOCK_TABLE_FULL, DB_CORRUPTION, or DB_TOO_BIG_RECORD.
    */
   [[nodiscard]] DbErr mvcc_fetch(
-    IbRecovery recovery, ib_srch_mode_t mode, Prebuilt *prebuilt, IbMatch match_mode, IbCurOp direction
+    IbRecovery recovery, SearchMode mode, Prebuilt *prebuilt, IbMatch match_mode, IbCurOp direction
   ) noexcept;
 
   /**
@@ -526,7 +526,7 @@ struct Plan {
   DTuple *m_tuple{};
 
   /** search mode: PAGE_CUR_G, ... */
-  ib_srch_mode_t m_mode{};
+  SearchMode m_mode{};
 
   /** number of first fields in the search tuple which must be exactly matched */
   ulint m_n_exact_match{};

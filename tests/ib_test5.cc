@@ -59,7 +59,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #define TABLE "t"
 
 /** Create an InnoDB database (sub-directory). */
-static ib_err_t create_database(const char *name) {
+static DbErr create_database(const char *name) {
   bool err;
 
   err = ib_database_create(name);
@@ -74,15 +74,15 @@ static ib_err_t create_database(const char *name) {
         c3	INT,
         PRIMARY KEY(c1),
         INDEX(c3)); */
-static ib_err_t create_table(const char *dbname, /*!< in: database name */
+static DbErr create_table(const char *dbname, /*!< in: database name */
                              const char *name)   /*!< in: table name */
 {
-  ib_trx_t ib_trx;
-  ib_id_t table_id = 0;
-  ib_err_t err = DB_SUCCESS;
-  ib_tbl_sch_t ib_tbl_sch = nullptr;
-  ib_idx_sch_t ib_idx_sch = nullptr;
-  ib_tbl_fmt_t tbl_fmt = IB_TBL_V1;
+  Trx * ib_trx;
+  uint64_t table_id = 0;
+  DbErr err = DB_SUCCESS;
+  TableSchema * ib_tbl_sch = nullptr;
+  IndexSchema * ib_idx_sch = nullptr;
+  TableFormat tbl_fmt = IB_TBL_V1;
   char table_name[IB_MAX_TABLE_NAME_LEN];
 
   snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
@@ -142,12 +142,12 @@ static ib_err_t create_table(const char *dbname, /*!< in: database name */
 }
 
 /** Open a table and return a cursor for the table. */
-static ib_err_t open_table(const char *dbname, /*!< in: database name */
+static DbErr open_table(const char *dbname, /*!< in: database name */
                            const char *name,   /*!< in: table name */
-                           ib_trx_t ib_trx,    /*!< in: transaction */
-                           ib_crsr_t *crsr)    /*!< out: innodb cursor */
+                           Trx * ib_trx,    /*!< in: transaction */
+                           Cursor **crsr)    /*!< out: innodb cursor */
 {
-  ib_err_t err = DB_SUCCESS;
+  DbErr err = DB_SUCCESS;
   char table_name[IB_MAX_TABLE_NAME_LEN];
 
   snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
@@ -159,12 +159,12 @@ static ib_err_t open_table(const char *dbname, /*!< in: database name */
 }
 
 /** INSERT INTO T VALUE(RANDOM(TEXT), RANDOM(TEXT), 0); */
-static ib_err_t
-insert_random_rows(ib_crsr_t crsr) /*!< in, out: cursor to use for write */
+static DbErr
+insert_random_rows(Cursor * crsr) /*!< in, out: cursor to use for write */
 {
   int32_t i;
-  ib_err_t err;
-  ib_tpl_t tpl;
+  DbErr err;
+  Tuple * tpl;
   char *ptr = (char *)malloc(8192);
 
   tpl = ib_clust_read_tuple_create(crsr);
@@ -202,13 +202,13 @@ insert_random_rows(ib_crsr_t crsr) /*!< in, out: cursor to use for write */
 
 /** UPDATE T SET c1 = RANDOM(string), c3 = MOD(c3 + 1, 10)
         WHERE c3 = MOD(RANDOM(INT), 10); */
-static ib_err_t update_random_rows(ib_crsr_t crsr) {
+static DbErr update_random_rows(Cursor * crsr) {
   int32_t c3;
-  ib_err_t err;
+  DbErr err;
   int32_t key;
   int res = ~0L;
-  ib_crsr_t index_crsr;
-  ib_tpl_t sec_key_tpl;
+  Cursor * index_crsr;
+  Tuple * sec_key_tpl;
 
   /* Open the secondary index. */
   err = ib_cursor_open_index_using_name(crsr, "c3", &index_crsr);
@@ -244,9 +244,9 @@ static ib_err_t update_random_rows(ib_crsr_t crsr) {
     char *ptr;
     const char *first;
     ulint data_len;
-    ib_col_meta_t col_meta;
-    ib_tpl_t old_tpl = nullptr;
-    ib_tpl_t new_tpl = nullptr;
+    ColMeta col_meta;
+    Tuple * old_tpl = nullptr;
+    Tuple * new_tpl = nullptr;
 
     /* Create the tuple instance that we will use to update the
     table. old_tpl is used for reading the existing row and
@@ -369,9 +369,9 @@ static void set_options(int argc, char *argv[]) {
 
 int main(int argc, char *argv[]) {
   int i;
-  ib_err_t err;
-  ib_crsr_t crsr;
-  ib_trx_t ib_trx;
+  DbErr err;
+  Cursor * crsr;
+  Trx * ib_trx;
 
   srandom(time(nullptr));
 

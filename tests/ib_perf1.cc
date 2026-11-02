@@ -62,20 +62,20 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 
 #define MILLION 1000000
 
-typedef enum ib_op_t { INSERT, COPY, JOIN } ib_op_t;
+typedef enum TestOp { INSERT, COPY, JOIN } TestOp;
 
 typedef struct ib_op_time {
   time_t *time;
   int n_elems;
-} ib_op_time_t;
+} TestOpTime;
 
 typedef struct ib_op_stats {
   pthread_mutex_t mutex;
 
-  ib_op_time_t copy;
-  ib_op_time_t join;
-  ib_op_time_t insert;
-} ib_op_stats_t;
+  TestOpTime copy;
+  TestOpTime join;
+  TestOpTime insert;
+} TestOpStats;
 
 static uint32_t n_threads = 1;
 static uint32_t n_rows = MILLION;
@@ -86,13 +86,13 @@ we create compressed tables. It's set via the command line parameter
 --page-size INT */
 static int page_size = 0;
 
-static ib_op_stats_t ib_op_stats;
+static TestOpStats ib_op_stats;
 
 /* Barrier to synchronize all threads */
 static pthread_barrier_t barrier;
 
 /** Allocate memory. */
-static void ib_op_time_alloc(ib_op_time_t *ib_op_time, int n_threads) {
+static void ib_op_time_alloc(TestOpTime *ib_op_time, int n_threads) {
   memset(ib_op_time, 0x0, sizeof(*ib_op_time));
   ib_op_time->time = (time_t *)malloc(sizeof(time_t) * n_threads);
 }
@@ -112,7 +112,7 @@ static void ib_op_stats_alloc(int n_threads) {
 }
 
 /** Inverse of ib_op_time_alloc() */
-static void ib_op_time_free(ib_op_time_t *ib_op_time) {
+static void ib_op_time_free(TestOpTime *ib_op_time) {
   free(ib_op_time->time);
   memset(ib_op_time, 0x0, sizeof(*ib_op_time));
 }
@@ -130,9 +130,9 @@ static void ib_op_stats_free(void) {
 }
 
 /** Add timing info for operation. */
-static void ib_stats_collect(ib_op_t op, time_t elapsed_time) {
+static void ib_stats_collect(TestOp op, time_t elapsed_time) {
   int ret;
-  ib_op_time_t *collect = nullptr;
+  TestOpTime *collect = nullptr;
 
   ret = pthread_mutex_lock(&ib_op_stats.mutex);
   assert(ret == 0);
@@ -160,7 +160,7 @@ static void ib_stats_collect(ib_op_t op, time_t elapsed_time) {
 }
 
 /** Create an InnoDB database (sub-directory). */
-static ib_err_t create_database(const char *name) {
+static DbErr create_database(const char *name) {
   bool err;
 
   err = ib_database_create(name);
@@ -170,15 +170,15 @@ static ib_err_t create_database(const char *name) {
 }
 
 /** CREATE TABLE T (c1 INT, c2 INT, PRIMARY KEY(c1)); */
-static ib_err_t create_table(const char *dbname, /*!< in: database name */
+static DbErr create_table(const char *dbname, /*!< in: database name */
                              const char *name)   /*!< in: table name */
 {
-  ib_trx_t ib_trx;
-  ib_id_t table_id = 0;
-  ib_err_t err = DB_SUCCESS;
-  ib_tbl_sch_t ib_tbl_sch = nullptr;
-  ib_idx_sch_t ib_idx_sch = nullptr;
-  ib_tbl_fmt_t tbl_fmt = IB_TBL_V1;
+  Trx * ib_trx;
+  uint64_t table_id = 0;
+  DbErr err = DB_SUCCESS;
+  TableSchema * ib_tbl_sch = nullptr;
+  IndexSchema * ib_idx_sch = nullptr;
+  TableFormat tbl_fmt = IB_TBL_V1;
   char table_name[IB_MAX_TABLE_NAME_LEN];
 
   snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
@@ -225,8 +225,8 @@ static ib_err_t create_table(const char *dbname, /*!< in: database name */
 }
 
 /** Open a table and return a cursor for the table. */
-static ib_err_t open_table(const char *dbname, const char *name,
-                           ib_trx_t ib_trx, ib_crsr_t *crsr) {
+static DbErr open_table(const char *dbname, const char *name,
+                           Trx * ib_trx, Cursor **crsr) {
   char table_name[IB_MAX_TABLE_NAME_LEN];
 
   snprintf(table_name, sizeof(table_name), "%.64s/%.64s", dbname, name);
@@ -237,14 +237,14 @@ static ib_err_t open_table(const char *dbname, const char *name,
 }
 
 /** INSERT INTO T VALUE(i, i); */
-static ib_err_t
-insert_rows(ib_crsr_t crsr,    /*!< in, out: cursor to use for write */
+static DbErr
+insert_rows(Cursor * crsr,    /*!< in, out: cursor to use for write */
             uint32_t start,    /*!< in: start of column value */
             uint32_t n_values) /*!< in: no. of values to insert */
 {
   uint32_t i;
-  ib_tpl_t tpl = nullptr;
-  ib_err_t err = DB_SUCCESS;
+  Tuple * tpl = nullptr;
+  DbErr err = DB_SUCCESS;
 
   tpl = ib_clust_read_tuple_create(crsr);
   assert(tpl != nullptr);
@@ -271,15 +271,15 @@ insert_rows(ib_crsr_t crsr,    /*!< in, out: cursor to use for write */
 }
 
 /** INSERT INTO T2 SELECT * FROM T2; */
-static ib_err_t
-copy_table(ib_crsr_t dst_crsr, /*!< in, out: dest table */
-           ib_crsr_t src_crsr, /*!< in, out: source table */
+static DbErr
+copy_table(Cursor * dst_crsr, /*!< in, out: dest table */
+           Cursor * src_crsr, /*!< in, out: source table */
            uint32_t n_values)  /*!< in: no. of rows to copy in a batch */
 {
   uint32_t i;
-  ib_tpl_t src_tpl = nullptr;
-  ib_tpl_t dst_tpl = nullptr;
-  ib_err_t err = DB_SUCCESS;
+  Tuple * src_tpl = nullptr;
+  Tuple * dst_tpl = nullptr;
+  DbErr err = DB_SUCCESS;
 
   src_tpl = ib_clust_read_tuple_create(src_crsr);
   assert(src_tpl != nullptr);
@@ -344,15 +344,15 @@ copy_table(ib_crsr_t dst_crsr, /*!< in, out: dest table */
 }
 
 /** SELECT COUNT(*) FROM T1, T2 WHERE T1.c1 = T2.c1; */
-static ib_err_t join_on_c1(ib_crsr_t t1_crsr, /*!< in: table */
-                           ib_crsr_t t2_crsr, /*!< in: table */
+static DbErr join_on_c1(Cursor * t1_crsr, /*!< in: table */
+                           Cursor * t2_crsr, /*!< in: table */
                            uint32_t *count) /*!< in: no. of rows that matched */
 {
-  ib_err_t t2_err;
-  ib_err_t t1_err;
-  ib_trx_t ib_trx;
-  ib_tpl_t t1_tpl = nullptr;
-  ib_tpl_t t2_tpl = nullptr;
+  DbErr t2_err;
+  DbErr t1_err;
+  Trx * ib_trx;
+  Tuple * t1_tpl = nullptr;
+  Tuple * t2_tpl = nullptr;
 
   // printf("Begin transaction\n");
   ib_trx = ib_trx_begin(IB_TRX_REPEATABLE_READ);
@@ -453,14 +453,14 @@ static ib_err_t join_on_c1(ib_crsr_t t1_crsr, /*!< in: table */
 static void *worker_thread(void *arg) {
   int i;
   int ret;
-  ib_err_t err;
+  DbErr err;
   time_t end;
   time_t start;
   uint32_t count = 0;
   char table1[BUFSIZ];
   char table2[BUFSIZ];
-  ib_crsr_t src_crsr = nullptr;
-  ib_crsr_t dst_crsr = nullptr;
+  Cursor * src_crsr = nullptr;
+  Cursor * dst_crsr = nullptr;
   int *table_id = (int *)arg;
   bool positioned = false;
 
@@ -488,7 +488,7 @@ static void *worker_thread(void *arg) {
 
   start = time(nullptr);
   for (i = 0; i < (int)n_rows; i += BATCH_SIZE) {
-    ib_trx_t ib_trx;
+    Trx * ib_trx;
 
     ib_trx = ib_trx_begin(IB_TRX_REPEATABLE_READ);
     assert(ib_trx != nullptr);
@@ -522,7 +522,7 @@ static void *worker_thread(void *arg) {
 
   start = time(nullptr);
   for (i = 0; i < (int)n_rows && err == DB_SUCCESS; i += BATCH_SIZE) {
-    ib_trx_t ib_trx;
+    Trx * ib_trx;
 
     ib_trx = ib_trx_begin(IB_TRX_REPEATABLE_READ);
     assert(ib_trx != nullptr);
@@ -599,7 +599,7 @@ static int op_time_compare(const void *p1, const void *p2) {
 }
 
 /** Sort the elapsed time data and  print to stdout. */
-static void print_data(ib_op_time_t *ib_op_time, const char *title) {
+static void print_data(TestOpTime *ib_op_time, const char *title) {
   int i;
   double avg = 0.0;
   double stdev = 0.0;
@@ -704,7 +704,7 @@ static void print_stats(void) {
 int main(int argc, char *argv[]) {
   int i;
   int ret;
-  ib_err_t err;
+  DbErr err;
   pthread_t *pthreads;
 
   err = ib_init();

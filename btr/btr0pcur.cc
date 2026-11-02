@@ -210,7 +210,7 @@ bool BtreePcursor::restore_position(System &sys, ulint latch_mode, Mtr *mtr, Sou
   auto tuple = index->build_data_tuple(m_old_rec, m_old_n_fields, heap);
 
   /* Save the old search mode of the cursor */
-  ib_srch_mode_t search_mode;
+  SearchMode search_mode;
   auto old_search_mode = m_search_mode;
 
   if (likely(m_rel_pos == BtreeCursorPos::ON)) {
@@ -366,7 +366,7 @@ void BtreePcursor::move_backward_from_page(System &sys, Mtr *mtr) noexcept {
 }
 
 void BtreePcursor::open_on_user_rec(System &sys, 
-  Index *index, const DTuple *tuple, ib_srch_mode_t search_mode, ulint latch_mode, Mtr *mtr, SourceLocation loc
+  Index *index, const DTuple *tuple, SearchMode search_mode, ulint latch_mode, Mtr *mtr, SourceLocation loc
 ) noexcept {
   open(sys, index, tuple, search_mode, latch_mode, mtr, loc);
 
@@ -385,7 +385,7 @@ void BtreePcursor::open_on_user_rec(System &sys,
   }
 }
 
-void BtreePcursor::open_on_user_rec(const PageCursor &page_cursor, ib_srch_mode_t mode, ulint latch_mode) noexcept {
+void BtreePcursor::open_on_user_rec(const PageCursor &page_cursor, SearchMode mode, ulint latch_mode) noexcept {
   m_btr_cur.m_index = const_cast<Index *>(page_cursor.m_index);
 
   auto page_cur = get_page_cur();

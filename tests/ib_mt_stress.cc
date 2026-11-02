@@ -213,7 +213,7 @@ print_random_data(void)
 #endif
 
 /** Create an InnoDB database (sub-directory). */
-static ib_err_t create_database(const char *name) {
+static DbErr create_database(const char *name) {
   bool err;
 
   err = ib_database_create(name);
@@ -223,9 +223,9 @@ static ib_err_t create_database(const char *name) {
 }
 
 /** Drop the database. */
-static ib_err_t drop_database(const char *dbname) /*!< in: db to drop */
+static DbErr drop_database(const char *dbname) /*!< in: db to drop */
 {
-  ib_err_t err;
+  DbErr err;
   err = ib_database_drop(dbname);
 
   return (err);
@@ -241,15 +241,15 @@ static ib_err_t drop_database(const char *dbname) /*!< in: db to drop */
         INDEX(A),
         INDEX(C(255), B(255)),
         INDEX(B(5), C(10), A)); */
-static ib_err_t create_table(const char *dbname, /*!< in: database name */
+static DbErr create_table(const char *dbname, /*!< in: database name */
                              const char *name)   /*!< in: table name */
 {
-  ib_trx_t ib_trx;
-  ib_id_t table_id = 0;
-  ib_err_t err = DB_SUCCESS;
-  ib_tbl_sch_t ib_tbl_sch = nullptr;
-  ib_idx_sch_t idx_sch = nullptr;
-  ib_tbl_fmt_t tbl_fmt = IB_TBL_V1;
+  Trx * ib_trx;
+  uint64_t table_id = 0;
+  DbErr err = DB_SUCCESS;
+  TableSchema * ib_tbl_sch = nullptr;
+  IndexSchema * idx_sch = nullptr;
+  TableFormat tbl_fmt = IB_TBL_V1;
   char table_name[IB_MAX_TABLE_NAME_LEN];
 
   snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
@@ -347,12 +347,12 @@ static ib_err_t create_table(const char *dbname, /*!< in: database name */
 }
 
 /** Open a table and return a cursor for the table. */
-static ib_err_t open_table(const char *dbname, /*!< in: database name */
+static DbErr open_table(const char *dbname, /*!< in: database name */
                            const char *name,   /*!< in: table name */
-                           ib_trx_t ib_trx,    /*!< in: transaction */
-                           ib_crsr_t *crsr)    /*!< out: innodb cursor */
+                           Trx * ib_trx,    /*!< in: transaction */
+                           Cursor **crsr)    /*!< out: innodb cursor */
 {
-  ib_err_t err = DB_SUCCESS;
+  DbErr err = DB_SUCCESS;
   char table_name[IB_MAX_TABLE_NAME_LEN];
 
   snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
@@ -365,11 +365,11 @@ static ib_err_t open_table(const char *dbname, /*!< in: database name */
 /** Depending on rollback_percent decides whether to commit or rollback a
 given transaction */
 static void
-commit_or_rollback(ib_trx_t trx, /*!< in: trx to commit or rollback */
+commit_or_rollback(Trx * trx, /*!< in: trx to commit or rollback */
                    int cnt)      /*!< in: trx counter */
 {
 
-  ib_err_t err;
+  DbErr err;
 
   if (ib_trx_state(trx) == IB_TRX_NOT_STARTED) {
     err = ib_trx_release(trx);
@@ -387,12 +387,12 @@ commit_or_rollback(ib_trx_t trx, /*!< in: trx to commit or rollback */
 
 /** Inserts one row into the table.
 @return	error from insert row */
-static ib_err_t
-insert_one_row(ib_crsr_t crsr, /*!< in, out: cursor to use for write */
-               ib_tpl_t tpl)   /*!< in: tpl to work on */
+static DbErr
+insert_one_row(Cursor * crsr, /*!< in, out: cursor to use for write */
+               Tuple * tpl)   /*!< in: tpl to work on */
 {
   int j;
-  ib_err_t err;
+  DbErr err;
 
   err = ib_tuple_write_u32(tpl, 0, random() % num_rows);
   assert(err == DB_SUCCESS);
@@ -415,13 +415,13 @@ insert_one_row(ib_crsr_t crsr, /*!< in, out: cursor to use for write */
 
 /** Insert one batch of rows which constitute one transactions.
 @return	number of row inserted we return on first error. */
-static int insert_row_batch(ib_crsr_t crsr, /*!< in, out: cursor to use */
+static int insert_row_batch(Cursor * crsr, /*!< in, out: cursor to use */
                             int n_rows,     /*!< in: num rows to insert */
-                            ib_err_t *err)  /*!< out: error code */
+                            DbErr *err)  /*!< out: error code */
 {
   int i;
   int cnt = 0;
-  ib_tpl_t tpl;
+  Tuple * tpl;
 
   assert(n_rows <= num_rows);
 
@@ -473,15 +473,15 @@ static void *ins_worker(void *dummy) /*!< in: unused */
 
   printf("ins_worker up\n");
   do {
-    ib_trx_t trx;
-    ib_crsr_t crsr;
-    ib_err_t err;
-    ib_err_t ins_err = DB_SUCCESS;
+    Trx * trx;
+    Cursor * crsr;
+    DbErr err;
+    DbErr ins_err = DB_SUCCESS;
 
     ++cnt;
 
     // printf("Begin INSERT transaction\n");
-    trx = ib_trx_begin(ib_trx_level_t(isolation_level));
+    trx = ib_trx_begin(TrxLevel(isolation_level));
     assert(trx != nullptr);
 
     err = open_table(DATABASE, TABLE, trx, &crsr);
@@ -509,15 +509,15 @@ static void *ins_worker(void *dummy) /*!< in: unused */
 
 /** Update one row in the table.
 @return	error returned from ib_crsr_moveto() or ib_cursor_update_row() */
-static ib_err_t update_one_row(ib_crsr_t crsr) /*!< in: cursor on the table
+static DbErr update_one_row(Cursor * crsr) /*!< in: cursor on the table
                                                or the secondary index */
 {
   int j;
-  ib_err_t err;
-  ib_tpl_t old_tpl;
-  ib_tpl_t new_tpl;
+  DbErr err;
+  Tuple * old_tpl;
+  Tuple * new_tpl;
   ulint data_len;
-  ib_col_meta_t col_meta;
+  ColMeta col_meta;
 
   /* Create the tuple instance that we will use to update the
   table. old_tpl is used for reading the existing row and
@@ -558,7 +558,7 @@ static ib_err_t update_one_row(ib_crsr_t crsr) /*!< in: cursor on the table
 }
 
 /** Update or delete a batch of rows that constitute one transaction. */
-static void process_row_batch(ib_crsr_t crsr,    /*!< in, out: cursor to use
+static void process_row_batch(Cursor * crsr,    /*!< in, out: cursor to use
                                                  for write */
                               enum op_type type, /*!< in: DML_OP_TYPE_UPDATE or
                                                  DML_OP_TYPE_DELETE */
@@ -567,8 +567,8 @@ static void process_row_batch(ib_crsr_t crsr,    /*!< in, out: cursor to use
   int i;
   int key;
   int res = ~0L;
-  ib_crsr_t index_crsr;
-  ib_err_t err = DB_SUCCESS;
+  Cursor * index_crsr;
+  DbErr err = DB_SUCCESS;
 
   assert(n_rows <= num_rows);
 
@@ -584,7 +584,7 @@ static void process_row_batch(ib_crsr_t crsr,    /*!< in, out: cursor to use
 
   for (i = 0; i < n_rows && err != DB_DEADLOCK && err != DB_LOCK_WAIT_TIMEOUT;
        ++i) {
-    ib_tpl_t sec_key_tpl;
+    Tuple * sec_key_tpl;
 
     /* Create a tuple for searching the secondary index. */
     sec_key_tpl = ib_sec_search_tuple_create(index_crsr);
@@ -637,9 +637,9 @@ TODO: It may be that multiple rows match the where clause. Currently we
 just update the first row that matches the where clause. */
 static void *upd_worker(void *dummy) /*!< in: unused */
 {
-  ib_trx_t trx;
-  ib_crsr_t crsr;
-  ib_err_t err;
+  Trx * trx;
+  Cursor * crsr;
+  DbErr err;
   int cnt = 0;
 
   (void)dummy;
@@ -648,7 +648,7 @@ static void *upd_worker(void *dummy) /*!< in: unused */
   while (1) {
     ++cnt;
     // printf("Begin UPDATE transaction\n");
-    trx = ib_trx_begin(ib_trx_level_t(isolation_level));
+    trx = ib_trx_begin(TrxLevel(isolation_level));
     assert(trx != nullptr);
 
     err = open_table(DATABASE, TABLE, trx, &crsr);
@@ -685,13 +685,13 @@ static void *del_worker(void *dummy) /*!< in: unused */
 
   printf("del_worker up\n");
   do {
-    ib_trx_t trx;
-    ib_crsr_t crsr;
-    ib_err_t err;
+    Trx * trx;
+    Cursor * crsr;
+    DbErr err;
 
     ++cnt;
     // printf("Begin DELETE transaction\n");
-    trx = ib_trx_begin(ib_trx_level_t(isolation_level));
+    trx = ib_trx_begin(TrxLevel(isolation_level));
     assert(trx != nullptr);
 
     err = open_table(DATABASE, TABLE, trx, &crsr);
@@ -712,9 +712,9 @@ static void *del_worker(void *dummy) /*!< in: unused */
 }
 
 /** SELECT * FROM blobt3; */
-static ib_err_t do_query(ib_crsr_t crsr) {
-  ib_err_t err;
-  ib_tpl_t tpl;
+static DbErr do_query(Cursor * crsr) {
+  DbErr err;
+  Tuple * tpl;
 
   tpl = ib_clust_read_tuple_create(crsr);
   assert(tpl != nullptr);
@@ -756,18 +756,18 @@ static ib_err_t do_query(ib_crsr_t crsr) {
 /** SELECT * FROM blobt3; */
 static void *sel_worker(void *dummy) /*!< in: unused */
 {
-  ib_crsr_t crsr;
-  ib_err_t err;
+  Cursor * crsr;
+  DbErr err;
 
   (void)dummy;
 
   printf("sel_worker up\n");
 
   do {
-    ib_trx_t trx;
+    Trx * trx;
 
     // printf("Begin SELECT transaction\n");
-    trx = ib_trx_begin(ib_trx_level_t(isolation_level));
+    trx = ib_trx_begin(TrxLevel(isolation_level));
     assert(trx != nullptr);
 
     err = open_table(DATABASE, TABLE, trx, &crsr);
@@ -966,9 +966,9 @@ int main(int argc, char *argv[]) {
   int i;
   int cnt;
   void *res;
-  ib_err_t err;
-  ib_crsr_t crsr;
-  ib_trx_t ib_trx;
+  DbErr err;
+  Cursor * crsr;
+  Trx * ib_trx;
   time_t start_time;
 
   (void)argc;
@@ -999,7 +999,7 @@ int main(int argc, char *argv[]) {
   for (i = 0; i < num_rows; ++i) {
     /* Insert initial rows */
     // printf("Begin transaction\n");
-    ib_trx = ib_trx_begin(ib_trx_level_t(isolation_level));
+    ib_trx = ib_trx_begin(TrxLevel(isolation_level));
     assert(ib_trx != nullptr);
 
     err = open_table(DATABASE, TABLE, ib_trx, &crsr);

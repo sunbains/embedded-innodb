@@ -51,7 +51,7 @@ TODO: Test limits, SQL_NULL and data mismatch handling.
 #define TABLE "t"
 
 /** Create an InnoDB database (sub-directory). */
-static ib_err_t create_database(const char *name) {
+static DbErr create_database(const char *name) {
   bool err;
 
   err = ib_database_create(name);
@@ -65,14 +65,14 @@ static ib_err_t create_database(const char *name) {
         blob	VARCHAR(n),
         count	INT,
         PRIMARY KEY(vchar); */
-static ib_err_t create_table(const char *dbname, /*!< in: database name */
+static DbErr create_table(const char *dbname, /*!< in: database name */
                              const char *name,   /*!< in: table name */
                              int size)           /*!< in: int size in bits */
 {
-  ib_trx_t ib_trx;
-  ib_id_t table_id = 0;
-  ib_err_t err = DB_SUCCESS;
-  ib_tbl_sch_t ib_tbl_sch = nullptr;
+  Trx * ib_trx;
+  uint64_t table_id = 0;
+  DbErr err = DB_SUCCESS;
+  TableSchema * ib_tbl_sch = nullptr;
   char table_name[IB_MAX_TABLE_NAME_LEN];
 
   assert(size == 8 || size == 16 || size == 32 || size == 64);
@@ -113,13 +113,13 @@ static ib_err_t create_table(const char *dbname, /*!< in: database name */
 }
 
 /** Open a table and return a cursor for the table. */
-static ib_err_t open_table(const char *dbname, /*!< in: database name */
+static DbErr open_table(const char *dbname, /*!< in: database name */
                            const char *name,   /*!< in: table name */
                            int size,           /*!< in: int size in bits */
-                           ib_trx_t ib_trx,    /*!< in: transaction */
-                           ib_crsr_t *crsr)    /*!< out: innodb cursor */
+                           Trx * ib_trx,    /*!< in: transaction */
+                           Cursor **crsr)    /*!< out: innodb cursor */
 {
-  ib_err_t err = DB_SUCCESS;
+  DbErr err = DB_SUCCESS;
   char table_name[IB_MAX_TABLE_NAME_LEN];
 
   assert(size == 8 || size == 16 || size == 32 || size == 64);
@@ -134,12 +134,12 @@ static ib_err_t open_table(const char *dbname, /*!< in: database name */
 
 /** INSERT INTO Tn VALUE(1, -1);
 INSERT INTO Tn VALUE(100, -100); */
-static ib_err_t insert(ib_crsr_t crsr, /*!< in, out: cursor to use for write */
+static DbErr insert(Cursor * crsr, /*!< in, out: cursor to use for write */
                        int size)       /*!< in: int size in bits */
 {
   int i;
-  ib_err_t err;
-  ib_tpl_t tpl;
+  DbErr err;
+  Tuple * tpl;
 
   assert(size == 8 || size == 16 || size == 32 || size == 64);
 
@@ -211,9 +211,9 @@ static ib_err_t insert(ib_crsr_t crsr, /*!< in, out: cursor to use for write */
 }
 
 /** Check int  columns in a tuple. */
-static void read_col(const ib_tpl_t tpl, int i, ib_col_meta_t *col_meta,
+static void read_col(const Tuple * tpl, int i, ColMeta *col_meta,
                      int *c) {
-  ib_err_t err = DB_SUCCESS;
+  DbErr err = DB_SUCCESS;
 
   switch (col_meta->type_len) {
   case 1: {
@@ -280,8 +280,8 @@ static void read_col(const ib_tpl_t tpl, int i, ib_col_meta_t *col_meta,
 }
 
 /** Check that the column value read matches what was written. */
-static void check_row(ib_tpl_t tpl, int *c1, int *c2) {
-  ib_col_meta_t col_meta;
+static void check_row(Tuple * tpl, int *c1, int *c2) {
+  ColMeta col_meta;
 
   ib_col_get_meta(tpl, 0, &col_meta);
   assert(col_meta.type == IB_INT);
@@ -297,9 +297,9 @@ static void check_row(ib_tpl_t tpl, int *c1, int *c2) {
 }
 
 /** SELECT * FROM T; */
-static ib_err_t read_rows(ib_crsr_t crsr) {
-  ib_tpl_t tpl;
-  ib_err_t err;
+static DbErr read_rows(Cursor * crsr) {
+  Tuple * tpl;
+  DbErr err;
   int c1 = 0;
   int c2 = 0;
 
@@ -343,12 +343,12 @@ static ib_err_t read_rows(ib_crsr_t crsr) {
 }
 
 /** Drop the table. */
-static ib_err_t drop_table_n(const char *dbname, /*!< in: database name */
+static DbErr drop_table_n(const char *dbname, /*!< in: database name */
                              const char *name,   /*!< in: table to drop */
                              int size)           /*!< in: int size in bits */
 {
-  ib_err_t err;
-  ib_trx_t ib_trx;
+  DbErr err;
+  Trx * ib_trx;
   char table_name[IB_MAX_TABLE_NAME_LEN];
 
   snprintf(table_name, sizeof(table_name), "%s/%s%d", dbname, name, size);
@@ -369,9 +369,9 @@ static ib_err_t drop_table_n(const char *dbname, /*!< in: database name */
 
 int main(int argc, char *argv[]) {
   int i;
-  ib_err_t err;
-  ib_crsr_t crsr;
-  ib_trx_t ib_trx;
+  DbErr err;
+  Cursor * crsr;
+  Trx * ib_trx;
   int size = 8;
 
   (void)argc;

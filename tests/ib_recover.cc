@@ -49,7 +49,7 @@ static const int C2_MAX_LEN = 256;
 static const int C3_MAX_LEN = 8192;
 
 /** Create an InnoDB database (sub-directory). */
-static ib_err_t create_database(const char *name) {
+static DbErr create_database(const char *name) {
   bool err;
 
   err = ib_database_create(name);
@@ -59,14 +59,14 @@ static ib_err_t create_database(const char *name) {
 }
 
 /** CREATE TABLE T(c1 INT, c2 VARCHAR(n), c3 BLOB, PK(c1)); */
-static ib_err_t create_table(const char *dbname, /*!< in: database name */
+static DbErr create_table(const char *dbname, /*!< in: database name */
                              const char *name)   /*!< in: table name */
 {
-  ib_trx_t ib_trx;
-  ib_id_t table_id = 0;
-  ib_err_t err = DB_SUCCESS;
-  ib_tbl_sch_t ib_tbl_sch = nullptr;
-  ib_idx_sch_t ib_idx_sch = nullptr;
+  Trx * ib_trx;
+  uint64_t table_id = 0;
+  DbErr err = DB_SUCCESS;
+  TableSchema * ib_tbl_sch = nullptr;
+  IndexSchema * ib_idx_sch = nullptr;
   char table_name[IB_MAX_TABLE_NAME_LEN];
 
   snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
@@ -114,12 +114,12 @@ static ib_err_t create_table(const char *dbname, /*!< in: database name */
 }
 
 /** Open a table and return a cursor for the table. */
-static ib_err_t open_table(const char *dbname, /*!< in: database name */
+static DbErr open_table(const char *dbname, /*!< in: database name */
                            const char *name,   /*!< in: table name */
-                           ib_trx_t ib_trx,    /*!< in: transaction */
-                           ib_crsr_t *crsr)    /*!< out: innodb cursor */
+                           Trx * ib_trx,    /*!< in: transaction */
+                           Cursor **crsr)    /*!< out: innodb cursor */
 {
-  ib_err_t err = DB_SUCCESS;
+  DbErr err = DB_SUCCESS;
   char table_name[IB_MAX_TABLE_NAME_LEN];
 
   snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
@@ -130,15 +130,15 @@ static ib_err_t open_table(const char *dbname, /*!< in: database name */
 }
 
 /** INSERT INTO T VALUE(N, RANDOM(n), RANDOM(n)); */
-static ib_err_t
-insert_rows(ib_crsr_t crsr, /*!< in, out: cursor to use for write */
+static DbErr
+insert_rows(Cursor * crsr, /*!< in, out: cursor to use for write */
             int start,      /*!< in: in: start of c1 value */
             int count)      /*!< in: number of rows to insert */
 {
   int i;
   int dups = 0;
-  ib_tpl_t tpl = nullptr;
-  ib_err_t err = DB_ERROR;
+  Tuple * tpl = nullptr;
+  DbErr err = DB_ERROR;
   char *ptr = new char[8192];
 
   assert(ptr != nullptr);
@@ -202,9 +202,9 @@ static void set_options(int argc, char *argv[]) {
   }
 }
 
-static ib_err_t test_phase_I() {
+static DbErr test_phase_I() {
   int i;
-  ib_err_t err;
+  DbErr err;
   int dups = 0;
 
   err = create_database(DATABASE);
@@ -214,8 +214,8 @@ static ib_err_t test_phase_I() {
   assert(err == DB_SUCCESS);
 
   for (i = 0; i < N_TRX; ++i) {
-    ib_crsr_t crsr;
-    ib_trx_t ib_trx;
+    Cursor * crsr;
+    Trx * ib_trx;
 
     ib_trx = ib_trx_begin(IB_TRX_REPEATABLE_READ);
     assert(ib_trx != nullptr);
