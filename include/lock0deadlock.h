@@ -23,6 +23,8 @@ Deadlock detection and resolution
 
 #pragma once
 
+class System;
+
 #include <stack>
 #include <vector>
 #include "lock0types.h"

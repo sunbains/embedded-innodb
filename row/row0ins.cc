@@ -196,7 +196,7 @@ DbErr RowInsert::sec_index_entry_by_modify(
   } else {
     ut_a(mode == BTR_MODIFY_TREE);
 
-    auto buf_pool = m_sys.m_buf_pool;
+    auto buf_pool = m_sys.m_buf_pool.get();
 
     if (unlikely(buf_pool->m_LRU->buf_pool_running_out())) {
       err = DB_LOCK_TABLE_FULL;
@@ -252,7 +252,7 @@ DbErr RowInsert::clust_index_entry_by_modify(
 
     ut_a(mode == BTR_MODIFY_TREE);
 
-    auto buf_pool = m_sys.m_buf_pool;
+    auto buf_pool = m_sys.m_buf_pool.get();
 
     if (unlikely(buf_pool->m_LRU->buf_pool_running_out())) {
 
@@ -908,7 +908,7 @@ DbErr RowInsert::check_foreign_constraint(
   MemHeap *heap = nullptr;
   std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
   RecOffs offsets(offsets_.data());
-  BtreePcursor pcur(m_sys.m_fsp, m_sys.m_btree);
+  BtreePcursor pcur{};
 
 run_again:
 
@@ -1239,7 +1239,7 @@ bool RowInsert::dupl_error_with_rec(const Rec rec, const DTuple *entry, const In
 
 DbErr RowInsert::scan_sec_index_for_duplicate(const Index *index, DTuple *entry, QueThr *thr) noexcept {
   int cmp;
-  BtreePcursor pcur(m_sys.m_fsp, m_sys.m_btree);
+  BtreePcursor pcur{};
   DbErr err = DB_SUCCESS;
   unsigned allow_duplicates;
   Mtr mtr;
@@ -1569,7 +1569,7 @@ DbErr RowInsert::index_entry_low(ulint mode, const Index *index, DTuple *entry, 
     } else {
       ut_a(mode == BTR_MODIFY_TREE);
 
-      auto buf_pool = m_sys.m_buf_pool;
+      auto buf_pool = m_sys.m_buf_pool.get();
 
       if (unlikely(buf_pool->m_LRU->buf_pool_running_out())) {
 
@@ -1599,7 +1599,7 @@ function_exit:
       offsets = record.get_all_col_offsets(nullptr, &heap, Current_location());
     }
 
-    Blob blob(m_sys.m_fsp, m_sys.m_btree);
+    Blob blob(m_sys.m_fsp.get(), m_sys.m_btree.get());
 
     err = blob.store_big_rec_extern_fields(m_sys, index, btr_cur.get_block(), rec, offsets, big_rec, &mtr);
 

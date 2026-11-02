@@ -1583,7 +1583,7 @@ void LockSys::move_reorganize_page(const BufBlock *block, const BufBlock *oblock
 
       /* Check that all locks were moved. */
       if (unlikely(i != ULINT_UNDEFINED)) {
-        log_fatal(std::format("move_reorganize_page(): {} not moved in {}", i, lock->to_string(m_sys.m_buf_pool)));
+        log_fatal(std::format("move_reorganize_page(): {} not moved in {}", i, lock->to_string(m_sys.m_buf_pool.get())));
       }
     }
 #endif /* UNIV_DEBUG */
@@ -1699,7 +1699,7 @@ void LockSys::move_rec_list_start(const BufBlock *new_block, const BufBlock *blo
       IF_DEBUG(if (page_rec_is_supremum(rec)) {
         for (auto i = PAGE_HEAP_NO_USER_LOW; i < lock->rec_get_n_bits(); ++i) {
           if (unlikely(lock->rec_is_nth_bit_set(i))) {
-            log_fatal("move_rec_list_start(): {} not moved in {}", i, lock->to_string(m_sys.m_buf_pool));
+            log_fatal("move_rec_list_start(): {} not moved in {}", i, lock->to_string(m_sys.m_buf_pool.get()));
           }
         }
       })
@@ -1952,7 +1952,7 @@ retry:
 
       log_info("*** WAITING FOR THIS LOCK TO BE GRANTED:n");
 
-      log_info(lock->to_string(m_sys.m_buf_pool));
+      log_info(lock->to_string(m_sys.m_buf_pool.get()));
       break;
 
     case LOCK_VICTIM_IS_START:
@@ -2040,7 +2040,7 @@ ulint LockSys::deadlock_recursive(Trx *start, Trx *trx, Lock *wait_lock, ulint *
 
         log_info("*** (1) WAITING FOR THIS LOCK TO BE GRANTED:");
 
-        log_info(wait_lock->to_string(m_sys.m_buf_pool));
+        log_info(wait_lock->to_string(m_sys.m_buf_pool.get()));
 
         log_info("*** (2) TRANSACTION:");
 
@@ -2048,13 +2048,13 @@ ulint LockSys::deadlock_recursive(Trx *start, Trx *trx, Lock *wait_lock, ulint *
 
         log_info("*** (2) HOLDS THE LOCK(S):");
 
-        log_info(found_lock->to_string(m_sys.m_buf_pool));
+        log_info(found_lock->to_string(m_sys.m_buf_pool.get()));
 
         log_info("*** (2) WAITING FOR THIS LOCK TO BE GRANTED:");
 
-        log_info(wait_lock->to_string(m_sys.m_buf_pool));
+        log_info(wait_lock->to_string(m_sys.m_buf_pool.get()));
 
-        log_info(start->m_wait_lock->to_string(m_sys.m_buf_pool));
+        log_info(start->m_wait_lock->to_string(m_sys.m_buf_pool.get()));
 
         if (Trx::weight_cmp(wait_lock->m_trx, start) >= 0) {
           /* Our recursion starting point transaction is 'smaller', let us
@@ -2591,7 +2591,7 @@ void LockSys::print_info_all_transactions() noexcept {
           "------- TRX HAS BEEN WAITING {} SEC FOR THIS LOCK TO BE GRANTED:", difftime(time(nullptr), trx->m_wait_started)
         ));
 
-        log_info(lock->to_string(m_sys.m_buf_pool));
+        log_info(lock->to_string(m_sys.m_buf_pool.get()));
 
         log_info("------------------");
       }
@@ -2633,7 +2633,7 @@ void LockSys::print_info_all_transactions() noexcept {
           load the page in the buffer pool. */
 
           log_info("RECORD LOCKS on non-existing space ", lock->rec_space_id());
-          log_info(lock->rec_to_string(m_sys.m_buf_pool));
+          log_info(lock->rec_to_string(m_sys.m_buf_pool.get()));
 
         } else {
 

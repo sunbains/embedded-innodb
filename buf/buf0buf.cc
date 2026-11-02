@@ -1335,7 +1335,7 @@ BufBlock *BufPool::create(const PageId &page_id, Mtr *mtr) {
   such can exist if the page belonged to an index which was dropped */
 
   /* Flush pages from the end of the LRU list if necessary */
-  m_flusher->free_margin(m_sys.m_dblwr);
+  m_flusher->free_margin(m_sys.m_dblwr.get());
 
   auto frame = block->m_frame;
 

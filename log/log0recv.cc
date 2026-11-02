@@ -1273,7 +1273,7 @@ DbErr recv_recovery_from_checkpoint_start(System &sys, Dblwr *dblwr, IbRecovery 
 
   sys.m_recv = static_cast<RecvSys *>(mem_alloc(sizeof(RecvSys)));
 
-  new (sys.m_recv) RecvSys();
+  new (sys.m_recv.get()) RecvSys();
 
   sys.m_recv->open(sys.m_buf_pool->get_curr_size());
 
@@ -1374,9 +1374,9 @@ void recv_recovery_from_checkpoint_finish(System &sys, Dblwr *dblwr, IbRecovery 
 
   call_destructor(.m_recv);
 
-  mem_free(sys.m_recv);
+  mem_free(sys.m_recv.get());
 
-  sys.m_recv = nullptr;
+  sys.m_recv.get() = nullptr;
 
   /* Free up the flush_rbt. */
   sys.m_buf_pool->m_flusher->free_flush_list();

@@ -70,8 +70,8 @@ bool RowSel::sec_rec_is_for_blob(
   ulint sec_len
 ) noexcept {
 
-  auto fsp = m_sys.m_fsp;
-  auto btree = m_sys.m_btree;
+  auto fsp = m_sys.m_fsp.get();
+  auto btree = m_sys.m_btree.get();
   Blob blob(fsp, btree);
   std::array<byte, DICT_MAX_INDEX_COL_LEN> buf{};
 
@@ -249,8 +249,8 @@ void RowSel::fetch_columns(Index *index, const Rec rec, const ulint *offsets, Sy
 
   const auto index_type = index->is_clustered() ? SYM_CLUST_FIELD_NO : SYM_SEC_FIELD_NO;
 
-  auto fsp = m_sys.m_fsp;
-  auto btree = m_sys.m_btree;
+  auto fsp = m_sys.m_fsp.get();
+  auto btree = m_sys.m_btree.get();
   Blob blob(fsp, btree);
 
   while (column != nullptr) {
@@ -577,7 +577,7 @@ inline DbErr RowSel::set_rec_lock(
   const BufBlock *block, const Rec rec, Index *index, const ulint *offsets, LockMode mode, ulint type, QueThr *thr
 ) noexcept {
   auto trx = thr_get_trx(thr);
-  auto buf_pool = m_sys.m_buf_pool;
+  auto buf_pool = m_sys.m_buf_pool.get();
 
   if (trx->m_trx_locks.size() > 10000 && buf_pool->m_LRU->buf_pool_running_out()) {
     return DB_LOCK_TABLE_FULL;
@@ -748,7 +748,7 @@ SearchStatus Plan::try_search_shortcut(System &sys, SelNode *sel_node, Mtr *mtr)
     offsets = record.get_all_col_offsets(rec_offsets.data(), &heap, Current_location());
   }
 
-  auto lock_sys = sys.m_lock_sys;
+  auto lock_sys = sys.m_lock_sys.get();
 
   if (m_index->is_clustered()) {
     if (!lock_sys->clust_rec_cons_read_sees(rec, m_index, offsets, sel_node->m_read_view)) {
@@ -2394,7 +2394,7 @@ rec_loop:
   }
 
   if (unlikely(recovery != IB_RECOVERY_DEFAULT)) {
-    auto btree = m_sys.m_btree;
+    auto btree = m_sys.m_btree.get();
 
     if (!rec.validate(offsets) || !btree->index_rec_validate(rec, index, false)) {
       log_err(std::format(

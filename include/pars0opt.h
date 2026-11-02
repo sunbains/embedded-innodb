@@ -24,6 +24,8 @@ Created 12/21/1997 Heikki Tuuri
 
 #pragma once
 
+class System;
+
 #include "innodb0types.h"
 
 #include "dict0types.h"

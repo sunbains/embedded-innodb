@@ -450,7 +450,7 @@ bool row_search_on_row_ref(System &sys, BtreePcursor *pcur, ulint mode, const Ta
 }
 
 Rec row_get_clust_rec(System &sys, ulint mode, const Rec rec, const Index *index, Index **clust_index, Mtr *mtr) {
-  BtreePcursor pcur(sys.m_fsp, sys.m_btree);
+  BtreePcursor pcur{};
 
   ut_ad(!index->is_clustered());
 

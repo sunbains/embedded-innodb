@@ -496,9 +496,9 @@ byte *page_parse_delete_rec_list(System &sys, byte type, byte *ptr, byte *end_pt
   auto page = block->get_frame();
 
   if (type == MLOG_LIST_END_DELETE) {
-    page_delete_rec_list_end(sys, page sys, + offset, block, index, ULINT_UNDEFINED, ULINT_UNDEFINED, mtr);
+    page_delete_rec_list_end(sys, page + offset, block, index, ULINT_UNDEFINED, ULINT_UNDEFINED, mtr);
   } else {
-    page_delete_rec_list_start(sys, page sys, + offset, block, index, mtr);
+    page_delete_rec_list_start(sys, page + offset, block, index, mtr);
   }
 
   return ptr;

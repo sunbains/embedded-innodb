@@ -47,7 +47,7 @@ retry:
     mark_trx->m_deadlock_mark = 0;
   }
 
-  ret = search_iterative(trx, trx, lock, &cost, 0);
+  ret = search_iterative(sys, trx, trx, lock, &cost, 0);
 
   switch (ret) {
     case LOCK_VICTIM_IS_OTHER:

@@ -146,7 +146,7 @@ void Mtr::commit(System &sys) noexcept {
   const auto write_log = m_modifications > 0 && m_n_log_recs > 0;
 
   if (write_log) {
-    mtr_log_reserve_and_write(this, sys.m_log, sys.m_config.m_recv.m_force_recovery);
+    mtr_log_reserve_and_write(this, sys.m_log.get(), sys.m_config.m_recv.m_force_recovery);
   }
 
   /* We first update the modification info to buffer pages, and only

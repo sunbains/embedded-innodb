@@ -24,6 +24,8 @@ Created 3/26/1996 Heikki Tuuri
 
 #pragma once
 
+class System;
+
 #include "innodb0types.h"
 
 #include "mtr0mtr.h"

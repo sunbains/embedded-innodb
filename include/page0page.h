@@ -24,6 +24,8 @@ Created 2/2/1994 Heikki Tuuri
 
 #pragma once
 
+class System;
+
 #include "innodb0types.h"
 
 #include "buf0buf.h"

@@ -266,7 +266,7 @@ static DbErr trx_undo_seg_create(System &sys,
 
   flst_init(seg_hdr + TRX_UNDO_PAGE_LIST, mtr);
 
-  flst_add_last(sys, seg_hdr sys, + TRX_UNDO_PAGE_LIST, page_hdr + TRX_UNDO_PAGE_NODE, mtr);
+  flst_add_last(sys, seg_hdr + TRX_UNDO_PAGE_LIST, page_hdr + TRX_UNDO_PAGE_NODE, mtr);
 
   trx_rsegf_set_nth_undo(rseg_hdr, slot_no, page_get_page_no(*undo_page), mtr);
   *id = slot_no;
@@ -549,7 +549,7 @@ ulint Undo::free_page(
   auto undo_page = page_get(space, page_no, mtr);
   auto header_page = page_get(space, hdr_page_no, mtr);
 
-  flst_remove(m_sys, header_page m_sys, + TRX_UNDO_SEG_HDR m_sys, + TRX_UNDO_PAGE_LIST, undo_page + TRX_UNDO_PAGE_HDR + TRX_UNDO_PAGE_NODE, mtr);
+  flst_remove(m_sys, header_page + TRX_UNDO_SEG_HDR + TRX_UNDO_PAGE_LIST, undo_page + TRX_UNDO_PAGE_HDR + TRX_UNDO_PAGE_NODE, mtr);
 
   m_sys.m_fsp->fseg_free_page(header_page + TRX_UNDO_SEG_HDR + TRX_UNDO_FSEG_HEADER, space, page_no, mtr);
 
@@ -1241,7 +1241,7 @@ ulint Undo::add_page(Trx *trx, TrxUndo *undo, Mtr *mtr) noexcept {
 
     trx_undo_page_init(new_page, undo->m_type, mtr);
 
-    flst_add_last(m_sys, header_page m_sys, + TRX_UNDO_SEG_HDR m_sys, + TRX_UNDO_PAGE_LIST, new_page + TRX_UNDO_PAGE_HDR + TRX_UNDO_PAGE_NODE, mtr);
+    flst_add_last(m_sys, header_page + TRX_UNDO_SEG_HDR + TRX_UNDO_PAGE_LIST, new_page + TRX_UNDO_PAGE_HDR + TRX_UNDO_PAGE_NODE, mtr);
 
     ++undo->m_size;
     ++rseg->m_curr_size;

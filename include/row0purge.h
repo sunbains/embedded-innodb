@@ -24,6 +24,8 @@ Created 3/14/1997 Heikki Tuuri
 
 #pragma once
 
+class System;
+
 #include "btr0pcur.h"
 #include "btr0types.h"
 #include "data0data.h"

@@ -346,7 +346,7 @@ DbErr DictStore::build_table_def_step(QueThr *thr, TableNode *node) noexcept {
 
     auto flags = table->m_flags & ~(~0UL << DICT_TF_BITS);
 
-    auto fil = m_sys.m_fil;
+    auto fil = m_sys.m_fil.get();
 
     auto err = fil->create_new_single_table_tablespace(&space_id, path_or_name, is_path, flags, FIL_IBD_FILE_INITIAL_SIZE);
 
@@ -582,7 +582,7 @@ DbErr DictStore::build_field_def_step(IndexNode *node) noexcept {
 DbErr DictStore::create_index_tree_step(IndexNode *node) noexcept {
   ut_ad(mutex_own(&m_sys.m_dict->m_mutex));
 
-  BtreePcursor pcur(m_sys.m_fsp, m_sys.m_btree);
+  BtreePcursor pcur{};
 
   auto index = node->m_index;
   auto sys_indexes = m_sys.m_dict->m_sys_indexes;
@@ -697,7 +697,7 @@ page_no_t DictStore::truncate_index_tree(Table *table, space_id_t space_id, Btre
     space_id = mtr->read_ulint(field.get(), MLOG_4BYTES);
   }
 
-  auto fil = m_sys.m_fil;
+  auto fil = m_sys.m_fil.get();
 
   if (fil->space_get_flags(space_id) == ULINT_UNDEFINED) {
     /* It is a single table tablespace and the .ibd file is

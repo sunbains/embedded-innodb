@@ -24,6 +24,8 @@ Created 3/26/1996 Heikki Tuuri
 
 #pragma once
 
+class System;
+
 #include "dict0types.h"
 #include "mem0mem.h"
 #include "que0types.h"

@@ -554,7 +554,7 @@ DbErr TrxUndoRecord::prev_version_build(System &sys,
 
     entry = row_rec_to_index_entry(ROW_COPY_DATA, rec, index, offsets, &n_ext, heap);
 
-    Blob blob(sys.m_fsp, sys.m_btree);
+    Blob blob(sys.m_fsp.get(), sys.m_btree.get());
 
     n_ext += blob.push_update_extern_fields(entry, update, heap);
 

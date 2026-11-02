@@ -23,6 +23,8 @@ Lock system validation and debugging
 
 #pragma once
 
+class System;
+
 #include "lock0types.h"
 
 struct BufBlock;

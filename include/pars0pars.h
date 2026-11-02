@@ -24,6 +24,8 @@ Created 11/19/1996 Heikki Tuuri
 
 #pragma once
 
+class System;
+
 #include "pars0types.h"
 #include "que0types.h"
 #include "row0types.h"

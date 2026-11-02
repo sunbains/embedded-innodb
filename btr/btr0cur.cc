@@ -1991,7 +1991,7 @@ void BtreeCursor::estimate_number_of_different_key_vals(System &sys, const Index
 
   /* We sample some pages in the index to get an estimate */
 
-  Blob blob(sys.m_fsp, sys.m_btree);
+  Blob blob(sys.m_fsp.get(), sys.m_btree.get());
 
   for (ulint i = 0; i < n_sample_pages; i++) {
     Rec supremum;

@@ -342,7 +342,7 @@ void Trx::commit_off_kernel(System &sys) noexcept {
     mutex would serialize all commits and prevent a group of
     transactions from gathering. */
 
-    auto log = sys.m_log;
+    auto log = sys.m_log.get();
 
 #ifdef WITH_XOPEN
     if (m_flush_log_later) {
@@ -960,7 +960,7 @@ void Trx::prepare_for_commit(System &sys) noexcept {
 
     mutex_exit(&m_trx_sys->m_mutex);
 
-    auto log = sys.m_log;
+    auto log = sys.m_log.get();
 
     if (sys.m_config.m_log.m_flush_at_trx_commit == 0) {
       /* Do nothing */
@@ -1004,7 +1004,7 @@ ulint Trx::prepare(System &sys) noexcept {
 #ifdef WITH_XOPEN
 ulint Trx::commit_flush_log(System &sys) noexcept {
   const auto lsn = m_commit_lsn;
-  auto log = sys.m_log;
+  auto log = sys.m_log.get();
 
   m_op_info = "flushing log";
 

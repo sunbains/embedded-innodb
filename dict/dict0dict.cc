@@ -432,7 +432,7 @@ bool Dict::table_rename_in_cache(Table *table, const char *new_name, bool rename
 
   /* If the table is stored in the system tablespace, rename the .ibd file */
   if (table->m_space_id != DICT_HDR_SPACE) {
-    auto fil = m_sys.m_fil;
+    auto fil = m_sys.m_fil.get();
 
     if (table->m_dir_path_of_temp_table != nullptr) {
       log_err("Trying to rename a TEMPORARY TABLE ", old_name, " (", table->m_dir_path_of_temp_table, ")");

@@ -24,6 +24,8 @@ Created 3/26/1996 Heikki Tuuri
 
 #pragma once
 
+class System;
+
 #include "innodb0types.h"
 #include "fut0lst.h"
 #include "mtr0log.h"

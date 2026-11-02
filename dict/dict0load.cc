@@ -40,9 +40,9 @@ bool DictLoad::name_of_col_is(const Table *table, const Index *index, ulint i, c
 
 char *DictLoad::get_first_table_name_in_db(const char *name) noexcept {
   ut_ad(mutex_own(&m_sys.m_dict->m_mutex));
-  auto fsp = m_sys.m_fsp;
-  auto btree = m_sys.m_btree;
-  BtreePcursor pcur(fsp, btree);
+  auto fsp = m_sys.m_fsp.get();
+  auto btree = m_sys.m_btree.get();
+  BtreePcursor pcur{};
 
   auto heap = mem_heap_create(1000);
 
@@ -112,9 +112,9 @@ char *DictLoad::get_first_table_name_in_db(const char *name) noexcept {
 
 std::string DictLoad::to_string() noexcept {
   std::string str;
-  auto fsp = m_sys.m_fsp;
-  auto btree = m_sys.m_btree;
-  BtreePcursor pcur(fsp, btree);
+  auto fsp = m_sys.m_fsp.get();
+  auto btree = m_sys.m_btree.get();
+  BtreePcursor pcur{};
 
   /* Enlarge the fatal semaphore wait timeout during the InnoDB table
   monitor printout */
@@ -185,7 +185,7 @@ std::string DictLoad::to_string() noexcept {
           m_sys.m_dict->update_statistics(table);
         }
 
-        str += table->to_string(m_sys.m_dict);
+        str += table->to_string(m_sys.m_dict.get());
       }
 
       mtr.start();
@@ -229,9 +229,9 @@ ulint DictLoad::sys_tables_get_flags(const Rec rec, const ulint *offsets) const 
 
 DbErr DictLoad::open(bool in_crash_recovery) noexcept {
   space_id_t max_space_id{};
-  auto fsp = m_sys.m_fsp;
-  auto btree = m_sys.m_btree;
-  BtreePcursor pcur(fsp, btree);
+  auto fsp = m_sys.m_fsp.get();
+  auto btree = m_sys.m_btree.get();
+  BtreePcursor pcur{};
 
   m_sys.m_dict->mutex_acquire();
 
@@ -247,7 +247,7 @@ DbErr DictLoad::open(bool in_crash_recovery) noexcept {
 
   pcur.open_at_index_side(m_sys, true, sys_index, BTR_SEARCH_LEAF, true, 0, &mtr);
 
-  auto fil = m_sys.m_fil;
+  auto fil = m_sys.m_fil.get();
 
   for (;;) {
     (void)pcur.move_to_next_user_rec(m_sys, &mtr);
@@ -335,9 +335,9 @@ DbErr DictLoad::open(bool in_crash_recovery) noexcept {
 }
 
 DbErr DictLoad::load_columns(Table *table, MemHeap *heap) noexcept {
-  auto fsp = m_sys.m_fsp;
-  auto btree = m_sys.m_btree;
-  BtreePcursor pcur(fsp, btree);
+  auto fsp = m_sys.m_fsp.get();
+  auto btree = m_sys.m_btree.get();
+  BtreePcursor pcur{};
 
   ut_ad(mutex_own(&m_sys.m_dict->m_mutex));
 
@@ -425,9 +425,9 @@ DbErr DictLoad::load_columns(Table *table, MemHeap *heap) noexcept {
 
 DbErr DictLoad::load_fields(Index *index, MemHeap *heap) noexcept {
   ulint len;
-  auto fsp = m_sys.m_fsp;
-  auto btree = m_sys.m_btree;
-  BtreePcursor pcur(fsp, btree);
+  auto fsp = m_sys.m_fsp.get();
+  auto btree = m_sys.m_btree.get();
+  BtreePcursor pcur{};
 
   ut_ad(mutex_own(&m_sys.m_dict->m_mutex));
 
@@ -510,9 +510,9 @@ DbErr DictLoad::load_fields(Index *index, MemHeap *heap) noexcept {
 
 DbErr DictLoad::load_indexes(Table *table, MemHeap *heap) noexcept {
   auto err{DB_SUCCESS};
-  auto fsp = m_sys.m_fsp;
-  auto btree = m_sys.m_btree;
-  BtreePcursor pcur(fsp, btree);
+  auto fsp = m_sys.m_fsp.get();
+  auto btree = m_sys.m_btree.get();
+  BtreePcursor pcur{};
 
   ut_ad(mutex_own(&m_sys.m_dict->m_mutex));
 
@@ -668,7 +668,7 @@ Table *DictLoad::load_table(IbRecovery recovery, const char *name) noexcept {
   dfield_set_data(dfield, name, strlen(name));
   sys_index->copy_types(tuple, 1);
 
-  BtreePcursor pcur(m_sys.m_fsp, m_sys.m_btree);
+  BtreePcursor pcur{};
 
   pcur.open_on_user_rec(m_sys, sys_index, tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF, &mtr, Current_location());
 
@@ -727,7 +727,7 @@ Table *DictLoad::load_table(IbRecovery recovery, const char *name) noexcept {
   field = rec.get_nth_field(offsets, 4, &len);
 
   bool ibd_file_missing{};
-  auto fil = m_sys.m_fil;
+  auto fil = m_sys.m_fil.get();
   auto n_cols = mach_read_from_4(field.get());
 
   /* See if the tablespace is available. */
@@ -807,9 +807,9 @@ Table *DictLoad::load_table(IbRecovery recovery, const char *name) noexcept {
 Table *DictLoad::load_table_on_id(IbRecovery recovery, Dict_id table_id) noexcept {
   ut_ad(mutex_own(&m_sys.m_dict->m_mutex));
 
-  auto fsp = m_sys.m_fsp;
-  auto btree = m_sys.m_btree;
-  BtreePcursor pcur(fsp, btree);
+  auto fsp = m_sys.m_fsp.get();
+  auto btree = m_sys.m_btree.get();
+  BtreePcursor pcur{};
 
   /* NOTE that the operation of this function is protected by
   the dictionary mutex, and therefore no deadlocks can occur
@@ -900,9 +900,9 @@ DbErr DictLoad::load_system_table(Table *table) noexcept {
 DbErr DictLoad::load_foreign_cols(const char *id, Foreign *foreign) noexcept {
   ut_ad(mutex_own(&m_sys.m_dict->m_mutex));
 
-  auto fsp = m_sys.m_fsp;
-  auto btree = m_sys.m_btree;
-  BtreePcursor pcur(fsp, btree);
+  auto fsp = m_sys.m_fsp.get();
+  auto btree = m_sys.m_btree.get();
+  BtreePcursor pcur{};
 
   foreign->m_foreign_col_names =
     reinterpret_cast<const char **>(mem_heap_alloc(foreign->m_heap, foreign->m_n_fields * sizeof(void *)));
@@ -962,9 +962,9 @@ DbErr DictLoad::load_foreign(const char *id, bool check_charsets) noexcept {
   ut_ad(mutex_own(&m_sys.m_dict->m_mutex));
 
   auto heap2 = mem_heap_create(1000);
-  auto fsp = m_sys.m_fsp;
-  auto btree = m_sys.m_btree;
-  BtreePcursor pcur(fsp, btree);
+  auto fsp = m_sys.m_fsp.get();
+  auto btree = m_sys.m_btree.get();
+  BtreePcursor pcur{};
 
   Mtr mtr;
 
@@ -1066,7 +1066,7 @@ DbErr DictLoad::load_foreign(const char *id, bool check_charsets) noexcept {
 DbErr DictLoad::load_foreigns(const char *table_name, bool check_charsets) noexcept {
   ut_ad(mutex_own(&m_sys.m_dict->m_mutex));
 
-  BtreePcursor pcur(m_sys.m_fsp, m_sys.m_btree);
+  BtreePcursor pcur{};
 
   auto sys_foreign = m_sys.m_dict->table_get("SYS_FOREIGN");
 

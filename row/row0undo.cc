@@ -135,7 +135,7 @@ DbErr UndoNode::remove_secondary_index_entry(System &sys, ulint mode, Index *ind
 
   sys.m_log->free_check();
 
-  BtreePcursor pcur(sys.m_fsp, sys.m_btree);
+  BtreePcursor pcur{};
 
   Mtr mtr;
 
@@ -660,7 +660,7 @@ DbErr UndoNode::undo_clustered_index_modification(System &sys, QueThr *thr) noex
 DbErr UndoNode::delete_mark_or_remove_secondary_index_entry(System &sys, QueThr *thr, Index *index, DTuple *entry, ulint mode) noexcept {
   ut_ad(mode == BTR_MODIFY_LEAF || mode == BTR_MODIFY_TREE);
 
-  BtreePcursor pcur(sys.m_fsp, sys.m_btree);
+  BtreePcursor pcur{};
 
   sys.m_log->free_check();
 
@@ -741,7 +741,7 @@ DbErr UndoNode::del_unmark_secondary_index_and_undo_update(System &sys,
   ut_ad(mode == BTR_MODIFY_LEAF || mode == BTR_MODIFY_TREE);
 
   auto trx = thr_get_trx(thr);
-  BtreePcursor pcur(sys.m_fsp, sys.m_btree);
+  BtreePcursor pcur{};
 
   /* Ignore indexes that are being created. */
   if (unlikely(*index->m_name == TEMP_INDEX_PREFIX)) {
@@ -1069,5 +1069,5 @@ QueThr *RowUndo::step(QueThr *thr) noexcept {
 }
 
 UndoNode *RowUndo::create_undo_node(Trx *trx, QueThr *parent, MemHeap *heap) noexcept {
-  return UndoNode::create(m_sys.m_dict, trx, parent, heap);
+  return UndoNode::create(m_sys.m_dict.get(), trx, parent, heap);
 }

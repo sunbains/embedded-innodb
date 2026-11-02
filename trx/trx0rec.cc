@@ -217,7 +217,7 @@ ulint UndoPage::report_insert(Trx *trx, const Index *index, const DTuple *clust_
  */
 static byte *trx_undo_page_fetch_ext(System &sys, byte *ext_buf, const byte *field, ulint *len) {
   /* Fetch the BLOB. */
-  Blob blob(sys.m_fsp, sys.m_btree);
+  Blob blob(sys.m_fsp.get(), sys.m_btree.get());
   ulint ext_len = blob.copy_externally_stored_field_prefix(sys, ext_buf, REC_MAX_INDEX_COL_LEN, field, *len);
   /* BLOBs should always be nonempty. */
   ut_a(ext_len);
@@ -688,7 +688,7 @@ DbErr trx_undo_report_row_operation(System &sys,
     if (op_type == TRX_UNDO_INSERT_OP) {
       offset = undo_page.report_insert(trx, index, clust_entry, &mtr);
     } else {
-      offset = undo_page.report_modify(trx, index, rec, offsets, update, cmpl_info, &mtr);
+      offset = undo_page.report_modify(sys, trx, index, rec, offsets, update, cmpl_info, &mtr);
     }
 
     if (unlikely(offset == 0)) {

@@ -166,7 +166,7 @@ retry:
 }
 
 bool RowPurge::remove_sec_if_poss_low(System &sys, Index *index, const DTuple *entry, ulint mode) {
-  BtreePcursor pcur(sys.m_fsp, sys.m_btree);
+  BtreePcursor pcur{};
   BtreeCursor *btr_cur;
   bool success;
   bool old_has{};
@@ -293,7 +293,7 @@ void RowPurge::upd_exist_or_extern(System &sys) {
   ulint offset;
   Mtr mtr;
 
-  Blob blob(sys.m_fsp, sys.m_btree);
+  Blob blob(sys.m_fsp.get(), sys.m_btree.get());
   auto heap = mem_heap_create(1024);
 
   if (m_rec_type == TRX_UNDO_UPD_DEL_REC) {

@@ -24,6 +24,8 @@ Created 4/20/1996 Heikki Tuuri
 
 #pragma once
 
+class System;
+
 #include "btr0types.h"
 #include "data0data.h"
 #include "dict0dict.h"

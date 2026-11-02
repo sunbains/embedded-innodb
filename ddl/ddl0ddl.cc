@@ -396,7 +396,7 @@ DbErr Ddl::drop_table(const char *in_name, Trx *trx, bool drop_db) noexcept {
     wrong: we do not want to delete valuable data of the user */
 
     if (err == DB_SUCCESS && space_id != SYS_TABLESPACE) {
-      auto fil = m_sys.m_fil;
+      auto fil = m_sys.m_fil.get();
 
       if (!fil->space_for_table_exists_in_mem(space_id, name_or_path, is_path, false, true)) {
         err = DB_SUCCESS;
@@ -512,7 +512,7 @@ DbErr Ddl::create_table(Table *table, Trx *trx) noexcept {
 
   trx->set_dict_operation(TRX_DICT_OP_TABLE);
 
-  auto node = TableNode::create(m_sys.m_dict, table, heap, false);
+  auto node = TableNode::create(m_sys.m_dict.get(), table, heap, false);
 
   auto thr = pars_complete_graph_for_exec(node, trx, heap);
 
@@ -571,7 +571,7 @@ DbErr Ddl::create_index(Index *index, Trx *trx) noexcept {
 
   /* This heap is destroyed when the query graph is freed. */
   auto heap = mem_heap_create(512);
-  auto node = IndexNode::create(m_sys.m_dict, index, heap, false);
+  auto node = IndexNode::create(m_sys.m_dict.get(), index, heap, false);
   auto thr = pars_complete_graph_for_exec(node, trx, heap);
   auto tmp = que_fork_start_command(static_cast<QueFork *>(que_node_get_parent(thr)));
 
@@ -690,9 +690,9 @@ DbErr Ddl::truncate_table(Table *table, Trx *trx) noexcept {
     return func_exit(DB_ERROR);
   }
 
-  auto fsp = m_sys.m_fsp;
+  auto fsp = m_sys.m_fsp.get();
   space_id_t recreate_space{NULL_SPACE_ID};
-  auto lock_sys = m_sys.m_lock_sys;
+  auto lock_sys = m_sys.m_lock_sys.get();
 
   /* Remove all locks except the table-level S and X locks. */
   lock_sys->remove_all_on_table(table, false);
@@ -751,7 +751,7 @@ DbErr Ddl::truncate_table(Table *table, Trx *trx) noexcept {
 
   mtr.start();
 
-  BtreePcursor pcur(fsp, m_sys.m_btree);
+  BtreePcursor pcur{};
 
   /* Scan SYS_INDEXES for all indexes of the table */
   pcur.open_on_user_rec(m_sys, sys_index, tuple, PAGE_CUR_GE, BTR_MODIFY_LEAF, &mtr, Current_location());
@@ -1278,7 +1278,7 @@ DbErr Ddl::drop_database(const char *name, Trx *trx) noexcept {
 }
 
 void Ddl::drop_all_temp_indexes(IbRecovery recovery) noexcept {
-  BtreePcursor pcur(m_sys.m_fsp, m_sys.m_btree);
+  BtreePcursor pcur{};
 
   /* Load the table definitions that contain partially defined indexes, so that the data dictionary
   information can be checked * when accessing the tablename.ibd files. */
@@ -1385,7 +1385,7 @@ void Ddl::drop_all_temp_tables(IbRecovery recovery) noexcept {
 
   mtr.start();
 
-  BtreePcursor pcur(m_sys.m_fsp, m_sys.m_btree);
+  BtreePcursor pcur{};
 
   auto sys_clustered_index = m_sys.m_dict->m_sys_tables->get_clustered_index();
   pcur.open_at_index_side(m_sys, true, sys_clustered_index, BTR_SEARCH_LEAF, true, 0, &mtr);

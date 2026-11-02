@@ -31,7 +31,7 @@ Created September 2006 Marko Makela
 @param[in] i                    Index of ext->extp[]
 @paramp[in] dfield              Data field. */
 static void row_ext_cache_fill(System &sys, RowExt *ext, ulint i, const Dfield *dfield) {
-  Blob blob(sys.m_fsp, sys.m_btree);
+  Blob blob(sys.m_fsp.get(), sys.m_btree.get());
   auto field = (const byte *)dfield_get_data(dfield);
   auto f_len = dfield_get_len(dfield);
   auto buf = ext->buf + i * REC_MAX_INDEX_COL_LEN;

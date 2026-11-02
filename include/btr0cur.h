@@ -24,6 +24,8 @@ Created 10/16/1994 Heikki Tuuri
 
 #pragma once
 
+class System;
+
 #include "btr0btr.h"
 #include "dict0dict.h"
 #include "innodb0types.h"

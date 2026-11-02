@@ -1267,7 +1267,7 @@ loop:
       buffer pool under the limit wished by the user */
 
       m_main_thread_op_info = "flushing buffer pool pages";
-      n_pages_flushed = m_sys.m_buf_pool->m_flusher->batch(m_sys.m_dblwr, BUF_FLUSH_LIST, pct_io(100), IB_UINT64_T_MAX);
+      n_pages_flushed = m_sys.m_buf_pool->m_flusher->batch(m_sys.m_dblwr.get(), BUF_FLUSH_LIST, pct_io(100), IB_UINT64_T_MAX);
 
       /* If we had to do the flush, it may have taken
       even more than 1 second, and also, there may be more
@@ -1286,7 +1286,7 @@ loop:
       if (n_flush) {
         m_main_thread_op_info = "flushing buffer pool pages";
         n_flush = std::min<ulint>(pct_io(100), n_flush);
-        n_pages_flushed = m_sys.m_buf_pool->m_flusher->batch(m_sys.m_dblwr, BUF_FLUSH_LIST, n_flush, IB_ULONGLONG_MAX);
+        n_pages_flushed = m_sys.m_buf_pool->m_flusher->batch(m_sys.m_dblwr.get(), BUF_FLUSH_LIST, n_flush, IB_ULONGLONG_MAX);
 
         if (n_flush == pct_io(100)) {
           skip_sleep = true;
@@ -1320,7 +1320,7 @@ loop:
   if (n_pend_ios < pct_io(3) && (n_ios - n_ios_very_old < pct_io(200))) {
 
     m_main_thread_op_info = "flushing buffer pool pages";
-    m_sys.m_buf_pool->m_flusher->batch(m_sys.m_dblwr, BUF_FLUSH_LIST, pct_io(100), IB_ULONGLONG_MAX);
+    m_sys.m_buf_pool->m_flusher->batch(m_sys.m_dblwr.get(), BUF_FLUSH_LIST, pct_io(100), IB_ULONGLONG_MAX);
 
     /* Flush logs if needed */
     sync_log_buffer_in_background();
@@ -1356,13 +1356,13 @@ loop:
     (> 70 %), we assume we can afford reserving the disk(s) for
     the time it requires to flush 100 pages */
 
-    n_pages_flushed = m_sys.m_buf_pool->m_flusher->batch(m_sys.m_dblwr, BUF_FLUSH_LIST, pct_io(100), IB_UINT64_T_MAX);
+    n_pages_flushed = m_sys.m_buf_pool->m_flusher->batch(m_sys.m_dblwr.get(), BUF_FLUSH_LIST, pct_io(100), IB_UINT64_T_MAX);
   } else {
     /* Otherwise, we only flush a small number of pages so that
     we do not unnecessarily use much disk i/o capacity from
     other work */
 
-    n_pages_flushed = m_sys.m_buf_pool->m_flusher->batch(m_sys.m_dblwr, BUF_FLUSH_LIST, pct_io(10), IB_UINT64_T_MAX);
+    n_pages_flushed = m_sys.m_buf_pool->m_flusher->batch(m_sys.m_dblwr.get(), BUF_FLUSH_LIST, pct_io(10), IB_UINT64_T_MAX);
   }
 
   m_main_thread_op_info = "making checkpoint";
@@ -1456,7 +1456,7 @@ flush_loop:
   m_main_thread_op_info = "flushing buffer pool pages";
   m_main_flush_loops++;
   if (m_fast_shutdown != IB_SHUTDOWN_NO_BUFPOOL_FLUSH) {
-    n_pages_flushed = m_sys.m_buf_pool->m_flusher->batch(m_sys.m_dblwr, BUF_FLUSH_LIST, pct_io(100), IB_UINT64_T_MAX);
+    n_pages_flushed = m_sys.m_buf_pool->m_flusher->batch(m_sys.m_dblwr.get(), BUF_FLUSH_LIST, pct_io(100), IB_UINT64_T_MAX);
   } else {
     /* In the fastest shutdown we do not flush the buffer pool
     to data files: we set n_pages_flushed to 0 artificially. */

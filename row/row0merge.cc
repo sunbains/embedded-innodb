@@ -895,7 +895,7 @@ static DbErr row_merge_read_clustered_index(System &sys,
   ulint *nonnull{};
   ulint n_nonnull{};
   DbErr err = DB_SUCCESS;
-  BtreePcursor pcur(sys.m_fsp, sys.m_btree);
+  BtreePcursor pcur{};
 
   trx->m_op_info = "reading clustered index";
 

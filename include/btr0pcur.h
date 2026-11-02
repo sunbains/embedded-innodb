@@ -24,6 +24,8 @@ Created 2/23/1996 Heikki Tuuri
 
 #pragma once
 
+class System;
+
 #include "btr0cur.h"
 
 struct Mtr;

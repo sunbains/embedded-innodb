@@ -24,6 +24,8 @@ Created 10/4/1994 Heikki Tuuri
 
 #pragma once
 
+class System;
+
 #include "buf0types.h"
 #include "data0data.h"
 #include "mtr0mtr.h"

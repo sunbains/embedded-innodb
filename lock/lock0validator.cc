@@ -63,14 +63,14 @@ LockValidator::LockValidator(LockSys *lock_sys) noexcept : m_lock_sys(lock_sys) 
 bool LockValidator::validate(System &sys) noexcept {
   mutex_enter(&sys.m_trx_sys->m_mutex);
 
-  auto trx_sys = sys.m_trx_sys;
+  auto trx_sys = sys.m_trx_sys.get();
 
   for (auto trx : trx_sys->m_trx_list) {
 
     for (auto lock : trx->m_trx_locks) {
 
       if (lock->type() == LOCK_TABLE) {
-        (void)table_queue_validate(lock->m_table.m_table);
+        (void)table_queue_validate(sys, lock->m_table.m_table);
       }
     }
   }
@@ -80,7 +80,7 @@ bool LockValidator::validate(System &sys) noexcept {
 
     mutex_exit(&sys.m_trx_sys->m_mutex);
 
-    (void)rec_validate_page(page_id);
+    (void)rec_validate_page(sys, page_id);
 
     mutex_enter(&sys.m_trx_sys->m_mutex);
   }
@@ -91,7 +91,7 @@ bool LockValidator::validate(System &sys) noexcept {
 }
 
 bool LockValidator::rec_validate_page(System &sys, PageId page_id) noexcept {
-  ut_ad(!mutex_own(&m_lock_sys->m_trx_sys->m_mutex));
+  ut_ad(!mutex_own(&sys.m_trx_sys->m_mutex));
 
   Mtr mtr;
   MemHeap *heap{};
@@ -111,7 +111,7 @@ bool LockValidator::rec_validate_page(System &sys, PageId page_id) noexcept {
 
   mtr.start();
 
-  auto buf_pool = m_lock_sys->m_buf_pool;
+  auto buf_pool = sys.m_buf_pool;
 
   BufPool::Request req{.m_page_id = page_id, .m_mode = BUF_GET_NO_LATCH, .m_file = __FILE__, .m_line = __LINE__, .m_mtr = &mtr};
 
@@ -137,14 +137,14 @@ bool LockValidator::rec_validate_page(System &sys, PageId page_id) noexcept {
         /* We cannot get offsets for the record here because
         we do not know the index. */
 
-        mutex_enter(&m_lock_sys->m_trx_sys->m_mutex);
+        mutex_enter(&sys.m_trx_sys->m_mutex);
 
         if (auto it = m_lock_sys->m_rec_locks.find(page_id); it != m_lock_sys->m_rec_locks.end()) {
           auto heap_no = page_rec_get_heap_no(rec_cursor);
 
           for (auto lock : it->second) {
 
-            ut_a(m_lock_sys->m_trx_sys->in_trx_list(lock->m_trx));
+            ut_a(sys.m_trx_sys->in_trx_list(lock->m_trx));
 
             validate_trx_state(lock->m_trx);
 
@@ -178,14 +178,14 @@ bool LockValidator::rec_validate_page(System &sys, PageId page_id) noexcept {
               offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
             }
 
-            mutex_exit(&m_lock_sys->m_trx_sys->m_mutex);
+            mutex_exit(&sys.m_trx_sys->m_mutex);
 
             /* If this thread is holding the file space latch (FilSpace::latch), the following
               check WILL break the latching order and may cause a deadlock of threads. */
 
             (void)rec_queue_validate(block, Rec(rec_cursor), index, offsets);
 
-            mutex_enter(&m_lock_sys->m_trx_sys->m_mutex);
+            mutex_enter(&sys.m_trx_sys->m_mutex);
 
             if (clean_up_called) {
               return true;
@@ -193,7 +193,7 @@ bool LockValidator::rec_validate_page(System &sys, PageId page_id) noexcept {
           }
         }
 
-        mutex_exit(&m_lock_sys->m_trx_sys->m_mutex);
+        mutex_exit(&sys.m_trx_sys->m_mutex);
       }
     }
   }

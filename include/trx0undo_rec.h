@@ -23,6 +23,8 @@ Transaction undo log record parsing and building utilities
 
 #pragma once
 
+class System;
+
 #include "data0data.h"
 #include "dict0types.h"
 #include "innodb0types.h"

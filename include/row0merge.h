@@ -24,6 +24,8 @@ Created 13/06/2005 Jan Lindstrom
 
 #pragma once
 
+class System;
+
 #include "innodb0types.h"
 
 #include "lock0types.h"
