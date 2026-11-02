@@ -40,7 +40,7 @@ TrxSys::TrxSys(System &sys) noexcept : m_sys(sys) {
   mutex_create(&m_mutex, IF_DEBUG("trx_sys_mutex", ) IF_SYNC_DEBUG(TRX_SYS_MUTEX, ) Current_location());
 }
 
-TrxSys::~TrxSys(System &sys) noexcept {
+TrxSys::~TrxSys() noexcept {
   /* Check that all read views are closed except read view owned
   by a purge. */
 
@@ -69,7 +69,7 @@ TrxSys::~TrxSys(System &sys) noexcept {
 
     m_rseg_list.remove(prev_rseg);
 
-    prev_rseg->memory_free(sys);
+    prev_rseg->memory_free(m_sys);
   }
 
   auto view = m_view_list.front();
@@ -152,10 +152,10 @@ DbErr TrxSys::start(IbRecovery recovery) noexcept {
     ut_a(m_purge == nullptr);
 
     auto ptr = ut_new(sizeof(PurgeSys));
-    m_purge = new (ptr) PurgeSys(purge_trx);
+    m_purge = new (ptr) PurgeSys(m_sys, purge_trx);
   }
 
-  mutex_exit(m_sys, &m_mutex);
+  mutex_exit(&m_mutex);
 
   mtr.commit(m_sys);
 

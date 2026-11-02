@@ -80,7 +80,7 @@ private:
   /**
    * Creates and initializes a rollback segment object.
    */
-  static TrxRseg *mem_create(IbRecovery recovery, ulint id, ulint space, ulint page_no, Mtr *mtr);
+  static TrxRseg *mem_create(System &sys, IbRecovery recovery, ulint id, ulint space, ulint page_no, Mtr *mtr);
 
 public:
   /** Rollback segment id == the index of its slot in the trx

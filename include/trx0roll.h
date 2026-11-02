@@ -211,7 +211,7 @@ private:
    * @param[in] recovery Recovery flag
    * @param[in,out] trx Transaction
    */
-  static void rollback_active(IbRecovery recovery, Trx *trx);
+  static void rollback_active(System &sys, IbRecovery recovery, Trx *trx);
 
   /**
    * @brief Finishes error processing after the necessary partial rollback has been done.

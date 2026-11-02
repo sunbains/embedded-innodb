@@ -41,7 +41,7 @@ Trx *RowVers::impl_x_locked_off_trx_sys_mutex(const Rec rec, const Index *index,
 
   mutex_exit(&m_sys.m_trx_sys->m_mutex);
 
-  auto func_exit = [](Mtr &mtr, MemHeap *heap, Trx *trx) -> auto {
+  auto func_exit = [this](Mtr &mtr, MemHeap *heap, Trx *trx) -> auto {
     mtr.commit(m_sys);
     mem_heap_free(heap);
 

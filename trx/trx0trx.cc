@@ -705,7 +705,7 @@ void Trx::sig_reply(System &sys, TrxSig *sig, QueThr *&next_thr) noexcept {
     receiver_trx->m_reply_signals.remove(sig);
     ut_ad(receiver_trx->m_sess->m_state != Session::State::ERROR);
 
-    que_thr_end_wait(sig->sys, receiver, &next_thr);
+    que_thr_end_wait(sys, sig->receiver, &next_thr);
 
     sig->receiver = nullptr;
   }

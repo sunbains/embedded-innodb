@@ -45,7 +45,7 @@
 extern int yydebug;
 #endif
 /* "%code requires" blocks.  */
-#line 47 "pars0grm.y"
+#line 53 "pars0grm.y"
 
 class System;
 

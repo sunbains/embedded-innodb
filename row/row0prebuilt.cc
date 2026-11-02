@@ -41,12 +41,12 @@ Prebuilt::Prebuilt(Fsp *fsp, Btree *btree, Table *table, MemHeap *heap) noexcept
 
   {
     auto ptr = ut_new(sizeof(BtreePcursor));
-    m_pcur = new (ptr) BtreePcursor(fsp, btree);
+    m_pcur = new (ptr) BtreePcursor();
   }
 
   {
     auto ptr = ut_new(sizeof(BtreePcursor));
-    m_clust_pcur = new (ptr) BtreePcursor(fsp, btree);
+    m_clust_pcur = new (ptr) BtreePcursor();
   }
 
   m_search_tuple = dtuple_create(m_heap, 2 * m_table->get_n_cols());

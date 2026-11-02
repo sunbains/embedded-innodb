@@ -41,7 +41,7 @@ Created 9/5/1995 Heikki Tuuri
 #include "ut0mem.h"
 
 /** Initializes the synchronization data structures. */
-void sync_init();
+void sync_init(ulint max_n_threads);
 
 /** Frees the resources in synchronization data structures. */
 void sync_close();

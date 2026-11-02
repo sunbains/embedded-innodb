@@ -184,7 +184,7 @@ struct TrxSys {
    *
    * @return	the trx handle or NULL if not found
    */
-  [[nodiscard]] Trx *get_on_id(trx_id_t trx_id) const noexcept {
+  [[nodiscard]] Trx *get_on_id(trx_id_t trx_id) noexcept {
     ut_ad(mutex_own(&m_mutex));
 
     for (const auto trx : m_trx_list) {
@@ -220,7 +220,7 @@ struct TrxSys {
    *
    * @return	true if active
    */
-  [[nodiscard]] bool is_active(trx_id_t trx_id) const noexcept {
+  [[nodiscard]] bool is_active(trx_id_t trx_id) noexcept {
     ut_ad(mutex_own(&m_mutex));
 
     if (trx_id < get_min_trx_id()) {

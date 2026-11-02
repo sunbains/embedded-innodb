@@ -1318,12 +1318,6 @@ void recv_recovery_from_checkpoint_finish(System &sys) noexcept {
 }
 
 void recv_recovery_rollback_active(System &sys) noexcept {
-  /* This is required to set the compare context before recovery, also
-  it's a one-shot. We can safely set it to nullptr after calling it. */
-  if (recv_pre_rollback_hook != nullptr) {
-    recv_pre_rollback_hook();
-  }
-
 #ifdef UNIV_SYNC_DEBUG
   /* Wait for a while so that created threads have time to suspend
   themselves before we switch the latching order checks on */

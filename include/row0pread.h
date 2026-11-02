@@ -247,11 +247,11 @@ class ParallelReader {
     State get_state() const noexcept { return m_state; }
 
     /** Save current position, commit any active mtr. */
-    void savepoint() noexcept;
+    void savepoint(System &sys) noexcept;
 
     /** Restore saved position and resume scan.
     @return DB_SUCCESS or error code. */
-    [[nodiscard]] DbErr restore_from_savepoint() noexcept;
+    [[nodiscard]] DbErr restore_from_savepoint(System &sys) noexcept;
 
     /** Thread ID. */
     size_t m_thread_id{std::numeric_limits<size_t>::max()};
@@ -302,7 +302,7 @@ class ParallelReader {
   @param[in]      f           Callback function.
   (default is 0 which is leaf level)
   @return error. */
-  [[nodiscard]] DbErr add_scan(Trx *trx, const Config &config, F &&f);
+  [[nodiscard]] DbErr add_scan(System &sys, Trx *trx, const Config &config, F &&f);
 
   /** Wait for the join of threads spawned by the parallel reader. */
   void join() {
@@ -330,12 +330,12 @@ class ParallelReader {
   Don't wait for the spawned to threads to complete.
   @param[in]  n_threads number of threads that *need* to be spawned
   @return DB_SUCCESS or error code. */
-  [[nodiscard]] DbErr spawn(size_t n_threads) noexcept;
+  [[nodiscard]] DbErr spawn(System &sys, size_t n_threads) noexcept;
 
   /** Start the threads to do the parallel read for the specified range.
   @param[in] n_threads          Number of threads to use for the scan.
   @return DB_SUCCESS or error code. */
-  [[nodiscard]] DbErr run(size_t n_threads);
+  [[nodiscard]] DbErr run(System &sys, size_t n_threads);
 
   /** @return the configured max threads size. */
   [[nodiscard]] size_t max_threads() const { return m_max_threads; }
@@ -381,10 +381,10 @@ class ParallelReader {
 
   /** Poll for requests and execute.
   @param[in]  thread_ctx  thread related context information */
-  void worker(ThreadCtx *thread_ctx);
+  void worker(System &sys, ThreadCtx *thread_ctx);
 
   /** Create the threads and do a parallel read across the partitions. */
-  void parallel_read();
+  void parallel_read(System &sys);
 
   /** @return true if tasks are still executing. */
   [[nodiscard]] bool is_active() const {
@@ -514,21 +514,21 @@ class ParallelReader::ScanCtx {
   @param[in,out]  mtr           Mini-transaction covering the fetch.
   @param[in]      line          Line from where called.
   @return the block fetched from the buffer pool. */
-  [[nodiscard]] BufBlock *block_get_s_latched(const PageId &page_id, Mtr *mtr, ulint line) const;
+  [[nodiscard]] BufBlock *block_get_s_latched(System &sys, const PageId &page_id, Mtr *mtr, ulint line) const;
 
   /** Partition the B+Tree for parallel read.
   @param[in] scan_range Range for partitioning.
   @param[in,out]  ranges        Ranges to scan.
   @param[in] split_level  Sub-range required level (0 == root).
   @return the partition scan ranges. */
-  DbErr partition(const ScanRange &scan_range, Ranges &ranges, size_t split_level);
+  DbErr partition(System &sys, const ScanRange &scan_range, Ranges &ranges, size_t split_level);
 
   /** Find the page number of the node that contains the search key. If the
   key is null then we assume -infinity.
   @param[in]  block             Page to look in.
   @param[in] key                Key of the first record in the range.
   @return the left child page number. */
-  [[nodiscard]] page_no_t search(const BufBlock *block, const DTuple *key) const;
+  [[nodiscard]] page_no_t search(System &sys, const BufBlock *block, const DTuple *key) const;
 
   /** Traverse from given sub-tree page number to start of the scan range
   from the given page number.
@@ -537,14 +537,14 @@ class ParallelReader::ScanCtx {
   @param[in]      key           Key of the first record in the range.
   @param[in,out]  savepoints    Blocks S latched and accessed.
   @return the leaf node page cursor. */
-  [[nodiscard]] PageCursor start_range(page_no_t page_no, Mtr *mtr, const DTuple *key, Savepoints &savepoints) const;
+  [[nodiscard]] PageCursor start_range(System &sys, page_no_t page_no, Mtr *mtr, const DTuple *key, Savepoints &savepoints) const;
 
   /** Create and add the range to the scan ranges.
   @param[in,out]  ranges        Ranges to scan.
   @param[in,out]  leaf_page_cursor Leaf page cursor on which to create the
                                 persistent cursor.
   @param[in,out]  mtr           Mini-transaction */
-  void create_range(Ranges &ranges, PageCursor &leaf_page_cursor, Mtr *mtr) const;
+  void create_range(System &sys, Ranges &ranges, PageCursor &leaf_page_cursor, Mtr *mtr) const;
 
   /** Find the subtrees to scan in a block.
   @param[in]      scan_range    Partition based on this scan range.
@@ -553,7 +553,7 @@ class ParallelReader::ScanCtx {
   @param[in]      split_level   Sub-range starting level (0 == root).
   @param[in,out]  ranges        Ranges to scan.
   @param[in,out]  mtr           Mini-transaction */
-  DbErr create_ranges(
+  DbErr create_ranges(System &sys, 
     const ScanRange &scan_range, page_no_t page_no, size_t depth, const size_t split_level, Ranges &ranges, Mtr *mtr
   );
 
@@ -567,7 +567,7 @@ class ParallelReader::ScanCtx {
   @param[in]      page_cursor   Current page cursor
   @param[in]      mtr           Mini-transaction covering the read.
   @return Start iterator. */
-  [[nodiscard]] std::shared_ptr<Iter> create_persistent_cursor(const PageCursor &page_cursor, Mtr *mtr) const;
+  [[nodiscard]] std::shared_ptr<Iter> create_persistent_cursor(System &sys, const PageCursor &page_cursor, Mtr *mtr) const;
 
   /** Build an old version of the row if required.
   @param[in,out]  rec           Current row read from the index. This can
@@ -578,7 +578,7 @@ class ParallelReader::ScanCtx {
                                 built from the undo log.
   @param[in,out]  mtr           Mini-transaction covering the read.
   @return true if row is visible to the transaction. */
-  [[nodiscard]] bool check_visibility(Rec &rec, RecOffs &offsets, MemHeap *&heap, Mtr *mtr);
+  [[nodiscard]] bool check_visibility(System &sys, Rec &rec, RecOffs &offsets, MemHeap *&heap, Mtr *mtr);
 
   /** Create an execution context for a range and add it to
   the ParallelReader's run queue.
@@ -688,30 +688,30 @@ class ParallelReader::Ctx {
                                 built from the undo log.
   @param[in,out]  mtr           Mini-transaction covering the read.
   @return true if row is visible to the transaction. */
-  bool is_rec_visible(Rec &rec, ulint *&offsets, MemHeap *&heap, Mtr *mtr) {
+  bool is_rec_visible(System &sys, Rec &rec, ulint *&offsets, MemHeap *&heap, Mtr *mtr) {
     RecOffs rec_offsets(offsets);
-    return m_scan_ctx->check_visibility(rec, rec_offsets, heap, mtr);
+    return m_scan_ctx->check_visibility(sys, rec, rec_offsets, heap, mtr);
   }
 
  private:
   /** Traverse the pages by key order.
   @return DB_SUCCESS or error code. */
-  [[nodiscard]] DbErr traverse();
+  [[nodiscard]] DbErr traverse(System &sys);
 
   /** Traverse the records in a node.
   @param[in]  pcursor persistent b-tree cursor
   @param[in]  mtr mtr
   @return error */
-  DbErr traverse_recs(PCursor *pcursor, Mtr *mtr);
+  DbErr traverse_recs(System &sys, PCursor *pcursor, Mtr *mtr);
 
   /** Move to the next node in the specified level.
   @param[in]  pcursor persistent b-tree cursor
   @return success */
-  bool move_to_next_node(PCursor *pcursor);
+  bool move_to_next_node(System &sys, PCursor *pcursor);
 
   /** Split the context into sub-ranges and add them to the execution queue.
   @return DB_SUCCESS or error code. */
-  [[nodiscard]] DbErr split();
+  [[nodiscard]] DbErr split(System &sys);
 
   /** @return true if in error state. */
   [[nodiscard]] bool is_error_set() const { return m_scan_ctx->m_reader->is_error_set() || m_scan_ctx->is_error_set(); }

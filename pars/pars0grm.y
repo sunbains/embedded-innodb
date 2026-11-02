@@ -44,6 +44,12 @@ extern "C" int yylex();
 
 %}
 
+%code top {
+/* Bison frees its stack with free() on a path where the stack is still the
+automatic array; the call is never reached for that case. */
+#pragma GCC diagnostic ignored "-Wfree-nonheap-object"
+}
+
 %code requires {
 class System;
 }

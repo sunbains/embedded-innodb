@@ -178,6 +178,10 @@ counter_t mutex_exit_count{};
 mutexes and read-write locks */
 SyncCheck *sync_primary_wait_array;
 
+/** Size of the wait array and of the latch level arrays: the maximum number
+of threads that can wait inside InnoDB. Set by sync_init(). */
+static ulint sync_max_n_threads;
+
 /** This variable is set to true when sync_init is called */
 bool sync_initialized = false;
 
@@ -188,7 +192,7 @@ struct SyncThread;
 
 #ifdef UNIV_SYNC_DEBUG
 /** The latch levels currently owned by threads are stored in this data
-structure; the size of this array is OS_THREAD_MAX_N */
+structure; the size of this array is sync_max_n_threads */
 
 SyncThread *sync_thread_level_arrays;
 
@@ -541,7 +545,7 @@ bool sync_all_freed(void) {
 @return	pointer to thread slot */
 static SyncThread *sync_thread_level_arrays_get_nth(ulint n) /*!< in: slot number */
 {
-  ut_ad(n < OS_THREAD_MAX_N);
+  ut_ad(n < sync_max_n_threads);
 
   return (sync_thread_level_arrays + n);
 }
@@ -557,7 +561,7 @@ static SyncThread *sync_thread_level_arrays_find_slot(void)
 
   id = os_thread_get_curr_id();
 
-  for (i = 0; i < OS_THREAD_MAX_N; i++) {
+  for (i = 0; i < sync_max_n_threads; i++) {
 
     slot = sync_thread_level_arrays_get_nth(i);
 
@@ -578,7 +582,7 @@ static SyncThread *sync_thread_level_arrays_find_free(void)
   SyncThread *slot;
   ulint i;
 
-  for (i = 0; i < OS_THREAD_MAX_N; i++) {
+  for (i = 0; i < sync_max_n_threads; i++) {
 
     slot = sync_thread_level_arrays_get_nth(i);
 
@@ -1030,7 +1034,9 @@ bool sync_thread_reset_level(void *latch) /*!< in: pointer to a mutex or an rw-l
 }
 #endif /* UNIV_SYNC_DEBUG */
 
-void sync_init() {
+void sync_init(ulint max_n_threads) {
+  sync_max_n_threads = max_n_threads;
+
 
   ut_a(sync_initialized == false);
 
@@ -1039,15 +1045,15 @@ void sync_init() {
   /* Create the primary system wait array which is protected by an OS
   mutex */
 
-  sync_primary_wait_array = sync_array_create(OS_THREAD_MAX_N, SYNC_ARRAY_OS_MUTEX);
+  sync_primary_wait_array = sync_array_create(sync_max_n_threads, SYNC_ARRAY_OS_MUTEX);
 
   IF_SYNC_DEBUG(
     /* Create the thread latch level array where the latch levels
     are stored for each OS thread */
 
-    sync_thread_level_arrays = new SyncThread[OS_THREAD_MAX_N];
+    sync_thread_level_arrays = new SyncThread[sync_max_n_threads];
 
-    for (ulint i = 0; i < OS_THREAD_MAX_N; i++) {
+    for (ulint i = 0; i < sync_max_n_threads; i++) {
       auto thread_slot = sync_thread_level_arrays_get_nth(i);
       thread_slot->levels = nullptr;
     }

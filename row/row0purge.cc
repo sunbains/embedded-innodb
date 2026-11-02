@@ -293,7 +293,7 @@ void RowPurge::upd_exist_or_extern(System &sys) {
   ulint offset;
   Mtr mtr;
 
-  Blob blob(sys.m_fsp.get(), sys.m_btree.get());
+  Blob blob{};
   auto heap = mem_heap_create(1024);
 
   if (m_rec_type == TRX_UNDO_UPD_DEL_REC) {

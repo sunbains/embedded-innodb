@@ -127,7 +127,7 @@ fields are read from the header. The object is inserted to the rseg
 list of the trx system object and a pointer is inserted in the rseg
 array in the trx system object.
 @return	own: rollback segment object */
-TrxRseg *TrxRseg::mem_create(
+TrxRseg *TrxRseg::mem_create(System &sys, 
   IbRecovery recovery, /*!< in: recovery flag */
   ulint id,               /*!< in: rollback segment id */
   ulint space,            /*!< in: space where the segment placed */
@@ -196,7 +196,7 @@ void TrxRseg::list_and_array_init(System &sys, IbRecovery recovery, trx_sysf_t *
     } else {
       const auto space = TrxSys::frseg_get_space(sys_header, i, mtr);
 
-      mem_create(recovery, i, space, page_no, mtr);
+      mem_create(sys, recovery, i, space, page_no, mtr);
     }
   }
 }

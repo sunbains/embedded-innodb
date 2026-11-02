@@ -1464,7 +1464,7 @@ static DbErr row_merge_sort(
 }
 
 /** Copy externally stored columns to the data tuple. */
-static void row_merge_copy_blobs(
+static void row_merge_copy_blobs(System &sys, 
   const mrec_t mrec,    /*!< in: merge record */
   const ulint *offsets, /*!< in: offsets of mrec */
   DTuple *tuple,        /*!< in/out: data tuple */
@@ -1566,7 +1566,7 @@ static DbErr row_merge_insert_index_tuples(System &sys, Trx *trx, Index *index, 
       dtuple = row_rec_to_index_entry_low(Rec(mrec), index, offsets, &n_ext, tuple_heap);
 
       if (unlikely(n_ext)) {
-        row_merge_copy_blobs(mrec, offsets, dtuple, tuple_heap);
+        row_merge_copy_blobs(sys, mrec, offsets, dtuple, tuple_heap);
       }
 
       node->m_row = dtuple;
@@ -1614,7 +1614,7 @@ err_exit:
 have been locked exclusively by the caller, because the transaction
 will not be committed. */
 
-void row_merge_drop_index(
+void row_merge_drop_index(System &sys, 
   Index *index, /*!< in: index to be removed */
   Table *table, /*!< in: table */
   Trx *trx

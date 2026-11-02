@@ -153,7 +153,7 @@ TrxSavept TrxRollback::savept_take(Trx *trx) {
 }
 
 /** Roll back an active transaction. */
-void TrxRollback::rollback_active(
+void TrxRollback::rollback_active(System &sys, 
   IbRecovery recovery, /*!< in: recovery flag */
   Trx *trx
 ) /*!< in/out: transaction */
@@ -288,7 +288,7 @@ loop:
         if (all || trx->get_dict_operation() != TRX_DICT_OP_NONE) {
           mutex_exit(&sys.m_trx_sys->m_mutex);
           // FIXME: Need to get rid of this global access
-          TrxRollback::rollback_active(sys.m_config.m_recv.m_force_recovery, trx);
+          TrxRollback::rollback_active(sys, sys.m_config.m_recv.m_force_recovery, trx);
           goto loop;
         }
     }

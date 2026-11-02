@@ -70,9 +70,7 @@ bool RowSel::sec_rec_is_for_blob(
   ulint sec_len
 ) noexcept {
 
-  auto fsp = m_sys.m_fsp.get();
-  auto btree = m_sys.m_btree.get();
-  Blob blob(fsp, btree);
+  Blob blob{};
   std::array<byte, DICT_MAX_INDEX_COL_LEN> buf{};
 
   auto len = blob.copy_externally_stored_field_prefix(m_sys, buf.data(), buf.size(), clust_field, clust_len);
@@ -249,9 +247,7 @@ void RowSel::fetch_columns(Index *index, const Rec rec, const ulint *offsets, Sy
 
   const auto index_type = index->is_clustered() ? SYM_CLUST_FIELD_NO : SYM_SEC_FIELD_NO;
 
-  auto fsp = m_sys.m_fsp.get();
-  auto btree = m_sys.m_btree.get();
-  Blob blob(fsp, btree);
+  Blob blob{};
 
   while (column != nullptr) {
     const auto field_no = column->field_nos[index_type];

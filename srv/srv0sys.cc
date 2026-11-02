@@ -171,7 +171,7 @@ DbErr System::init(const Config &config) noexcept {
   IF_SYNC_DEBUG(log_warn("!!!!!!!! UNIV_SYNC_DEBUG switched on !!!!!!!!!");)
 
   os_sync_init();
-  sync_init();
+  sync_init(m_config.m_srv.m_max_n_threads);
   os_file_init();
 
   m_aio = Aio::create(m_config.m_aio);

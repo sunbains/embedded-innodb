@@ -623,7 +623,7 @@ std::string Lock::rec_to_string(System &sys) const noexcept {
 
   BufPool::Request req{.m_page_id = page_id(), .m_file = __FILE__, .m_line = __LINE__, .m_mtr = &mtr};
 
-  auto block = buf_pool->try_get_by_page_id(req);
+  auto block = sys.m_buf_pool->try_get_by_page_id(req);
 
   str += " heap no ";
 

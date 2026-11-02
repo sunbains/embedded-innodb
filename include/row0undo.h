@@ -146,7 +146,7 @@ struct UndoNode {
    *
    * @return A pointer to the newly created undo node.
    */
-  [[nodiscard]] static UndoNode *create(Dict *dict, Trx *trx, QueThr *parent, MemHeap *heap) noexcept;
+  [[nodiscard]] static UndoNode *create(Trx *trx, QueThr *parent, MemHeap *heap) noexcept;
 
   /**
    * @brief Looks for the clustered index record when node has the row reference.

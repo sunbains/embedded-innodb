@@ -106,7 +106,7 @@ struct PurgeSys {
    * @param[in] undo_page         Update undo log header page, x-latched.
    * @param[in] mtr               Mini-transaction.
    */
-  static void add_update_undo_to_history(Trx *trx, page_t *undo_page, Mtr *mtr) noexcept;
+  void add_update_undo_to_history(Trx *trx, page_t *undo_page, Mtr *mtr) noexcept;
 
   /**
    * Fetches the next undo log record from the history list to purge. It must be

@@ -172,9 +172,9 @@ DbErr UndoNode::remove_secondary_index_entry(System &sys, ulint mode, Index *ind
   return err;
 }
 
-DbErr UndoNode::remove_secondary_index_entry(Index *index, DTuple *entry) noexcept {
+DbErr UndoNode::remove_secondary_index_entry(System &sys, Index *index, DTuple *entry) noexcept {
   /* Try first optimistic descent to the B-tree */
-  auto err = remove_secondary_index_entry(BTR_MODIFY_LEAF, index, entry);
+  auto err = remove_secondary_index_entry(sys, BTR_MODIFY_LEAF, index, entry);
 
   if (err == DB_SUCCESS) {
 
@@ -185,7 +185,7 @@ DbErr UndoNode::remove_secondary_index_entry(Index *index, DTuple *entry) noexce
 
   /* Try then pessimistic descent to the B-tree */
   for (;; ++n_tries) {
-    err = remove_secondary_index_entry(BTR_MODIFY_TREE, index, entry);
+    err = remove_secondary_index_entry(sys, BTR_MODIFY_TREE, index, entry);
 
     /* The delete operation may fail if we have little
     file space left: TODO: easiest to crash the database
@@ -212,9 +212,9 @@ UndoNode::UndoNode(Trx *trx, QueThr *parent) noexcept : m_trx{} {
   m_heap = mem_heap_create(256);
 }
 
-UndoNode *UndoNode::create(Dict *dict, Trx *trx, QueThr *parent, MemHeap *heap) noexcept {
+UndoNode *UndoNode::create(Trx *trx, QueThr *parent, MemHeap *heap) noexcept {
   auto ptr = mem_heap_alloc(heap, sizeof(UndoNode));
-  return new (ptr) UndoNode(dict, trx, parent);
+  return new (ptr) UndoNode(trx, parent);
 }
 
 bool UndoNode::search_cluster_index_and_persist_position(System &sys) noexcept {
@@ -425,7 +425,7 @@ DbErr UndoNode::fetch_undo_log_and_undo(System &sys, QueThr *thr) noexcept {
 DbErr UndoNode::undo_insert(System &sys) noexcept {
   ut_ad(m_state == UNDO_NODE_INSERT);
 
-  parse_insert_undo_rec(sys.m_config.m_recv.m_force_recovery);
+  parse_insert_undo_rec(sys, sys.m_config.m_recv.m_force_recovery);
 
   if (m_table == nullptr || !search_cluster_index_and_persist_position(sys)) {
     trx_undo_rec_release(m_trx, m_undo_no);
@@ -727,11 +727,11 @@ DbErr UndoNode::delete_mark_or_remove_secondary_index_entry(System &sys, QueThr 
   return err;
 }
 
-DbErr UndoNode::delete_mark_or_remove_secondary_index_entry(QueThr *thr, Index *index, DTuple *entry) noexcept {
-  if (auto err = delete_mark_or_remove_secondary_index_entry(thr, index, entry, BTR_MODIFY_LEAF); err == DB_SUCCESS) {
+DbErr UndoNode::delete_mark_or_remove_secondary_index_entry(System &sys, QueThr *thr, Index *index, DTuple *entry) noexcept {
+  if (auto err = delete_mark_or_remove_secondary_index_entry(sys, thr, index, entry, BTR_MODIFY_LEAF); err == DB_SUCCESS) {
     return err;
   } else {
-    return delete_mark_or_remove_secondary_index_entry(thr, index, entry, BTR_MODIFY_TREE);
+    return delete_mark_or_remove_secondary_index_entry(sys, thr, index, entry, BTR_MODIFY_TREE);
   }
 }
 
@@ -1008,8 +1008,7 @@ DbErr UndoNode::undo_update(System &sys, QueThr *thr) noexcept {
 
   ut_ad(m_state == UNDO_NODE_MODIFY);
 
-  // FIXME: Get rid of this global variable access
-  parse_update_undo_rec(sys.m_config.m_recv.m_force_recovery, thr);
+  parse_update_undo_rec(sys, sys.m_config.m_recv.m_force_recovery, thr);
 
   if (m_table == nullptr || !search_cluster_index_and_persist_position(sys)) {
     /* It is already undone, or will be undone by another query thread, or table was dropped */
@@ -1069,5 +1068,5 @@ QueThr *RowUndo::step(QueThr *thr) noexcept {
 }
 
 UndoNode *RowUndo::create_undo_node(Trx *trx, QueThr *parent, MemHeap *heap) noexcept {
-  return UndoNode::create(m_sys.m_dict.get(), trx, parent, heap);
+  return UndoNode::create(trx, parent, heap);
 }

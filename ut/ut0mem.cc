@@ -83,6 +83,3 @@ ulint ut_strlcpy_rev(char *dst, const char *src, ulint size) {
   return src_size;
 }
 
-ulint ut_total_allocated_memory() {
-  return MemBlock::s_total_memory.load(std::memory_order_acquire);
-}

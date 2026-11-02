@@ -737,7 +737,6 @@ bool Srv::printf_innodb_monitor(FILE *ib_stream, bool nowait, ulint *trx_start, 
     "BUFFER POOL AND MEMORY\n"
     "----------------------\n"
   );
-  log_warn("Total memory allocated ", ut_total_allocated_memory());
   log_warn("Dictionary memory allocated ", m_sys.m_dict->m_size);
 
   m_sys.m_buf_pool->print_io(ib_stream);

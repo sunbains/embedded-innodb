@@ -1286,20 +1286,18 @@ void Dict::update_statistics(Table *table) noexcept {
     return;
   }
 
-  auto fsp = m_sys.m_fsp.get();
   auto &stats = table->m_stats;
-  auto btree = m_sys.m_btree.get();
   ulint sum_of_index_sizes{};
   BtreeCursor btr_cur{};
 
   for (auto index : table->m_indexes) {
-    auto size = btree->get_size(index, BTR_TOTAL_SIZE);
+    auto size = m_sys.m_btree->get_size(index, BTR_TOTAL_SIZE);
 
     index->m_stats.m_index_size = size;
 
     sum_of_index_sizes += size;
 
-    size = btree->get_size(index, BTR_N_LEAF_PAGES);
+    size = m_sys.m_btree->get_size(index, BTR_N_LEAF_PAGES);
 
     if (size == 0) {
       /* The root node of the tree is a leaf */

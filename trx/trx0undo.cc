@@ -606,7 +606,7 @@ void Undo::seg_free(TrxUndo *undo) noexcept {
 
     if (finished) {
       /* Update the rseg header */
-      auto rseg_header = trx_rsegf_get(rseg->m_sys, m_space, rseg->m_page_no, &mtr);
+      auto rseg_header = trx_rsegf_get(m_sys, rseg->m_space, rseg->m_page_no, &mtr);
 
       trx_rsegf_set_nth_undo(rseg_header, undo->m_id, FIL_NULL, &mtr);
     }
@@ -813,7 +813,7 @@ static void trx_undo_mem_init_for_reuse(
  * @return DB_SUCCESS or DB_TOO_MANY_CONCURRENT_TRXS, DB_OUT_OF_FILE_SPACE
  *  or DB_OUT_OF_MEMORY
  */
-static DbErr trx_undo_create(
+static DbErr trx_undo_create(System &sys, 
   Trx *trx, TrxRseg *rseg, ulint type, trx_id_t trx_id, const Xid *xid, TrxUndo **undo, Mtr *mtr
 ) {
   ut_ad(mutex_own(&rseg->m_mutex));
@@ -827,8 +827,8 @@ static DbErr trx_undo_create(
 
   ulint id;
   page_t *undo_page;
-  auto rseg_header = trx_rsegf_get(rseg->sys, m_space, rseg->m_page_no, mtr);
-  auto err = trx_undo_seg_create(rseg, rseg_header, type, &id, &undo_page, mtr);
+  auto rseg_header = trx_rsegf_get(sys, rseg->m_space, rseg->m_page_no, mtr);
+  auto err = trx_undo_seg_create(sys, rseg, rseg_header, type, &id, &undo_page, mtr);
 
   if (err != DB_SUCCESS) {
     /* Did not succeed */
@@ -966,7 +966,7 @@ DbErr Undo::assign_undo(Trx *trx, ulint type) noexcept {
 
   if (undo == nullptr) {
 #ifdef WITH_XOPEN
-    auto err = trx_undo_create(trx, rseg, type, trx->m_id, &trx->m_xid, &undo, &mtr);
+    auto err = trx_undo_create(m_sys, trx, rseg, type, trx->m_id, &trx->m_xid, &undo, &mtr);
 #else
     auto err = trx_undo_create(trx, rseg, type, trx->id, nullptr, &undo, &mtr);
 #endif /* WITH_OPEN */
@@ -1343,7 +1343,7 @@ ulint Undo::lists_init(IbRecovery recovery, TrxRseg *rseg) noexcept {
 
   mtr.start();
 
-  auto rseg_header = trx_rsegf_get_new(rseg->m_sys, m_space, rseg->m_page_no, &mtr);
+  auto rseg_header = trx_rsegf_get_new(m_sys, rseg->m_space, rseg->m_page_no, &mtr);
 
   ulint size = 0;
 
@@ -1364,7 +1364,7 @@ ulint Undo::lists_init(IbRecovery recovery, TrxRseg *rseg) noexcept {
 
       mtr.start();
 
-      rseg_header = trx_rsegf_get(rseg->m_sys, m_space, rseg->m_page_no, &mtr);
+      rseg_header = trx_rsegf_get(m_sys, rseg->m_space, rseg->m_page_no, &mtr);
     }
   }
 

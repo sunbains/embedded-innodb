@@ -142,7 +142,7 @@ void PurgeSys::free_segment(TrxRseg *rseg, FilAddr hdr_addr, ulint n_removed_log
 
     mutex_enter(&rseg->m_mutex);
 
-    rseg_hdr = trx_rsegf_get(rseg->m_sys, m_space, rseg->m_page_no, &mtr);
+    rseg_hdr = trx_rsegf_get(m_sys, rseg->m_space, rseg->m_page_no, &mtr);
 
     auto undo_page = m_sys.m_undo->page_get(rseg->m_space, hdr_addr.m_page_no, &mtr);
 
@@ -221,7 +221,7 @@ void PurgeSys::truncate_rseg_history(TrxRseg *rseg, trx_id_t limit_trx_no, undo_
 
   mutex_enter(&rseg->m_mutex);
 
-  auto rseg_hdr = trx_rsegf_get(rseg->m_sys, m_space, rseg->m_page_no, &mtr);
+  auto rseg_hdr = trx_rsegf_get(m_sys, rseg->m_space, rseg->m_page_no, &mtr);
   auto hdr_addr = trx_purge_get_log_from_hist(flst_get_last(rseg_hdr + TRX_RSEG_HISTORY, &mtr));
 
   for (;;) {
@@ -251,7 +251,7 @@ void PurgeSys::truncate_rseg_history(TrxRseg *rseg, trx_id_t limit_trx_no, undo_
 
       mutex_exit(&m_sys.m_trx_sys->m_mutex);
 
-      flst_truncate_end(rseg_hdr + TRX_RSEG_HISTORY, log_hdr + TRX_UNDO_HISTORY_NODE, n_removed_logs, &mtr);
+      flst_truncate_end(m_sys, rseg_hdr + TRX_RSEG_HISTORY, log_hdr + TRX_UNDO_HISTORY_NODE, n_removed_logs, &mtr);
 
       mutex_exit(&rseg->m_mutex);
 
@@ -289,7 +289,7 @@ void PurgeSys::truncate_rseg_history(TrxRseg *rseg, trx_id_t limit_trx_no, undo_
 
     mutex_enter(&rseg->m_mutex);
 
-    rseg_hdr = trx_rsegf_get(rseg->m_sys, m_space, rseg->m_page_no, &mtr);
+    rseg_hdr = trx_rsegf_get(m_sys, rseg->m_space, rseg->m_page_no, &mtr);
 
     hdr_addr = prev_hdr_addr;
   }
@@ -670,7 +670,7 @@ void PurgeSys::add_update_undo_to_history(Trx *trx, page_t *undo_page, Mtr *mtr)
 
   ut_ad(mutex_own(&rseg->m_mutex));
 
-  auto rseg_header = trx_rsegf_get(rseg->m_sys, m_space, rseg->m_page_no, mtr);
+  auto rseg_header = trx_rsegf_get(m_sys, rseg->m_space, rseg->m_page_no, mtr);
   auto undo_header = undo_page + undo->m_hdr_offset;
   auto seg_header = undo_page + TRX_UNDO_SEG_HDR;
 
@@ -690,7 +690,7 @@ void PurgeSys::add_update_undo_to_history(Trx *trx, page_t *undo_page, Mtr *mtr)
   }
 
   /* Add the log as the first in the history list */
-  flst_add_first(rseg_header + TRX_RSEG_HISTORY, undo_header + TRX_UNDO_HISTORY_NODE, mtr);
+  flst_add_first(m_sys, rseg_header + TRX_RSEG_HISTORY, undo_header + TRX_UNDO_HISTORY_NODE, mtr);
 
   mutex_enter(&m_sys.m_trx_sys->m_mutex);
   ++m_sys.m_trx_sys->m_rseg_history_len;
@@ -801,11 +801,6 @@ ulint PurgeSys::run() noexcept {
   mutex_exit(&m_sys.m_trx_sys->m_mutex);
 
   /*	srv_que_task_enqueue(thr2); */
-
-  if (srv_print_thread_releases) {
-
-    log_info("Starting purge");
-  }
 
   que_run_threads(m_sys, thr);
 
