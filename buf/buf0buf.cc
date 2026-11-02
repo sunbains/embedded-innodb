@@ -216,7 +216,6 @@ constexpr int WAIT_FOR_READ = 5000;
 constexpr ulint BUF_PAGE_READ_MAX_RETRIES = 100;
 
 /** Checksum function. */
-crc32::Checksum crc32::checksum = {};
 
 
 /** A chunk of buffers.  The buffer pool is allocated in chunks. */
@@ -581,7 +580,6 @@ bool BufPool::open(uint64_t pool_size) {
   /* 4. Initialize the buddy allocator fields */
   /* All fields are initialized by mem_zalloc(). */
 
-  crc32::checksum = crc32::init();
 
   return true;
 }

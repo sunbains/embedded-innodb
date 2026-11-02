@@ -123,27 +123,14 @@ struct CondVar {
 
   /** This is true when the event is in the signaled state,
    * i.e., a thread does not stop if it tries to wait for this event */
-  bool m_is_set;
+  bool m_is_set{};
 
   /** This is incremented each time the event becomes signaled */
-  int64_t m_signal_count;
+  int64_t m_signal_count{};
 
   /** Condition variable is used in waiting for the event */
   std::condition_variable m_cond_var{};
 
-  /** List of all created events */
-  UT_LIST_NODE_T(CondVar) m_os_event_list;
-
-  using Events = UT_LIST_BASE_NODE_T(CondVar, m_os_event_list);
-
-  /** Mutex protecting s_events && s_count */
-  static std::mutex s_mutex;
-
-  /* For tracking all the created events. */
-  static Events s_events;
-
-  /* Number of events created. */
-  static ulint s_count;
 };
 
 /** Operating system mutex */
@@ -155,15 +142,8 @@ constexpr ulint OS_SYNC_INFINITE_TIME = ((ulint)(-1));
 /** Return value of os_event_wait_time() when the time is exceeded */
 constexpr ulint OS_SYNC_TIME_EXCEEDED = 1;
 
-/** This is incremented by 1 in os_thread_create and decremented by 1 in
-os_thread_exit */
-extern std::atomic_int os_thread_count;
 
-/** Initializes global event and OS 'slow' mutex lists. */
-void os_sync_init();
 
-/** Frees created events and OS 'slow' mutexes. */
-void os_sync_free();
 
 /**
  * Creates an event semaphore, i.e., a semaphore which may just have two
@@ -217,10 +197,4 @@ void os_mutex_exit(OsMutex *mutex);
  */
 void os_mutex_destroy(OsMutex *mutex);
 
-/** @return the number of mutexes created. */
-ulint os_mutex_count();
 
-/**
- * Reset the variables.
- */
-void os_sync_var_init();

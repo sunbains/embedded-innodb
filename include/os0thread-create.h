@@ -38,8 +38,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include <functional>
 #include <future>
 
-/** Number of threads active. */
-extern std::atomic_int os_thread_count;
 
 struct Runnable {
   Runnable() = default;
@@ -54,16 +52,9 @@ struct Runnable {
 
     std::atomic_thread_fence(std::memory_order_release);
 
-    os_thread_count.fetch_add(1, std::memory_order_relaxed);
-
     task();
 
     std::atomic_thread_fence(std::memory_order_release);
-
-    {
-      const auto old = os_thread_count.fetch_sub(1, std::memory_order_relaxed);
-      ut_a(old > 0);
-    }
   }
 };
 

@@ -349,6 +349,21 @@ struct Srv {
   void start_threads() noexcept;
 
   /**
+   * Start a background thread of this instance. The thread must call
+   * thread_exited() just before it returns.
+   *
+   * @param[in] f               Thread function.
+   * @param[in] arg             Argument of f.
+   */
+  void create_thread(void *(*f)(void *), void *arg) noexcept;
+
+  /** A background thread started with create_thread() is about to return. */
+  void thread_exited() noexcept { m_n_background_threads.fetch_sub(1, std::memory_order_release); }
+
+  /** @return the number of background threads that have not exited yet. */
+  [[nodiscard]] int n_background_threads() const noexcept { return m_n_background_threads.load(std::memory_order_acquire); }
+
+  /**
    * Releases threads of the type given from suspension in the thread table.
    * NOTE! The trx_sys mutex has to be reserved by the caller!
    *
@@ -491,9 +506,17 @@ struct Srv {
   /** Thread entry point: runs F on the Srv instance passed as the argument. */
   template <void (Srv::*F)() noexcept>
   static void *thread_main(void *arg) noexcept {
-    (static_cast<Srv *>(arg)->*F)();
+    auto srv = static_cast<Srv *>(arg);
+
+    (srv->*F)();
+
+    srv->thread_exited();
+
     return nullptr;
   }
+
+  /** Background threads started by create_thread() that are still running. */
+  std::atomic_int m_n_background_threads{};
 
   void lock_timeout_thread() noexcept;
   void error_monitor_thread() noexcept;

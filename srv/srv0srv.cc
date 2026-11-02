@@ -982,10 +982,7 @@ loop:
 exit_func:
   m_monitor_active = false;
 
-  /* We count the number of threads in os_thread_exit(). A created
-  thread should always use that to exit and not use return() to exit. */
 
-  os_thread_exit();
 
   return;
 }
@@ -1037,10 +1034,7 @@ void Srv::lock_timeout_thread() noexcept {
     if (m_shutdown_state >= SRV_SHUTDOWN_CLEANUP) {
       m_lock_timeout_active = false;
 
-      /* We count the number of threads in os_thread_exit(). A created
-      thread should always use that to exit and not use return() to exit. */
 
-      os_thread_exit();
 
       return;
     }
@@ -1119,10 +1113,7 @@ loop:
 
   m_error_monitor_active = false;
 
-  /* We count the number of threads in os_thread_exit(). A created
-  thread should always use that to exit and not use return() to exit. */
 
-  os_thread_exit();
 
   return;
 }
@@ -1553,7 +1544,6 @@ suspend_thread:
     /* This is only extra safety, the thread should exit
     already when the event wait ends */
 
-    os_thread_exit();
     return;
   } else {
     /* When there is user activity, InnoDB will set the event and the
@@ -1576,18 +1566,25 @@ void Srv::request_monitor_print() noexcept {
   os_event_set(m_lock_timeout_thread_event);
 }
 
-void Srv::start_threads() noexcept {
+void Srv::create_thread(void *(*f)(void *), void *arg) noexcept {
+  /* Count it before it runs, so that shutdown can't miss it. */
+  m_n_background_threads.fetch_add(1, std::memory_order_release);
+
   os_thread_id_t id;
 
+  os_thread_create(f, arg, &id);
+}
+
+void Srv::start_threads() noexcept {
   /* Watches the timeouts for lock waits */
-  os_thread_create(&thread_main<&Srv::lock_timeout_thread>, this, &id);
+  create_thread(&thread_main<&Srv::lock_timeout_thread>, this);
 
   /* Warns of long semaphore waits */
-  os_thread_create(&thread_main<&Srv::error_monitor_thread>, this, &id);
+  create_thread(&thread_main<&Srv::error_monitor_thread>, this);
 
   /* Prints the InnoDB monitor info */
-  os_thread_create(&thread_main<&Srv::monitor_thread>, this, &id);
+  create_thread(&thread_main<&Srv::monitor_thread>, this);
 
   /* Does purge and other utility operations */
-  os_thread_create(&thread_main<&Srv::master_thread>, this, &id);
+  create_thread(&thread_main<&Srv::master_thread>, this);
 }

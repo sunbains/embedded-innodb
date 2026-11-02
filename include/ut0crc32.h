@@ -64,7 +64,6 @@ constexpr uint32_t CRC32C_POLYNOMIAL = 0x1EDC6F41;
 
 using Checksum = std::function<uint32_t(const byte *, size_t)>;
 
-extern Checksum checksum;
 
 #if defined(__SSE4_2__)
 /** Executes cpuid assembly instruction and returns the ecx register's value.
@@ -549,5 +548,8 @@ static inline Checksum init() noexcept {  // Provide complete type for Checksum
     return NO_CHECKSUM;
   };
 }
+
+/** The CRC32 implementation for this CPU, chosen once. */
+inline const Checksum checksum{init()};
 
 }  // namespace crc32

@@ -84,66 +84,10 @@ struct OsMutex {
   that the OS mutex supports recursive locking, though NT seems to do that */
   uint16_t m_count{};
 
-  /** list of all 'slow' OS mutexes created */
-  UT_LIST_NODE_T(OsMutex) m_os_mutex_list;
-
-  using Mutexes = UT_LIST_BASE_NODE_T(OsMutex, m_os_mutex_list);
-
-  /** Mutex protecting counts and the lists of OS mutexes and events */
-  static std::mutex s_mutex;
-
-  /* For tracking all mutexes created. */
-  static Mutexes s_mutexes;
-
-  /** Number of mutexes created. */
-  static ulint s_count;
 };
 
-/** This is incremented by 1 in os_thread_create and decremented by 1 in
-os_thread_exit */
-std::atomic_int os_thread_count{};
-
-std::mutex OsMutex::s_mutex{};
-std::mutex CondVar::s_mutex{};
-
-OsMutex::Mutexes OsMutex::s_mutexes{};
-CondVar::Events CondVar::s_events{};
-
-ulint OsMutex::s_count = 0;
-ulint CondVar::s_count = 0;
-
-void os_sync_var_init() {
-  os_thread_count.store(0, std::memory_order_release);
-}
-
-void os_sync_init() {
-  UT_LIST_INIT(CondVar::s_events);
-  UT_LIST_INIT(OsMutex::s_mutexes);
-}
-
-void os_sync_free() {
-  for (auto event = UT_LIST_GET_FIRST(CondVar::s_events); event != nullptr; event = UT_LIST_GET_FIRST(CondVar::s_events)) {
-
-    CondVar::destroy(event);
-  }
-
-  for (auto mutex = UT_LIST_GET_FIRST(OsMutex::s_mutexes); mutex != nullptr; mutex = UT_LIST_GET_FIRST(OsMutex::s_mutexes)) {
-
-    OsMutex::destroy(mutex);
-  }
-}
-
 CondVar *CondVar::create(const char *) {
-  auto event = new CondVar;
-
-  std::lock_guard<std::mutex> lock(s_mutex);
-
-  /* Put to the list of events */
-  UT_LIST_ADD_FIRST(CondVar::s_events, event);
-
-  ++s_count;
-
-  return event;
+  return new CondVar;
 }
 
 void CondVar::set() {
@@ -167,12 +111,6 @@ int64_t CondVar::reset() {
 }
 
 void CondVar::destroy(CondVar *event) {
-  std::lock_guard<std::mutex> lock(s_mutex);
-
-  UT_LIST_REMOVE(s_events, event);
-
-  --s_count;
-
   delete event;
 }
 
@@ -208,15 +146,7 @@ ulint CondVar::wait_time(std::chrono::microseconds timeout, int64_t reset_sig_co
 }
 
 OsMutex *OsMutex::create(const char *) {
-  auto mutex = new (std::nothrow) OsMutex;
-
-  std::lock_guard<std::mutex> lock(s_mutex);
-
-  UT_LIST_ADD_FIRST(s_mutexes, mutex);
-
-  ++s_count;
-
-  return mutex;
+  return new (std::nothrow) OsMutex;
 }
 
 void os_mutex_enter(OsMutex *mutex) {
@@ -228,12 +158,6 @@ void os_mutex_exit(OsMutex *mutex) {
 }
 
 void OsMutex::destroy(OsMutex *mutex) {
-  std::lock_guard<std::mutex> lock(s_mutex);
-
-  UT_LIST_REMOVE(s_mutexes, mutex);
-
-  --s_count;
-
   delete mutex;
 }
 
@@ -245,6 +169,3 @@ void os_mutex_destroy(OsMutex *mutex) {
   OsMutex::destroy(mutex);
 }
 
-ulint os_mutex_count() {
-  return OsMutex::s_count;
-}

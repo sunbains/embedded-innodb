@@ -1341,7 +1341,7 @@ void recv_recovery_rollback_active(System &sys) noexcept {
     /* Rollback the uncommitted transactions which have no user
     session */
 
-    os_thread_create(trx_rollback_or_clean_all_recovered, &sys, nullptr);
+    sys.m_srv->create_thread(trx_rollback_or_clean_all_recovered, &sys);
   }
 }
 

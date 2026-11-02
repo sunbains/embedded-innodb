@@ -71,8 +71,6 @@ thread should always use that to exit and not use return() to exit.
 @return	handle to the thread. */
 os_thread_t os_thread_create(void *(*f)(void *), void *arg, os_thread_id_t *thread_id);
 
-/** Exits the current thread. */
-void os_thread_exit();
 
 /** Returns the thread identifier of current thread.
 @return	current thread identifier */

@@ -48,8 +48,6 @@ os_thread_t os_thread_create(void *(*f)(void *), void *arg, os_thread_id_t *thre
 
   memset(&attr, 0x0, sizeof(attr));
 
-  os_thread_count.fetch_add(1, std::memory_order_relaxed);
-
   auto ret = pthread_create(&pthread, &attr, f, arg);
 
   if (ret != 0) {
@@ -63,9 +61,6 @@ os_thread_t os_thread_create(void *(*f)(void *), void *arg, os_thread_id_t *thre
   return pthread;
 }
 
-void os_thread_exit() {
-  os_thread_count.fetch_sub(1, std::memory_order_relaxed);
-}
 
 os_thread_t os_thread_get_curr() {
   return pthread_self();

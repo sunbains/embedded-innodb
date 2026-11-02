@@ -298,10 +298,7 @@ leave_function:
 void *TrxRollback::rollback_or_clean_all_recovered(System &sys, void *) {
   trx_rollback_or_clean_recovered(sys, true);
 
-  /* We count the number of threads in os_thread_exit(). A created
-  thread should always use that to exit and not use return() to exit. */
-
-  os_thread_exit();
+  sys.m_srv->thread_exited();
 
   return nullptr;
 }

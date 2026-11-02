@@ -89,9 +89,7 @@ static void *io_handler_thread(void *arg) noexcept {
 
   while (handler->m_sys->m_fil->aio_wait(handler->m_segment)) {}
 
-  /* We count the number of threads in os_thread_exit(). A created
-  thread should always use that to exit and not use return() to exit. */
-  os_thread_exit();
+  handler->m_sys->m_srv->thread_exited();
 
   return nullptr;
 }
@@ -171,7 +169,6 @@ DbErr System::init(const Config &config) noexcept {
 
   IF_SYNC_DEBUG(log_warn("!!!!!!!! UNIV_SYNC_DEBUG switched on !!!!!!!!!");)
 
-  os_sync_init();
   sync_init(m_config.m_srv.m_max_n_threads);
   os_file_init();
 
@@ -254,7 +251,6 @@ void System::destroy() noexcept {
 
   os_file_free();
   sync_close();
-  os_sync_free();
   pars_close();
 }
 
@@ -471,14 +467,14 @@ static bool threads_shutdown(System &sys) noexcept {
 
     sys.m_aio->shutdown();
 
-    if (os_thread_count.load(std::memory_order_relaxed) == 0) {
+    if (sys.m_srv->n_background_threads() == 0) {
       /* All the threads have exited or are just exiting; NOTE that the
       threads may not have completed their exit yet. */
       return true;
     }
   }
 
-  log_warn(std::format("{} threads created by InnoDB had not exited at shutdown!", os_thread_count.load(std::memory_order_relaxed)));
+  log_warn(std::format("{} threads created by InnoDB had not exited at shutdown!", sys.m_srv->n_background_threads()));
 
   return false;
 }
@@ -694,11 +690,9 @@ DbErr System::startup() noexcept {
   m_io_handlers.resize(n_file_io_threads);
 
   for (ulint i{}; i < n_file_io_threads; ++i) {
-    os_thread_id_t id;
-
     m_io_handlers[i] = IoHandler{this, i};
 
-    os_thread_create(io_handler_thread, &m_io_handlers[i], &id);
+    m_srv->create_thread(io_handler_thread, &m_io_handlers[i]);
   }
 
   bool create_new_db{};
