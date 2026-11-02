@@ -24,6 +24,8 @@ Created 12/19/1997 Heikki Tuuri
 
 #pragma once
 
+#include "srv0sys.h"
+
 #include "innodb0types.h"
 #include "btr0pcur.h"
 #include "data0data.h"
@@ -45,10 +47,13 @@ struct SelNode;
 enum class SearchStatus { UNDEFINED = -1, FOUND = 0, EXHAUSTED = 1, RETRY = 2 };
 
 struct RowSel {
+  /** The instance this sub-system belongs to. */
+  System &m_sys;
+
   /*  *
    * @brief Constructor.
    */
-  RowSel(Dict *dict, LockSys *lock_sys) noexcept;
+  explicit RowSel(System &sys) noexcept : m_sys(sys) {}
 
   /**
    * @brief Destructor.
@@ -58,13 +63,9 @@ struct RowSel {
   /**
    * @brief Creates a new RowSel object.
    */
-  [[nodiscard]] static RowSel *create(Dict *dict, LockSys *lock_sys) noexcept;
-
   /**
    * @brief Destroys a RowSel object.
    */
-  static void destroy(RowSel *&row_sel) noexcept;
-
   /**
    * @brief Frees a prefetch buffer for a column.
    *
@@ -347,11 +348,8 @@ struct RowSel {
   ) noexcept;
 
  public:
-  /** Dictionary */
-  Dict *m_dict{};
 
   /** Lock system. */
-  LockSys *m_lock_sys{};
 };
 
 /** A structure for caching column values for prefetched rows */
@@ -399,7 +397,7 @@ struct Plan {
    * @param[in] btree The B-tree.
    */
   Plan(Fsp *fsp, Btree *btree, LockSys *lock_sys, RowSel *row_sel) noexcept
-      : m_pcur{fsp, btree}, m_clust_pcur{fsp, btree}, m_lock_sys{lock_sys}, m_sel{row_sel} {}
+      : m_pcur{fsp, btree}, m_clust_pcur{fsp, btree}, sys.m_lock_sys{lock_sys}, m_sel{row_sel} {}
 
   /**
    * Pops the column values for a prefetched, cached row from the column prefetch
@@ -472,7 +470,7 @@ struct Plan {
    *
    * @return          DB_SUCCESS or error code
    */
-  [[nodiscard]] DbErr get_clust_rec(SelNode *sel_node, const Rec rec, QueThr *thr, Rec &out_rec, Mtr *mtr) noexcept;
+  [[nodiscard]] DbErr get_clust_rec(System &sys, SelNode *sel_node, const Rec rec, QueThr *thr, Rec &out_rec, Mtr *mtr) noexcept;
 
   /**
    * Tries to do a shortcut to fetch a clustered index record with a unique key,
@@ -579,7 +577,6 @@ struct Plan {
   MemHeap *m_old_row_heap{};
 
   /** lock system */
-  LockSys *m_lock_sys{};
 
   /** row selector */
   RowSel *m_sel{};

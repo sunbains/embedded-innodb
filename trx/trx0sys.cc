@@ -35,10 +35,8 @@ Created 3/26/1996 Heikki Tuuri
 #include "trx0trx.h"
 #include "trx0undo.h"
 
-/** The transaction system */
-TrxSys *srv_trx_sys{};
 
-TrxSys::TrxSys(Fsp *fsp) noexcept : m_fsp(fsp) {
+TrxSys::TrxSys(System &sys) noexcept : m_sys(sys) {
   mutex_create(&m_mutex, IF_DEBUG("trx_sys_mutex", ) IF_SYNC_DEBUG(TRX_SYS_MUTEX, ) Current_location());
 }
 
@@ -218,12 +216,12 @@ DbErr TrxSys::create_system_tablespace() noexcept {
   then enter the kernel: we must do it in this order to conform
   to the latching order rules. */
 
-  mtr_x_lock(m_fsp->m_fil->space_get_latch(TRX_SYS_SPACE), &mtr);
+  mtr_x_lock(m_sys.m_fsp->m_fil->space_get_latch(TRX_SYS_SPACE), &mtr);
 
   mutex_enter(&m_mutex);
 
   /* Create the trx sys file block in a new allocated file segment */
-  auto block = m_fsp->fseg_create(TRX_SYS_SPACE, 0, TRX_SYS + TRX_SYS_FSEG_HEADER, &mtr);
+  auto block = m_sys.m_fsp->fseg_create(TRX_SYS_SPACE, 0, TRX_SYS + TRX_SYS_FSEG_HEADER, &mtr);
 
   buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_TRX_SYS_HEADER));
 
@@ -661,7 +659,7 @@ CursorView *TrxSys::create_cursor_view(Trx *cr_trx) {
       n++;
 
       /* NOTE that a transaction whose trx number is <
-      srv_trx_sys->m_max_trx_id can still be active, if it is
+      m_max_trx_id can still be active, if it is
       in the middle of its commit! Note that when a
       transaction starts, we initialize trx->no to
       LSN_MAX. */
@@ -796,7 +794,7 @@ ReadView *TrxSys::open_read_view_now(trx_id_t cr_trx_id, MemHeap *heap) {
 
       ++n;
 
-      /* NOTE that a transaction whose trx number is < srv_trx_sys->m_max_trx_id can still be active, if it is
+      /* NOTE that a transaction whose trx number is < m_max_trx_id can still be active, if it is
       in the middle of its commit! Note that when a transaction starts, we initialize trx->no to LSN_MAX. */
 
       if (view->m_low_limit_no > trx->m_no) {
@@ -820,16 +818,3 @@ ReadView *TrxSys::open_read_view_now(trx_id_t cr_trx_id, MemHeap *heap) {
   return view;
 }
 
-TrxSys *TrxSys::create(Fsp *fsp) noexcept {
-  auto ptr = ut_new(sizeof(TrxSys));
-
-  return ptr != nullptr ? new (ptr) TrxSys(fsp) : nullptr;
-}
-
-void TrxSys::destroy(TrxSys *&trx_sys) noexcept {
-  call_destructor(trx_sys);
-
-  ut_delete(trx_sys);
-
-  trx_sys = nullptr;
-}

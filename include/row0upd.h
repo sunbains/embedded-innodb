@@ -24,6 +24,8 @@ Created 12/27/1996 Heikki Tuuri
 
 #pragma once
 
+#include "srv0sys.h"
+
 #include "btr0pcur.h"
 #include "btr0types.h"
 #include "data0data.h"
@@ -266,13 +268,16 @@ struct UpdNode {
 };
 
 struct RowUpdate {
+  /** The instance this sub-system belongs to. */
+  System &m_sys;
+
 
   /**
    * @brief Constructor.
    *
    * @param[in] dict_sys Dictionary system.
    */
-  RowUpdate(Dict *dict, LockSys *lock_sys) noexcept;
+  explicit RowUpdate(System &sys) noexcept : m_sys(sys) {}
 
   /**
    * @brief Destructor.
@@ -286,15 +291,11 @@ struct RowUpdate {
    *
    * @return Pointer to the created row update object.
    */
-  [[nodiscard]] static RowUpdate *create(Dict *dict, LockSys *lock_sys) noexcept;
-
   /**
    * @brief Destroys a row update object.
    *
    * @param[in,out] row_upd Pointer to the row update object to destroy.
    */
-  static void destroy(RowUpdate *&row_upd) noexcept;
-
   /**
    * @brief Writes into the redo log the values of trx id and roll ptr and enough info
    * to determine their positions within a clustered index record.
@@ -573,7 +574,7 @@ struct RowUpdate {
 
     static_assert(DATA_TRX_ID + 1 == DATA_ROLL_PTR, "error DATA_TRX_ID + 1 != DATA_ROLL_PTR");
 
-    srv_trx_sys->write_trx_id(rec.get() + offset, trx->m_id);
+    m_sys.m_trx_sys->write_trx_id(rec.get() + offset, trx->m_id);
 
     trx_write_roll_ptr(rec.get() + offset + DATA_TRX_ID_LEN, roll_ptr);
   }
@@ -775,10 +776,8 @@ struct RowUpdate {
   /**
    * @brief Dictionary.
    */
-  Dict *m_dict{};
 
   /**
    * @brief Lock system.
    */
-  LockSys *m_lock_sys{};
 };

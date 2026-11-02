@@ -110,7 +110,7 @@ struct BtreeCursor {
    * @param[in] fsp             The file segment manager.
    * @param[in] btree           The B-tree.
    */
-  BtreeCursor(Fsp *fsp, Btree *btree) : m_fsp(fsp), m_btree(btree), m_lock_sys(btree->m_lock_sys) {}
+  BtreeCursor(Fsp *fsp, Btree *btree) : sys.m_fsp(fsp), sys.m_btree(btree), sys.m_lock_sys(btree->m_lock_sys) {}
 
   /**
    * Searches to the nth level of the index tree.
@@ -142,7 +142,7 @@ struct BtreeCursor {
    * @param[in] mtr            The mini-transaction handle.
    * @param[in] loc            The source location.
    */
-  void search_to_nth_level(
+  void search_to_nth_level(System &sys, 
     Paths *paths, const Index *index, ulint level, const DTuple *tuple, ulint mode, ulint latch_mode, Mtr *mtr,
     SourceLocation loc
   ) noexcept;
@@ -171,7 +171,7 @@ struct BtreeCursor {
    * @param[in] mtr             The mini-transaction handle.
    * @param[in] loc             The source location.
    */
-  void open_at_rnd_pos(const Index *index, ulint latch_mode, Mtr *mtr, SourceLocation loc) noexcept;
+  void open_at_rnd_pos(System &sys, const Index *index, ulint latch_mode, Mtr *mtr, SourceLocation loc) noexcept;
 
   /**
    * Tries to perform an insert to a page in an index tree, next to cursor.
@@ -194,7 +194,7 @@ struct BtreeCursor {
    *
    * @return DB_SUCCESS, DB_WAIT_LOCK, DB_FAIL, or error number
    */
-  [[nodiscard]] DbErr optimistic_insert(
+  [[nodiscard]] DbErr optimistic_insert(System &sys, 
     ulint flags, DTuple *entry, Rec *rec, BigRec *big_rec, ulint n_ext, QueThr *thr, Mtr *mtr
   ) noexcept;
 
@@ -215,7 +215,7 @@ struct BtreeCursor {
    *
    * @return          DB_SUCCESS or error number
    */
-  [[nodiscard]] DbErr pessimistic_insert(
+  [[nodiscard]] DbErr pessimistic_insert(System &sys, 
     ulint flags, DTuple *entry, Rec *rec, BigRec *big_rec, ulint n_ext, QueThr *thr, Mtr *mtr
   ) noexcept;
 
@@ -230,7 +230,7 @@ struct BtreeCursor {
    *
    * @return  DB_SUCCESS or error number
    */
-  [[nodiscard]] DbErr update_in_place(ulint flags, const Upd *update, ulint cmpl_info, QueThr *thr, Mtr *mtr) noexcept;
+  [[nodiscard]] DbErr update_in_place(System &sys, ulint flags, const Upd *update, ulint cmpl_info, QueThr *thr, Mtr *mtr) noexcept;
 
   /**
    * Tries to update a record on a page in an index tree. It is assumed that mtr
@@ -248,7 +248,7 @@ struct BtreeCursor {
    * @return DB_SUCCESS, or DB_OVERFLOW if the updated record does not fit,
    *         DB_UNDERFLOW if the page would become too empty.
    */
-  [[nodiscard]] DbErr optimistic_update(ulint flags, const Upd *update, ulint cmpl_info, QueThr *thr, Mtr *mtr) noexcept;
+  [[nodiscard]] DbErr optimistic_update(System &sys, ulint flags, const Upd *update, ulint cmpl_info, QueThr *thr, Mtr *mtr) noexcept;
 
   /**
    * Performs an update of a record on a page of a tree. It is assumed that mtr holds an x-latch
@@ -266,7 +266,7 @@ struct BtreeCursor {
    *
    * @return DB_SUCCESS or error code
    */
-  [[nodiscard]] DbErr pessimistic_update(
+  [[nodiscard]] DbErr pessimistic_update(System &sys, 
     ulint flags, MemHeap **heap, BigRec *big_rec, const Upd *update, ulint cmpl_info, QueThr *thr, Mtr *mtr
   ) noexcept;
 
@@ -282,7 +282,7 @@ struct BtreeCursor {
    *
    * @return DB_SUCCESS, DB_LOCK_WAIT, or error number
    */
-  [[nodiscard]] DbErr del_mark_set_clust_rec(ulint flags, bool val, QueThr *thr, Mtr *mtr) noexcept;
+  [[nodiscard]] DbErr del_mark_set_clust_rec(System &sys, ulint flags, bool val, QueThr *thr, Mtr *mtr) noexcept;
 
   /**
    * Sets a secondary index record delete mark to true or false.
@@ -294,7 +294,7 @@ struct BtreeCursor {
    *
    * @return DB_SUCCESS, DB_LOCK_WAIT, or error number
    */
-  [[nodiscard]] DbErr del_mark_set_sec_rec(ulint flags, bool val, QueThr *thr, Mtr *mtr) noexcept;
+  [[nodiscard]] DbErr del_mark_set_sec_rec(System &sys, ulint flags, bool val, QueThr *thr, Mtr *mtr) noexcept;
 
   /**
    * Removes the record on which the tree cursor is positioned. It is assumed that
@@ -310,7 +310,7 @@ struct BtreeCursor {
    *
    * @return true on success.
    */
-  [[nodiscard]] bool optimistic_delete(Mtr *mtr) noexcept;
+  [[nodiscard]] bool optimistic_delete(System &sys, Mtr *mtr) noexcept;
 
   /**
    * Removes the record on which the tree cursor is positioned. Tries to compress the page if its
@@ -328,7 +328,7 @@ struct BtreeCursor {
    * @return DB_SUCCESS or DB_OUT_OF_FILE_SPACE; the latter may occur because we may have to update node pointers
    *   on upper levels, and in the case of variable length keys these may actually grow in size
    */
-  [[nodiscard]] DbErr pessimistic_delete(bool has_reserved_extents, TrxRbCtx rb_ctx, Mtr *mtr) noexcept;
+  [[nodiscard]] DbErr pessimistic_delete(System &sys, bool has_reserved_extents, TrxRbCtx rb_ctx, Mtr *mtr) noexcept;
 
   /**
    * Parses a redo log record of updating a record in-place.
@@ -340,7 +340,7 @@ struct BtreeCursor {
    *
    * @return End of log record or nullptr
    */
-  [[nodiscard]] static byte *parse_update_in_place(byte *ptr, byte *end_ptr, page_t *page, Index *index) noexcept;
+  [[nodiscard]] static byte *parse_update_in_place(System &sys, byte *ptr, byte *end_ptr, page_t *page, Index *index) noexcept;
 
   /**
    * Parses the redo log record for delete marking or unmarking of a clustered index record.
@@ -352,7 +352,7 @@ struct BtreeCursor {
    *
    * @return End of log record or nullptr
    */
-  [[nodiscard]] static byte *parse_del_mark_set_clust_rec(byte *ptr, byte *end_ptr, page_t *page, Index *index) noexcept;
+  [[nodiscard]] static byte *parse_del_mark_set_clust_rec(System &sys, byte *ptr, byte *end_ptr, page_t *page, Index *index) noexcept;
 
   /**
    * Parses the redo log record for delete marking or unmarking of a secondary index record.
@@ -386,7 +386,7 @@ struct BtreeCursor {
    *
    * @param[in] index           Index
    */
-  void estimate_number_of_different_key_vals(const Index *index) noexcept;
+  void estimate_number_of_different_key_vals(System &sys, const Index *index) noexcept;
 
   /**
    * Returns the page cursor component of a tree cursor.
@@ -524,7 +524,7 @@ struct BtreeCursor {
    *                            BTR_MODIFY_TREE, BTR_SEARCH_PREV, or BTR_MODIFY_PREV.
    * @param[in,out] mtr         The mini-transaction handle.
    */
-  void latch_leaves(page_t *page, space_id_t space, page_no_t page_no, ulint latch_mode, Mtr *mtr) noexcept;
+  void latch_leaves(System &sys, page_t *page, space_id_t space, page_no_t page_no, ulint latch_mode, Mtr *mtr) noexcept;
 
   /**
      * Inserts a record if there is enough space, or if enough space can
@@ -538,7 +538,7 @@ struct BtreeCursor {
      *
      * @return Pointer to inserted record if succeed, else nullptr
      */
-  [[nodiscard]] Rec insert_if_possible(const DTuple *tuple, ulint n_ext, Mtr *mtr) noexcept;
+  [[nodiscard]] Rec insert_if_possible(System &sys, const DTuple *tuple, ulint n_ext, Mtr *mtr) noexcept;
 
   /**
    * For an insert, checks the locks and does the undo logging if desired.
@@ -551,7 +551,7 @@ struct BtreeCursor {
    *
    * @return DB_SUCCESS, DB_WAIT_LOCK, DB_FAIL, or error number.
    */
-  [[nodiscard]] inline DbErr ins_lock_and_undo(
+  [[nodiscard]] inline DbErr ins_lock_and_undo(System &sys, 
     ulint flags, const DTuple *entry, QueThr *thr, Mtr *mtr, bool *inherit
   ) noexcept;
 
@@ -578,7 +578,7 @@ struct BtreeCursor {
    *
    * @return DB_SUCCESS, DB_WAIT_LOCK, or error number
    */
-  [[nodiscard]] inline DbErr upd_lock_and_undo(
+  [[nodiscard]] inline DbErr upd_lock_and_undo(System &sys, 
     ulint flags, const Upd *update, ulint cmpl_info, QueThr *thr, Mtr *mtr, roll_ptr_t *roll_ptr
   ) noexcept;
 
@@ -593,7 +593,7 @@ struct BtreeCursor {
    * @param[in] roll_ptr        The roll pointer.
    * @param[in] mtr             The mini-transaction handle.
    */
-  inline void update_in_place_log(
+  inline void update_in_place_log(System &sys, 
     ulint flags, Rec rec, const Index *index, const Upd *update, Trx *trx, roll_ptr_t roll_ptr, Mtr *mtr
   ) noexcept;
 
@@ -610,7 +610,7 @@ struct BtreeCursor {
    * @param[in] rec             Updated record.
    * @param[in] mtr             Mini-transaction handle.
    */
-  void pess_upd_restore_supremum(BufBlock *block, const Rec rec, Mtr *mtr) noexcept;
+  void pess_upd_restore_supremum(System &sys, BufBlock *block, const Rec rec, Mtr *mtr) noexcept;
 
   /**
    * Writes the redo log record for delete marking or unmarking of an index record.
@@ -623,7 +623,7 @@ struct BtreeCursor {
    * @param[in] roll_ptr        The roll pointer to the undo log record.
    * @param[in] mtr             The mini-transaction handle.
    */
-  inline void del_mark_set_clust_rec_log(
+  inline void del_mark_set_clust_rec_log(System &sys, 
     ulint flags, Rec rec, const Index *index, bool val, Trx *trx, roll_ptr_t roll_ptr, Mtr *mtr
   ) noexcept;
 
@@ -642,28 +642,28 @@ struct BtreeCursor {
    *
    * @return File interface
    */
-  inline Fil *get_fil() noexcept { return m_fsp->m_fil; }
+  inline Fil *get_fil(System &sys) noexcept { return sys.m_fsp->m_fil; }
 
   /**
    * Gets the buffer pool.
    *
    * @return Buffer pool
    */
-  inline BufPool *get_buf_pool() noexcept { return m_fsp->m_buf_pool; }
+  inline BufPool *get_buf_pool(System &sys) noexcept { return sys.m_fsp->m_buf_pool; }
 
   /**
    * Gets the B-tree system.
    *
    * @return B-tree system
    */
-  inline Btree *get_btree() noexcept { return m_btree; }
+  inline Btree *get_btree(System &sys) noexcept { return sys.m_btree; }
 
   /**
    * Gets the lock system.
    *
    * @return Lock system
    */
-  inline LockSys *get_lock_sys() noexcept { return m_lock_sys; }
+  inline LockSys *get_lock_sys(System &sys) noexcept { return sys.m_lock_sys; }
 
 #ifndef UNIT_TESTING
  private:
@@ -728,11 +728,8 @@ struct BtreeCursor {
   IF_DEBUG(bool m_print_record_ops{};)
 
   /** The file segment manager */
-  Fsp *m_fsp{};
 
   /** The B-tree system */
-  Btree *m_btree{};
 
   /** The lock system */
-  LockSys *m_lock_sys{};
 };

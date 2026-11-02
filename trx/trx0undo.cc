@@ -96,7 +96,6 @@ of the list and release undo log segments. In stepping through the list,
 s-latches on the undo log pages are enough, but in a truncate, x-latches must
 be obtained on the rollback segment and individual pages. */
 
-Undo *srv_undo{};
 
 /**
  * Creates a new undo log in the rollback segment memory object.
@@ -544,7 +543,7 @@ ulint Undo::free_page(
   TrxRseg *rseg, bool in_history, space_id_t space, page_no_t hdr_page_no, page_no_t page_no, Mtr *mtr
 ) noexcept {
   ut_a(hdr_page_no != page_no);
-  ut_ad(!mutex_own(&srv_trx_sys->m_mutex));
+  ut_ad(!mutex_own(&m_sys.m_trx_sys->m_mutex));
   ut_ad(mutex_own(&rseg->m_mutex));
 
   auto undo_page = page_get(space, page_no, mtr);
@@ -552,7 +551,7 @@ ulint Undo::free_page(
 
   flst_remove(header_page + TRX_UNDO_SEG_HDR + TRX_UNDO_PAGE_LIST, undo_page + TRX_UNDO_PAGE_HDR + TRX_UNDO_PAGE_NODE, mtr);
 
-  m_fsp->fseg_free_page(header_page + TRX_UNDO_SEG_HDR + TRX_UNDO_FSEG_HEADER, space, page_no, mtr);
+  m_sys.m_fsp->fseg_free_page(header_page + TRX_UNDO_SEG_HDR + TRX_UNDO_FSEG_HEADER, space, page_no, mtr);
 
   auto last_addr = flst_get_last(header_page + TRX_UNDO_SEG_HDR + TRX_UNDO_PAGE_LIST, mtr);
 
@@ -596,14 +595,14 @@ void Undo::seg_free(TrxUndo *undo) noexcept {
   do {
     mtr.start();
 
-    ut_ad(!mutex_own(&srv_trx_sys->m_mutex));
+    ut_ad(!mutex_own(&m_sys.m_trx_sys->m_mutex));
 
     mutex_enter(&rseg->m_mutex);
 
     auto seg_header = page_get(undo->m_space, undo->m_hdr_page_no, &mtr) + TRX_UNDO_SEG_HDR;
     auto file_seg = seg_header + TRX_UNDO_FSEG_HEADER;
 
-    finished = m_fsp->fseg_free_step(file_seg, &mtr);
+    finished = m_sys.m_fsp->fseg_free_step(file_seg, &mtr);
 
     if (finished) {
       /* Update the rseg header */
@@ -955,7 +954,7 @@ DbErr Undo::assign_undo(Trx *trx, ulint type) noexcept {
 
   mtr.start();
 
-  ut_ad(!mutex_own(&srv_trx_sys->m_mutex));
+  ut_ad(!mutex_own(&m_sys.m_trx_sys->m_mutex));
 
   mutex_enter(&rseg->m_mutex);
 
@@ -1073,7 +1072,7 @@ void Undo::update_cleanup(Trx *trx, page_t *undo_page, Mtr *mtr) noexcept {
 
   ut_ad(mutex_own(&rseg->m_mutex));
 
-  srv_trx_sys->m_purge->add_update_undo_to_history(trx, undo_page, mtr);
+  m_sys.m_trx_sys->m_purge->add_update_undo_to_history(trx, undo_page, mtr);
 
   UT_LIST_REMOVE(rseg->m_update_undo_list, undo);
 
@@ -1210,7 +1209,7 @@ byte *Undo::parse_page_header(ulint type, byte *ptr, byte *end_ptr, page_t *page
 
 ulint Undo::add_page(Trx *trx, TrxUndo *undo, Mtr *mtr) noexcept {
   ut_ad(mutex_own(&trx->m_undo_mutex));
-  ut_ad(!mutex_own(&srv_trx_sys->m_mutex));
+  ut_ad(!mutex_own(&m_sys.m_trx_sys->m_mutex));
   ut_ad(mutex_own(&trx->m_rseg->m_mutex));
 
   auto rseg = trx->m_rseg;
@@ -1222,18 +1221,18 @@ ulint Undo::add_page(Trx *trx, TrxUndo *undo, Mtr *mtr) noexcept {
 
   ulint n_reserved;
   auto header_page = page_get(undo->m_space, undo->m_hdr_page_no, mtr);
-  auto success = srv_fsp->reserve_free_extents(&n_reserved, undo->m_space, 1, FSP_UNDO, mtr);
+  auto success = m_sys.m_fsp->reserve_free_extents(&n_reserved, undo->m_space, 1, FSP_UNDO, mtr);
 
   if (!success) {
 
     return FIL_NULL;
   }
 
-  auto page_no = m_fsp->fseg_alloc_free_page_general(
+  auto page_no = m_sys.m_fsp->fseg_alloc_free_page_general(
     header_page + TRX_UNDO_SEG_HDR + TRX_UNDO_FSEG_HEADER, undo->m_top_page_no + 1, FSP_UP, true, mtr
   );
 
-  m_fsp->m_fil->space_release_free_extents(undo->m_space, n_reserved);
+  m_sys.m_fsp->m_fil->space_release_free_extents(undo->m_space, n_reserved);
 
   if (page_no != FIL_NULL) {
     undo->m_last_page_no = page_no;
@@ -1383,14 +1382,3 @@ void Undo::delete_undo(TrxUndo *&undo) noexcept {
   undo = nullptr;
 }
 
-Undo *Undo::create(Fsp *fsp) noexcept {
-  auto ptr = ut_new(sizeof(Undo));
-
-  return new (ptr) Undo(fsp);
-}
-
-void Undo::destroy(Undo *&undo) noexcept {
-  call_destructor(undo);
-  ut_delete(undo);
-  undo = nullptr;
-}

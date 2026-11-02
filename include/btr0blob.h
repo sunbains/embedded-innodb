@@ -98,7 +98,7 @@ struct Blob {
    *
    * @param[in] fsp             File space handler.
    */
-  explicit Blob(Fsp *fsp, Btree *btree) : m_fsp{fsp}, m_btree(btree) {}
+  explicit Blob(Fsp *fsp, Btree *btree) : sys.m_fsp{fsp}, sys.m_btree(btree) {}
 
   /**
    * Sets the ownership bit of an externally stored field in a record.
@@ -131,7 +131,7 @@ struct Blob {
    * @param[in,out] block       Block to free.
    * @param[in,out] mtr         Min-transaction.
    */
-  void blob_free(BufBlock *block, Mtr *mtr) noexcept;
+  void blob_free(System &sys, BufBlock *block, Mtr *mtr) noexcept;
 
   /** Frees the externally stored fields for a record, if the field is mentioned
    * in the update vector.
@@ -177,7 +177,7 @@ struct Blob {
    * @param[in] page            Page
    * @param[in] read            True if the page is being read, false if it is being purged
    */
-  void check_blob_fil_page_type(space_id_t space_id, page_no_t page_no, const page_t *page, bool read) noexcept;
+  void check_blob_fil_page_type(System &sys, space_id_t space_id, page_no_t page_no, const page_t *page, bool read) noexcept;
 
   /**
    * Copies the prefix of a BLOB.
@@ -193,7 +193,7 @@ struct Blob {
    *
    * @return Number of bytes written to buf.
    */
-  [[nodiscard]] ulint copy_blob_prefix(byte *buf, ulint len, space_id_t space_id, page_no_t page_no, ulint offset) noexcept;
+  [[nodiscard]] ulint copy_blob_prefix(System &sys, byte *buf, ulint len, space_id_t space_id, page_no_t page_no, ulint offset) noexcept;
 
   /**
    * Copies the prefix of an externally stored field of a record.
@@ -289,7 +289,7 @@ struct Blob {
    *
    * @return  DB_SUCCESS or error
    */
-  [[nodiscard]] DbErr store_big_rec_extern_fields(
+  [[nodiscard]] DbErr store_big_rec_extern_fields(System &sys, 
     const Index *index, BufBlock *rec_block, Rec rec, const RecOffs &offsets, BigRec big_rec_vec, Mtr *local_mtr
   ) noexcept;
 
@@ -308,7 +308,7 @@ struct Blob {
    * @param[in] rb_ctx          Rollback context
    * @param[in] local_mtr       Mtr containing the latch to data an an X-latch to the index tree
    */
-  void free_externally_stored_field(
+  void free_externally_stored_field(System &sys, 
     const Index *index, byte *field_ref, const Rec rec, const ulint *offsets, ulint i, enum TrxRbCtx rb_ctx, Mtr *local_mtr
   ) noexcept;
 
@@ -366,10 +366,8 @@ struct Blob {
   /**
    * The file space handler.
    */
-  Fsp *m_fsp{};
 
   /**
    * The B-tree handler.
    */
-  Btree *m_btree{};
 };

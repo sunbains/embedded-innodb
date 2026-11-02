@@ -1278,7 +1278,7 @@ void Dict::update_statistics(Table *table) noexcept {
   /* If we have set a high innodb_force_recovery level, do not calculate
   statistics, as a badly corrupted index can cause a crash in it. */
 
-  if (srv_config.m_force_recovery > IB_RECOVERY_NO_TRX_UNDO) {
+  if (m_sys.m_config.m_recv.m_force_recovery > IB_RECOVERY_NO_TRX_UNDO) {
 
     return;
   }

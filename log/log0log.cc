@@ -37,11 +37,10 @@ Created 12/9/1995 Heikki Tuuri
 IF_DEBUG(bool log_debug_writes = false;)
 
 /* Global log system variable */
-Log *log_sys = nullptr;
 
 IF_DEBUG(bool log_do_write = true;)
 
-Log::Log(size_t size) noexcept : m_buffer(size) {
+Log::Log(System &sys) noexcept : m_sys(sys), m_buffer(sys.m_config.m_log.m_buffer_size) {
   mutex_create(&m_mutex, IF_DEBUG("log_sys_mutex", ) IF_SYNC_DEBUG(SYNC_LOG, ) Current_location());
 
   m_lsn = LOG_START_LSN;
@@ -70,7 +69,7 @@ Log::~Log() noexcept {
 lsn_t Log::buf_pool_get_oldest_modification() noexcept {
   ut_ad(mutex_own(&m_mutex));
 
-  auto lsn = srv_buf_pool->get_oldest_modification();
+  auto lsn = m_sys.m_buf_pool->get_oldest_modification();
 
   if (lsn == 0) {
     lsn = m_lsn;
@@ -110,14 +109,6 @@ bool Log::calc_max_ages() noexcept {
   return true;
 }
 
-Log *Log::create(size_t log_buffer_size) noexcept {
-  ut_a(log_sys == nullptr);
-
-  log_sys = new (static_cast<Log *>(mem_zalloc(sizeof(Log)))) Log(log_buffer_size);
-
-  return log_sys;
-}
-
 bool Log::open(ulint n_files, off_t file_size) noexcept {
   return false;
 }
@@ -135,7 +126,7 @@ bool Log::peek_lsn(lsn_t *lsn) noexcept {
 }
 
 void Log::shutdown() noexcept {
-  if (log_sys == nullptr) {
+  if (this == nullptr) {
     return;
   }
 
@@ -143,14 +134,6 @@ void Log::shutdown() noexcept {
 
   os_event_free(m_no_flush_event);
   os_event_free(m_one_flushed_event);
-}
-
-void Log::destroy(Log *&log_sys) noexcept {
-  if (log_sys != nullptr) {
-    call_destructor(log_sys);
-    mem_free(log_sys);
-    log_sys = nullptr;
-  }
 }
 
 lsn_t Log::close([[maybe_unused]] IbRecovery recovery) noexcept {

@@ -63,28 +63,15 @@ constexpr ulint SEL_PREFETCH_LIMIT = 1;
 to que_run_threads: this is to allow canceling runaway queries */
 constexpr ulint SEL_COST_LIMIT = 100;
 
-RowSel *srv_row_sel;
 
-RowSel::RowSel(Dict *dict, LockSys *lock_sys) noexcept : m_dict(dict), m_lock_sys(lock_sys) {}
-
-RowSel *RowSel::create(Dict *dict, LockSys *lock_sys) noexcept {
-  auto ptr = ut_new(sizeof(RowSel));
-  return new (ptr) RowSel(dict, lock_sys);
-}
-
-void RowSel::destroy(RowSel *&row_sel) noexcept {
-  call_destructor(row_sel);
-  ut_delete(row_sel);
-  row_sel = nullptr;
-}
 
 bool RowSel::sec_rec_is_for_blob(
   ulint mtype, ulint prtype, ulint mbminlen, ulint mbmaxlen, const byte *clust_field, ulint clust_len, const byte *sec_field,
   ulint sec_len
 ) noexcept {
 
-  auto fsp = m_dict->m_store.m_fsp;
-  auto btree = m_dict->m_store.m_btree;
+  auto fsp = m_sys.m_dict->m_store.m_fsp;
+  auto btree = m_sys.m_dict->m_store.m_btree;
   Blob blob(fsp, btree);
   std::array<byte, DICT_MAX_INDEX_COL_LEN> buf{};
 
@@ -262,8 +249,8 @@ void RowSel::fetch_columns(Index *index, const Rec rec, const ulint *offsets, Sy
 
   const auto index_type = index->is_clustered() ? SYM_CLUST_FIELD_NO : SYM_SEC_FIELD_NO;
 
-  auto fsp = m_dict->m_store.m_fsp;
-  auto btree = m_dict->m_store.m_btree;
+  auto fsp = m_sys.m_dict->m_store.m_fsp;
+  auto btree = m_sys.m_dict->m_store.m_btree;
   Blob blob(fsp, btree);
 
   while (column != nullptr) {
@@ -458,7 +445,7 @@ inline bool Plan::test_other_conds() noexcept {
   return srv_row_vers->build_for_consistent_read(row);
 }
 
-DbErr Plan::get_clust_rec(SelNode *sel_node, const Rec rec, QueThr *thr, Rec &out_rec, Mtr *mtr) noexcept {
+DbErr Plan::get_clust_rec(System &sys, SelNode *sel_node, const Rec rec, QueThr *thr, Rec &out_rec, Mtr *mtr) noexcept {
   MemHeap *heap{};
   std::array<ulint, REC_OFFS_NORMAL_SIZE> rec_offsets{};
 
@@ -522,7 +509,7 @@ DbErr Plan::get_clust_rec(SelNode *sel_node, const Rec rec, QueThr *thr, Rec &ou
     auto block = m_clust_pcur.get_block();
     const auto lock_mode = sel_node->m_row_lock_mode;
     const auto lock_type = trx->m_isolation_level == TRX_ISO_READ_COMMITTED ? LOCK_REC_NOT_GAP : LOCK_ORDINARY;
-    const auto err = m_lock_sys->clust_rec_read_check_and_lock(0, block, clust_rec, index, offsets, lock_mode, lock_type, thr);
+    const auto err = sys.m_lock_sys->clust_rec_read_check_and_lock(0, block, clust_rec, index, offsets, lock_mode, lock_type, thr);
 
     if (unlikely(err != DB_SUCCESS)) {
       return func_exit(err);
@@ -533,7 +520,7 @@ DbErr Plan::get_clust_rec(SelNode *sel_node, const Rec rec, QueThr *thr, Rec &ou
 
     Rec old_vers{};
 
-    if (!m_lock_sys->clust_rec_cons_read_sees(clust_rec, index, offsets, sel_node->m_read_view)) {
+    if (!sys.m_lock_sys->clust_rec_cons_read_sees(clust_rec, index, offsets, sel_node->m_read_view)) {
 
       RowVers::Row row{
         .m_cluster_rec = clust_rec,
@@ -590,14 +577,14 @@ inline DbErr RowSel::set_rec_lock(
   const BufBlock *block, const Rec rec, Index *index, const ulint *offsets, LockMode mode, ulint type, QueThr *thr
 ) noexcept {
   auto trx = thr_get_trx(thr);
-  auto buf_pool = m_dict->m_store.m_btree->m_buf_pool;
+  auto buf_pool = m_sys.m_dict->m_store.m_btree->m_buf_pool;
 
   if (trx->m_trx_locks.size() > 10000 && buf_pool->m_LRU->buf_pool_running_out()) {
     return DB_LOCK_TABLE_FULL;
   } else if (index->is_clustered()) {
-    return m_lock_sys->clust_rec_read_check_and_lock(0, block, rec, index, offsets, mode, type, thr);
+    return m_sys.m_lock_sys->clust_rec_read_check_and_lock(0, block, rec, index, offsets, mode, type, thr);
   } else {
-    return m_lock_sys->sec_rec_read_check_and_lock(0, block, rec, index, offsets, mode, type, thr);
+    return m_sys.m_lock_sys->sec_rec_read_check_and_lock(0, block, rec, index, offsets, mode, type, thr);
   }
 }
 
@@ -1096,7 +1083,7 @@ skip_lock:
 
     if (index->is_clustered()) {
 
-      if (!m_lock_sys->clust_rec_cons_read_sees(rec, index, offsets, sel_node->m_read_view)) {
+      if (!m_sys.m_lock_sys->clust_rec_cons_read_sees(rec, index, offsets, sel_node->m_read_view)) {
 
         RowVers::Row row{
           .m_cluster_rec = rec,
@@ -1140,7 +1127,7 @@ skip_lock:
 
         rec = old_vers;
       }
-    } else if (!m_lock_sys->sec_rec_cons_read_sees(rec, sel_node->m_read_view)) {
+    } else if (!m_sys.m_lock_sys->sec_rec_cons_read_sees(rec, sel_node->m_read_view)) {
       cons_read_requires_clust_rec = true;
     }
   }
@@ -1481,7 +1468,7 @@ QueThr *RowSel::step(QueThr *thr) noexcept {
       const auto lock_mode = sel_node->m_set_x_locks ? LOCK_IX : LOCK_IS;
 
       while (table_node != nullptr) {
-        const auto err = m_lock_sys->lock_table(0, table_node->table, lock_mode, thr);
+        const auto err = m_sys.m_lock_sys->lock_table(0, table_node->table, lock_mode, thr);
 
         if (err != DB_SUCCESS) {
           thr_get_trx(thr)->m_error_state = err;
@@ -1733,7 +1720,7 @@ DbErr RowSel::get_clust_rec_with_prebuilt(
 
     if (!rec.get_deleted_flag() || prebuilt->m_select_lock_type != LOCK_NONE) {
       log_err("Clustered record for sec rec not found");
-      m_dict->index_name_print(trx, sec_index);
+      m_sys.m_dict->index_name_print(trx, sec_index);
       log_err("sec index record ");
       log_err(rec.to_string());
       log_err("clust index record\nclust index record ");
@@ -1762,7 +1749,7 @@ DbErr RowSel::get_clust_rec_with_prebuilt(
     const auto lock_type = prebuilt->m_select_lock_type;
 
     const auto err =
-      m_lock_sys->clust_rec_read_check_and_lock(0, block, clust_rec, clust_index, *offsets, lock_type, LOCK_REC_NOT_GAP, thr);
+      m_sys.m_lock_sys->clust_rec_read_check_and_lock(0, block, clust_rec, clust_index, *offsets, lock_type, LOCK_REC_NOT_GAP, thr);
 
     if (err != DB_SUCCESS) {
 
@@ -1779,7 +1766,7 @@ DbErr RowSel::get_clust_rec_with_prebuilt(
     then we never look for an earlier version */
 
     if (trx->m_isolation_level > TRX_ISO_READ_UNCOMMITTED &&
-        !m_lock_sys->clust_rec_cons_read_sees(clust_rec, clust_index, *offsets, trx->m_read_view)) {
+        !m_sys.m_lock_sys->clust_rec_cons_read_sees(clust_rec, clust_index, *offsets, trx->m_read_view)) {
 
       RowVers::Row row{
         .m_cluster_rec = clust_rec,
@@ -1918,7 +1905,7 @@ SearchStatus RowSel::try_search_shortcut_for_prebuilt(
     *offsets = record.get_all_col_offsets(*offsets, heap, Current_location());
   }
 
-  if (!m_lock_sys->clust_rec_cons_read_sees(rec, index, *offsets, trx->m_read_view)) {
+  if (!m_sys.m_lock_sys->clust_rec_cons_read_sees(rec, index, *offsets, trx->m_read_view)) {
 
     return SearchStatus::RETRY;
 
@@ -1959,7 +1946,7 @@ DbErr RowSel::unlock_for_client(Prebuilt *prebuilt, bool has_latches_on_recs) no
 
     auto rec = pcur->get_rec();
 
-    m_lock_sys->rec_unlock(trx, pcur->get_block(), rec, prebuilt->m_select_lock_type);
+    m_sys.m_lock_sys->rec_unlock(trx, pcur->get_block(), rec, prebuilt->m_select_lock_type);
 
     mtr.commit();
 
@@ -1990,7 +1977,7 @@ DbErr RowSel::unlock_for_client(Prebuilt *prebuilt, bool has_latches_on_recs) no
 
     auto rec = clust_pcur->get_rec();
 
-    m_lock_sys->rec_unlock(trx, clust_pcur->get_block(), rec, prebuilt->m_select_lock_type);
+    m_sys.m_lock_sys->rec_unlock(trx, clust_pcur->get_block(), rec, prebuilt->m_select_lock_type);
 
     mtr.commit();
   }
@@ -2301,7 +2288,7 @@ DbErr RowSel::mvcc_fetch(
   } else {
     auto lck_mode = prebuilt->m_select_lock_type == LOCK_S ? LOCK_IS : LOCK_IX;
 
-    err = m_lock_sys->lock_table(0, index->m_table, lck_mode, thr);
+    err = m_sys.m_lock_sys->lock_table(0, index->m_table, lck_mode, thr);
 
     if (err != DB_SUCCESS) {
 
@@ -2375,7 +2362,7 @@ rec_loop:
       log_err(std::format(
         "Index corruption: rec offs {} next offs {}, page no {},", page_offset(rec), next_offs, page_get_page_no(rec.page_align())
       ));
-      m_dict->index_name_print(trx, index);
+      m_sys.m_dict->index_name_print(trx, index);
       log_err(". Run CHECK TABLE. You may need to restore from a backup, or dump + drop + reimport the table.");
 
       err = DB_CORRUPTION;
@@ -2388,7 +2375,7 @@ rec_loop:
       log_err(std::format(
         "Index corruption: rec offs {} next offs {}, page no {},", page_offset(rec), next_offs, page_get_page_no(rec.page_align())
       ));
-      m_dict->index_name_print(trx, index);
+      m_sys.m_dict->index_name_print(trx, index);
       log_err(". We try to skip the rest of the page.");
 
       pcur->move_to_last_on_page(&mtr);
@@ -2407,13 +2394,13 @@ rec_loop:
   }
 
   if (unlikely(recovery != IB_RECOVERY_DEFAULT)) {
-    auto btree = m_dict->m_store.m_btree;
+    auto btree = m_sys.m_dict->m_store.m_btree;
 
     if (!rec.validate(offsets) || !btree->index_rec_validate(rec, index, false)) {
       log_err(std::format(
         "Index corruption: rec offs {} next offs {}, page no {} ", page_offset(rec), next_offs, page_get_page_no(rec.page_align())
       ));
-      m_dict->index_name_print(trx, index);
+      m_sys.m_dict->index_name_print(trx, index);
       log_err(". We try to skip the record.");
 
       goto next_rec;
@@ -2528,7 +2515,7 @@ rec_loop:
       high force recovery level set, we try to avoid crashes by skipping this lookup */
 
       if (likely(recovery < IB_RECOVERY_NO_UNDO_LOG_SCAN) &&
-          !srv_lock_sys->clust_rec_cons_read_sees(rec, index, offsets, trx->m_read_view)) {
+          !m_sys.m_lock_sys->clust_rec_cons_read_sees(rec, index, offsets, trx->m_read_view)) {
 
         Rec old_vers;
 
@@ -2559,7 +2546,7 @@ rec_loop:
 
         rec = old_vers;
       }
-    } else if (!m_lock_sys->sec_rec_cons_read_sees(rec, trx->m_read_view)) {
+    } else if (!m_sys.m_lock_sys->sec_rec_cons_read_sees(rec, trx->m_read_view)) {
       /* We are looking into a non-clustered index, and to get the right version of the record we
       have to look also into the clustered index: this is necessary, because we can only get the undo
       information via the clustered index record. */

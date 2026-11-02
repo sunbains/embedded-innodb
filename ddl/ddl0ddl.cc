@@ -27,7 +27,7 @@ static const char S_innodb_table_monitor[] = "innodb_table_monitor";
 static const char S_innodb_mem_validate[] = "innodb_mem_validate";
 
 DbErr Ddl::drop_table_in_background(const char *name) noexcept {
-  auto trx = srv_trx_sys->create_background_trx(nullptr);
+  auto trx = m_sys.m_trx_sys->create_background_trx(nullptr);
 
   auto started = trx->start(ULINT_UNDEFINED);
   ut_a(started);
@@ -40,18 +40,18 @@ DbErr Ddl::drop_table_in_background(const char *name) noexcept {
 
   /* Try to drop the table in InnoDB */
 
-  m_dict->lock_data_dictionary(trx);
+  m_sys.m_dict->lock_data_dictionary(trx);
 
   auto err = drop_table(name, trx, false);
 
   auto err_commit = trx->commit();
   ut_a(err_commit == DB_SUCCESS);
 
-  m_dict->unlock_data_dictionary(trx);
+  m_sys.m_dict->unlock_data_dictionary(trx);
 
-  m_log->buffer_flush_to_disk();
+  m_sys.m_log->buffer_flush_to_disk();
 
-  srv_trx_sys->destroy_background_trx(trx);
+  m_sys.m_trx_sys->destroy_background_trx(trx);
 
   return err;
 }
@@ -60,23 +60,23 @@ ulint Ddl::drop_tables_in_background() noexcept {
   ulint n_tables_dropped{};
 
   for (;;) {
-    mutex_enter(&srv_trx_sys->m_mutex);
+    mutex_enter(&m_sys.m_trx_sys->m_mutex);
 
     auto drop = m_drop_list.front();
     const auto n_tables = m_drop_list.size();
 
-    mutex_exit(&srv_trx_sys->m_mutex);
+    mutex_exit(&m_sys.m_trx_sys->m_mutex);
 
     if (drop == nullptr) {
       /* All tables dropped */
       return n_tables + n_tables_dropped;
     }
 
-    m_dict->mutex_acquire();
+    m_sys.m_dict->mutex_acquire();
 
-    auto table = m_dict->table_get(drop->m_table_name);
+    auto table = m_sys.m_dict->table_get(drop->m_table_name);
 
-    m_dict->mutex_release();
+    m_sys.m_dict->mutex_release();
 
     if (table != nullptr) {
       if (drop_table_in_background(drop->m_table_name) != DB_SUCCESS) {
@@ -89,7 +89,7 @@ ulint Ddl::drop_tables_in_background() noexcept {
       ++n_tables_dropped;
     }
 
-    mutex_enter(&srv_trx_sys->m_mutex);
+    mutex_enter(&m_sys.m_trx_sys->m_mutex);
 
     m_drop_list.remove(drop);
 
@@ -99,24 +99,24 @@ ulint Ddl::drop_tables_in_background() noexcept {
 
     mem_free(drop);
 
-    mutex_exit(&srv_trx_sys->m_mutex);
+    mutex_exit(&m_sys.m_trx_sys->m_mutex);
   }
 }
 
 ulint Ddl::get_background_drop_list_len() noexcept {
-  ut_ad(mutex_own(&srv_trx_sys->m_mutex));
+  ut_ad(mutex_own(&m_sys.m_trx_sys->m_mutex));
 
   return m_drop_list.size();
 }
 
 bool Ddl::add_table_to_background_drop_list(const char *name) noexcept {
-  mutex_enter(&srv_trx_sys->m_mutex);
+  mutex_enter(&m_sys.m_trx_sys->m_mutex);
 
   for (auto drop : m_drop_list) {
     if (strcmp(drop->m_table_name, name) == 0) {
       /* Already in the list */
 
-      mutex_exit(&srv_trx_sys->m_mutex);
+      mutex_exit(&m_sys.m_trx_sys->m_mutex);
 
       return false;
     }
@@ -128,7 +128,7 @@ bool Ddl::add_table_to_background_drop_list(const char *name) noexcept {
 
   m_drop_list.push_back(drop);
 
-  mutex_exit(&srv_trx_sys->m_mutex);
+  mutex_exit(&m_sys.m_trx_sys->m_mutex);
 
   return true;
 }
@@ -163,13 +163,13 @@ DbErr Ddl::drop_table(const char *in_name, Trx *trx, bool drop_db) noexcept {
 
     /* Table name equals "innodb_monitor": stop monitor prints */
     srv_print_innodb_monitor = false;
-    m_dict->m_store.m_btree->m_lock_sys->unset_print_lock_monitor();
+    m_sys.m_dict->m_store.m_btree->m_lock_sys->unset_print_lock_monitor();
 
   } else if (namelen == sizeof(S_innodb_lock_monitor) &&
              memcmp(table_name, S_innodb_lock_monitor, sizeof(S_innodb_lock_monitor)) == 0) {
 
     srv_print_innodb_monitor = false;
-    m_dict->m_store.m_btree->m_lock_sys->unset_print_lock_monitor();
+    m_sys.m_dict->m_store.m_btree->m_lock_sys->unset_print_lock_monitor();
 
   } else if (namelen == sizeof(S_innodb_tablespace_monitor) &&
              memcmp(table_name, S_innodb_tablespace_monitor, sizeof(S_innodb_tablespace_monitor)) == 0) {
@@ -189,10 +189,10 @@ DbErr Ddl::drop_table(const char *in_name, Trx *trx, bool drop_db) noexcept {
     return DB_SCHEMA_NOT_LOCKED;
   }
 
-  ut_ad(mutex_own(&m_dict->m_mutex));
+  ut_ad(mutex_own(&m_sys.m_dict->m_mutex));
 
 #ifdef UNIV_SYNC_DEBUG
-  ut_ad(rw_lock_own(&m_dict->m_lock, RW_LOCK_EX));
+  ut_ad(rw_lock_own(&m_sys.m_dict->m_lock, RW_LOCK_EX));
 #endif /* UNIV_SYNC_DEBUG */
 
   auto func_exit = [trx](DbErr err) -> auto {
@@ -203,7 +203,7 @@ DbErr Ddl::drop_table(const char *in_name, Trx *trx, bool drop_db) noexcept {
     return err;
   };
 
-  auto table = m_dict->table_get(in_name);
+  auto table = m_sys.m_dict->table_get(in_name);
 
   if (table == nullptr) {
     log_err(
@@ -225,14 +225,14 @@ DbErr Ddl::drop_table(const char *in_name, Trx *trx, bool drop_db) noexcept {
       break;
     }
 
-    if (drop_db && m_dict->tables_have_same_db(in_name, foreign->m_foreign_table_name)) {
+    if (drop_db && m_sys.m_dict->tables_have_same_db(in_name, foreign->m_foreign_table_name)) {
       /* We only allow dropping a referenced table if FOREIGN_KEY_CHECKS is set to 0 */
 
-      mutex_enter(&m_dict->m_foreign_err_mutex);
+      mutex_enter(&m_sys.m_dict->m_foreign_err_mutex);
 
       log_err(std::format("Cannot drop table {} because it is referenced by {}", in_name, foreign->m_foreign_table_name));
 
-      mutex_exit(&m_dict->m_foreign_err_mutex);
+      mutex_exit(&m_sys.m_dict->m_foreign_err_mutex);
 
       return func_exit(DB_CANNOT_DROP_CONSTRAINT);
     }
@@ -288,7 +288,7 @@ DbErr Ddl::drop_table(const char *in_name, Trx *trx, bool drop_db) noexcept {
 
   /* Remove any locks there are on the table or its records */
 
-  m_dict->m_store.m_btree->m_lock_sys->remove_all_on_table(table, true);
+  m_sys.m_dict->m_store.m_btree->m_lock_sys->remove_all_on_table(table, true);
 
   trx->set_dict_operation(TRX_DICT_OP_TABLE);
   trx->m_table_id = table->m_id;
@@ -385,9 +385,9 @@ DbErr Ddl::drop_table(const char *in_name, Trx *trx, bool drop_db) noexcept {
       name_or_path = name_copy;
     }
 
-    m_dict->table_remove_from_cache(table);
+    m_sys.m_dict->table_remove_from_cache(table);
 
-    if (m_dict->m_loader.load_table(srv_config.m_force_recovery, name_copy) != nullptr) {
+    if (m_sys.m_dict->m_loader.load_table(m_sys.m_config.m_recv.m_force_recovery, name_copy) != nullptr) {
       log_err(std::format("Not able to remove table id: {} name: {} from the dictionary cache", table->m_id, name_copy));
       err = DB_ERROR;
     }
@@ -396,7 +396,7 @@ DbErr Ddl::drop_table(const char *in_name, Trx *trx, bool drop_db) noexcept {
     wrong: we do not want to delete valuable data of the user */
 
     if (err == DB_SUCCESS && space_id != SYS_TABLESPACE) {
-      auto fil = m_dict->m_store.m_fsp->m_fil;
+      auto fil = m_sys.m_dict->m_store.m_fsp->m_fil;
 
       if (!fil->space_for_table_exists_in_mem(space_id, name_or_path, is_path, false, true)) {
         err = DB_SUCCESS;
@@ -419,9 +419,9 @@ DbErr Ddl::drop_table(const char *in_name, Trx *trx, bool drop_db) noexcept {
   ((str1_len) == sizeof(str2_onstack) && memcmp(str1, str2_onstack, sizeof(str2_onstack)) == 0)
 
 DbErr Ddl::create_table(Table *table, Trx *trx) noexcept {
-  IF_SYNC_DEBUG(ut_ad(rw_lock_own(&m_dict->m_lock, RW_LOCK_EX));)
+  IF_SYNC_DEBUG(ut_ad(rw_lock_own(&m_sys.m_dict->m_lock, RW_LOCK_EX));)
 
-  ut_ad(mutex_own(&m_dict->m_mutex));
+  ut_ad(mutex_own(&m_sys.m_dict->m_mutex));
   ut_ad(trx->m_dict_operation_lock_mode == RW_X_LATCH);
 
   if (srv_config.m_created_new_raw) {
@@ -476,7 +476,7 @@ DbErr Ddl::create_table(Table *table, Trx *trx) noexcept {
 
     srv_print_innodb_monitor = true;
 
-    m_dict->m_store.m_btree->m_lock_sys->set_print_lock_monitor();
+    m_sys.m_dict->m_store.m_btree->m_lock_sys->set_print_lock_monitor();
 
     os_event_set(srv_lock_timeout_thread_event);
 
@@ -512,7 +512,7 @@ DbErr Ddl::create_table(Table *table, Trx *trx) noexcept {
 
   trx->set_dict_operation(TRX_DICT_OP_TABLE);
 
-  auto node = TableNode::create(m_dict, table, heap, false);
+  auto node = TableNode::create(m_sys.m_dict, table, heap, false);
 
   auto thr = pars_complete_graph_for_exec(node, trx, heap);
 
@@ -531,7 +531,7 @@ DbErr Ddl::create_table(Table *table, Trx *trx) noexcept {
     case DB_OUT_OF_FILE_SPACE:
       log_warn("Cannot create table ", table->m_name);
 
-      if (m_dict->table_get(table->m_name)) {
+      if (m_sys.m_dict->table_get(table->m_name)) {
 
         auto err = drop_table(table->m_name, trx, false);
 
@@ -565,13 +565,13 @@ DbErr Ddl::create_table(Table *table, Trx *trx) noexcept {
 
 DbErr Ddl::create_index(Index *index, Trx *trx) noexcept {
 #ifdef UNIV_SYNC_DEBUG
-  ut_ad(rw_lock_own(&m_dict->m_lock, RW_LOCK_EX));
+  ut_ad(rw_lock_own(&m_sys.m_dict->m_lock, RW_LOCK_EX));
 #endif /* UNIV_SYNC_DEBUG */
-  ut_ad(mutex_own(&m_dict->m_mutex));
+  ut_ad(mutex_own(&m_sys.m_dict->m_mutex));
 
   /* This heap is destroyed when the query graph is freed. */
   auto heap = mem_heap_create(512);
-  auto node = IndexNode::create(m_dict, index, heap, false);
+  auto node = IndexNode::create(m_sys.m_dict, index, heap, false);
   auto thr = pars_complete_graph_for_exec(node, trx, heap);
   auto tmp = que_fork_start_command(static_cast<QueFork *>(que_node_get_parent(thr)));
 
@@ -641,10 +641,10 @@ DbErr Ddl::truncate_table(Table *table, Trx *trx) noexcept {
   ut_a(trx->m_dict_operation_lock_mode != 0);
 
   /* Prevent foreign key checks etc. while we are truncating the table */
-  ut_ad(mutex_own(&m_dict->m_mutex));
+  ut_ad(mutex_own(&m_sys.m_dict->m_mutex));
 
 #ifdef UNIV_SYNC_DEBUG
-  ut_ad(rw_lock_own(&m_dict->m_lock, RW_LOCK_EX));
+  ut_ad(rw_lock_own(&m_sys.m_dict->m_lock, RW_LOCK_EX));
 #endif /* UNIV_SYNC_DEBUG */
 
   auto func_exit = [trx](DbErr err) -> auto {
@@ -665,13 +665,13 @@ DbErr Ddl::truncate_table(Table *table, Trx *trx) noexcept {
     auto foreign = *it;
 
     /* We only allow truncating a referenced table if FOREIGN_KEY_CHECKS is set to 0 */
-    mutex_enter(&m_dict->m_foreign_err_mutex);
+    mutex_enter(&m_sys.m_dict->m_foreign_err_mutex);
 
     log_err(std::format(
       "Cannot truncate table {} by DROP+CREATE because it is referenced by {}", table->m_name, foreign->m_foreign_table_name
     ));
 
-    mutex_exit(&m_dict->m_foreign_err_mutex);
+    mutex_exit(&m_sys.m_dict->m_foreign_err_mutex);
 
     return func_exit(DB_ERROR);
   }
@@ -690,9 +690,9 @@ DbErr Ddl::truncate_table(Table *table, Trx *trx) noexcept {
     return func_exit(DB_ERROR);
   }
 
-  auto fsp = m_dict->m_store.m_fsp;
+  auto fsp = m_sys.m_dict->m_store.m_fsp;
   space_id_t recreate_space{NULL_SPACE_ID};
-  auto lock_sys = m_dict->m_store.m_btree->m_lock_sys;
+  auto lock_sys = m_sys.m_dict->m_store.m_btree->m_lock_sys;
 
   /* Remove all locks except the table-level S and X locks. */
   lock_sys->remove_all_on_table(table, false);
@@ -744,14 +744,14 @@ DbErr Ddl::truncate_table(Table *table, Trx *trx) noexcept {
   mach_write_to_8(buf, table->m_id);
 
   dfield_set_data(dfield, buf, 8);
-  auto sys_index = m_dict->m_sys_indexes->get_first_index();
+  auto sys_index = m_sys.m_dict->m_sys_indexes->get_first_index();
   sys_index->copy_types(tuple, 1);
 
   Mtr mtr;
 
   mtr.start();
 
-  BtreePcursor pcur(fsp, m_dict->m_store.m_btree);
+  BtreePcursor pcur(fsp, m_sys.m_dict->m_store.m_btree);
 
   /* Scan SYS_INDEXES for all indexes of the table */
   pcur.open_on_user_rec(sys_index, tuple, PAGE_CUR_GE, BTR_MODIFY_LEAF, &mtr, Current_location());
@@ -772,7 +772,7 @@ DbErr Ddl::truncate_table(Table *table, Trx *trx) noexcept {
     } else if (!rec.get_deleted_flag()) {
 
       /* This call may commit and restart mtr and reposition pcur. */
-      const auto root_page_no = m_dict->m_store.truncate_index_tree(table, recreate_space, &pcur, &mtr);
+      const auto root_page_no = m_sys.m_dict->m_store.truncate_index_tree(table, recreate_space, &pcur, &mtr);
 
       rec = pcur.get_rec();
 
@@ -799,7 +799,7 @@ DbErr Ddl::truncate_table(Table *table, Trx *trx) noexcept {
 
   mem_heap_free(heap);
 
-  const auto new_id = m_dict->m_store.hdr_get_new_id(DictIdType::TABLE_ID);
+  const auto new_id = m_sys.m_dict->m_store.hdr_get_new_id(DictIdType::TABLE_ID);
 
   auto info = pars_info_create();
 
@@ -837,10 +837,10 @@ DbErr Ddl::truncate_table(Table *table, Trx *trx) noexcept {
     err = DB_ERROR;
 
   } else {
-    m_dict->table_change_id_in_cache(table, new_id);
+    m_sys.m_dict->table_change_id_in_cache(table, new_id);
   }
 
-  m_dict->update_statistics(table);
+  m_sys.m_dict->update_statistics(table);
 
   return func_exit(err);
 }
@@ -881,7 +881,7 @@ DbErr Ddl::drop_index(Table *table, Index *index, Trx *trx) noexcept {
   foreign key constraints on this table where this index is used */
 
   table->replace_index_in_foreign_list(index);
-  m_dict->index_remove_from_cache(table, index);
+  m_sys.m_dict->index_remove_from_cache(table, index);
 
   trx->m_op_info = "";
   return err;
@@ -932,7 +932,7 @@ DbErr Ddl::rename_table(const char *old_name, const char *new_name, Trx *trx) no
     return err;
   };
 
-  if (srv_config.m_created_new_raw || srv_config.m_force_recovery != IB_RECOVERY_DEFAULT) {
+  if (srv_config.m_created_new_raw || m_sys.m_config.m_recv.m_force_recovery != IB_RECOVERY_DEFAULT) {
     log_err(
       "A new raw disk partition was initialized or innodb_force_recovery is on: we do not allow"
       " database modifications by the user. Shut down the server and ensure that newraw is replaced"
@@ -944,7 +944,7 @@ DbErr Ddl::rename_table(const char *old_name, const char *new_name, Trx *trx) no
 
   trx->m_op_info = "renaming table";
 
-  auto table = m_dict->table_get(old_name);
+  auto table = m_sys.m_dict->table_get(old_name);
 
   if (table == nullptr) {
     return func_exit(DB_TABLE_NOT_FOUND);
@@ -1054,7 +1054,7 @@ DbErr Ddl::rename_table(const char *old_name, const char *new_name, Trx *trx) no
     /* The following call will also rename the .ibd data file if
     the table is stored in a single-table tablespace */
 
-    if (!m_dict->table_rename_in_cache(table, new_name, true)) {
+    if (!m_sys.m_dict->table_rename_in_cache(table, new_name, true)) {
       trx->m_error_state = DB_SUCCESS;
 
       trx_general_rollback(trx, false, nullptr);
@@ -1067,7 +1067,7 @@ DbErr Ddl::rename_table(const char *old_name, const char *new_name, Trx *trx) no
     /* We only want to switch off some of the type checking in
     an ALTER, not in a RENAME. */
 
-    err = m_dict->m_loader.load_foreigns(new_name, trx->m_check_foreigns);
+    err = m_sys.m_dict->m_loader.load_foreigns(new_name, trx->m_check_foreigns);
 
     if (err != DB_SUCCESS) {
       log_err(
@@ -1077,7 +1077,7 @@ DbErr Ddl::rename_table(const char *old_name, const char *new_name, Trx *trx) no
         " with the new table definition.\n"
       );
 
-      auto success = m_dict->table_rename_in_cache(table, old_name, false);
+      auto success = m_sys.m_dict->table_rename_in_cache(table, old_name, false);
       ut_a(success);
 
       trx->m_error_state = DB_SUCCESS;
@@ -1096,7 +1096,7 @@ DbErr Ddl::rename_index(const char *table_name, const char *old_name, const char
   ut_a(old_name != nullptr);
   ut_a(table_name != nullptr);
 
-  if (srv_config.m_created_new_raw || srv_config.m_force_recovery != IB_RECOVERY_DEFAULT) {
+  if (srv_config.m_created_new_raw || m_sys.m_config.m_recv.m_force_recovery != IB_RECOVERY_DEFAULT) {
     log_err(
       "A new raw disk partition was initialized or innodb_force_recovery is on: we do not allow"
       " database modifications by the user. Shut down the server and ensure that newraw is"
@@ -1110,7 +1110,7 @@ DbErr Ddl::rename_index(const char *table_name, const char *old_name, const char
 
   trx->m_op_info = "renaming index";
 
-  auto table = m_dict->table_get(table_name);
+  auto table = m_sys.m_dict->table_get(table_name);
 
   if (table == nullptr || table->m_ibd_file_missing) {
     trx->m_op_info = "";
@@ -1225,17 +1225,17 @@ DbErr Ddl::drop_database(const char *name, Trx *trx) noexcept {
   char *table_name;
 
   do {
-    m_dict->lock_data_dictionary(trx);
+    m_sys.m_dict->lock_data_dictionary(trx);
 
-    while ((table_name = m_dict->m_loader.get_first_table_name_in_db(name)) != nullptr) {
+    while ((table_name = m_sys.m_dict->m_loader.get_first_table_name_in_db(name)) != nullptr) {
       ut_a(memcmp(table_name, name, namelen) == 0);
 
-      auto table = m_dict->table_get(table_name);
+      auto table = m_sys.m_dict->table_get(table_name);
 
       /* Wait until the user does not have any queries running on the table */
 
       if (table->m_n_handles_opened > 0) {
-        m_dict->unlock_data_dictionary(trx);
+        m_sys.m_dict->unlock_data_dictionary(trx);
 
         log_warn("The client is trying to drop database ", name, " though there are still open handles to table ", table_name);
 
@@ -1271,30 +1271,30 @@ DbErr Ddl::drop_database(const char *name, Trx *trx) noexcept {
 
   } while (table_name != nullptr);
 
-  m_dict->unlock_data_dictionary(trx);
+  m_sys.m_dict->unlock_data_dictionary(trx);
 
   trx->m_op_info = "";
   return err;
 }
 
 void Ddl::drop_all_temp_indexes(IbRecovery recovery) noexcept {
-  BtreePcursor pcur(m_dict->m_store.m_fsp, m_dict->m_store.m_btree);
+  BtreePcursor pcur(m_sys.m_dict->m_store.m_fsp, m_sys.m_dict->m_store.m_btree);
 
   /* Load the table definitions that contain partially defined indexes, so that the data dictionary
   information can be checked * when accessing the tablename.ibd files. */
-  auto trx = srv_trx_sys->create_background_trx(nullptr);
+  auto trx = m_sys.m_trx_sys->create_background_trx(nullptr);
   auto started = trx->start(ULINT_UNDEFINED);
   ut_a(started);
 
   trx->m_op_info = "dropping partially created indexes";
-  m_dict->lock_data_dictionary(trx);
+  m_sys.m_dict->lock_data_dictionary(trx);
 
   Mtr mtr;
   auto heap = mem_heap_create(1000);
 
   mtr.start();
 
-  auto sys_clustered_index = m_dict->m_sys_tables->get_clustered_index();
+  auto sys_clustered_index = m_sys.m_dict->m_sys_tables->get_clustered_index();
 
   pcur.open_at_index_side(true, sys_clustered_index, BTR_SEARCH_LEAF, true, 0, &mtr);
 
@@ -1336,7 +1336,7 @@ void Ddl::drop_all_temp_indexes(IbRecovery recovery) noexcept {
 
     pcur.commit_specify_mtr(&mtr);
 
-    auto table = m_dict->m_loader.load_table_on_id(recovery, table_id);
+    auto table = m_sys.m_dict->m_loader.load_table_on_id(recovery, table_id);
 
     if (table != nullptr) {
 
@@ -1360,16 +1360,16 @@ void Ddl::drop_all_temp_indexes(IbRecovery recovery) noexcept {
 
   mtr.commit();
 
-  m_dict->unlock_data_dictionary(trx);
+  m_sys.m_dict->unlock_data_dictionary(trx);
 
   auto err_commit = trx->commit();
   ut_a(err_commit == DB_SUCCESS);
 
-  srv_trx_sys->destroy_background_trx(trx);
+  m_sys.m_trx_sys->destroy_background_trx(trx);
 }
 
 void Ddl::drop_all_temp_tables(IbRecovery recovery) noexcept {
-  auto trx = srv_trx_sys->create_background_trx(nullptr);
+  auto trx = m_sys.m_trx_sys->create_background_trx(nullptr);
 
   {
     const auto success = trx->start(ULINT_UNDEFINED);
@@ -1377,7 +1377,7 @@ void Ddl::drop_all_temp_tables(IbRecovery recovery) noexcept {
   }
 
   trx->m_op_info = "dropping temporary tables";
-  m_dict->lock_data_dictionary(trx);
+  m_sys.m_dict->lock_data_dictionary(trx);
 
   auto heap = mem_heap_create(200);
 
@@ -1385,9 +1385,9 @@ void Ddl::drop_all_temp_tables(IbRecovery recovery) noexcept {
 
   mtr.start();
 
-  BtreePcursor pcur(m_dict->m_store.m_fsp, m_dict->m_store.m_btree);
+  BtreePcursor pcur(m_sys.m_dict->m_store.m_fsp, m_sys.m_dict->m_store.m_btree);
 
-  auto sys_clustered_index = m_dict->m_sys_tables->get_clustered_index();
+  auto sys_clustered_index = m_sys.m_dict->m_sys_tables->get_clustered_index();
   pcur.open_at_index_side(true, sys_clustered_index, BTR_SEARCH_LEAF, true, 0, &mtr);
 
   for (;;) {
@@ -1437,7 +1437,7 @@ void Ddl::drop_all_temp_tables(IbRecovery recovery) noexcept {
     pcur.store_position(&mtr);
     pcur.commit_specify_mtr(&mtr);
 
-    auto table = m_dict->m_loader.load_table(recovery, table_name);
+    auto table = m_sys.m_dict->m_loader.load_table(recovery, table_name);
 
     if (table != nullptr) {
       if (auto err = drop_table(table_name, trx, false); err != DB_SUCCESS) {
@@ -1458,10 +1458,10 @@ void Ddl::drop_all_temp_tables(IbRecovery recovery) noexcept {
 
   mem_heap_free(heap);
 
-  m_dict->unlock_data_dictionary(trx);
+  m_sys.m_dict->unlock_data_dictionary(trx);
 
   auto err_commit = trx->commit();
   ut_a(err_commit == DB_SUCCESS);
 
-  srv_trx_sys->destroy_background_trx(trx);
+  m_sys.m_trx_sys->destroy_background_trx(trx);
 }

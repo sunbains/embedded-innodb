@@ -24,6 +24,8 @@ Created 10/25/1995 Heikki Tuuri
 
 #pragma once
 
+#include "srv0sys.h"
+
 #include "innodb0types.h"
 
 #include "dict0types.h"
@@ -40,6 +42,9 @@ Created 10/25/1995 Heikki Tuuri
 struct Mtr;
 
 struct Fil {
+  /** The instance this sub-system belongs to. */
+  System &m_sys;
+
 
   // Friend function for log I/O operations
   friend DbErr log_io(
@@ -49,7 +54,7 @@ struct Fil {
   /** Constructor
    *  @param[in] max_n_open Maxium number of open files
    */
-  explicit Fil(ulint max_n_open);
+  explicit Fil(System &sys) noexcept;
 
   /** Destructor */
   ~Fil() noexcept;
@@ -720,6 +725,11 @@ struct Fil {
 
   /** n_open is not allowed to exceed this */
   ulint m_max_n_open{};
+
+  /** Create each new user table in its own .ibd file. Starts from the
+  config value; System::startup() suspends it while it creates the system
+  tables, which must be in the system tablespace. */
+  bool m_file_per_table{};
 
   /** When we write to a file we increment this by one */
   int64_t m_modification_counter{};

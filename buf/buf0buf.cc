@@ -218,7 +218,6 @@ constexpr ulint BUF_PAGE_READ_MAX_RETRIES = 100;
 /** Checksum function. */
 crc32::Checksum crc32::checksum = {};
 
-BufPool *srv_buf_pool = nullptr;
 
 /** A chunk of buffers.  The buffer pool is allocated in chunks. */
 struct BufChunk {
@@ -321,7 +320,7 @@ bool BufPool::is_corrupted(const byte *read_buf) {
   if (recv_lsn_checks_on) {
     lsn_t current_lsn;
 
-    if (log_sys->peek_lsn(&current_lsn) && current_lsn < mach_read_from_8(read_buf + FIL_PAGE_LSN)) {
+    if (m_sys.m_log->peek_lsn(&current_lsn) && current_lsn < mach_read_from_8(read_buf + FIL_PAGE_LSN)) {
       log_err(std::format(
         "Page {}::{} log sequence number {} is in the future! Current system"
         " log sequence number is {}. Your database may be corrupt or you may have copied"
@@ -339,7 +338,7 @@ bool BufPool::is_corrupted(const byte *read_buf) {
   BUF_NO_CHECKSUM_MAGIC which might be stored by InnoDB with checksums
   disabled. Otherwise, skip checksum calculation and return false */
 
-  if (likely(srv_config.m_use_checksums)) {
+  if (likely(m_sys.m_config.m_buf_pool.m_use_checksums)) {
     auto checksum = mach_read_from_4(read_buf + FIL_PAGE_SPACE_OR_CHKSUM);
 
     if (checksum != 0 && checksum != BUF_NO_CHECKSUM_MAGIC && checksum != buf_page_data_calc_checksum(read_buf)) {
@@ -535,7 +534,7 @@ const BufBlock *BufPool::chunk_not_freed(BufChunk *chunk) {
   return nullptr;
 }
 
-BufPool::BufPool() : m_LRU(new(std::nothrow) BufLru(this)), m_flusher(new(std::nothrow) BufFlush(this)) {}
+BufPool::BufPool(System &sys) noexcept : m_sys(sys), m_LRU(std::make_unique<BufLru>(sys)), m_flusher(std::make_unique<BufFlush>(sys)) {}
 
 bool BufPool::open(uint64_t pool_size) {
 
@@ -585,7 +584,7 @@ bool BufPool::open(uint64_t pool_size) {
 
   /* Initialize red-black tree for fast insertions into the flush_list
   during recovery process.  As this initialization is done while holding
-  the buffer pool mutex we perform it before acquiring recv_sys->mutex. */
+  the buffer pool mutex we perform it before acquiring m_sys.m_recv->mutex. */
 
   m_flusher->init_flush_list();
 
@@ -1239,7 +1238,7 @@ BufPage *BufPool::init_for_read(DbErr *err, const PageId &page_id, int64_t table
       mutex_exit(&block->m_mutex);
     }
 
-  } else if (srv_fil->tablespace_deleted_or_being_deleted_in_mem(page_id.space_id(), tablespace_version)) {
+  } else if (m_sys.m_fil->tablespace_deleted_or_being_deleted_in_mem(page_id.space_id(), tablespace_version)) {
 
     /* The page belongs to a space which has been deleted or is being deleted. */
     *err = DB_TABLESPACE_DELETED;
@@ -1336,7 +1335,7 @@ BufBlock *BufPool::create(const PageId &page_id, Mtr *mtr) {
   such can exist if the page belonged to an index which was dropped */
 
   /* Flush pages from the end of the LRU list if necessary */
-  m_flusher->free_margin(srv_dblwr);
+  m_flusher->free_margin(m_sys.m_dblwr);
 
   auto frame = block->m_frame;
 
@@ -1379,7 +1378,7 @@ void BufPool::io_complete(BufPage *bpage) {
     auto read_page_no = mach_read_from_4(frame + FIL_PAGE_OFFSET);
     auto read_space_id = mach_read_from_4(frame + FIL_PAGE_SPACE_ID);
 
-    if (bpage->m_space == TRX_SYS_SPACE && srv_dblwr->is_page_inside(bpage->m_page_no)) {
+    if (bpage->m_space == TRX_SYS_SPACE && m_sys.m_dblwr->is_page_inside(bpage->m_page_no)) {
 
       log_err(std::format("reading page {} which is in the doublewrite buffer!", bpage->m_page_no));
     } else if (read_space_id == 0 && read_page_no == 0) {
@@ -1422,7 +1421,7 @@ void BufPool::io_complete(BufPage *bpage) {
         " You can also use the force recovery flags."
       );
 
-      if (srv_config.m_force_recovery < IB_RECOVERY_IGNORE_CORRUPT) {
+      if (m_sys.m_config.m_recv.m_force_recovery < IB_RECOVERY_IGNORE_CORRUPT) {
         log_fatal("Ending processing because of a corrupt database page.");
       }
     }
@@ -1675,9 +1674,9 @@ void BufPool::print() {
     for (; n_blocks--; block++) {
       const buf_frame_t *frame = block->m_frame;
 
-      if (srv_fil->page_get_type(frame) == FIL_PAGE_TYPE_INDEX) {
+      if (m_sys.m_fil->page_get_type(frame) == FIL_PAGE_TYPE_INDEX) {
 
-        id = srv_btree_sys->page_get_index_id(frame);
+        id = m_sys.m_btree->page_get_index_id(frame);
 
         /* Look for the id in the index_ids array */
         ulint j = 0;
@@ -1704,13 +1703,13 @@ void BufPool::print() {
   mutex_release();
 
   for (ulint i = 0; i < n_found; i++) {
-    index = srv_dict_sys->index_get_if_in_cache(index_ids[i]);
+    index = m_sys.m_dict->index_get_if_in_cache(index_ids[i]);
 
     log_info(std::format("Block count for index {} in buffer is about {}", index_ids[i], counts[i]));
 
     if (index) {
       log_info(" ");
-      srv_dict_sys->index_name_print(nullptr, index);
+      m_sys.m_dict->index_name_print(nullptr, index);
     }
   }
 

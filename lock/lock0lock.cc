@@ -328,7 +328,6 @@ static const bool Lock_strength_matrix[4][4] = {
 };
 
 /* The lock system */
-LockSys *srv_lock_sys{};
 
 /**
  * @brief Validate the transaction state.
@@ -674,7 +673,7 @@ std::string Lock::to_string(BufPool *buf_pool) const noexcept {
   );
 }
 
-LockSys::LockSys(TrxSys *trx_sys, ulint n_cells) noexcept : m_buf_pool{trx_sys->m_fsp->m_buf_pool}, m_trx_sys{trx_sys} {}
+LockSys::LockSys(System &sys) noexcept : m_sys(sys) {}
 
 LockSys::~LockSys() noexcept {}
 
@@ -686,26 +685,26 @@ bool LockSys::check_trx_id_sanity(
   ut_ad(rec.offs_validate(index, offsets));
 
   if (!has_trx_sys_mutex) {
-    mutex_enter(&m_trx_sys->m_mutex);
+    mutex_enter(&m_sys.m_trx_sys->m_mutex);
   }
 
   /* A sanity check: the trx_id in rec must be smaller than the global trx id counter */
 
-  if (trx_id >= m_trx_sys->m_max_trx_id) {
+  if (trx_id >= m_sys.m_trx_sys->m_max_trx_id) {
     log_err("Transaction id associated with record");
     log_err(rec.to_string());
     log_err(std::format(
       "\nis {} which is higher than the global trx id counter {}"
       " The table is corrupt. You have to do dump + drop + reimport.",
       trx_id,
-      m_trx_sys->m_max_trx_id
+      m_sys.m_trx_sys->m_max_trx_id
     ));
 
     is_ok = false;
   }
 
   if (!has_trx_sys_mutex) {
-    mutex_exit(&m_trx_sys->m_mutex);
+    mutex_exit(&m_sys.m_trx_sys->m_mutex);
   }
 
   return is_ok;
@@ -795,7 +794,7 @@ Table *LockSys::get_src_table(Trx *trx, Table *dest, LockMode *mode) noexcept {
 }
 
 bool LockSys::is_table_exclusive(Table *table, Trx *trx) noexcept {
-  mutex_enter(&m_trx_sys->m_mutex);
+  mutex_enter(&m_sys.m_trx_sys->m_mutex);
 
   for (auto lock : table->m_locks) {
     if (lock->m_trx != trx) {
@@ -808,24 +807,24 @@ bool LockSys::is_table_exclusive(Table *table, Trx *trx) noexcept {
     } else {
       switch (lock->mode()) {
         case LOCK_IX:
-          mutex_exit(&m_trx_sys->m_mutex);
+          mutex_exit(&m_sys.m_trx_sys->m_mutex);
           return true;
         default:
           /* Other table locks than LOCK_IX are not allowed. */
-          mutex_exit(&m_trx_sys->m_mutex);
+          mutex_exit(&m_sys.m_trx_sys->m_mutex);
           return false;
       }
     }
   }
 
-  mutex_exit(&m_trx_sys->m_mutex);
+  mutex_exit(&m_sys.m_trx_sys->m_mutex);
 
   return false;
 }
 
 #ifdef UNIV_DEBUG
 const Lock *LockSys::rec_exists(const Rec_locks &rec_locks, ulint heap_no) const noexcept {
-  ut_ad(mutex_own(&m_trx_sys->m_mutex));
+  ut_ad(mutex_own(&m_sys.m_trx_sys->m_mutex));
 
   for (auto lock : rec_locks) {
     if (lock->rec_is_nth_bit_set(heap_no)) {
@@ -839,7 +838,7 @@ const Lock *LockSys::rec_exists(const Rec_locks &rec_locks, ulint heap_no) const
 
 const Lock *LockSys::rec_get_prev(const Lock *in_lock, ulint heap_no) noexcept {
   ut_ad(in_lock != nullptr);
-  ut_ad(mutex_own(&m_trx_sys->m_mutex));
+  ut_ad(mutex_own(&m_sys.m_trx_sys->m_mutex));
   ut_ad(in_lock->type() == LOCK_REC);
 
   if (auto it = m_rec_locks.find(in_lock->page_id()); likely(it != m_rec_locks.end())) {
@@ -863,7 +862,7 @@ const Lock *LockSys::rec_get_prev(const Lock *in_lock, ulint heap_no) noexcept {
 }
 
 Lock *LockSys::table_has(Trx *trx, Table *table, LockMode mode) noexcept {
-  ut_ad(mutex_own(&m_trx_sys->m_mutex));
+  ut_ad(mutex_own(&m_sys.m_trx_sys->m_mutex));
 
   /* Look for stronger locks the same trx already has on the table */
 
@@ -884,7 +883,7 @@ Lock *LockSys::table_has(Trx *trx, Table *table, LockMode mode) noexcept {
 }
 
 const Lock *LockSys::rec_has_expl(PageId page_id, ulint precise_mode, ulint heap_no, const Trx *trx) const noexcept {
-  ut_ad(mutex_own(&m_trx_sys->m_mutex));
+  ut_ad(mutex_own(&m_sys.m_trx_sys->m_mutex));
   ut_ad((precise_mode & LOCK_MODE_MASK) == LOCK_S || (precise_mode & LOCK_MODE_MASK) == LOCK_X);
   ut_ad(!(precise_mode & LOCK_INSERT_INTENTION));
 
@@ -908,7 +907,7 @@ const Lock *LockSys::rec_has_expl(PageId page_id, ulint precise_mode, ulint heap
 #ifdef UNIV_DEBUG
 const Lock *LockSys::rec_other_has_expl_req(PageId page_id, LockMode mode, ulint gap, ulint wait, ulint heap_no, const Trx *trx)
   const noexcept {
-  ut_ad(mutex_own(&m_trx_sys->m_mutex));
+  ut_ad(mutex_own(&m_sys.m_trx_sys->m_mutex));
   ut_ad(mode == LOCK_X || mode == LOCK_S);
   ut_ad(gap == 0 || gap == LOCK_GAP);
   ut_ad(wait == 0 || wait == LOCK_WAIT);
@@ -930,7 +929,7 @@ const Lock *LockSys::rec_other_has_expl_req(PageId page_id, LockMode mode, ulint
 #endif /* UNIV_DEBUG */
 
 Lock *LockSys::rec_other_has_conflicting(PageId page_id, LockMode mode, ulint heap_no, Trx *trx) noexcept {
-  ut_ad(mutex_own(&m_trx_sys->m_mutex));
+  ut_ad(mutex_own(&m_sys.m_trx_sys->m_mutex));
 
   if (auto it = m_rec_locks.find(page_id); likely(it != m_rec_locks.end())) {
     for (auto lock : it->second) {
@@ -944,7 +943,7 @@ Lock *LockSys::rec_other_has_conflicting(PageId page_id, LockMode mode, ulint he
 }
 
 Lock *LockSys::rec_find_similar_on_page(LockMode type_mode, ulint heap_no, Lock *lock, const Trx *trx) noexcept {
-  ut_ad(mutex_own(&m_trx_sys->m_mutex));
+  ut_ad(mutex_own(&m_sys.m_trx_sys->m_mutex));
 
   for (/* No op */; lock != nullptr; lock = lock->next()) {
     if (lock->m_trx == trx && lock->m_type_mode == type_mode && lock->rec_get_n_bits() > heap_no) {
@@ -958,7 +957,7 @@ Lock *LockSys::rec_find_similar_on_page(LockMode type_mode, ulint heap_no, Lock 
 Trx *LockSys::sec_rec_some_has_impl_off_trx_sys_mutex(const Rec rec, const Index *index, const ulint *offsets) noexcept {
   const page_t *page = rec.page_align();
 
-  ut_ad(mutex_own(&m_trx_sys->m_mutex));
+  ut_ad(mutex_own(&m_sys.m_trx_sys->m_mutex));
   ut_ad(!index->is_clustered());
   ut_ad(page_rec_is_user_rec(rec));
   ut_ad(rec.offs_validate(index, offsets));
@@ -969,7 +968,7 @@ Trx *LockSys::sec_rec_some_has_impl_off_trx_sys_mutex(const Rec rec, const Index
   max trx id to the log, and therefore during recovery, this value
   for a page may be incorrect. */
 
-  if (page_get_max_trx_id(page) < m_trx_sys->get_min_trx_id() && !recv_recovery_on) {
+  if (page_get_max_trx_id(page) < m_sys.m_trx_sys->get_min_trx_id() && !recv_recovery_on) {
 
     return nullptr;
   }
@@ -985,13 +984,13 @@ Trx *LockSys::sec_rec_some_has_impl_off_trx_sys_mutex(const Rec rec, const Index
     return nullptr;
   }
 
-  return srv_row_vers->impl_x_locked_off_trx_sys_mutex(rec, index, offsets);
+  return m_sys.m_row_vers->impl_x_locked_off_trx_sys_mutex(rec, index, offsets);
 }
 
 Lock *LockSys::rec_create_low(
   PageId page_id, LockMode type_mode, ulint heap_no, ulint n_bits, const Index *index, Trx *trx
 ) noexcept {
-  ut_ad(mutex_own(&m_trx_sys->m_mutex));
+  ut_ad(mutex_own(&m_sys.m_trx_sys->m_mutex));
 
   /* If rec is the supremum record, then we reset the gap and
   LOCK_REC_NOT_GAP bits, as all locks on the supremum are
@@ -1050,7 +1049,7 @@ Lock *LockSys::rec_create_low(
 Lock *LockSys::rec_create(
   LockMode type_mode, const BufBlock *block, ulint heap_no, const Index *index, const Trx *trx
 ) noexcept {
-  ut_ad(mutex_own(&m_trx_sys->m_mutex));
+  ut_ad(mutex_own(&m_sys.m_trx_sys->m_mutex));
 
   auto page = block->m_frame;
   const auto n_bits = page_dir_get_n_heap(page);
@@ -1061,7 +1060,7 @@ Lock *LockSys::rec_create(
 DbErr LockSys::rec_enqueue_waiting(
   LockMode type_mode, const BufBlock *block, ulint heap_no, const Index *index, QueThr *thr
 ) noexcept {
-  ut_ad(mutex_own(&m_trx_sys->m_mutex));
+  ut_ad(mutex_own(&m_sys.m_trx_sys->m_mutex));
 
   /* Test if there already is some other reason to suspend thread:
   we do not enqueue a lock request if the query thread should be
@@ -1126,7 +1125,7 @@ DbErr LockSys::rec_enqueue_waiting(
 Lock *LockSys::rec_add_to_queue(
   LockMode type_mode, const BufBlock *block, ulint heap_no, const Index *index, const Trx *trx
 ) noexcept {
-  ut_ad(mutex_own(&m_trx_sys->m_mutex));
+  ut_ad(mutex_own(&m_sys.m_trx_sys->m_mutex));
 
 #ifdef UNIV_DEBUG
   switch (type_mode & LOCK_MODE_MASK) {
@@ -1196,7 +1195,7 @@ Lock *LockSys::rec_add_to_queue(
 bool LockSys::rec_lock_fast(
   bool impl, LockMode mode, const BufBlock *block, ulint heap_no, const Index *index, QueThr *thr
 ) noexcept {
-  ut_ad(mutex_own(&m_trx_sys->m_mutex));
+  ut_ad(mutex_own(&m_sys.m_trx_sys->m_mutex));
   ut_ad((LOCK_MODE_MASK & mode) != LOCK_S || table_has(thr_get_trx(thr), index->m_table, LOCK_IS));
   ut_ad((LOCK_MODE_MASK & mode) != LOCK_X || table_has(thr_get_trx(thr), index->m_table, LOCK_IX));
   ut_ad((LOCK_MODE_MASK & mode) == LOCK_S || (LOCK_MODE_MASK & mode) == LOCK_X);
@@ -1244,7 +1243,7 @@ bool LockSys::rec_lock_fast(
 DbErr LockSys::rec_lock_slow(
   bool impl, LockMode mode, const BufBlock *block, ulint heap_no, const Index *index, QueThr *thr
 ) noexcept {
-  ut_ad(mutex_own(&m_trx_sys->m_mutex));
+  ut_ad(mutex_own(&m_sys.m_trx_sys->m_mutex));
   ut_ad((LOCK_MODE_MASK & mode) != LOCK_S || table_has(thr_get_trx(thr), index->m_table, LOCK_IS));
   ut_ad((LOCK_MODE_MASK & mode) != LOCK_X || table_has(thr_get_trx(thr), index->m_table, LOCK_IX));
   ut_ad((LOCK_MODE_MASK & mode) == LOCK_S || (LOCK_MODE_MASK & mode) == LOCK_X);
@@ -1286,7 +1285,7 @@ DbErr LockSys::rec_lock_slow(
 DbErr LockSys::rec_lock(
   bool impl, LockMode mode, const BufBlock *block, ulint heap_no, const Index *index, QueThr *thr
 ) noexcept {
-  ut_ad(mutex_own(&m_trx_sys->m_mutex));
+  ut_ad(mutex_own(&m_sys.m_trx_sys->m_mutex));
   ut_ad((LOCK_MODE_MASK & mode) != LOCK_S || table_has(thr_get_trx(thr), index->m_table, LOCK_IS));
   ut_ad((LOCK_MODE_MASK & mode) != LOCK_X || table_has(thr_get_trx(thr), index->m_table, LOCK_IX));
   ut_ad((LOCK_MODE_MASK & mode) == LOCK_S || (LOCK_MODE_MASK & mode) == LOCK_X);
@@ -1312,7 +1311,7 @@ DbErr LockSys::rec_lock(
 }
 
 bool LockSys::rec_has_to_wait_in_queue(const Rec_locks &rec_locks, Lock *waiting_lock, ulint heap_no) const noexcept {
-  ut_ad(mutex_own(&m_trx_sys->m_mutex));
+  ut_ad(mutex_own(&m_sys.m_trx_sys->m_mutex));
   ut_ad(waiting_lock->is_waiting());
   ut_ad(waiting_lock->type() == LOCK_REC);
   ut_ad(heap_no == waiting_lock->rec_find_set_bit());
@@ -1331,7 +1330,7 @@ bool LockSys::rec_has_to_wait_in_queue(const Rec_locks &rec_locks, Lock *waiting
 }
 
 void LockSys::grant(Lock *lock) noexcept {
-  ut_ad(mutex_own(&m_trx_sys->m_mutex));
+  ut_ad(mutex_own(&m_sys.m_trx_sys->m_mutex));
 
   lock->reset();
 
@@ -1346,7 +1345,7 @@ void LockSys::grant(Lock *lock) noexcept {
 }
 
 void LockSys::rec_cancel(Lock *lock) noexcept {
-  ut_ad(mutex_own(&m_trx_sys->m_mutex));
+  ut_ad(mutex_own(&m_sys.m_trx_sys->m_mutex));
   ut_ad(lock->type() == LOCK_REC);
 
   /* Reset the bit (there can be only one set bit) in the lock bitmap */
@@ -1360,7 +1359,7 @@ void LockSys::rec_cancel(Lock *lock) noexcept {
 }
 
 void LockSys::rec_dequeue_from_page(Lock *lock) noexcept {
-  ut_ad(mutex_own(&m_trx_sys->m_mutex));
+  ut_ad(mutex_own(&m_sys.m_trx_sys->m_mutex));
   ut_ad(lock->type() == LOCK_REC);
 
   auto it = m_rec_locks.find(lock->page_id());
@@ -1396,7 +1395,7 @@ void LockSys::rec_dequeue_from_page(Lock *lock) noexcept {
 }
 
 void LockSys::rec_discard(Lock *in_lock) noexcept {
-  ut_ad(mutex_own(&m_trx_sys->m_mutex));
+  ut_ad(mutex_own(&m_sys.m_trx_sys->m_mutex));
   ut_ad(in_lock->type() == LOCK_REC);
 
   auto trx = in_lock->m_trx;
@@ -1407,7 +1406,7 @@ void LockSys::rec_discard(Lock *in_lock) noexcept {
 }
 
 void LockSys::rec_free_all_from_discard_page(PageId page_id) noexcept {
-  ut_ad(mutex_own(&m_trx_sys->m_mutex));
+  ut_ad(mutex_own(&m_sys.m_trx_sys->m_mutex));
 
   if (auto it = m_rec_locks.find(page_id); it != m_rec_locks.end()) {
     auto lock = it->second.front();
@@ -1426,7 +1425,7 @@ void LockSys::rec_free_all_from_discard_page(PageId page_id) noexcept {
 }
 
 void LockSys::rec_reset_and_release_wait(PageId page_id, ulint heap_no) noexcept {
-  ut_ad(mutex_own(&m_trx_sys->m_mutex));
+  ut_ad(mutex_own(&m_sys.m_trx_sys->m_mutex));
 
   if (auto it = m_rec_locks.find(page_id); it != m_rec_locks.end()) {
     for (auto lock : it->second) {
@@ -1443,7 +1442,7 @@ void LockSys::rec_reset_and_release_wait(PageId page_id, ulint heap_no) noexcept
 }
 
 void LockSys::rec_inherit_to_gap(const BufBlock *heir_block, const BufBlock *block, ulint heir_heap_no, ulint heap_no) noexcept {
-  ut_ad(mutex_own(&m_trx_sys->m_mutex));
+  ut_ad(mutex_own(&m_sys.m_trx_sys->m_mutex));
 
   /* If session is using READ COMMITTED isolation level, we do not want locks set by an UPDATE or a DELETE to be inherited as gap type locks.
   But we DO want S-locks set by a consistency constraint to be inherited also then. */
@@ -1460,7 +1459,7 @@ void LockSys::rec_inherit_to_gap(const BufBlock *heir_block, const BufBlock *blo
 }
 
 void LockSys::rec_inherit_to_gap_if_gap_lock(const BufBlock *block, ulint heir_heap_no, ulint heap_no) noexcept {
-  ut_ad(mutex_own(&m_trx_sys->m_mutex));
+  ut_ad(mutex_own(&m_sys.m_trx_sys->m_mutex));
 
   if (auto it = m_rec_locks.find(block->get_page_id()); it != m_rec_locks.end()) {
     for (auto lock : it->second) {
@@ -1477,7 +1476,7 @@ void LockSys::rec_inherit_to_gap_if_gap_lock(const BufBlock *block, ulint heir_h
 void LockSys::rec_move(
   const BufBlock *receiver, const BufBlock *donator, ulint receiver_heap_no, ulint donator_heap_no
 ) noexcept {
-  ut_ad(mutex_own(&m_trx_sys->m_mutex));
+  ut_ad(mutex_own(&m_sys.m_trx_sys->m_mutex));
 
   IF_DEBUG({
     if (auto it = m_rec_locks.find(receiver->get_page_id()); it != m_rec_locks.end()) {
@@ -1513,12 +1512,12 @@ void LockSys::rec_move(
 void LockSys::move_reorganize_page(const BufBlock *block, const BufBlock *oblock) noexcept {
   UT_LIST_BASE_NODE_T(Lock, m_trx_locks) old_locks;
 
-  mutex_enter(&m_trx_sys->m_mutex);
+  mutex_enter(&m_sys.m_trx_sys->m_mutex);
 
   auto it = m_rec_locks.find(block->get_page_id());
 
   if (it == m_rec_locks.end()) {
-    mutex_exit(&m_trx_sys->m_mutex);
+    mutex_exit(&m_sys.m_trx_sys->m_mutex);
     return;
   }
 
@@ -1584,13 +1583,13 @@ void LockSys::move_reorganize_page(const BufBlock *block, const BufBlock *oblock
 
       /* Check that all locks were moved. */
       if (unlikely(i != ULINT_UNDEFINED)) {
-        log_fatal(std::format("move_reorganize_page(): {} not moved in {}", i, lock->to_string(m_buf_pool)));
+        log_fatal(std::format("move_reorganize_page(): {} not moved in {}", i, lock->to_string(m_sys.m_buf_pool)));
       }
     }
 #endif /* UNIV_DEBUG */
   }
 
-  mutex_exit(&m_trx_sys->m_mutex);
+  mutex_exit(&m_sys.m_trx_sys->m_mutex);
 
   mem_heap_free(heap);
 
@@ -1598,7 +1597,7 @@ void LockSys::move_reorganize_page(const BufBlock *block, const BufBlock *oblock
 }
 
 void LockSys::move_rec_list_end(const BufBlock *new_block, const BufBlock *block, const Rec rec) noexcept {
-  mutex_enter(&m_trx_sys->m_mutex);
+  mutex_enter(&m_sys.m_trx_sys->m_mutex);
 
   /* Note: when we move locks from record to record, waiting locks
   and possible granted gap type locks behind them are enqueued in
@@ -1648,7 +1647,7 @@ void LockSys::move_rec_list_end(const BufBlock *new_block, const BufBlock *block
     }
   }
 
-  mutex_exit(&m_trx_sys->m_mutex);
+  mutex_exit(&m_sys.m_trx_sys->m_mutex);
 
   ut_ad(rec_validate_page(block->get_page_id()));
   ut_ad(rec_validate_page(new_block->get_page_id()));
@@ -1658,7 +1657,7 @@ void LockSys::move_rec_list_start(const BufBlock *new_block, const BufBlock *blo
   ut_ad(block->m_frame == rec.page_align());
   ut_ad(new_block->m_frame == old_end.page_align());
 
-  mutex_enter(&m_trx_sys->m_mutex);
+  mutex_enter(&m_sys.m_trx_sys->m_mutex);
 
   if (auto it = m_rec_locks.find(block->get_page_id()); it != m_rec_locks.end()) {
 
@@ -1700,14 +1699,14 @@ void LockSys::move_rec_list_start(const BufBlock *new_block, const BufBlock *blo
       IF_DEBUG(if (page_rec_is_supremum(rec)) {
         for (auto i = PAGE_HEAP_NO_USER_LOW; i < lock->rec_get_n_bits(); ++i) {
           if (unlikely(lock->rec_is_nth_bit_set(i))) {
-            log_fatal("move_rec_list_start(): {} not moved in {}", i, lock->to_string(m_buf_pool));
+            log_fatal("move_rec_list_start(): {} not moved in {}", i, lock->to_string(m_sys.m_buf_pool));
           }
         }
       })
     }
   }
 
-  mutex_exit(&m_trx_sys->m_mutex);
+  mutex_exit(&m_sys.m_trx_sys->m_mutex);
 
   ut_ad(rec_validate_page(block->get_page_id()));
 }
@@ -1715,7 +1714,7 @@ void LockSys::move_rec_list_start(const BufBlock *new_block, const BufBlock *blo
 void LockSys::update_split_right(const BufBlock *right_block, const BufBlock *left_block) noexcept {
   const ulint heap_no = get_min_heap_no(right_block);
 
-  mutex_enter(&m_trx_sys->m_mutex);
+  mutex_enter(&m_sys.m_trx_sys->m_mutex);
 
   /* Move the locks on the supremum of the left page to the supremum
   of the right page */
@@ -1727,11 +1726,11 @@ void LockSys::update_split_right(const BufBlock *right_block, const BufBlock *le
 
   rec_inherit_to_gap(left_block, right_block, PAGE_HEAP_NO_SUPREMUM, heap_no);
 
-  mutex_exit(&m_trx_sys->m_mutex);
+  mutex_exit(&m_sys.m_trx_sys->m_mutex);
 }
 
 void LockSys::update_merge_right(const BufBlock *right_block, const Rec orig_succ, const BufBlock *left_block) noexcept {
-  mutex_enter(&m_trx_sys->m_mutex);
+  mutex_enter(&m_sys.m_trx_sys->m_mutex);
 
   /* Inherit the locks from the supremum of the left page to the
   original successor of infimum on the right page, to which the left
@@ -1746,20 +1745,20 @@ void LockSys::update_merge_right(const BufBlock *right_block, const Rec orig_suc
 
   rec_free_all_from_discard_page(left_block->get_page_id());
 
-  mutex_exit(&m_trx_sys->m_mutex);
+  mutex_exit(&m_sys.m_trx_sys->m_mutex);
 }
 
 void LockSys::update_root_raise(const BufBlock *block, const BufBlock *root) noexcept {
-  mutex_enter(&m_trx_sys->m_mutex);
+  mutex_enter(&m_sys.m_trx_sys->m_mutex);
 
   /* Move the locks on the supremum of the root to the supremum of block */
   rec_move(block, root, PAGE_HEAP_NO_SUPREMUM, PAGE_HEAP_NO_SUPREMUM);
 
-  mutex_exit(&m_trx_sys->m_mutex);
+  mutex_exit(&m_sys.m_trx_sys->m_mutex);
 }
 
 void LockSys::update_copy_and_discard(const BufBlock *new_block, const BufBlock *block) noexcept {
-  mutex_enter(&m_trx_sys->m_mutex);
+  mutex_enter(&m_sys.m_trx_sys->m_mutex);
 
   /* Move the locks on the supremum of the old page to the supremum
   of new_page */
@@ -1767,20 +1766,20 @@ void LockSys::update_copy_and_discard(const BufBlock *new_block, const BufBlock 
   rec_move(new_block, block, PAGE_HEAP_NO_SUPREMUM, PAGE_HEAP_NO_SUPREMUM);
   rec_free_all_from_discard_page(block->get_page_id());
 
-  mutex_exit(&m_trx_sys->m_mutex);
+  mutex_exit(&m_sys.m_trx_sys->m_mutex);
 }
 
 void LockSys::update_split_left(const BufBlock *right_block, const BufBlock *left_block) noexcept {
   const ulint heap_no = get_min_heap_no(right_block);
 
-  mutex_enter(&m_trx_sys->m_mutex);
+  mutex_enter(&m_sys.m_trx_sys->m_mutex);
 
   /* Inherit the locks to the supremum of the left page from the
   successor of the infimum on the right page */
 
   rec_inherit_to_gap(left_block, right_block, PAGE_HEAP_NO_SUPREMUM, heap_no);
 
-  mutex_exit(&m_trx_sys->m_mutex);
+  mutex_exit(&m_sys.m_trx_sys->m_mutex);
 }
 
 void LockSys::update_merge_left(const BufBlock *left_block, const Rec orig_pred, const BufBlock *right_block) noexcept {
@@ -1788,7 +1787,7 @@ void LockSys::update_merge_left(const BufBlock *left_block, const Rec orig_pred,
 
   ut_ad(left_block->m_frame == orig_pred.page_align());
 
-  mutex_enter(&m_trx_sys->m_mutex);
+  mutex_enter(&m_sys.m_trx_sys->m_mutex);
 
   left_next_rec = page_rec_get_next_const(orig_pred);
 
@@ -1812,31 +1811,31 @@ void LockSys::update_merge_left(const BufBlock *left_block, const Rec orig_pred,
 
   rec_free_all_from_discard_page(right_block->get_page_id());
 
-  mutex_exit(&m_trx_sys->m_mutex);
+  mutex_exit(&m_sys.m_trx_sys->m_mutex);
 }
 
 void LockSys::rec_reset_and_inherit_gap_locks(
   const BufBlock *heir_block, const BufBlock *block, ulint heir_heap_no, ulint heap_no
 ) noexcept {
-  mutex_enter(&m_trx_sys->m_mutex);
+  mutex_enter(&m_sys.m_trx_sys->m_mutex);
 
   rec_reset_and_release_wait(heir_block->get_page_id(), heir_heap_no);
 
   rec_inherit_to_gap(heir_block, block, heir_heap_no, heap_no);
 
-  mutex_exit(&m_trx_sys->m_mutex);
+  mutex_exit(&m_sys.m_trx_sys->m_mutex);
 }
 
 void LockSys::update_discard(const BufBlock *heir_block, ulint heir_heap_no, const BufBlock *block) noexcept {
   const auto page = block->m_frame;
 
-  mutex_enter(&m_trx_sys->m_mutex);
+  mutex_enter(&m_sys.m_trx_sys->m_mutex);
 
   auto it = m_rec_locks.find(block->get_page_id());
 
   if (it == m_rec_locks.end()) {
     /* No locks exist on page, nothing to do */
-    mutex_exit(&m_trx_sys->m_mutex);
+    mutex_exit(&m_sys.m_trx_sys->m_mutex);
     return;
   }
 
@@ -1860,7 +1859,7 @@ void LockSys::update_discard(const BufBlock *heir_block, ulint heir_heap_no, con
 
   rec_free_all_from_discard_page(block->get_page_id());
 
-  mutex_exit(&m_trx_sys->m_mutex);
+  mutex_exit(&m_sys.m_trx_sys->m_mutex);
 }
 
 void LockSys::update_insert(const BufBlock *block, const Rec rec) noexcept {
@@ -1872,11 +1871,11 @@ void LockSys::update_insert(const BufBlock *block, const Rec rec) noexcept {
   const auto receiver_heap_no = rec.get_heap_no();
   const auto donator_heap_no = page_rec_get_heap_no(page_rec_get_next_low(rec));
 
-  mutex_enter(&m_trx_sys->m_mutex);
+  mutex_enter(&m_sys.m_trx_sys->m_mutex);
 
   rec_inherit_to_gap_if_gap_lock(block, receiver_heap_no, donator_heap_no);
 
-  mutex_exit(&m_trx_sys->m_mutex);
+  mutex_exit(&m_sys.m_trx_sys->m_mutex);
 }
 
 void LockSys::update_delete(const BufBlock *block, const Rec rec) noexcept {
@@ -1887,7 +1886,7 @@ void LockSys::update_delete(const BufBlock *block, const Rec rec) noexcept {
   const auto heap_no = rec.get_heap_no();
   const auto next_heap_no = page_rec_get_heap_no(page + rec.get_next_offs());
 
-  mutex_enter(&m_trx_sys->m_mutex);
+  mutex_enter(&m_sys.m_trx_sys->m_mutex);
 
   /* Let the next record inherit the locks from rec, in gap mode */
 
@@ -1897,7 +1896,7 @@ void LockSys::update_delete(const BufBlock *block, const Rec rec) noexcept {
 
   rec_reset_and_release_wait(block->get_page_id(), heap_no);
 
-  mutex_exit(&m_trx_sys->m_mutex);
+  mutex_exit(&m_sys.m_trx_sys->m_mutex);
 }
 
 void LockSys::rec_store_on_page_infimum(const BufBlock *block, const Rec rec) noexcept {
@@ -1905,35 +1904,35 @@ void LockSys::rec_store_on_page_infimum(const BufBlock *block, const Rec rec) no
 
   ut_ad(block->m_frame == rec.page_align());
 
-  mutex_enter(&m_trx_sys->m_mutex);
+  mutex_enter(&m_sys.m_trx_sys->m_mutex);
 
   rec_move(block, block, PAGE_HEAP_NO_INFIMUM, heap_no);
 
-  mutex_exit(&m_trx_sys->m_mutex);
+  mutex_exit(&m_sys.m_trx_sys->m_mutex);
 }
 
 void LockSys::rec_restore_from_page_infimum(const BufBlock *block, const Rec rec, const BufBlock *donator) noexcept {
   const auto heap_no = page_rec_get_heap_no(rec);
 
-  mutex_enter(&m_trx_sys->m_mutex);
+  mutex_enter(&m_sys.m_trx_sys->m_mutex);
 
   rec_move(block, donator, heap_no, PAGE_HEAP_NO_INFIMUM);
 
-  mutex_exit(&m_trx_sys->m_mutex);
+  mutex_exit(&m_sys.m_trx_sys->m_mutex);
 }
 
 bool LockSys::deadlock_occurs(Lock *lock, Trx *trx) noexcept {
   ulint ret;
   ulint cost{};
 
-  ut_ad(mutex_own(&m_trx_sys->m_mutex));
+  ut_ad(mutex_own(&m_sys.m_trx_sys->m_mutex));
 
 retry:
   /* We check that adding this trx to the waits-for graph
   does not produce a cycle. First mark all active transactions
   with 0: */
 
-  for (auto mark_trx : m_trx_sys->m_trx_list) {
+  for (auto mark_trx : m_sys.m_trx_sys->m_trx_list) {
     mark_trx->m_deadlock_mark = 0;
   }
 
@@ -1953,7 +1952,7 @@ retry:
 
       log_info("*** WAITING FOR THIS LOCK TO BE GRANTED:n");
 
-      log_info(lock->to_string(m_buf_pool));
+      log_info(lock->to_string(m_sys.m_buf_pool));
       break;
 
     case LOCK_VICTIM_IS_START:
@@ -1972,7 +1971,7 @@ retry:
 
 ulint LockSys::deadlock_recursive(Trx *start, Trx *trx, Lock *wait_lock, ulint *cost, ulint depth) noexcept {
   ulint ret;
-  ut_ad(mutex_own(&m_trx_sys->m_mutex));
+  ut_ad(mutex_own(&m_sys.m_trx_sys->m_mutex));
 
   if (trx->m_deadlock_mark == 1) {
     /* We have already exhaustively searched the subtree starting from this trx */
@@ -2041,7 +2040,7 @@ ulint LockSys::deadlock_recursive(Trx *start, Trx *trx, Lock *wait_lock, ulint *
 
         log_info("*** (1) WAITING FOR THIS LOCK TO BE GRANTED:");
 
-        log_info(wait_lock->to_string(m_buf_pool));
+        log_info(wait_lock->to_string(m_sys.m_buf_pool));
 
         log_info("*** (2) TRANSACTION:");
 
@@ -2049,13 +2048,13 @@ ulint LockSys::deadlock_recursive(Trx *start, Trx *trx, Lock *wait_lock, ulint *
 
         log_info("*** (2) HOLDS THE LOCK(S):");
 
-        log_info(found_lock->to_string(m_buf_pool));
+        log_info(found_lock->to_string(m_sys.m_buf_pool));
 
         log_info("*** (2) WAITING FOR THIS LOCK TO BE GRANTED:");
 
-        log_info(wait_lock->to_string(m_buf_pool));
+        log_info(wait_lock->to_string(m_sys.m_buf_pool));
 
-        log_info(start->m_wait_lock->to_string(m_buf_pool));
+        log_info(start->m_wait_lock->to_string(m_sys.m_buf_pool));
 
         if (Trx::weight_cmp(wait_lock->m_trx, start) >= 0) {
           /* Our recursion starting point transaction is 'smaller', let us
@@ -2118,7 +2117,7 @@ ulint LockSys::deadlock_recursive(Trx *start, Trx *trx, Lock *wait_lock, ulint *
 }
 
 Lock *LockSys::table_create(Table *table, LockMode type_mode, Trx *trx) noexcept {
-  ut_ad(mutex_own(&m_trx_sys->m_mutex));
+  ut_ad(mutex_own(&m_sys.m_trx_sys->m_mutex));
 
   auto lock = reinterpret_cast<Lock *>(mem_heap_alloc(trx->m_lock_heap, sizeof(Lock)));
 
@@ -2140,7 +2139,7 @@ Lock *LockSys::table_create(Table *table, LockMode type_mode, Trx *trx) noexcept
 }
 
 void LockSys::table_remove_low(Lock *lock) noexcept {
-  ut_ad(mutex_own(&m_trx_sys->m_mutex));
+  ut_ad(mutex_own(&m_sys.m_trx_sys->m_mutex));
 
   auto trx = lock->m_trx;
   auto table = lock->m_table.m_table;
@@ -2150,7 +2149,7 @@ void LockSys::table_remove_low(Lock *lock) noexcept {
 }
 
 [[nodiscard]] DbErr LockSys::table_enqueue_waiting(LockMode mode, Table *table, QueThr *thr) noexcept {
-  ut_ad(mutex_own(&m_trx_sys->m_mutex));
+  ut_ad(mutex_own(&m_sys.m_trx_sys->m_mutex));
 
   /* Test if there already is some other reason to suspend thread:
   we do not enqueue a lock request if the query thread should be
@@ -2212,7 +2211,7 @@ void LockSys::table_remove_low(Lock *lock) noexcept {
 }
 
 Lock *LockSys::table_other_has_incompatible(Trx *trx, ulint wait, Table *table, LockMode mode) noexcept {
-  ut_ad(mutex_own(&m_trx_sys->m_mutex));
+  ut_ad(mutex_own(&m_sys.m_trx_sys->m_mutex));
 
   auto lock = table->m_locks.back();
 
@@ -2239,13 +2238,13 @@ DbErr LockSys::lock_table(ulint flags, Table *table, LockMode mode, QueThr *thr)
 
   auto trx = thr_get_trx(thr);
 
-  mutex_enter(&m_trx_sys->m_mutex);
+  mutex_enter(&m_sys.m_trx_sys->m_mutex);
 
   /* Look for stronger locks the same trx already has on the table */
 
   if (table_has(trx, table, mode)) {
 
-    mutex_exit(&m_trx_sys->m_mutex);
+    mutex_exit(&m_sys.m_trx_sys->m_mutex);
 
     return DB_SUCCESS;
   }
@@ -2260,7 +2259,7 @@ DbErr LockSys::lock_table(ulint flags, Table *table, LockMode mode, QueThr *thr)
 
     auto err = table_enqueue_waiting(LockMode(mode | flags), table, thr);
 
-    mutex_exit(&m_trx_sys->m_mutex);
+    mutex_exit(&m_sys.m_trx_sys->m_mutex);
 
     return err;
   }
@@ -2269,7 +2268,7 @@ DbErr LockSys::lock_table(ulint flags, Table *table, LockMode mode, QueThr *thr)
 
   ut_a(!flags || mode == LOCK_S || mode == LOCK_X);
 
-  mutex_exit(&m_trx_sys->m_mutex);
+  mutex_exit(&m_sys.m_trx_sys->m_mutex);
 
   return DB_SUCCESS;
 }
@@ -2294,7 +2293,7 @@ bool LockSys::table_has_to_wait_in_queue(Lock *wait_lock) noexcept {
 }
 
 void LockSys::table_dequeue(Lock *in_lock) noexcept {
-  ut_ad(mutex_own(&m_trx_sys->m_mutex));
+  ut_ad(mutex_own(&m_sys.m_trx_sys->m_mutex));
   ut_a(in_lock->type() == LOCK_TABLE);
 
   auto lock = UT_LIST_GET_NEXT(m_table.m_locks, in_lock);
@@ -2321,7 +2320,7 @@ void LockSys::rec_unlock(Trx *trx, const BufBlock *block, const Rec rec, LockMod
 
   const auto heap_no = page_rec_get_heap_no(rec);
 
-  mutex_enter(&m_trx_sys->m_mutex);
+  mutex_enter(&m_sys.m_trx_sys->m_mutex);
 
   Lock *release_lock{};
 
@@ -2342,7 +2341,7 @@ void LockSys::rec_unlock(Trx *trx, const BufBlock *block, const Rec rec, LockMod
   if (likely(release_lock != nullptr)) {
     release_lock->rec_reset_nth_bit(heap_no);
   } else {
-    mutex_exit(&m_trx_sys->m_mutex);
+    mutex_exit(&m_sys.m_trx_sys->m_mutex);
     log_err(std::format("Unlock row could not find a {} mode lock on the record", to_int(LockMode)));
     return;
   }
@@ -2355,11 +2354,11 @@ void LockSys::rec_unlock(Trx *trx, const BufBlock *block, const Rec rec, LockMod
     }
   }
 
-  mutex_exit(&m_trx_sys->m_mutex);
+  mutex_exit(&m_sys.m_trx_sys->m_mutex);
 }
 
 void LockSys::release_off_trx_sys_mutex(Trx *trx) noexcept {
-  ut_ad(mutex_own(&m_trx_sys->m_mutex));
+  ut_ad(mutex_own(&m_sys.m_trx_sys->m_mutex));
 
   ulint count{};
   auto lock = trx->m_trx_locks.back();
@@ -2383,9 +2382,9 @@ void LockSys::release_off_trx_sys_mutex(Trx *trx) noexcept {
       /* Release the trx system mutex for a while, so that we
       do not monopolize it */
 
-      mutex_exit(&m_trx_sys->m_mutex);
+      mutex_exit(&m_sys.m_trx_sys->m_mutex);
 
-      mutex_enter(&m_trx_sys->m_mutex);
+      mutex_enter(&m_sys.m_trx_sys->m_mutex);
 
       count = 0;
     }
@@ -2397,7 +2396,7 @@ void LockSys::release_off_trx_sys_mutex(Trx *trx) noexcept {
 }
 
 void LockSys::cancel_waiting_and_release(Lock *lock) noexcept {
-  ut_ad(mutex_own(&m_trx_sys->m_mutex));
+  ut_ad(mutex_own(&m_sys.m_trx_sys->m_mutex));
 
   if (lock->type() == LOCK_REC) {
 
@@ -2421,7 +2420,7 @@ void LockSys::cancel_waiting_and_release(Lock *lock) noexcept {
 #define IS_LOCK_S_OR_X(lock) (lock->mode() == LOCK_S || lock->mode() == LOCK_X)
 
 void LockSys::remove_all_on_table_for_trx(Table *table, Trx *trx, bool remove_sx_locks) noexcept {
-  ut_ad(mutex_own(&m_trx_sys->m_mutex));
+  ut_ad(mutex_own(&m_sys.m_trx_sys->m_mutex));
 
   auto lock = trx->m_trx_locks.back();
 
@@ -2444,7 +2443,7 @@ void LockSys::remove_all_on_table_for_trx(Table *table, Trx *trx, bool remove_sx
 }
 
 void LockSys::remove_all_on_table(Table *table, bool remove_sx_locks) noexcept {
-  mutex_enter(&m_trx_sys->m_mutex);
+  mutex_enter(&m_sys.m_trx_sys->m_mutex);
 
   auto lock = table->m_locks.front();
 
@@ -2488,7 +2487,7 @@ void LockSys::remove_all_on_table(Table *table, bool remove_sx_locks) noexcept {
     }
   }
 
-  mutex_exit(&m_trx_sys->m_mutex);
+  mutex_exit(&m_sys.m_trx_sys->m_mutex);
 }
 
 [[nodiscard]] ulint LockSys::get_n_rec_locks() noexcept {
@@ -2500,8 +2499,8 @@ bool LockSys::print_info_summary(bool nowait) const noexcept {
   otherwise return immediately if fail to obtain the
   mutex. */
   if (!nowait) {
-    mutex_enter(&m_trx_sys->m_mutex);
-  } else if (mutex_enter_nowait(&m_trx_sys->m_mutex)) {
+    mutex_enter(&m_sys.m_trx_sys->m_mutex);
+  } else if (mutex_enter_nowait(&m_sys.m_trx_sys->m_mutex)) {
     log_info("FAIL TO OBTAIN TRX SYSTEM MUTEX, SKIP LOCK INFO PRINTING");
     return false;
   }
@@ -2520,13 +2519,13 @@ bool LockSys::print_info_summary(bool nowait) const noexcept {
     "------------\n"
   );
 
-  log_info("Trx id counter ", m_trx_sys->m_max_trx_id);
+  log_info("Trx id counter ", m_sys.m_trx_sys->m_max_trx_id);
 
   log_info(std::format(
-    "Purge done for trx's n:o < {} undo n:o < {}", m_trx_sys->m_purge->m_purge_trx_no, m_trx_sys->m_purge->m_purge_undo_no
+    "Purge done for trx's n:o < {} undo n:o < {}", m_sys.m_trx_sys->m_purge->m_purge_trx_no, m_sys.m_trx_sys->m_purge->m_purge_undo_no
   ));
 
-  log_info("History list length ", m_trx_sys->m_rseg_history_len);
+  log_info("History list length ", m_sys.m_trx_sys->m_rseg_history_len);
 
   return true;
 }
@@ -2540,7 +2539,7 @@ void LockSys::print_info_all_transactions() noexcept {
 
   /* First print info on non-active transactions */
 
-  for (auto trx : m_trx_sys->m_client_trx_list) {
+  for (auto trx : m_sys.m_trx_sys->m_client_trx_list) {
     if (trx->m_conc_state == TRX_NOT_STARTED) {
       log_info("---");
       log_info(trx->to_string(600));
@@ -2558,7 +2557,7 @@ void LockSys::print_info_all_transactions() noexcept {
     obsolete now and we must loop through the trx list to
     get probably the same trx, or some other trx. */
 
-    for (auto tx : m_trx_sys->m_trx_list) {
+    for (auto tx : m_sys.m_trx_sys->m_trx_list) {
       if (i == nth_trx) {
         trx = tx;
         break;
@@ -2568,7 +2567,7 @@ void LockSys::print_info_all_transactions() noexcept {
     }
 
     if (trx == nullptr) {
-      mutex_exit(&m_trx_sys->m_mutex);
+      mutex_exit(&m_sys.m_trx_sys->m_mutex);
 
       ut_ad(validate());
 
@@ -2592,7 +2591,7 @@ void LockSys::print_info_all_transactions() noexcept {
           "------- TRX HAS BEEN WAITING {} SEC FOR THIS LOCK TO BE GRANTED:", difftime(time(nullptr), trx->m_wait_started)
         ));
 
-        log_info(lock->to_string(m_buf_pool));
+        log_info(lock->to_string(m_sys.m_buf_pool));
 
         log_info("------------------");
       }
@@ -2625,7 +2624,7 @@ void LockSys::print_info_all_transactions() noexcept {
 
     if (lock->type() == LOCK_REC) {
       if (load_page_first) {
-        const auto size = m_trx_sys->m_fsp->m_fil->space_get_flags(lock->rec_space_id());
+        const auto size = m_sys.m_trx_sys->m_fsp->m_fil->space_get_flags(lock->rec_space_id());
 
         if (unlikely(size == ULINT_UNDEFINED)) {
 
@@ -2634,11 +2633,11 @@ void LockSys::print_info_all_transactions() noexcept {
           load the page in the buffer pool. */
 
           log_info("RECORD LOCKS on non-existing space ", lock->rec_space_id());
-          log_info(lock->rec_to_string(m_buf_pool));
+          log_info(lock->rec_to_string(m_sys.m_buf_pool));
 
         } else {
 
-          mutex_exit(&m_trx_sys->m_mutex);
+          mutex_exit(&m_sys.m_trx_sys->m_mutex);
 
           Mtr mtr;
 
@@ -2654,13 +2653,13 @@ void LockSys::print_info_all_transactions() noexcept {
           };
 
           /* We are simply trying to force a read here. */
-          (void)m_buf_pool->get(req, nullptr);
+          (void)m_sys.m_buf_pool->get(req, nullptr);
 
           mtr.commit();
 
           load_page_first = false;
 
-          mutex_enter(&m_trx_sys->m_mutex);
+          mutex_enter(&m_sys.m_trx_sys->m_mutex);
 
           continue;
         }
@@ -2687,7 +2686,7 @@ void LockSys::print_info_all_transactions() noexcept {
 
 #ifdef UNIV_DEBUG
 bool LockSys::table_queue_validate(Table *table) noexcept {
-  ut_ad(mutex_own(&m_trx_sys->m_mutex));
+  ut_ad(mutex_own(&m_sys.m_trx_sys->m_mutex));
 
   for (auto lock : table->m_locks) {
     validate_trx_state(lock->m_trx);
@@ -2709,7 +2708,7 @@ bool LockSys::rec_queue_validate(const BufBlock *block, const Rec rec, const Ind
   ut_ad(block->get_frame() == rec.page_align());
   ut_ad(rec.offs_validate(index, offsets));
 
-  mutex_enter(&m_trx_sys->m_mutex);
+  mutex_enter(&m_sys.m_trx_sys->m_mutex);
 
   auto heap_no = page_rec_get_heap_no(rec);
 
@@ -2725,7 +2724,7 @@ bool LockSys::rec_queue_validate(const BufBlock *block, const Rec rec, const Ind
         }
 
         validate_trx_state(lock->m_trx);
-        ut_ad(m_trx_sys->in_trx_list(lock->m_trx));
+        ut_ad(m_sys.m_trx_sys->in_trx_list(lock->m_trx));
 
         if (lock->is_waiting()) {
           ut_ad(rec_has_to_wait_in_queue(it->second, lock, heap_no));
@@ -2757,7 +2756,7 @@ bool LockSys::rec_queue_validate(const BufBlock *block, const Rec rec, const Ind
         }
 
         validate_trx_state(lock->m_trx);
-        ut_ad(m_trx_sys->in_trx_list(lock->m_trx));
+        ut_ad(m_sys.m_trx_sys->in_trx_list(lock->m_trx));
 
         if (index != nullptr) {
           ut_a(lock->m_rec.m_index == index);
@@ -2776,13 +2775,13 @@ bool LockSys::rec_queue_validate(const BufBlock *block, const Rec rec, const Ind
     }
   }
 
-  mutex_exit(&m_trx_sys->m_mutex);
+  mutex_exit(&m_sys.m_trx_sys->m_mutex);
 
   return true;
 }
 
 bool LockSys::rec_validate_page(PageId page_id) noexcept {
-  ut_ad(!mutex_own(&m_trx_sys->m_mutex));
+  ut_ad(!mutex_own(&m_sys.m_trx_sys->m_mutex));
 
   Mtr mtr;
 
@@ -2792,14 +2791,14 @@ bool LockSys::rec_validate_page(PageId page_id) noexcept {
     .m_rw_latch = RW_X_LATCH, .m_page_id = page_id, .m_mode = BUF_GET, .m_file = __FILE__, .m_line = __LINE__, .m_mtr = &mtr
   };
 
-  auto block = m_buf_pool->get(req, nullptr);
+  auto block = m_sys.m_buf_pool->get(req, nullptr);
 
   buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_NO_ORDER_CHECK));
 
   const auto page = block->get_frame();
 
   auto clean_up = [this](Mtr &mtr, MemHeap *heap) -> bool {
-    mutex_exit(&m_trx_sys->m_mutex);
+    mutex_exit(&m_sys.m_trx_sys->m_mutex);
 
     mtr.commit();
 
@@ -2826,7 +2825,7 @@ bool LockSys::rec_validate_page(PageId page_id) noexcept {
     return lock;
   };
 
-  mutex_enter(&m_trx_sys->m_mutex);
+  mutex_enter(&m_sys.m_trx_sys->m_mutex);
 
   ulint nth_bit{};
   MemHeap *heap{};
@@ -2842,7 +2841,7 @@ bool LockSys::rec_validate_page(PageId page_id) noexcept {
       return clean_up(mtr, heap);
     }
 
-    ut_a(m_trx_sys->in_trx_list(lock->m_trx));
+    ut_a(m_sys.m_trx_sys->in_trx_list(lock->m_trx));
 
     validate_trx_state(lock->m_trx);
 
@@ -2872,14 +2871,14 @@ bool LockSys::rec_validate_page(PageId page_id) noexcept {
           offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
         }
 
-        mutex_exit(&m_trx_sys->m_mutex);
+        mutex_exit(&m_sys.m_trx_sys->m_mutex);
 
         /* If this thread is holding the file space latch (FilSpace::latch), the following
           check WILL break the latching order and may cause a deadlock of threads. */
 
         (void)rec_queue_validate(block, rec, index, offsets);
 
-        mutex_enter(&m_trx_sys->m_mutex);
+        mutex_enter(&m_sys.m_trx_sys->m_mutex);
 
         nth_bit = i + 1;
 
@@ -2897,9 +2896,9 @@ bool LockSys::rec_validate_page(PageId page_id) noexcept {
 }
 
 bool LockSys::validate() noexcept {
-  mutex_enter(&m_trx_sys->m_mutex);
+  mutex_enter(&m_sys.m_trx_sys->m_mutex);
 
-  for (auto trx : m_trx_sys->m_trx_list) {
+  for (auto trx : m_sys.m_trx_sys->m_trx_list) {
 
     for (auto lock : trx->m_trx_locks) {
 
@@ -2911,16 +2910,16 @@ bool LockSys::validate() noexcept {
 
   for (auto &[page_id, rec_locks] : m_rec_locks) {
 
-    ut_a(m_trx_sys->in_trx_list(rec_locks.front()->m_trx));
+    ut_a(m_sys.m_trx_sys->in_trx_list(rec_locks.front()->m_trx));
 
-    mutex_exit(&m_trx_sys->m_mutex);
+    mutex_exit(&m_sys.m_trx_sys->m_mutex);
 
     (void)rec_validate_page(page_id);
 
-    mutex_enter(&m_trx_sys->m_mutex);
+    mutex_enter(&m_sys.m_trx_sys->m_mutex);
   }
 
-  mutex_exit(&m_trx_sys->m_mutex);
+  mutex_exit(&m_sys.m_trx_sys->m_mutex);
 
   return true;
 }
@@ -2940,7 +2939,7 @@ DbErr LockSys::rec_insert_check_and_lock(
   auto next_rec = page_rec_get_next_const(rec);
   auto next_rec_heap_no = page_rec_get_heap_no(next_rec);
 
-  mutex_enter(&m_trx_sys->m_mutex);
+  mutex_enter(&m_sys.m_trx_sys->m_mutex);
 
   /* When inserting a record into an index, the table must be at
   least IX-locked or we must be building an index, in which case
@@ -2950,7 +2949,7 @@ DbErr LockSys::rec_insert_check_and_lock(
   auto it = m_rec_locks.find(block->get_page_id());
 
   if (likely(it == m_rec_locks.end())) {
-    mutex_exit(&m_trx_sys->m_mutex);
+    mutex_exit(&m_sys.m_trx_sys->m_mutex);
 
     if (likely(!index->is_clustered())) {
       /* Update the page max trx id field */
@@ -2986,7 +2985,7 @@ DbErr LockSys::rec_insert_check_and_lock(
     err = DB_SUCCESS;
   }
 
-  mutex_exit(&m_trx_sys->m_mutex);
+  mutex_exit(&m_sys.m_trx_sys->m_mutex);
 
   if (err == DB_SUCCESS && !index->is_clustered()) {
     /* Update the page max trx id field */
@@ -3017,7 +3016,7 @@ DbErr LockSys::rec_insert_check_and_lock(
 }
 
 void LockSys::rec_convert_impl_to_expl(const BufBlock *block, const Rec rec, const Index *index, const ulint *offsets) noexcept {
-  ut_ad(mutex_own(&m_trx_sys->m_mutex));
+  ut_ad(mutex_own(&m_sys.m_trx_sys->m_mutex));
   ut_ad(page_rec_is_user_rec(rec));
   ut_ad(rec.offs_validate(index, offsets));
 
@@ -3056,7 +3055,7 @@ DbErr LockSys::clust_rec_modify_check_and_lock(
 
   const auto heap_no = rec.get_heap_no();
 
-  mutex_enter(&m_trx_sys->m_mutex);
+  mutex_enter(&m_sys.m_trx_sys->m_mutex);
 
   ut_ad(table_has(thr_get_trx(thr), index->m_table, LOCK_IX));
 
@@ -3066,7 +3065,7 @@ DbErr LockSys::clust_rec_modify_check_and_lock(
 
   auto err = rec_lock(true, LockMode(LOCK_X | LOCK_REC_NOT_GAP), block, heap_no, index, thr);
 
-  mutex_exit(&m_trx_sys->m_mutex);
+  mutex_exit(&m_sys.m_trx_sys->m_mutex);
 
   ut_ad(rec_queue_validate(block, rec, index, offsets));
 
@@ -3089,13 +3088,13 @@ DbErr LockSys::sec_rec_modify_check_and_lock(
   /* Another transaction cannot have an implicit lock on the record, because when we come here, we already have modified the clustered
   index record, and this would not have been possible if another active transaction had modified this secondary index record. */
 
-  mutex_enter(&m_trx_sys->m_mutex);
+  mutex_enter(&m_sys.m_trx_sys->m_mutex);
 
   ut_ad(table_has(thr_get_trx(thr), index->m_table, LOCK_IX));
 
   auto err = rec_lock(true, LockMode(LOCK_X | LOCK_REC_NOT_GAP), block, heap_no, index, thr);
 
-  mutex_exit(&m_trx_sys->m_mutex);
+  mutex_exit(&m_sys.m_trx_sys->m_mutex);
 
 #ifdef UNIV_DEBUG
   {
@@ -3142,7 +3141,7 @@ DbErr LockSys::sec_rec_read_check_and_lock(
 
   const auto heap_no = page_rec_get_heap_no(rec);
 
-  mutex_enter(&m_trx_sys->m_mutex);
+  mutex_enter(&m_sys.m_trx_sys->m_mutex);
 
   ut_ad(mode != LOCK_X || table_has(thr_get_trx(thr), index->m_table, LOCK_IX));
   ut_ad(mode != LOCK_S || table_has(thr_get_trx(thr), index->m_table, LOCK_IS));
@@ -3151,14 +3150,14 @@ DbErr LockSys::sec_rec_read_check_and_lock(
   if the max trx id for the page >= min trx id for the trx list or a
   database recovery is running. */
 
-  if ((page_get_max_trx_id(block->m_frame) >= m_trx_sys->get_min_trx_id() || recv_recovery_on) && !page_rec_is_supremum(rec)) {
+  if ((page_get_max_trx_id(block->m_frame) >= m_sys.m_trx_sys->get_min_trx_id() || recv_recovery_on) && !page_rec_is_supremum(rec)) {
 
     rec_convert_impl_to_expl(block, rec, index, offsets);
   }
 
   auto err = rec_lock(false, LockMode(mode | gap_mode), block, heap_no, index, thr);
 
-  mutex_exit(&m_trx_sys->m_mutex);
+  mutex_exit(&m_sys.m_trx_sys->m_mutex);
 
   ut_ad(rec_queue_validate(block, rec, index, offsets));
 
@@ -3182,7 +3181,7 @@ DbErr LockSys::clust_rec_read_check_and_lock(
 
   const auto heap_no = page_rec_get_heap_no(rec);
 
-  mutex_enter(&m_trx_sys->m_mutex);
+  mutex_enter(&m_sys.m_trx_sys->m_mutex);
 
   ut_ad(mode != LOCK_X || table_has(thr_get_trx(thr), index->m_table, LOCK_IX));
   ut_ad(mode != LOCK_S || table_has(thr_get_trx(thr), index->m_table, LOCK_IS));
@@ -3194,7 +3193,7 @@ DbErr LockSys::clust_rec_read_check_and_lock(
 
   auto err = rec_lock(false, LockMode(mode | gap_mode), block, heap_no, index, thr);
 
-  mutex_exit(&m_trx_sys->m_mutex);
+  mutex_exit(&m_sys.m_trx_sys->m_mutex);
 
   ut_ad(rec_queue_validate(block, rec, index, offsets));
 
@@ -3225,7 +3224,7 @@ DbErr LockSys::clust_rec_read_check_and_lock_alt(
 }
 
 bool LockSys::trx_has_no_waiters(const Trx *trx) noexcept {
-  mutex_enter(&m_trx_sys->m_mutex);
+  mutex_enter(&m_sys.m_trx_sys->m_mutex);
 
   for (auto lock = UT_LIST_GET_LAST(trx->m_trx_locks); lock != nullptr; lock = UT_LIST_GET_PREV(m_trx_locks, lock)) {
 
@@ -3236,7 +3235,7 @@ bool LockSys::trx_has_no_waiters(const Trx *trx) noexcept {
       if (auto it = m_rec_locks.find(page_id); it != m_rec_locks.end()) {
         for (auto lock : it->second) {
           if (lock->is_waiting()) {
-            mutex_exit(&m_trx_sys->m_mutex);
+            mutex_exit(&m_sys.m_trx_sys->m_mutex);
             return true;
           }
         }
@@ -3250,25 +3249,15 @@ bool LockSys::trx_has_no_waiters(const Trx *trx) noexcept {
            table_lock = UT_LIST_GET_NEXT(m_table.m_locks, table_lock)) {
 
         if (table_lock->is_waiting()) {
-          mutex_exit(&m_trx_sys->m_mutex);
+          mutex_exit(&m_sys.m_trx_sys->m_mutex);
           return true;
         }
       }
     }
   }
 
-  mutex_exit(&m_trx_sys->m_mutex);
+  mutex_exit(&m_sys.m_trx_sys->m_mutex);
 
   return false;
 }
 
-LockSys *LockSys::create(TrxSys *trx_sys, ulint n_cells) noexcept {
-  auto ptr = ut_new(sizeof(LockSys));
-  return ptr == nullptr ? nullptr : new (ptr) LockSys(trx_sys, n_cells);
-}
-
-void LockSys::destroy(LockSys *&lock_sys) noexcept {
-  call_destructor(lock_sys);
-  ut_delete(lock_sys);
-  lock_sys = nullptr;
-}

@@ -30,7 +30,38 @@ owns it. */
 #include "innodb0types.h"
 
 #include <chrono>
-#include <filesystem>
+#include <string>
+
+/** How data and log files are flushed to disk; see the InnoDB manual. */
+enum FlushMethod : ulint {
+  SRV_UNIX_FSYNC = 1,
+  SRV_UNIX_O_DSYNC,
+  /** Do not call os_file_flush() when writing data files, but do flush
+  after writing to log files */
+  SRV_UNIX_LITTLESYNC,
+  SRV_UNIX_NOSYNC,
+  SRV_UNIX_O_DIRECT
+};
+
+/** Alternatives for forced recovery. Non-zero values are intended to help
+the user get a damaged database up so that he can dump intact tables and rows
+with SELECT INTO OUTFILE. The database must not otherwise be used with these
+options! A bigger number below means that all precautions of lower numbers
+are included.
+NOTE: The order below is important, the code uses <= and >= to check for
+recovery levels. */
+enum IbRecovery {
+  IB_RECOVERY_DEFAULT,
+  IB_RECOVERY_IGNORE_CORRUPT,
+  /** Prevent the main thread from running: if a crash would occur in purge,
+  this prevents it */
+  IB_RECOVERY_NO_BACKGROUND,
+  IB_RECOVERY_NO_TRX_UNDO,
+  /** Do not look at undo logs when starting the database: InnoDB will treat
+  even incomplete transactions as committed */
+  IB_RECOVERY_NO_UNDO_LOG_SCAN,
+  IB_RECOVERY_NO_LOG_REDO
+};
 
 /** Asynchronous I/O. */
 struct AioConfig {
@@ -41,14 +72,14 @@ struct AioConfig {
 /** Tablespace files. */
 struct FilConfig {
   /** Directory holding the system tablespace and the .ibd files. */
-  std::filesystem::path m_data_home{"./"};
+  std::string m_data_home{"./"};
 
   /** Create each user table in its own .ibd file. */
   bool m_file_per_table{true};
 
   ulint m_max_n_open_files{1024};
 
-  Unix_file_flush_method m_flush_method{SRV_UNIX_FSYNC};
+  FlushMethod m_flush_method{SRV_UNIX_FSYNC};
 };
 
 /** Buffer pool and page flushing. */
@@ -81,12 +112,14 @@ struct DblwrConfig {
 
 /** Redo log. */
 struct LogConfig {
-  std::filesystem::path m_group_home_dir{"."};
+  std::string m_group_home_dir{"."};
 
   ulint m_n_files{2};
 
+  /** Size of each log file in bytes. */
   ulint m_file_size{16 * 1024 * 1024};
 
+  /** Size of the log buffer in bytes. */
   ulint m_buffer_size{384 * 1024};
 
   /** 0: write and flush once a second, 1: flush at every commit,
@@ -96,7 +129,7 @@ struct LogConfig {
 
 /** Crash recovery. */
 struct RecvConfig {
-  ib_recovery_t m_force_recovery{IB_RECOVERY_DEFAULT};
+  IbRecovery m_force_recovery{IB_RECOVERY_DEFAULT};
 };
 
 /** Lock manager. */
@@ -123,12 +156,19 @@ struct DictConfig {
 
 /** Server threads and shutdown. */
 struct SrvConfig {
+  /** Maximum number of threads that can wait inside InnoDB, 0 means derive
+  it from the buffer pool size. */
   ulint m_max_n_threads{};
-
-  ib_shutdown_t m_fast_shutdown{IB_SHUTDOWN_NORMAL};
 
   /** Print the status output periodically. */
   bool m_status{};
+
+  /** Print extra information during startup and shutdown. */
+  bool m_verbose_log{true};
+
+  /** Seconds a thread may wait for a latch before the server is
+  considered hung and crashed on purpose. */
+  ulint m_fatal_semaphore_wait_threshold{600};
 };
 
 struct Config {
@@ -144,7 +184,8 @@ struct Config {
   SrvConfig m_srv{};
 
   /** Check that the values are consistent with each other, eg. the
-  combined log file size limit.
+  combined log file size limit, and fill in the derived ones (e.g.
+  m_srv.m_max_n_threads).
   @return DB_SUCCESS or an error code, and a message is logged. */
-  [[nodiscard]] db_err validate() const noexcept;
+  [[nodiscard]] DbErr normalize() noexcept;
 };

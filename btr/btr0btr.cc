@@ -88,7 +88,6 @@ make them consecutive on disk if possible. From the other file segment
 we allocate pages for the non-leaf levels of the tree.
 */
 
-Btree *srv_btree_sys = nullptr;
 
 #ifdef UNIV_BTR_DEBUG
 /**
@@ -155,7 +154,7 @@ Rec Btree::get_prev_user_rec(Rec rec, Mtr *mtr) noexcept {
       .m_mtr = mtr
     };
 
-    auto prev_block = m_buf_pool->get(req, nullptr);
+    auto prev_block = m_sys.m_buf_pool->get(req, nullptr);
     auto prev_page = prev_block->get_frame();
 
     /* The caller must already have a latch to the brother */
@@ -198,7 +197,7 @@ Rec Btree::get_next_user_rec(Rec rec, Mtr *mtr) noexcept {
       .m_mtr = mtr
     };
 
-    const auto next_block = m_buf_pool->get(req, nullptr);
+    const auto next_block = m_sys.m_buf_pool->get(req, nullptr);
     const auto next_page = next_block->get_frame();
 
     /* The caller must already have a latch to the brother */
@@ -246,7 +245,7 @@ BufBlock *Btree::page_alloc(const Index *index, page_no_t hint_page_no, byte fil
   reservation for free extents, and thus we know that a page can
   be allocated: */
 
-  const auto new_page_no = m_fsp->fseg_alloc_free_page_general(seg_header, hint_page_no, file_direction, true, mtr);
+  const auto new_page_no = m_sys.m_fsp->fseg_alloc_free_page_general(seg_header, hint_page_no, file_direction, true, mtr);
 
   if (new_page_no == FIL_NULL) {
 
@@ -263,7 +262,7 @@ BufBlock *Btree::page_alloc(const Index *index, page_no_t hint_page_no, byte fil
       .m_mtr = mtr
     };
 
-    auto new_block = m_buf_pool->get(req, nullptr);
+    auto new_block = m_sys.m_buf_pool->get(req, nullptr);
 
     buf_block_dbg_add_level(IF_SYNC_DEBUG(new_block, SYNC_TREE_NODE_NEW));
 
@@ -285,17 +284,17 @@ ulint Btree::get_size(const Index *index, ulint flag) noexcept {
   if (flag == BTR_N_LEAF_PAGES) {
     auto seg_header = root + PAGE_HEADER + PAGE_BTR_SEG_LEAF;
 
-    m_fsp->fseg_n_reserved_pages(seg_header, &n, &mtr);
+    m_sys.m_fsp->fseg_n_reserved_pages(seg_header, &n, &mtr);
 
   } else if (flag == BTR_TOTAL_SIZE) {
     ulint dummy;
     auto seg_header = root + PAGE_HEADER + PAGE_BTR_SEG_TOP;
 
-    n = m_fsp->fseg_n_reserved_pages(seg_header, &dummy, &mtr);
+    n = m_sys.m_fsp->fseg_n_reserved_pages(seg_header, &dummy, &mtr);
 
     seg_header = root + PAGE_HEADER + PAGE_BTR_SEG_LEAF;
 
-    n += m_fsp->fseg_n_reserved_pages(seg_header, &dummy, &mtr);
+    n += m_sys.m_fsp->fseg_n_reserved_pages(seg_header, &dummy, &mtr);
 
   } else {
     ut_error;
@@ -323,7 +322,7 @@ void Btree::page_free_low(const Index *index, BufBlock *block, ulint level, Mtr 
     seg_header = root + PAGE_HEADER + PAGE_BTR_SEG_TOP;
   }
 
-  m_fsp->fseg_free_page(seg_header, block->get_space(), block->get_page_no(), mtr);
+  m_sys.m_fsp->fseg_free_page(seg_header, block->get_space(), block->get_page_no(), mtr);
 }
 
 void Btree::page_free(const Index *index, BufBlock *block, Mtr *mtr) noexcept {
@@ -439,7 +438,7 @@ void Btree::page_get_father(Index *index, BufBlock *block, Mtr *mtr, BtreeCursor
 }
 
 page_no_t Btree::create(ulint type, space_id_t space, uint64_t index_id, Index *index, Mtr *mtr) noexcept {
-  auto block = m_fsp->fseg_create(space, 0, PAGE_HEADER + PAGE_BTR_SEG_TOP, mtr);
+  auto block = m_sys.m_fsp->fseg_create(space, 0, PAGE_HEADER + PAGE_BTR_SEG_TOP, mtr);
 
   if (block == nullptr) {
 
@@ -450,7 +449,7 @@ page_no_t Btree::create(ulint type, space_id_t space, uint64_t index_id, Index *
 
   buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_TREE_NODE_NEW));
 
-  if (!m_fsp->fseg_create(space, page_no, PAGE_HEADER + PAGE_BTR_SEG_LEAF, mtr)) {
+  if (!m_sys.m_fsp->fseg_create(space, page_no, PAGE_HEADER + PAGE_BTR_SEG_LEAF, mtr)) {
     /* Not enough space for new segment, free root segment before return. */
     free_root(space, page_no, mtr);
     return FIL_NULL;
@@ -500,7 +499,7 @@ void Btree::free_but_not_root(space_id_t space, page_no_t root_page_no) noexcept
 
     /* NOTE: page hash indexes are dropped when a page is freed inside fsp0fsp. */
 
-    finished = m_fsp->fseg_free_step(root + PAGE_HEADER + PAGE_BTR_SEG_LEAF, &mtr);
+    finished = m_sys.m_fsp->fseg_free_step(root + PAGE_HEADER + PAGE_BTR_SEG_LEAF, &mtr);
 
     mtr.commit();
 
@@ -515,7 +514,7 @@ void Btree::free_but_not_root(space_id_t space, page_no_t root_page_no) noexcept
     ut_a(root_fseg_validate(FIL_PAGE_DATA + PAGE_BTR_SEG_TOP + root, space));
 #endif /* UNIV_BTR_DEBUG */
 
-    finished = m_fsp->fseg_free_step_not_header(root + PAGE_HEADER + PAGE_BTR_SEG_TOP, &mtr);
+    finished = m_sys.m_fsp->fseg_free_step_not_header(root + PAGE_HEADER + PAGE_BTR_SEG_TOP, &mtr);
 
     mtr.commit();
 
@@ -530,7 +529,7 @@ void Btree::free_root(space_id_t space, page_no_t root_page_no, Mtr *mtr) noexce
   ut_a(root_fseg_validate(header, space));
 #endif /* UNIV_BTR_DEBUG */
 
-  while (!m_fsp->fseg_free_step(header, mtr)) {}
+  while (!m_sys.m_fsp->fseg_free_step(header, mtr)) {}
 }
 
 bool Btree::page_reorganize_low(bool recovery, BufBlock *block, const Index *index, Mtr *mtr) noexcept {
@@ -547,7 +546,7 @@ bool Btree::page_reorganize_low(bool recovery, BufBlock *block, const Index *ind
 
   /* Turn logging off */
   const auto log_mode = mtr->set_log_mode(MTR_LOG_NONE);
-  const auto temp_block = m_buf_pool->block_alloc();
+  const auto temp_block = m_sys.m_buf_pool->block_alloc();
   const auto temp_page = temp_block->get_frame();
 
   /* Copy the old page to temporary space */
@@ -576,7 +575,7 @@ bool Btree::page_reorganize_low(bool recovery, BufBlock *block, const Index *ind
 
   if (likely(!recovery)) {
     /* Update the record lock bitmaps */
-    m_lock_sys->move_reorganize_page(block, temp_block);
+    m_sys.m_lock_sys->move_reorganize_page(block, temp_block);
   }
 
   auto data_size2 = page_get_data_size(page);
@@ -598,7 +597,7 @@ bool Btree::page_reorganize_low(bool recovery, BufBlock *block, const Index *ind
     success = true;
   }
 
-  m_buf_pool->block_free(temp_block);
+  m_sys.m_buf_pool->block_free(temp_block);
 
   /* Restore logging mode */
   const auto old_mode = mtr->set_log_mode(log_mode);
@@ -677,7 +676,7 @@ Rec Btree::root_raise_and_insert(BtreeCursor *btr_cur, const DTuple *tuple, ulin
   information of the record to be inserted on the infimum of the
   root page: we cannot discard the lock structs on the root page */
 
-  m_lock_sys->update_root_raise(new_block, root_block);
+  m_sys.m_lock_sys->update_root_raise(new_block, root_block);
 
   /* Create a memory heap where the node pointer is stored */
   auto heap = mem_heap_create(100);
@@ -951,7 +950,7 @@ bool Btree::page_insert_fits(
 
 void Btree::insert_on_non_leaf_level(Index *index, ulint level, DTuple *tuple, Mtr *mtr, SourceLocation loc) noexcept {
   Rec rec;
-  BtreeCursor btr_cur(m_fsp, this);
+  BtreeCursor btr_cur(m_sys.m_fsp, this);
   BigRec dummy_big_rec;
 
   ut_ad(level > 0);
@@ -982,7 +981,7 @@ void Btree::attach_half_pages(
   /* Based on split direction, decide upper and lower pages */
   if (direction == FSP_DOWN) {
 
-    BtreeCursor btr_cur(m_fsp, this);
+    BtreeCursor btr_cur(m_sys.m_fsp, this);
 
     lower_page = new_block->get_frame();
     lower_page_no = new_block->get_page_no();
@@ -1229,7 +1228,7 @@ Rec Btree::page_split_and_insert(BtreeCursor *btr_cur, const DTuple *tuple, ulin
       left_block = new_block;
       right_block = block;
 
-      m_lock_sys->update_split_left(right_block, left_block);
+      m_sys.m_lock_sys->update_split_left(right_block, left_block);
 
 #ifdef UNIV_BTR_AVOID_COPY
     } else if (split_rec.is_null()) {
@@ -1246,7 +1245,7 @@ Rec Btree::page_split_and_insert(BtreeCursor *btr_cur, const DTuple *tuple, ulin
       left_block = block;
       right_block = new_block;
 
-      m_lock_sys->update_split_right(right_block, left_block);
+      m_sys.m_lock_sys->update_split_right(right_block, left_block);
     }
 
     /* At this point, split_rec, move_limit and first_rec may point
@@ -1371,7 +1370,7 @@ void Btree::set_min_rec_mark(Rec rec, Mtr *mtr) noexcept {
 }
 
 void Btree::node_ptr_delete(Index *index, BufBlock *block, Mtr *mtr) noexcept {
-  BtreeCursor btr_cur(m_fsp, this);
+  BtreeCursor btr_cur(m_sys.m_fsp, this);
 
   ut_ad(mtr->memo_contains(block, MTR_MEMO_PAGE_X_FIX));
 
@@ -1399,7 +1398,7 @@ void Btree::lift_page_up(Index *index, BufBlock *block, Mtr *mtr) noexcept {
   IF_DEBUG(page_t * father_page;)
 
   {
-    BtreeCursor btr_cur(m_fsp, this);
+    BtreeCursor btr_cur(m_sys.m_fsp, this);
     auto heap = mem_heap_create(100);
     auto offsets = page_get_father_block(nullptr, heap, index, block, mtr, &btr_cur);
 
@@ -1428,7 +1427,7 @@ void Btree::lift_page_up(Index *index, BufBlock *block, Mtr *mtr) noexcept {
   /* Make the father empty */
   page_empty(father_block, index, page_level, mtr);
 
-  m_lock_sys->update_copy_and_discard(father_block, block);
+  m_sys.m_lock_sys->update_copy_and_discard(father_block, block);
 
   /* Go upward to root page, decrementing levels by one. */
   for (ulint i{}; i < n_blocks; ++i, ++page_level) {
@@ -1447,7 +1446,7 @@ void Btree::lift_page_up(Index *index, BufBlock *block, Mtr *mtr) noexcept {
 
 bool Btree::compress(BtreeCursor *cursor, Mtr *mtr) noexcept {
   page_t *merge_page;
-  BtreeCursor btr_cur(m_fsp, this);
+  BtreeCursor btr_cur(m_sys.m_fsp, this);
 
   auto block = btr_cur.get_block();
   auto page = btr_cur.get_page_no();
@@ -1549,7 +1548,7 @@ bool Btree::compress(BtreeCursor *cursor, Mtr *mtr) noexcept {
 
     node_ptr_delete(index, block, mtr);
 
-    m_lock_sys->update_merge_left(merge_block, orig_pred, block);
+    m_sys.m_lock_sys->update_merge_left(merge_block, orig_pred, block);
 
   } else {
     auto orig_succ = page_copy_rec_list_end(merge_block, block, page_get_infimum_rec(page), cursor->m_index, mtr);
@@ -1565,7 +1564,7 @@ bool Btree::compress(BtreeCursor *cursor, Mtr *mtr) noexcept {
     node_ptr_set_child_page_no(btr_cur.get_rec(), offsets, right_page_no, mtr);
     node_ptr_delete(index, merge_block, mtr);
 
-    m_lock_sys->update_merge_right(merge_block, orig_succ, block);
+    m_sys.m_lock_sys->update_merge_right(merge_block, orig_succ, block);
   }
 
   mem_heap_free(heap);
@@ -1586,7 +1585,7 @@ void Btree::discard_only_page_on_level(Index *index, BufBlock *block, Mtr *mtr) 
   const auto max_trx_id = page_get_max_trx_id(block->get_frame());
 
   while (block->get_page_no() != index->get_page_no()) {
-    BtreeCursor btr_cur(m_fsp, this);
+    BtreeCursor btr_cur(m_sys.m_fsp, this);
     const auto page = block->get_frame();
 
     ut_a(page_get_n_recs(page) == 1);
@@ -1599,7 +1598,7 @@ void Btree::discard_only_page_on_level(Index *index, BufBlock *block, Mtr *mtr) 
     page_get_father(index, block, mtr, &btr_cur);
     auto father = btr_cur.get_block();
 
-    m_lock_sys->update_discard(father, PAGE_HEAP_NO_SUPREMUM, block);
+    m_sys.m_lock_sys->update_discard(father, PAGE_HEAP_NO_SUPREMUM, block);
 
     /* Free the file page */
     page_free(index, block, mtr);
@@ -1687,9 +1686,9 @@ void Btree::discard_page(BtreeCursor *btr_cur, Mtr *mtr) noexcept {
   level_list_remove(space, page, mtr);
 
   if (left_page_no != FIL_NULL) {
-    m_lock_sys->update_discard(merge_block, PAGE_HEAP_NO_SUPREMUM, block);
+    m_sys.m_lock_sys->update_discard(merge_block, PAGE_HEAP_NO_SUPREMUM, block);
   } else {
-    m_lock_sys->update_discard(merge_block, m_lock_sys->get_min_heap_no(merge_block), block);
+    m_sys.m_lock_sys->update_discard(merge_block, m_sys.m_lock_sys->get_min_heap_no(merge_block), block);
   }
 
   /* Free the file page */
@@ -1708,7 +1707,7 @@ void Btree::print_size(Index *index) noexcept {
   const auto seg = root + PAGE_HEADER + PAGE_BTR_SEG_TOP;
 
   log_info("NON-LEAF PAGE SEGMENT");
-  m_fsp->fseg_print(seg, &mtr);
+  m_sys.m_fsp->fseg_print(seg, &mtr);
 
   mtr.commit();
 }
@@ -1798,7 +1797,7 @@ bool Btree::check_node_ptr(Index *index, BufBlock *block, Mtr *mtr) noexcept {
     return true;
   }
 
-  BtreeCursor btr_cur(m_fsp, this);
+  BtreeCursor btr_cur(m_sys.m_fsp, this);
   const auto page = block->get_frame();
   auto heap = mem_heap_create(256);
   const auto offsets = page_get_father_block(nullptr, heap, index, block, mtr, &btr_cur);
@@ -1934,8 +1933,8 @@ bool Btree::validate_level(Index *index, Trx *trx, ulint level) noexcept {
   page_t *right_page{};
   PageCursor page_cursor;
   BufBlock *right_block{};
-  BtreeCursor node_cur(m_fsp, this);
-  BtreeCursor right_node_cur(m_fsp, this);
+  BtreeCursor node_cur(m_sys.m_fsp, this);
+  BtreeCursor right_node_cur(m_sys.m_fsp, this);
   MemHeap *heap = mem_heap_create(256);
 
   Mtr mtr;
@@ -2239,13 +2238,3 @@ bool Btree::validate_index(Index *index, Trx *trx) noexcept {
   return true;
 }
 
-Btree *Btree::create(LockSys *lock_sys, Fsp *fsp, BufPool *buf_pool) noexcept {
-  auto ptr = ut_new(sizeof(Btree));
-  return new (ptr) Btree(lock_sys, fsp, buf_pool);
-}
-
-void Btree::destroy(Btree *&btree) noexcept {
-  call_destructor(btree);
-  ut_delete(btree);
-  btree = nullptr;
-}

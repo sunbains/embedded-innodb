@@ -24,6 +24,8 @@ Created 12/18/1995 Heikki Tuuri
 
 #pragma once
 
+#include "srv0sys.h"
+
 #include "innodb0types.h"
 
 #include "fsp0types.h"
@@ -37,6 +39,9 @@ struct Fil;
 struct BufPool;
 
 struct Fsp {
+  /** The instance this sub-system belongs to. */
+  System &m_sys;
+
   /* The data structures in files are defined just as byte strings in C */
 
   /** EXTENT DESCRIPTOR
@@ -69,7 +74,7 @@ struct Fsp {
    * @param[in] fil             Fil instance
    * @param[in] buf_pool        Buffer pool instance
    */
-  Fsp(Log *log, Fil *fil, BufPool *buf_pool) noexcept : m_log(log), m_fil(fil), m_buf_pool(buf_pool) {}
+  explicit Fsp(System &sys) noexcept : m_sys(sys) {}
 
   /**
    * Create an instance of the Fsp class.
@@ -80,15 +85,11 @@ struct Fsp {
    * 
    * @return Instance of the Fsp class
    */
-  [[nodiscard]] static Fsp *create(Log *log, Fil *fil, BufPool *buf_pool) noexcept;
-
   /**
    * Destroy an instance of the Fsp class.
    * 
    * @param[in,own] fsp  Instance to destroy
    */
-  static void destroy(Fsp *&fsp) noexcept;
-
   /**
    * Gets the current free limit of the system tablespace.  The free limit
    * means the place of the first page which has never been put to the
@@ -248,7 +249,7 @@ struct Fsp {
    * use several pages from the tablespace should call this function beforehand
    * and reserve enough free extents so that they certainly will be able
    * to do their operation, like a B-tree page split, fully. Reservations
-   * must be released with function srv_fil->space_release_free_extents!
+   * must be released with function m_sys.m_fil->space_release_free_extents!
    * 
    * The alloc_type below has the following meaning: FSP_NORMAL means an
    * operation which will probably result in more space usage, like an
@@ -685,11 +686,7 @@ struct Fsp {
   void fseg_mark_page_used(fseg_inode_t *seg_inode, space_id_t space, page_no_t page, Mtr *mtr) noexcept;
 
  public:
-  /** Redo log to use. */
-  Log *m_log{};
 
   /** File interface. */
-  Fil *m_fil{};
 
-  BufPool *m_buf_pool{};
 };

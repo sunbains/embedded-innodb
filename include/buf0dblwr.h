@@ -23,6 +23,8 @@ Created 2024-09-25 by Sunny Bains. */
 
 #pragma once
 
+#include "srv0sys.h"
+
 #include "innodb0types.h"
 
 #include "fil0fil.h"
@@ -74,13 +76,16 @@ constexpr auto SYS_DOUBLEWRITE_BLOCK_SIZE = FSP_EXTENT_SIZE;
 
 /** Doublewrite control struct */
 struct Dblwr {
+  /** The instance this sub-system belongs to. */
+  System &m_sys;
+
 
   /** 
    * Constructor.
    * 
    * @param[in,out] fsp Filespace manager to use for IO.
    */
-  explicit Dblwr(Fsp *fsp);
+  explicit Dblwr(System &sys) noexcept;
 
   /** 
    * Destructor.
@@ -94,13 +99,9 @@ struct Dblwr {
    * 
    * @return and instance or nullptr if there is an error.
    */
-  static Dblwr *create(Fsp *fsp) noexcept;
-
   /**
    * Destroy an instance of Dblwr.
    */
-  static void destroy(Dblwr *&dblwr) noexcept;
-
   /**
    * Creates the doublewrite buffer to a new InnoDB installation. The header of
    * the doublewrite buffer is placed on the trx system header page.
@@ -142,8 +143,6 @@ struct Dblwr {
    */
   static bool check_if_exists(Fil *fil, std::pair<page_no_t, page_no_t> &offsets) noexcept;
 
-  /** Filespace manager for IO. */
-  Fsp *m_fsp{};
 
   /** mutex protecting the first_free field and write_buf */
   Mutex m_mutex{};
@@ -170,4 +169,3 @@ struct Dblwr {
 };
 
 /** Doublewrite system */
-extern Dblwr *srv_dblwr;

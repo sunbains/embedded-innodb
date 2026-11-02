@@ -8,6 +8,8 @@ Created 12 Oct 2008
 
 #pragma once
 
+#include "srv0sys.h"
+
 #include "dict0types.h"
 #include "srv0srv.h"
 
@@ -17,12 +19,15 @@ struct Dict;
 
 /** Data Dictionary Layer Ddl operations. */
 struct Ddl {
+  /** The instance this sub-system belongs to. */
+  System &m_sys;
+
   /**
    * @brief Constructor.
    *
    * @param[in] dict Data dictionary.
    */
-  explicit Ddl(Dict *dict) noexcept : m_dict{dict} {}
+  explicit Ddl(System &sys) noexcept : m_sys(sys) {}
 
   /** Get the background drop list length. NOTE: the caller must own the kernel mutex!
    * @return	how many tables in list
@@ -228,11 +233,8 @@ struct Ddl {
     UT_LIST_NODE_T(DropList) m_node{};
   };
 
-  /** Data Dictionary. */
-  Dict *m_dict{};
 
   /** Log. */
-  Log *m_log{};
 
   /** List of tables we should drop in background. */
   UT_LIST_BASE_NODE_T(DropList, m_node) m_drop_list;

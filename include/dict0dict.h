@@ -24,6 +24,8 @@ Created 1/8/1996 Heikki Tuuri
 
 #pragma once
 
+#include "srv0sys.h"
+
 #include "data0data.h"
 #include "ddl0ddl.h"
 #include "dict0load.h"
@@ -51,6 +53,9 @@ struct Btree;
 
 /** Data dictionary system. */
 struct Dict {
+  /** The instance this sub-system belongs to. */
+  System &m_sys;
+
   /** Responsible for data dictionary persistence. */
   struct Store;
 
@@ -59,7 +64,7 @@ struct Dict {
    * 
    * @param[in] btree B-tree system.
    */
-  explicit Dict(Btree *btree) noexcept;
+  explicit Dict(System &sys) noexcept;
 
   /** Destructor. */
   ~Dict() noexcept;
@@ -72,15 +77,11 @@ struct Dict {
    * 
    * @return Data dictionary.
    */
-  [[nodiscard]] static Dict *create(Btree *btree) noexcept;
-
   /**
    * Closes the data dictionary module.
    * 
    * @param[in,out] dict Data dictionary.
    */
-  static void destroy(Dict *&dict) noexcept;
-
   /**
    * Makes all characters in a NUL-terminated UTF-8 string lower case.
    * 
@@ -552,7 +553,7 @@ struct Dict {
     auto table = table_check_if_in_cache(table_name);
 
     if (table == nullptr) {
-      table = m_loader.load_table(srv_config.m_force_recovery, table_name);
+      table = m_loader.load_table(m_sys.m_config.m_recv.m_force_recovery, table_name);
     }
 
     ut_ad(table == nullptr || table->m_cached);

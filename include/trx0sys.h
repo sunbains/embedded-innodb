@@ -24,6 +24,8 @@ Created 3/26/1996 Heikki Tuuri
 
 #pragma once
 
+#include "srv0sys.h"
+
 #include "innodb0types.h"
 
 #include "buf0buf.h"
@@ -106,13 +108,16 @@ constexpr ulint TRX_SYS_TRX_ID_WRITE_MARGIN = 256;
 /** The transaction system central memory data structure; protected by the
 kernel mutex */
 struct TrxSys {
+  /** The instance this sub-system belongs to. */
+  System &m_sys;
+
 
   /**
    * Constructor
    *
    * @param[in] fsp               File space management instance
    */
-  explicit TrxSys(Fsp *fsp) noexcept;
+  explicit TrxSys(System &sys) noexcept;
 
   /**
    * Destructor
@@ -126,15 +131,11 @@ struct TrxSys {
    *
    * @return new TrxSys instance.
    */
-  [[nodiscard]] static TrxSys *create(Fsp *fsp) noexcept;
-
   /**
    * Destroy a transaction system instance.
    *
    * @param[in] recovery        Recovery flag
    */
-  static void destroy(TrxSys *&srv_trx_sys) noexcept;
-
   /** Start the transaction system.
    *
    * @return DB_SUCCESS or error code.
@@ -236,7 +237,7 @@ struct TrxSys {
 
       return true;
     } else {
-      auto trx = srv_trx_sys->get_on_id(trx_id);
+      auto trx = get_on_id(trx_id);
 
       return trx != nullptr && (trx->m_conc_state == TRX_ACTIVE || trx->m_conc_state == TRX_PREPARED);
     }
@@ -311,7 +312,7 @@ struct TrxSys {
       .m_mtr = mtr
     };
 
-    auto block = m_fsp->m_buf_pool->get(req, nullptr);
+    auto block = m_sys.m_fsp->m_buf_pool->get(req, nullptr);
     buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_TRX_SYS_HEADER));
 
     return TRX_SYS + block->get_frame();
@@ -355,7 +356,7 @@ struct TrxSys {
   void trx_list_insert_ordered(Trx *trx) noexcept;
 
   /**
-   * Creates trx objects for transactions and initializes the trx list of srv_trx_sys at database start.
+   * Creates trx objects for transactions and initializes the trx list of this at database start.
    * Rollback segment and undo log lists must already exist when this function is called,
    * because the lists of transactions to be rolled back or cleaned up are built based on the undo log lists.
    *
@@ -598,7 +599,7 @@ struct TrxSys {
   void create_new_instance(Mtr *mtr) noexcept;
 
   /**
-   * Creates trx objects for transactions and initializes the trx list of srv_trx_sys at database start.
+   * Creates trx objects for transactions and initializes the trx list of this at database start.
    * Rollback segment and undo log lists must already exist when this function is called,
    * because the lists of transactions to be rolled back or cleaned up are built based on the undo log lists.
    *
@@ -668,8 +669,6 @@ struct TrxSys {
    * the kernel mutex */
   ulint m_n_background_trx{};
 
-  /** File space management instance. */
-  Fsp *m_fsp{};
 
   /** Purge system. */
   PurgeSys *m_purge{};

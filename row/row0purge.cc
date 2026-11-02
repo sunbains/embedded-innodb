@@ -165,8 +165,8 @@ retry:
   ut_a(success);
 }
 
-bool RowPurge::remove_sec_if_poss_low(Index *index, const DTuple *entry, ulint mode) {
-  BtreePcursor pcur(srv_fsp, srv_btree_sys);
+bool RowPurge::remove_sec_if_poss_low(System &sys, Index *index, const DTuple *entry, ulint mode) {
+  BtreePcursor pcur(sys.m_fsp, sys.m_btree);
   BtreeCursor *btr_cur;
   bool success;
   bool old_has{};
@@ -174,7 +174,7 @@ bool RowPurge::remove_sec_if_poss_low(Index *index, const DTuple *entry, ulint m
   Mtr mtr;
   Mtr mtr_vers;
 
-  log_sys->free_check();
+  sys.m_log->free_check();
 
   mtr.start();
 
@@ -213,7 +213,7 @@ bool RowPurge::remove_sec_if_poss_low(Index *index, const DTuple *entry, ulint m
   success = reposition_pcur(BTR_SEARCH_LEAF, &mtr_vers);
 
   if (success) {
-    old_has = srv_row_vers->old_has_index_entry(true, pcur.get_rec(), &mtr_vers, index, entry);
+    old_has = sys.m_row_vers->old_has_index_entry(true, pcur.get_rec(), &mtr_vers, index, entry);
   }
 
   pcur.commit_specify_mtr(&mtr_vers);
@@ -285,7 +285,7 @@ void RowPurge::del_mark() {
   remove_clust_if_poss();
 }
 
-void RowPurge::upd_exist_or_extern() {
+void RowPurge::upd_exist_or_extern(System &sys) {
   Index *idx;
   bool is_insert;
   ulint rseg_id;
@@ -293,7 +293,7 @@ void RowPurge::upd_exist_or_extern() {
   ulint offset;
   Mtr mtr;
 
-  Blob blob(srv_fsp, srv_btree_sys);
+  Blob blob(sys.m_fsp, sys.m_btree);
   auto heap = mem_heap_create(1024);
 
   if (m_rec_type == TRX_UNDO_UPD_DEL_REC) {
@@ -304,7 +304,7 @@ void RowPurge::upd_exist_or_extern() {
   for (; m_index != nullptr; m_index = m_index->get_next()) {
     auto idx = m_index;
 
-    if (srv_row_upd->changes_ord_field_binary(nullptr, m_index, m_update)) {
+    if (sys.m_row_upd->changes_ord_field_binary(nullptr, m_index, m_update)) {
       /* Build the older version of the index entry */
       auto entry = row_build_index_entry(m_row, nullptr, idx, heap);
       ut_a(entry);
@@ -355,7 +355,7 @@ skip_secondaries:
       latching order if we would only later latch the
       root page of such a tree! */
 
-      (void)srv_btree_sys->root_get(idx->m_page_id, &mtr);
+      (void)sys.m_btree->root_get(idx->m_page_id, &mtr);
 
       /* We assume in purge of externally stored fields
       that the space id of the undo log record is 0! */
@@ -369,7 +369,7 @@ skip_secondaries:
         .m_mtr = &mtr
       };
 
-      block = srv_buf_pool->get(req, nullptr);
+      block = sys.m_buf_pool->get(req, nullptr);
       buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_TRX_UNDO_PAGE));
 
       data_field = block->get_frame() + offset + internal_offset;
@@ -383,7 +383,7 @@ skip_secondaries:
   }
 }
 
-bool RowPurge::parse_undo_rec(bool *updated_extern, QueThr *thr) {
+bool RowPurge::parse_undo_rec(System &sys, bool *updated_extern, QueThr *thr) {
   TrxUndoRecord::Parsed pars;
   auto trx = thr_get_trx(thr);
 
@@ -416,19 +416,19 @@ bool RowPurge::parse_undo_rec(bool *updated_extern, QueThr *thr) {
   /* Prevent DROP TABLE etc. from running when we are doing the purge
   for this row */
 
-  srv_dict_sys->freeze_data_dictionary(trx);
+  sys.m_dict->freeze_data_dictionary(trx);
 
-  srv_dict_sys->mutex_acquire();
+  sys.m_dict->mutex_acquire();
 
   // FIXME: srv_force_recovery should be passed in as an arg
-  m_table = srv_dict_sys->table_get_on_id(pars.m_table_id);
+  m_table = sys.m_dict->table_get_on_id(pars.m_table_id);
 
-  srv_dict_sys->mutex_release();
+  sys.m_dict->mutex_release();
 
   if (m_table == nullptr || m_table->m_ibd_file_missing) {
     /* The table has been dropped or the .ibd file is missing: no need to do purge */
 
-    srv_dict_sys->unfreeze_data_dictionary(trx);
+    sys.m_dict->unfreeze_data_dictionary(trx);
 
     return false;
   }
@@ -438,7 +438,7 @@ bool RowPurge::parse_undo_rec(bool *updated_extern, QueThr *thr) {
   if (clust_index == nullptr) {
     /* The table was corrupt in the data dictionary */
 
-    srv_dict_sys->unfreeze_data_dictionary(trx);
+    sys.m_dict->unfreeze_data_dictionary(trx);
 
     return false;
   }
@@ -456,7 +456,7 @@ bool RowPurge::parse_undo_rec(bool *updated_extern, QueThr *thr) {
   return true;
 }
 
-ulint RowPurge::purge(QueThr *thr) {
+ulint RowPurge::purge(System &sys, QueThr *thr) {
   roll_ptr_t roll_ptr_val;
   bool purge_needed;
   bool updated_extern;
@@ -464,7 +464,7 @@ ulint RowPurge::purge(QueThr *thr) {
 
   trx = thr_get_trx(thr);
 
-  m_undo_rec = srv_trx_sys->m_purge->fetch_next_rec(&roll_ptr_val, &m_reservation, m_heap);
+  m_undo_rec = sys.m_trx_sys->m_purge->fetch_next_rec(&roll_ptr_val, &m_reservation, m_heap);
 
   if (!m_undo_rec.is_valid()) {
     /* Purge completed for this query thread */
@@ -503,11 +503,11 @@ ulint RowPurge::purge(QueThr *thr) {
       m_pcur.close();
     }
 
-    srv_dict_sys->unfreeze_data_dictionary(trx);
+    sys.m_dict->unfreeze_data_dictionary(trx);
   }
 
   /* Do some cleanup */
-  srv_trx_sys->m_purge->rec_release(m_reservation);
+  sys.m_trx_sys->m_purge->rec_release(m_reservation);
 
   mem_heap_empty(m_heap);
 

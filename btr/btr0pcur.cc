@@ -124,7 +124,7 @@ void BtreePcursor::copy_stored_position(BtreePcursor *src) noexcept {
   m_old_n_fields = src->m_old_n_fields;
 }
 
-bool BtreePcursor::restore_position(ulint latch_mode, Mtr *mtr, SourceLocation loc) noexcept {
+bool BtreePcursor::restore_position(System &sys, ulint latch_mode, Mtr *mtr, SourceLocation loc) noexcept {
   ut_ad(mtr->m_state == MTR_ACTIVE);
 
   auto index = m_btr_cur.m_index;
@@ -170,7 +170,7 @@ bool BtreePcursor::restore_position(ulint latch_mode, Mtr *mtr, SourceLocation l
       .m_mtr = mtr
     };
 
-    if (likely(srv_buf_pool->try_get(req))) {
+    if (likely(sys.m_buf_pool->try_get(req))) {
       m_pos_state = BtrPcurPositioned::IS_POSITIONED;
 
       buf_block_dbg_add_level(IF_SYNC_DEBUG(get_block(), SYNC_TREE_NODE));

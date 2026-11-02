@@ -40,26 +40,27 @@ sub-system takes a System& (or the sub-system it needs) as a parameter. */
 #include "srv0cfg.h"
 
 #include <memory>
+#include <vector>
 
-class Aio;
-class Btree;
-class BufPool;
-class Dblwr;
-class Dict;
-class Fil;
-class Fsp;
-class LockSys;
-class Log;
-class RecvSys;
-class RowInsert;
-class RowSel;
-class RowUndo;
-class RowUpdate;
-class RowVers;
-class SrvThreads;
-class SrvStats;
-class TrxSys;
-class Undo;
+struct Aio;
+struct Btree;
+struct BufPool;
+struct Dblwr;
+struct Dict;
+struct Fil;
+struct Fsp;
+struct LockSys;
+struct Log;
+struct RecvSys;
+struct RowInsert;
+struct RowSel;
+struct RowUndo;
+struct RowUpdate;
+struct RowVers;
+struct Srv;
+struct TrxSys;
+struct Undo;
+struct IoHandler;
 
 class System {
  public:
@@ -76,23 +77,21 @@ class System {
   @param[in] config             Instance configuration, copied.
   @return DB_SUCCESS or error code; on error, what was created is
   destroyed again and init() may be retried. */
-  [[nodiscard]] db_err init(const Config &config) noexcept;
+  [[nodiscard]] DbErr init(const Config &config) noexcept;
 
   /** Open or create the tablespaces and redo log, run crash recovery and
   start the background threads.
   @return DB_SUCCESS or error code. */
-  [[nodiscard]] db_err startup() noexcept;
+  [[nodiscard]] DbErr startup() noexcept;
 
   /** Stop the background threads, flush, and destroy the sub-systems in
   reverse creation order.
   @param[in] shutdown           How much work to do before stopping.
   @return DB_SUCCESS or error code. */
-  [[nodiscard]] db_err shutdown(ib_shutdown_t shutdown) noexcept;
+  [[nodiscard]] DbErr shutdown(ib_shutdown_t shutdown) noexcept;
 
-  /** @return the instance configuration. */
-  [[nodiscard]] const Config &config() const noexcept { return m_config; }
-
-  /** The configuration this instance was initialized with. */
+  /** The configuration this instance was initialized with, normalized by
+  init(). Read only after init(). */
   Config m_config{};
 
   /** Sub-systems, declared in creation order. Null before init() and after
@@ -115,10 +114,18 @@ class System {
   std::unique_ptr<RowUndo> m_row_undo;
   std::unique_ptr<RowVers> m_row_vers;
 
-  /** Background threads (master, lock timeout, monitors) and the
-  startup/shutdown state that used to live in srv0srv/srv0start. */
-  std::unique_ptr<SrvThreads> m_threads;
+  /** Server threads (master, lock timeout, monitors), their state and
+  the status counters. */
+  std::unique_ptr<Srv> m_srv;
 
-  /** Counters exported as status variables. */
-  std::unique_ptr<SrvStats> m_stats;
+ private:
+  /** Abort a failed startup(): shut down what startup() created.
+  @param[in] err                Error that caused the abort. */
+  void startup_abort(DbErr err) noexcept;
+
+  /** Destroy the sub-systems, in reverse creation order. */
+  void destroy() noexcept;
+
+  /** Arguments of the i/o handler threads, one per Aio segment. */
+  std::vector<IoHandler> m_io_handlers;
 };

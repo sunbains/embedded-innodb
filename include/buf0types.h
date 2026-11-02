@@ -25,6 +25,8 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 #pragma once
 
+#include "srv0sys.h"
+
 #include "innodb0types.h"
 
 #include <functional>
@@ -122,8 +124,6 @@ constexpr ulint BUF_MAKE_YOUNG = 51;
 constexpr ulint BUF_KEEP_OLD = 52;
 /* @} */
 
-/** The buffer pool of the database */
-extern BufPool *srv_buf_pool;
 
 #ifdef UNIV_DEBUG
 /*! If this is set true, the program prints info whenever read or flush occurs */
@@ -533,6 +533,9 @@ struct BufPoolStat {
 NOTE! The definition appears here only for other modules of this
 directory (buf) to see it. Do not use from outside! */
 struct BufPool {
+  /** The instance this sub-system belongs to. */
+  System &m_sys;
+
   using page_hash_t = Page_id_hash<BufPage *>;
 
   struct Request {
@@ -567,14 +570,13 @@ struct BufPool {
   static_assert(std::is_standard_layout<Request>::value, "Request must have a standard layout");
 
   /** Default constructor. */
-  BufPool();
+  explicit BufPool(System &sys) noexcept;
 
   /** Destructor. */
   ~BufPool() noexcept;
 
   [[nodiscard]] bool open(uint64_t pool_size);
 
-  void set_trx_sys(TrxSys *trx_sys) { m_trx_sys = trx_sys; }
 
   /** Returns the number of pending buf pool ios.
   @return number of pending I/O operations */
@@ -928,8 +930,6 @@ struct BufPool {
   void page_init_low(BufPage *bpage);
 
  public:
-  /** The transaction system. */
-  TrxSys *m_trx_sys{};
 
   /** mutex protecting the buffer pool struct and control blocks, except the
   read-write lock in them */

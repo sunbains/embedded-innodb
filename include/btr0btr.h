@@ -24,6 +24,8 @@ Created 6/2/1994 Heikki Tuuri
 
 #pragma once
 
+#include "srv0sys.h"
+
 #include "innodb0types.h"
 
 #include "btr0types.h"
@@ -35,6 +37,9 @@ Created 6/2/1994 Heikki Tuuri
 #include "page0cur.h"
 
 struct Btree {
+  /** The instance this sub-system belongs to. */
+  System &m_sys;
+
 
   /**
    * Constructor.
@@ -43,7 +48,7 @@ struct Btree {
    * @param[in] fsp             File space.
    * @param[in] buf_pool        Buffer pool.
    */
-  Btree(LockSys *lock_sys, Fsp *fsp, BufPool *buf_pool) noexcept : m_lock_sys{lock_sys}, m_fsp{fsp}, m_buf_pool{buf_pool} {}
+  explicit Btree(System &sys) noexcept : m_sys(sys) {}
 
   /**
    * Destructor.
@@ -379,7 +384,7 @@ struct Btree {
       .m_mtr = mtr
     };
 
-    auto block = srv_buf_pool->get(req, nullptr);
+    auto block = m_sys.m_buf_pool->get(req, nullptr);
 
     if (rw_latch != RW_NO_LATCH) {
 
@@ -558,15 +563,11 @@ struct Btree {
    *
    * @return Newly created B-tree instance
    */
-  static Btree *create(LockSys *lock_sys, Fsp *fsp, BufPool *buf_pool) noexcept;
-
   /**
    * Destroys a B-tree instance.
    *
    * @param tree B-tree instance to destroy
    */
-  static void destroy(Btree *&btree) noexcept;
-
 #ifdef UNIT_TEST
  private:
 #endif /* UNIT_TEST */
@@ -874,13 +875,9 @@ struct Btree {
    */
   [[nodiscard]] bool validate_level(Index *index, Trx *trx, ulint level) noexcept;
 
-  /** Lock manager to use */
-  LockSys *m_lock_sys{};
 
   /** File segment manager to use */
 
-  Fsp *m_fsp{};
 
   /** Buffer pool to use */
-  BufPool *m_buf_pool{};
 };

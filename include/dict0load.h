@@ -25,12 +25,17 @@ Created 4/24/1996 Heikki Tuuri
 
 #pragma once
 
+#include "srv0sys.h"
+
 #include "dict0types.h"
 #include "srv0srv.h"
 #include "ut0byte.h"
 
 struct DictLoad {
-  explicit DictLoad(Dict *dict) noexcept : m_dict{dict} {}
+  /** The instance this sub-system belongs to. */
+  System &m_sys;
+
+  explicit DictLoad(System &sys) noexcept : m_sys(sys) {}
 
   /**
    * In a crash recovery we already have all the tablespace objects created.
@@ -216,5 +221,4 @@ struct DictLoad {
   /**
    * @brief The dictionary.
    */
-  Dict *m_dict{};
 };

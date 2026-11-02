@@ -129,14 +129,13 @@ delete marked clustered index record was delete unmarked and possibly also
 some of its fields were changed. Now, it is possible that the delete marked
 version has become obsolete at the time the undo is started. */
 
-RowUndo *srv_row_undo;
 
-DbErr UndoNode::remove_secondary_index_entry(ulint mode, Index *index, DTuple *entry) noexcept {
+DbErr UndoNode::remove_secondary_index_entry(System &sys, ulint mode, Index *index, DTuple *entry) noexcept {
   ut_ad(mode == BTR_MODIFY_LEAF || mode == BTR_MODIFY_TREE);
 
-  m_dict->m_store.m_fsp->m_log->free_check();
+  sys.m_dict->m_store.m_fsp->m_log->free_check();
 
-  BtreePcursor pcur(m_dict->m_store.m_fsp, m_dict->m_store.m_btree);
+  BtreePcursor pcur(sys.m_dict->m_store.m_fsp, sys.m_dict->m_store.m_btree);
 
   Mtr mtr;
 
@@ -198,16 +197,6 @@ DbErr UndoNode::remove_secondary_index_entry(Index *index, DTuple *entry) noexce
 
     os_thread_sleep(BTR_CUR_RETRY_SLEEP_TIME);
   }
-}
-
-RowUndo *RowUndo::create(Dict *dict) noexcept {
-  auto ptr = ut_new(sizeof(RowUndo));
-  return new (ptr) RowUndo(dict);
-}
-
-void RowUndo::destroy(RowUndo *&row_undo) noexcept {
-  ut_delete(row_undo);
-  row_undo = nullptr;
 }
 
 UndoNode::UndoNode(Dict *dict, Trx *trx, QueThr *parent) noexcept
@@ -285,7 +274,7 @@ bool UndoNode::search_cluster_index_and_persist_position() noexcept {
   return success;
 }
 
-DbErr UndoNode::remove_cluster_rec() noexcept {
+DbErr UndoNode::remove_cluster_rec(System &sys) noexcept {
   Mtr mtr;
   mtr.start();
 
@@ -299,7 +288,7 @@ DbErr UndoNode::remove_cluster_rec() noexcept {
 
     /* Drop the index tree associated with the row in SYS_INDEXES table: */
 
-    m_dict->m_store.drop_index_tree(m_pcur.get_rec(), &mtr);
+    sys.m_dict->m_store.drop_index_tree(m_pcur.get_rec(), &mtr);
 
     mtr.commit();
 
@@ -358,7 +347,7 @@ DbErr UndoNode::remove_cluster_rec() noexcept {
   return err;
 }
 
-DbErr UndoNode::fetch_undo_log_and_undo(QueThr *thr) noexcept {
+DbErr UndoNode::fetch_undo_log_and_undo(System &sys, QueThr *thr) noexcept {
   auto trx = m_trx;
 
   if (m_state == UNDO_NODE_FETCH_NEXT) {
@@ -402,7 +391,7 @@ DbErr UndoNode::fetch_undo_log_and_undo(QueThr *thr) noexcept {
 
   if (locked_data_dict) {
 
-    m_dict->lock_data_dictionary(trx);
+    sys.m_dict->lock_data_dictionary(trx);
     ut_a(trx->m_dict_operation_lock_mode != 0);
   }
 
@@ -421,7 +410,7 @@ DbErr UndoNode::fetch_undo_log_and_undo(QueThr *thr) noexcept {
 
   if (locked_data_dict) {
 
-    m_dict->unlock_data_dictionary(trx);
+    sys.m_dict->unlock_data_dictionary(trx);
   }
 
   /* Do some cleanup */
@@ -434,10 +423,10 @@ DbErr UndoNode::fetch_undo_log_and_undo(QueThr *thr) noexcept {
   return err;
 }
 
-DbErr UndoNode::undo_insert() noexcept {
+DbErr UndoNode::undo_insert(System &sys) noexcept {
   ut_ad(m_state == UNDO_NODE_INSERT);
 
-  parse_insert_undo_rec(srv_config.m_force_recovery);
+  parse_insert_undo_rec(sys.m_config.m_recv.m_force_recovery);
 
   if (m_table == nullptr || !search_cluster_index_and_persist_position()) {
     trx_undo_rec_release(m_trx, m_undo_no);
@@ -526,7 +515,7 @@ DbErr UndoNode::undo_clustered_index_modification(QueThr *thr, Mtr *mtr, ulint m
   return err;
 }
 
-DbErr UndoNode::remove_clustered_index_record(QueThr *thr, Mtr *mtr, ulint mode) noexcept {
+DbErr UndoNode::remove_clustered_index_record(System &sys, QueThr *thr, Mtr *mtr, ulint mode) noexcept {
   ut_ad(m_rec_type == TRX_UNDO_UPD_DEL_REC);
 
   auto btr_cur = m_pcur.get_btr_cur();
@@ -539,7 +528,7 @@ DbErr UndoNode::remove_clustered_index_record(QueThr *thr, Mtr *mtr, ulint mode)
 
   /* Find out if we can remove the whole clustered index record */
 
-  if (m_rec_type == TRX_UNDO_UPD_DEL_REC && !srv_row_vers->must_preserve_del_marked(m_new_trx_id, mtr)) {
+  if (m_rec_type == TRX_UNDO_UPD_DEL_REC && !sys.m_row_vers->must_preserve_del_marked(m_new_trx_id, mtr)) {
 
     /* Ok, we can remove */
 
@@ -570,7 +559,7 @@ DbErr UndoNode::remove_clustered_index_record(QueThr *thr, Mtr *mtr, ulint mode)
   }
 }
 
-DbErr UndoNode::remove_clustered_index_record_low(QueThr *thr, Mtr *mtr, ulint mode) noexcept {
+DbErr UndoNode::remove_clustered_index_record_low(System &sys, QueThr *thr, Mtr *mtr, ulint mode) noexcept {
   ut_ad(m_rec_type == TRX_UNDO_UPD_DEL_REC);
   ut_ad(mode == BTR_MODIFY_LEAF || mode == BTR_MODIFY_TREE);
 
@@ -581,7 +570,7 @@ DbErr UndoNode::remove_clustered_index_record_low(QueThr *thr, Mtr *mtr, ulint m
 
     return DB_SUCCESS;
 
-  } else if (m_rec_type != TRX_UNDO_UPD_DEL_REC || srv_row_vers->must_preserve_del_marked(m_new_trx_id, mtr)) {
+  } else if (m_rec_type != TRX_UNDO_UPD_DEL_REC || sys.m_row_vers->must_preserve_del_marked(m_new_trx_id, mtr)) {
 
     /* We cannot remove the whole clustered index record */
 
@@ -669,12 +658,12 @@ DbErr UndoNode::undo_clustered_index_modification(QueThr *thr) noexcept {
   return err;
 }
 
-DbErr UndoNode::delete_mark_or_remove_secondary_index_entry(QueThr *thr, Index *index, DTuple *entry, ulint mode) noexcept {
+DbErr UndoNode::delete_mark_or_remove_secondary_index_entry(System &sys, QueThr *thr, Index *index, DTuple *entry, ulint mode) noexcept {
   ut_ad(mode == BTR_MODIFY_LEAF || mode == BTR_MODIFY_TREE);
 
-  BtreePcursor pcur(m_dict->m_store.m_fsp, m_dict->m_store.m_btree);
+  BtreePcursor pcur(sys.m_dict->m_store.m_fsp, sys.m_dict->m_store.m_btree);
 
-  m_dict->m_store.m_fsp->m_log->free_check();
+  sys.m_dict->m_store.m_fsp->m_log->free_check();
 
   Mtr mtr;
   DbErr err;
@@ -695,7 +684,7 @@ DbErr UndoNode::delete_mark_or_remove_secondary_index_entry(QueThr *thr, Index *
       ut_a(success);
     }
 
-    if (srv_row_vers->old_has_index_entry(false, m_pcur.get_rec(), &mtr_vers, index, entry)) {
+    if (sys.m_row_vers->old_has_index_entry(false, m_pcur.get_rec(), &mtr_vers, index, entry)) {
 
       err = btr_cur->del_mark_set_sec_rec(BTR_NO_LOCKING_FLAG, true, thr, &mtr);
       ut_ad(err == DB_SUCCESS);
@@ -747,13 +736,13 @@ DbErr UndoNode::delete_mark_or_remove_secondary_index_entry(QueThr *thr, Index *
   }
 }
 
-DbErr UndoNode::del_unmark_secondary_index_and_undo_update(
+DbErr UndoNode::del_unmark_secondary_index_and_undo_update(System &sys, 
   ulint mode, QueThr *thr, Index *index, const DTuple *entry
 ) noexcept {
   ut_ad(mode == BTR_MODIFY_LEAF || mode == BTR_MODIFY_TREE);
 
   auto trx = thr_get_trx(thr);
-  BtreePcursor pcur(m_dict->m_store.m_fsp, m_dict->m_store.m_btree);
+  BtreePcursor pcur(sys.m_dict->m_store.m_fsp, sys.m_dict->m_store.m_btree);
 
   /* Ignore indexes that are being created. */
   if (unlikely(*index->m_name == TEMP_INDEX_PREFIX)) {
@@ -761,7 +750,7 @@ DbErr UndoNode::del_unmark_secondary_index_and_undo_update(
     return DB_SUCCESS;
   }
 
-  m_dict->m_store.m_fsp->m_log->free_check();
+  sys.m_dict->m_store.m_fsp->m_log->free_check();
 
   Mtr mtr;
   DbErr err;
@@ -945,7 +934,7 @@ DbErr UndoNode::undo_update_of_secondary_indexes(QueThr *thr) noexcept {
   return err;
 }
 
-void UndoNode::parse_insert_undo_rec(IbRecovery recovery) noexcept {
+void UndoNode::parse_insert_undo_rec(System &sys, IbRecovery recovery) noexcept {
   TrxUndoRecord::Parsed pars;
   auto ptr = TrxUndoRecord::get_pars(m_undo_rec, pars);
 
@@ -953,7 +942,7 @@ void UndoNode::parse_insert_undo_rec(IbRecovery recovery) noexcept {
   m_rec_type = pars.m_type;
 
   m_update = nullptr;
-  m_table = m_dict->table_get_on_id(recovery, pars.m_table_id, m_trx);
+  m_table = sys.m_dict->table_get_on_id(recovery, pars.m_table_id, m_trx);
 
   /* Skip the UNDO if we can't find the table or the .ibd file. */
   if (unlikely(m_table == nullptr)) {
@@ -974,14 +963,14 @@ void UndoNode::parse_insert_undo_rec(IbRecovery recovery) noexcept {
   }
 }
 
-void UndoNode::parse_update_undo_rec(IbRecovery recovery, QueThr *thr) noexcept {
+void UndoNode::parse_update_undo_rec(System &sys, IbRecovery recovery, QueThr *thr) noexcept {
   TrxUndoRecord::Parsed pars;
   auto trx = thr_get_trx(thr);
   auto ptr = TrxUndoRecord::get_pars(m_undo_rec, pars);
 
   m_rec_type = pars.m_type;
 
-  m_table = m_dict->table_get_on_id(recovery, pars.m_table_id, trx);
+  m_table = sys.m_dict->table_get_on_id(recovery, pars.m_table_id, trx);
 
   /* TODO: other fixes associated with DROP TABLE + rollback in the same table by another user */
 
@@ -1014,14 +1003,14 @@ void UndoNode::parse_update_undo_rec(IbRecovery recovery, QueThr *thr) noexcept 
   m_cmpl_info = pars.m_cmpl_info;
 }
 
-DbErr UndoNode::undo_update(QueThr *thr) noexcept {
+DbErr UndoNode::undo_update(System &sys, QueThr *thr) noexcept {
   DbErr err;
   ut_a(m_rec_type == TRX_UNDO_UPD_EXIST_REC || m_rec_type == TRX_UNDO_DEL_MARK_REC || m_rec_type == TRX_UNDO_UPD_DEL_REC);
 
   ut_ad(m_state == UNDO_NODE_MODIFY);
 
   // FIXME: Get rid of this global variable access
-  parse_update_undo_rec(srv_config.m_force_recovery, thr);
+  parse_update_undo_rec(sys.m_config.m_recv.m_force_recovery, thr);
 
   if (m_table == nullptr || !search_cluster_index_and_persist_position()) {
     /* It is already undone, or will be undone by another query thread, or table was dropped */
@@ -1081,5 +1070,5 @@ QueThr *RowUndo::step(QueThr *thr) noexcept {
 }
 
 UndoNode *RowUndo::create_undo_node(Trx *trx, QueThr *parent, MemHeap *heap) noexcept {
-  return UndoNode::create(m_dict, trx, parent, heap);
+  return UndoNode::create(m_sys.m_dict, trx, parent, heap);
 }

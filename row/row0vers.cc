@@ -30,29 +30,16 @@ Created 2/6/1997 Heikki Tuuri
 #include "trx0undo.h"
 #include "trx0undo_rec.h"
 
-RowVers *srv_row_vers;
 
-RowVers::RowVers(TrxSys *trx_sys, LockSys *lock_sys) noexcept : m_trx_sys{trx_sys}, m_lock_sys{lock_sys} {}
-
-RowVers *RowVers::create(TrxSys *trx_sys, LockSys *lock_sys) noexcept {
-  auto ptr = ut_new(sizeof(RowVers));
-  return new (ptr) RowVers{trx_sys, lock_sys};
-}
-
-void RowVers::destroy(RowVers *&row_vers) noexcept {
-  call_destructor(row_vers);
-  ut_delete(row_vers);
-  row_vers = nullptr;
-}
 
 Trx *RowVers::impl_x_locked_off_trx_sys_mutex(const Rec rec, const Index *index, const ulint *offsets) noexcept {
-  ut_ad(mutex_own(&m_trx_sys->m_mutex));
+  ut_ad(mutex_own(&m_sys.m_trx_sys->m_mutex));
 
 #ifdef UNIV_SYNC_DEBUG
   ut_ad(!rw_lock_own(&purge_sys->m_latch, RW_LOCK_SHARED));
 #endif /* UNIV_SYNC_DEBUG */
 
-  mutex_exit(&m_trx_sys->m_mutex);
+  mutex_exit(&m_sys.m_trx_sys->m_mutex);
 
   auto func_exit = [](Mtr &mtr, MemHeap *heap, Trx *trx) -> auto {
     mtr.commit();
@@ -81,7 +68,7 @@ Trx *RowVers::impl_x_locked_off_trx_sys_mutex(const Rec rec, const Index *index,
     has modified the secondary index record has also modified the clustered index record. And in a rollback
     we always undo the modifications to secondary index records before the clustered index record. */
 
-    mutex_enter(&m_trx_sys->m_mutex);
+    mutex_enter(&m_sys.m_trx_sys->m_mutex);
 
     mtr.commit();
 
@@ -99,19 +86,19 @@ Trx *RowVers::impl_x_locked_off_trx_sys_mutex(const Rec rec, const Index *index,
 
   auto trx_id = row_get_rec_trx_id(clust_rec, clust_index, clust_offsets);
 
-  mtr_s_lock(&m_trx_sys->m_purge->m_latch, &mtr);
+  mtr_s_lock(&m_sys.m_trx_sys->m_purge->m_latch, &mtr);
 
-  mutex_enter(&m_trx_sys->m_mutex);
+  mutex_enter(&m_sys.m_trx_sys->m_mutex);
 
   Trx *trx{};
 
-  if (!m_trx_sys->is_active(trx_id)) {
+  if (!m_sys.m_trx_sys->is_active(trx_id)) {
     /* The transaction that modified or inserted clust_rec is no
     longer active: no implicit lock on rec */
     return func_exit(mtr, heap, nullptr);
   }
 
-  if (!m_lock_sys->check_trx_id_sanity(trx_id, clust_rec, clust_index, clust_offsets, true)) {
+  if (!m_sys.m_lock_sys->check_trx_id_sanity(trx_id, clust_rec, clust_index, clust_offsets, true)) {
     /* Corruption noticed: try to avoid a crash by returning */
     return func_exit(mtr, heap, nullptr);
   }
@@ -136,7 +123,7 @@ Trx *RowVers::impl_x_locked_off_trx_sys_mutex(const Rec rec, const Index *index,
     RowExt *ext;
     Rec prev_version;
 
-    mutex_exit(&m_trx_sys->m_mutex);
+    mutex_exit(&m_sys.m_trx_sys->m_mutex);
 
     /* While we retrieve an earlier version of clust_rec, we
     release the kernel mutex, because it may take time to access
@@ -154,9 +141,9 @@ Trx *RowVers::impl_x_locked_off_trx_sys_mutex(const Rec rec, const Index *index,
     mem_heap_free(heap2); /* free version and clust_offsets */
 
     if (prev_version.is_null()) {
-      mutex_enter(&m_trx_sys->m_mutex);
+      mutex_enter(&m_sys.m_trx_sys->m_mutex);
 
-      if (!m_trx_sys->is_active(trx_id)) {
+      if (!m_sys.m_trx_sys->is_active(trx_id)) {
         /* Transaction no longer active: no implicit x-lock */
 
         break;
@@ -168,7 +155,7 @@ Trx *RowVers::impl_x_locked_off_trx_sys_mutex(const Rec rec, const Index *index,
 
       /* It was a freshly inserted version: there is an implicit x-lock on rec */
 
-      trx = m_trx_sys->get_on_id(trx_id);
+      trx = m_sys.m_trx_sys->get_on_id(trx_id);
 
       break;
     }
@@ -189,7 +176,7 @@ Trx *RowVers::impl_x_locked_off_trx_sys_mutex(const Rec rec, const Index *index,
     cannot hold any implicit lock. */
     if (vers_del != 0 && trx_id != prev_trx_id) {
 
-      mutex_enter(&m_trx_sys->m_mutex);
+      mutex_enter(&m_sys.m_trx_sys->m_mutex);
 
       break;
     }
@@ -204,9 +191,9 @@ Trx *RowVers::impl_x_locked_off_trx_sys_mutex(const Rec rec, const Index *index,
     record were not initialized yet.  But in that case, prev_version should be NULL. */
     ut_a(entry != nullptr);
 
-    mutex_enter(&m_trx_sys->m_mutex);
+    mutex_enter(&m_sys.m_trx_sys->m_mutex);
 
-    if (!m_trx_sys->is_active(trx_id)) {
+    if (!m_sys.m_trx_sys->is_active(trx_id)) {
       /* Transaction no longer active: no implicit x-lock */
 
       break;
@@ -227,7 +214,7 @@ Trx *RowVers::impl_x_locked_off_trx_sys_mutex(const Rec rec, const Index *index,
       required by prev_version */
 
       if (rec_del != vers_del) {
-        trx = m_trx_sys->get_on_id(trx_id);
+        trx = m_sys.m_trx_sys->get_on_id(trx_id);
 
         break;
       }
@@ -240,7 +227,7 @@ Trx *RowVers::impl_x_locked_off_trx_sys_mutex(const Rec rec, const Index *index,
 
       if (cmp_dtuple_rec(index->m_cmp_ctx, entry, rec, offsets) != 0) {
 
-        trx = m_trx_sys->get_on_id(trx_id);
+        trx = m_sys.m_trx_sys->get_on_id(trx_id);
 
         break;
       }
@@ -249,7 +236,7 @@ Trx *RowVers::impl_x_locked_off_trx_sys_mutex(const Rec rec, const Index *index,
 
       /* The delete mark should be set in rec for it to be in the state required by prev_version */
 
-      trx = m_trx_sys->get_on_id(trx_id);
+      trx = m_sys.m_trx_sys->get_on_id(trx_id);
 
       break;
     }
@@ -269,13 +256,13 @@ Trx *RowVers::impl_x_locked_off_trx_sys_mutex(const Rec rec, const Index *index,
 bool RowVers::must_preserve_del_marked(trx_id_t trx_id, Mtr *mtr) noexcept {
 
 #ifdef UNIV_SYNC_DEBUG
-  ut_ad(!rw_lock_own(&m_trx_sys->m_purge->m_latch, RW_LOCK_SHARED));
+  ut_ad(!rw_lock_own(&m_sys.m_trx_sys->m_purge->m_latch, RW_LOCK_SHARED));
 #endif /* UNIV_SYNC_DEBUG */
 
-  mtr_s_lock(&m_trx_sys->m_purge->m_latch, mtr);
+  mtr_s_lock(&m_sys.m_trx_sys->m_purge->m_latch, mtr);
 
   /* A purge operation is not yet allowed to remove this delete marked record  (if true) */
-  return m_trx_sys->m_purge->update_undo_must_exist(trx_id);
+  return m_sys.m_trx_sys->m_purge->update_undo_must_exist(trx_id);
 }
 
 bool RowVers::old_has_index_entry(bool also_curr, const Rec rec, Mtr *mtr, Index *index, const DTuple *ientry) noexcept {
@@ -288,10 +275,10 @@ bool RowVers::old_has_index_entry(bool also_curr, const Rec rec, Mtr *mtr, Index
   ut_ad(mtr->memo_contains_page(rec, MTR_MEMO_PAGE_X_FIX) || mtr->memo_contains_page(rec, MTR_MEMO_PAGE_S_FIX));
 
 #ifdef UNIV_SYNC_DEBUG
-  ut_ad(!rw_lock_own(&m_trx_sys->m_purge->m_latch, RW_LOCK_SHARED));
+  ut_ad(!rw_lock_own(&m_sys.m_trx_sys->m_purge->m_latch, RW_LOCK_SHARED));
 #endif /* UNIV_SYNC_DEBUG */
 
-  mtr_s_lock(&m_trx_sys->m_purge->m_latch, mtr);
+  mtr_s_lock(&m_sys.m_trx_sys->m_purge->m_latch, mtr);
 
   auto heap = mem_heap_create(1024);
   auto clust_index = index->m_table->get_first_index();
@@ -398,7 +385,7 @@ DbErr RowVers::build_for_consistent_read(Row &row) noexcept {
   );
 
 #ifdef UNIV_SYNC_DEBUG
-  ut_ad(!rw_lock_own(&m_trx_sys->m_purge->m_latch, RW_LOCK_SHARED));
+  ut_ad(!rw_lock_own(&m_sys.m_trx_sys->m_purge->m_latch, RW_LOCK_SHARED));
 #endif /* UNIV_SYNC_DEBUG */
 
   ut_ad(row.m_cluster_rec.offs_validate(row.m_cluster_index, row.m_cluster_offsets));
@@ -407,7 +394,7 @@ DbErr RowVers::build_for_consistent_read(Row &row) noexcept {
 
   ut_ad(!row.m_consistent_read_view->sees_trx_id(trx_id));
 
-  rw_lock_s_lock(&m_trx_sys->m_purge->m_latch);
+  rw_lock_s_lock(&m_sys.m_trx_sys->m_purge->m_latch);
 
   auto version = row.m_cluster_rec;
   MemHeap *heap{};
@@ -495,7 +482,7 @@ DbErr RowVers::build_for_consistent_read(Row &row) noexcept {
   }
 
   mem_heap_free(heap);
-  rw_lock_s_unlock(&m_trx_sys->m_purge->m_latch);
+  rw_lock_s_unlock(&m_sys.m_trx_sys->m_purge->m_latch);
 
   return err;
 }
@@ -508,12 +495,12 @@ DbErr RowVers::build_for_semi_consistent_read(Row &row) noexcept {
   );
 
 #ifdef UNIV_SYNC_DEBUG
-  ut_ad(!rw_lock_own(&m_trx_sys->m_purge->m_latch, RW_LOCK_SHARED));
+  ut_ad(!rw_lock_own(&m_sys.m_trx_sys->m_purge->m_latch, RW_LOCK_SHARED));
 #endif /* UNIV_SYNC_DEBUG */
 
   ut_ad(row.m_cluster_rec.offs_validate(row.m_cluster_index, row.m_cluster_offsets));
 
-  rw_lock_s_lock(&m_trx_sys->m_purge->m_latch);
+  rw_lock_s_lock(&m_sys.m_trx_sys->m_purge->m_latch);
 
   /* The S-latch on purge_sys prevents the purge view from changing.  Thus, if we have an uncommitted transaction at
   this point, then purge cannot remove its undo log even if the transaction could commit now. */
@@ -526,11 +513,11 @@ DbErr RowVers::build_for_semi_consistent_read(Row &row) noexcept {
   for (;;) {
     auto version_trx_id = row_get_rec_trx_id(version, row.m_cluster_index, row.m_cluster_offsets);
 
-    mutex_enter(&m_trx_sys->m_mutex);
+    mutex_enter(&m_sys.m_trx_sys->m_mutex);
 
-    auto version_trx = m_trx_sys->get_on_id(version_trx_id);
+    auto version_trx = m_sys.m_trx_sys->get_on_id(version_trx_id);
 
-    mutex_exit(&m_trx_sys->m_mutex);
+    mutex_exit(&m_sys.m_trx_sys->m_mutex);
 
     if (version_trx == nullptr || version_trx->m_conc_state == TRX_NOT_STARTED ||
         version_trx->m_conc_state == TRX_COMMITTED_IN_MEMORY) {
@@ -611,7 +598,7 @@ DbErr RowVers::build_for_semi_consistent_read(Row &row) noexcept {
     mem_heap_free(heap);
   }
 
-  rw_lock_s_unlock(&m_trx_sys->m_purge->m_latch);
+  rw_lock_s_unlock(&m_sys.m_trx_sys->m_purge->m_latch);
 
   return err;
 }

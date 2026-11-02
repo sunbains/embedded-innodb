@@ -24,6 +24,8 @@ Created 2/6/1997 Heikki Tuuri
 
 #pragma once
 
+#include "srv0sys.h"
+
 #include "innodb0types.h"
 #include "mem0types.h"
 #include "rem0types.h"
@@ -37,6 +39,9 @@ struct ReadView;
 struct LockSys;
 
 struct RowVers {
+  /** The instance this sub-system belongs to. */
+  System &m_sys;
+
 
   /** A version of a clustered index record */
   struct Row {
@@ -72,7 +77,7 @@ struct RowVers {
    * @param[in] trx_sys The transaction system.
    * @param[in] lock_sys The lock system.
    */
-  RowVers(TrxSys *trx_sys, LockSys *lock_sys) noexcept;
+  explicit RowVers(System &sys) noexcept : m_sys(sys) {}
 
   /**
    * @brief Creates a RowVers.
@@ -80,15 +85,11 @@ struct RowVers {
    * @param[in] trx_sys The transaction system.
    * @param[in] lock_sys The lock system.
    */
-  [[nodiscard]] static RowVers *create(TrxSys *trx_sys, LockSys *lock_sys) noexcept;
-
   /**
    * @brief Destroys a RowVers.
    *
    * @param[in,out] row_vers The RowVers to destroy.
    */
-  static void destroy(RowVers *&row_vers) noexcept;
-
   /**
    * @brief Finds out if an active transaction has inserted or modified a secondary index record.
    *
@@ -154,9 +155,6 @@ struct RowVers {
  private:
 #endif /* !UNIT_TEST */
 
-  /** The transaction system */
-  TrxSys *m_trx_sys{};
 
   /** The lock system */
-  LockSys *m_lock_sys{};
 };

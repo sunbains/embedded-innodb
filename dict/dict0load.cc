@@ -39,9 +39,9 @@ bool DictLoad::name_of_col_is(const Table *table, const Index *index, ulint i, c
 }
 
 char *DictLoad::get_first_table_name_in_db(const char *name) noexcept {
-  ut_ad(mutex_own(&m_dict->m_mutex));
-  auto fsp = m_dict->m_store.m_fsp;
-  auto btree = m_dict->m_store.m_btree;
+  ut_ad(mutex_own(&m_sys.m_dict->m_mutex));
+  auto fsp = m_sys.m_dict->m_store.m_fsp;
+  auto btree = m_sys.m_dict->m_store.m_btree;
   BtreePcursor pcur(fsp, btree);
 
   auto heap = mem_heap_create(1000);
@@ -50,7 +50,7 @@ char *DictLoad::get_first_table_name_in_db(const char *name) noexcept {
 
   mtr.start();
 
-  auto sys_tables = m_dict->table_get("SYS_TABLES");
+  auto sys_tables = m_sys.m_dict->table_get("SYS_TABLES");
   auto sys_index = UT_LIST_GET_FIRST(sys_tables->m_indexes);
 
   auto tuple = dtuple_create(heap, 1);
@@ -112,25 +112,25 @@ char *DictLoad::get_first_table_name_in_db(const char *name) noexcept {
 
 std::string DictLoad::to_string() noexcept {
   std::string str;
-  auto fsp = m_dict->m_store.m_fsp;
-  auto btree = m_dict->m_store.m_btree;
+  auto fsp = m_sys.m_dict->m_store.m_fsp;
+  auto btree = m_sys.m_dict->m_store.m_btree;
   BtreePcursor pcur(fsp, btree);
 
   /* Enlarge the fatal semaphore wait timeout during the InnoDB table
   monitor printout */
 
-  mutex_enter(&srv_trx_sys->m_mutex);
+  mutex_enter(&m_sys.m_trx_sys->m_mutex);
   srv_fatal_semaphore_wait_threshold += 7200; /* 2 hours */
-  mutex_exit(&srv_trx_sys->m_mutex);
+  mutex_exit(&m_sys.m_trx_sys->m_mutex);
 
-  m_dict->mutex_acquire();
+  m_sys.m_dict->mutex_acquire();
 
   Mtr mtr;
   auto heap = mem_heap_create(1000);
 
   mtr.start();
 
-  auto sys_tables = m_dict->table_get("SYS_TABLES");
+  auto sys_tables = m_sys.m_dict->table_get("SYS_TABLES");
   auto sys_index = sys_tables->m_indexes.front();
 
   pcur.open_at_index_side(true, sys_index, BTR_SEARCH_LEAF, true, 0, &mtr);
@@ -147,13 +147,13 @@ std::string DictLoad::to_string() noexcept {
 
       mtr.commit();
 
-      m_dict->mutex_release();
+      m_sys.m_dict->mutex_release();
 
       /* Restore the fatal semaphore wait timeout */
 
-      mutex_enter(&srv_trx_sys->m_mutex);
+      mutex_enter(&m_sys.m_trx_sys->m_mutex);
       srv_fatal_semaphore_wait_threshold -= 7200; /* 2 hours */
-      mutex_exit(&srv_trx_sys->m_mutex);
+      mutex_exit(&m_sys.m_trx_sys->m_mutex);
 
       return str;
     }
@@ -171,7 +171,7 @@ std::string DictLoad::to_string() noexcept {
 
       mtr.commit();
 
-      auto table = m_dict->table_get(table_name);
+      auto table = m_sys.m_dict->table_get(table_name);
 
       mem_free(table_name);
 
@@ -182,10 +182,10 @@ std::string DictLoad::to_string() noexcept {
         /* The table definition was corrupt if there is no index */
 
         if (table->get_first_index()) {
-          m_dict->update_statistics(table);
+          m_sys.m_dict->update_statistics(table);
         }
 
-        str += table->to_string(m_dict);
+        str += table->to_string(m_sys.m_dict);
       }
 
       mtr.start();
@@ -229,11 +229,11 @@ ulint DictLoad::sys_tables_get_flags(const Rec rec, const ulint *offsets) const 
 
 DbErr DictLoad::open(bool in_crash_recovery) noexcept {
   space_id_t max_space_id{};
-  auto fsp = m_dict->m_store.m_fsp;
-  auto btree = m_dict->m_store.m_btree;
+  auto fsp = m_sys.m_dict->m_store.m_fsp;
+  auto btree = m_sys.m_dict->m_store.m_btree;
   BtreePcursor pcur(fsp, btree);
 
-  m_dict->mutex_acquire();
+  m_sys.m_dict->mutex_acquire();
 
   load_system_tables();
 
@@ -242,7 +242,7 @@ DbErr DictLoad::open(bool in_crash_recovery) noexcept {
 
   mtr.start();
 
-  auto sys_tables = m_dict->table_get("SYS_TABLES");
+  auto sys_tables = m_sys.m_dict->table_get("SYS_TABLES");
   auto sys_index = sys_tables->m_indexes.front();
 
   pcur.open_at_index_side(true, sys_index, BTR_SEARCH_LEAF, true, 0, &mtr);
@@ -263,7 +263,7 @@ DbErr DictLoad::open(bool in_crash_recovery) noexcept {
       /* We must make the tablespace cache aware of the biggest known space id */
       fil->set_max_space_id_if_bigger(max_space_id);
 
-      m_dict->mutex_release();
+      m_sys.m_dict->mutex_release();
 
       return DB_SUCCESS;
 
@@ -335,17 +335,17 @@ DbErr DictLoad::open(bool in_crash_recovery) noexcept {
 }
 
 DbErr DictLoad::load_columns(Table *table, MemHeap *heap) noexcept {
-  auto fsp = m_dict->m_store.m_fsp;
-  auto btree = m_dict->m_store.m_btree;
+  auto fsp = m_sys.m_dict->m_store.m_fsp;
+  auto btree = m_sys.m_dict->m_store.m_btree;
   BtreePcursor pcur(fsp, btree);
 
-  ut_ad(mutex_own(&m_dict->m_mutex));
+  ut_ad(mutex_own(&m_sys.m_dict->m_mutex));
 
   Mtr mtr;
 
   mtr.start();
 
-  auto sys_columns = m_dict->table_get("SYS_COLUMNS");
+  auto sys_columns = m_sys.m_dict->table_get("SYS_COLUMNS");
   auto sys_index = sys_columns->m_indexes.front();
 
   auto tuple = dtuple_create(heap, 1);
@@ -425,17 +425,17 @@ DbErr DictLoad::load_columns(Table *table, MemHeap *heap) noexcept {
 
 DbErr DictLoad::load_fields(Index *index, MemHeap *heap) noexcept {
   ulint len;
-  auto fsp = m_dict->m_store.m_fsp;
-  auto btree = m_dict->m_store.m_btree;
+  auto fsp = m_sys.m_dict->m_store.m_fsp;
+  auto btree = m_sys.m_dict->m_store.m_btree;
   BtreePcursor pcur(fsp, btree);
 
-  ut_ad(mutex_own(&m_dict->m_mutex));
+  ut_ad(mutex_own(&m_sys.m_dict->m_mutex));
 
   Mtr mtr;
 
   mtr.start();
 
-  auto sys_fields = m_dict->table_get("SYS_FIELDS");
+  auto sys_fields = m_sys.m_dict->table_get("SYS_FIELDS");
   auto sys_index = sys_fields->m_indexes.front();
 
   auto tuple = dtuple_create(heap, 1);
@@ -510,11 +510,11 @@ DbErr DictLoad::load_fields(Index *index, MemHeap *heap) noexcept {
 
 DbErr DictLoad::load_indexes(Table *table, MemHeap *heap) noexcept {
   auto err{DB_SUCCESS};
-  auto fsp = m_dict->m_store.m_fsp;
-  auto btree = m_dict->m_store.m_btree;
+  auto fsp = m_sys.m_dict->m_store.m_fsp;
+  auto btree = m_sys.m_dict->m_store.m_btree;
   BtreePcursor pcur(fsp, btree);
 
-  ut_ad(mutex_own(&m_dict->m_mutex));
+  ut_ad(mutex_own(&m_sys.m_dict->m_mutex));
 
   const auto is_sys_table = table->m_id < DICT_HDR_FIRST_ID;
 
@@ -522,7 +522,7 @@ DbErr DictLoad::load_indexes(Table *table, MemHeap *heap) noexcept {
 
   mtr.start();
 
-  auto sys_indexes = m_dict->table_get("SYS_INDEXES");
+  auto sys_indexes = m_sys.m_dict->table_get("SYS_INDEXES");
   auto sys_index = sys_indexes->m_indexes.front();
 
   auto tuple = dtuple_create(heap, 1);
@@ -613,7 +613,7 @@ DbErr DictLoad::load_indexes(Table *table, MemHeap *heap) noexcept {
 
       return DB_CORRUPTION;
 
-    } else if (is_sys_table && ((type & DICT_CLUSTERED) || (table == m_dict->m_sys_tables && name_len == sizeof("ID_IND") - 1 &&
+    } else if (is_sys_table && ((type & DICT_CLUSTERED) || (table == m_sys.m_dict->m_sys_tables && name_len == sizeof("ID_IND") - 1 &&
                                                             memcmp(name_buf, "ID_IND", name_len) == 0))) {
 
       /* The index was created in memory already at booting of the database server */
@@ -630,7 +630,7 @@ DbErr DictLoad::load_indexes(Table *table, MemHeap *heap) noexcept {
         return err;
       }
 
-      err = m_dict->index_add_to_cache(index, page_no, false);
+      err = m_sys.m_dict->index_add_to_cache(index, page_no, false);
 
       /* The data dictionary tables should never contain invalid index definitions.  If we ignored this error and
       simply did not load this index definition, the .frm file would disagree with the index definitions inside InnoDB. */
@@ -651,7 +651,7 @@ DbErr DictLoad::load_indexes(Table *table, MemHeap *heap) noexcept {
 }
 
 Table *DictLoad::load_table(IbRecovery recovery, const char *name) noexcept {
-  ut_ad(mutex_own(&m_dict->m_mutex));
+  ut_ad(mutex_own(&m_sys.m_dict->m_mutex));
 
   auto heap = mem_heap_create(32000);
 
@@ -659,7 +659,7 @@ Table *DictLoad::load_table(IbRecovery recovery, const char *name) noexcept {
 
   mtr.start();
 
-  auto sys_tables = m_dict->table_get("SYS_TABLES");
+  auto sys_tables = m_sys.m_dict->table_get("SYS_TABLES");
   auto sys_index = sys_tables->m_indexes.front();
 
   auto tuple = dtuple_create(heap, 1);
@@ -668,7 +668,7 @@ Table *DictLoad::load_table(IbRecovery recovery, const char *name) noexcept {
   dfield_set_data(dfield, name, strlen(name));
   sys_index->copy_types(tuple, 1);
 
-  BtreePcursor pcur(m_dict->m_store.m_fsp, m_dict->m_store.m_btree);
+  BtreePcursor pcur(m_sys.m_dict->m_store.m_fsp, m_sys.m_dict->m_store.m_btree);
 
   pcur.open_on_user_rec(sys_index, tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF, &mtr, Current_location());
 
@@ -727,7 +727,7 @@ Table *DictLoad::load_table(IbRecovery recovery, const char *name) noexcept {
   field = rec.get_nth_field(offsets, 4, &len);
 
   bool ibd_file_missing{};
-  auto fil = m_dict->m_store.m_fsp->m_fil;
+  auto fil = m_sys.m_dict->m_store.m_fsp->m_fil;
   auto n_cols = mach_read_from_4(field.get());
 
   /* See if the tablespace is available. */
@@ -767,7 +767,7 @@ Table *DictLoad::load_table(IbRecovery recovery, const char *name) noexcept {
     return nullptr;
   }
 
-  m_dict->table_add_to_cache(table);
+  m_sys.m_dict->table_add_to_cache(table);
 
   mem_heap_empty(heap);
 
@@ -780,22 +780,22 @@ Table *DictLoad::load_table(IbRecovery recovery, const char *name) noexcept {
   if (err == DB_SUCCESS) {
     err = load_foreigns(table->m_name, true);
   } else if (recovery == IB_RECOVERY_DEFAULT) {
-    m_dict->table_remove_from_cache(table);
+    m_sys.m_dict->table_remove_from_cache(table);
     table = nullptr;
   }
 
 #if 0
 	if (err != DB_SUCCESS && table != nullptr) {
 
-		mutex_enter(&m_dict->m_foreign_err_mutex);
+		mutex_enter(&m_sys.m_dict->m_foreign_err_mutex);
 
 		log_err(std::format(
       "Could not make a foreign key definition to match the foreign key table"
       " or the referenced table! The data dictionary of InnoDB is corrupt. You"
       " may need to drop and recreate the foreign key table or the referenced"
-      " table. Latest foreign key error printout:\n{}", m_dict->m_foreign_err_buf));
+      " table. Latest foreign key error printout:\n{}", m_sys.m_dict->m_foreign_err_buf));
 
-		mutex_exit(&m_dict->m_foreign_err_mutex);
+		mutex_exit(&m_sys.m_dict->m_foreign_err_mutex);
 	}
 #endif /* 0 */
 
@@ -805,10 +805,10 @@ Table *DictLoad::load_table(IbRecovery recovery, const char *name) noexcept {
 }
 
 Table *DictLoad::load_table_on_id(IbRecovery recovery, Dict_id table_id) noexcept {
-  ut_ad(mutex_own(&m_dict->m_mutex));
+  ut_ad(mutex_own(&m_sys.m_dict->m_mutex));
 
-  auto fsp = m_dict->m_store.m_fsp;
-  auto btree = m_dict->m_store.m_btree;
+  auto fsp = m_sys.m_dict->m_store.m_fsp;
+  auto btree = m_sys.m_dict->m_store.m_btree;
   BtreePcursor pcur(fsp, btree);
 
   /* NOTE that the operation of this function is protected by
@@ -820,7 +820,7 @@ Table *DictLoad::load_table_on_id(IbRecovery recovery, Dict_id table_id) noexcep
   mtr.start();
 
   /* Get the secondary index based on ID for table SYS_TABLES */
-  auto sys_tables = m_dict->m_sys_tables;
+  auto sys_tables = m_sys.m_dict->m_sys_tables;
   auto sys_table_ids = sys_tables->m_indexes.front()->get_next();
   auto heap = mem_heap_create(256);
 
@@ -879,7 +879,7 @@ Table *DictLoad::load_table_on_id(IbRecovery recovery, Dict_id table_id) noexcep
 }
 
 DbErr DictLoad::load_system_table(Table *table) noexcept {
-  ut_ad(mutex_own(&m_dict->m_mutex));
+  ut_ad(mutex_own(&m_sys.m_dict->m_mutex));
 
   auto heap = mem_heap_create(1000);
   auto err = load_indexes(table, heap);
@@ -898,10 +898,10 @@ DbErr DictLoad::load_system_table(Table *table) noexcept {
 }
 
 DbErr DictLoad::load_foreign_cols(const char *id, Foreign *foreign) noexcept {
-  ut_ad(mutex_own(&m_dict->m_mutex));
+  ut_ad(mutex_own(&m_sys.m_dict->m_mutex));
 
-  auto fsp = m_dict->m_store.m_fsp;
-  auto btree = m_dict->m_store.m_btree;
+  auto fsp = m_sys.m_dict->m_store.m_fsp;
+  auto btree = m_sys.m_dict->m_store.m_btree;
   BtreePcursor pcur(fsp, btree);
 
   foreign->m_foreign_col_names =
@@ -913,7 +913,7 @@ DbErr DictLoad::load_foreign_cols(const char *id, Foreign *foreign) noexcept {
 
   mtr.start();
 
-  auto sys_foreign_cols = m_dict->table_get("SYS_FOREIGN_COLS");
+  auto sys_foreign_cols = m_sys.m_dict->table_get("SYS_FOREIGN_COLS");
   auto sys_index = sys_foreign_cols->m_indexes.front();
 
   auto tuple = dtuple_create(foreign->m_heap, 1);
@@ -959,18 +959,18 @@ DbErr DictLoad::load_foreign_cols(const char *id, Foreign *foreign) noexcept {
 }
 
 DbErr DictLoad::load_foreign(const char *id, bool check_charsets) noexcept {
-  ut_ad(mutex_own(&m_dict->m_mutex));
+  ut_ad(mutex_own(&m_sys.m_dict->m_mutex));
 
   auto heap2 = mem_heap_create(1000);
-  auto fsp = m_dict->m_store.m_fsp;
-  auto btree = m_dict->m_store.m_btree;
+  auto fsp = m_sys.m_dict->m_store.m_fsp;
+  auto btree = m_sys.m_dict->m_store.m_btree;
   BtreePcursor pcur(fsp, btree);
 
   Mtr mtr;
 
   mtr.start();
 
-  auto sys_foreign = m_dict->table_get("SYS_FOREIGN");
+  auto sys_foreign = m_sys.m_dict->table_get("SYS_FOREIGN");
   auto sys_index = sys_foreign->m_indexes.front();
 
   auto tuple = dtuple_create(heap2, 1);
@@ -1050,7 +1050,7 @@ DbErr DictLoad::load_foreign(const char *id, bool check_charsets) noexcept {
   have to load it so that we are able to make type comparisons
   in the next function call. */
 
-  (void)m_dict->table_get(foreign->m_foreign_table_name);
+  (void)m_sys.m_dict->table_get(foreign->m_foreign_table_name);
 
   /* Note that there may already be a foreign constraint object in
   the dictionary cache for this constraint: then the following
@@ -1060,15 +1060,15 @@ DbErr DictLoad::load_foreign(const char *id, bool check_charsets) noexcept {
   a new foreign key constraint but loading one from the data
   dictionary. */
 
-  return m_dict->foreign_add_to_cache(foreign, check_charsets);
+  return m_sys.m_dict->foreign_add_to_cache(foreign, check_charsets);
 }
 
 DbErr DictLoad::load_foreigns(const char *table_name, bool check_charsets) noexcept {
-  ut_ad(mutex_own(&m_dict->m_mutex));
+  ut_ad(mutex_own(&m_sys.m_dict->m_mutex));
 
-  BtreePcursor pcur(m_dict->m_store.m_fsp, m_dict->m_store.m_btree);
+  BtreePcursor pcur(m_sys.m_dict->m_store.m_fsp, m_sys.m_dict->m_store.m_btree);
 
-  auto sys_foreign = m_dict->table_get("SYS_FOREIGN");
+  auto sys_foreign = m_sys.m_dict->table_get("SYS_FOREIGN");
 
   if (sys_foreign == nullptr) {
     /* No foreign keys defined yet in this database */
@@ -1161,13 +1161,13 @@ DbErr DictLoad::load_foreigns(const char *table_name, bool check_charsets) noexc
 }
 
 DbErr DictLoad::load_system_tables() noexcept {
-  ut_ad(mutex_own(&m_dict->m_mutex));
+  ut_ad(mutex_own(&m_sys.m_dict->m_mutex));
 
   Mtr mtr;
 
   mtr.start();
 
-  auto &store = m_dict->m_store;
+  auto &store = m_sys.m_dict->m_store;
 
   /* Get the dictionary header */
   auto hdr = store.hdr_get(&mtr);
@@ -1206,9 +1206,9 @@ DbErr DictLoad::load_system_tables() noexcept {
 
   table->m_id = DICT_TABLES_ID;
 
-  m_dict->table_add_to_cache(table);
+  m_sys.m_dict->table_add_to_cache(table);
 
-  m_dict->m_sys_tables = table;
+  m_sys.m_dict->m_sys_tables = table;
 
   auto index = Index::create(table, "CLUST_IND", PageId{DICT_HDR_SPACE, NULL_PAGE_NO}, DICT_UNIQUE | DICT_CLUSTERED, 1);
 
@@ -1216,7 +1216,7 @@ DbErr DictLoad::load_system_tables() noexcept {
 
   index->m_id = DICT_TABLES_ID;
 
-  auto err = m_dict->index_add_to_cache(index, mtr.read_ulint(hdr + DICT_HDR_TABLES, MLOG_4BYTES), false);
+  auto err = m_sys.m_dict->index_add_to_cache(index, mtr.read_ulint(hdr + DICT_HDR_TABLES, MLOG_4BYTES), false);
   ut_a(err == DB_SUCCESS);
 
   /*-------------------------*/
@@ -1226,7 +1226,7 @@ DbErr DictLoad::load_system_tables() noexcept {
 
   index->m_id = DICT_TABLE_IDS_ID;
 
-  err = m_dict->index_add_to_cache(index, mtr.read_ulint(hdr + DICT_HDR_TABLE_IDS, MLOG_4BYTES), false);
+  err = m_sys.m_dict->index_add_to_cache(index, mtr.read_ulint(hdr + DICT_HDR_TABLE_IDS, MLOG_4BYTES), false);
   ut_a(err == DB_SUCCESS);
 
   /*-------------------------*/
@@ -1242,9 +1242,9 @@ DbErr DictLoad::load_system_tables() noexcept {
 
   table->m_id = DICT_COLUMNS_ID;
 
-  m_dict->table_add_to_cache(table);
+  m_sys.m_dict->table_add_to_cache(table);
 
-  m_dict->m_sys_columns = table;
+  m_sys.m_dict->m_sys_columns = table;
 
   index = Index::create(table, "CLUST_IND", PageId{DICT_HDR_SPACE, NULL_PAGE_NO}, DICT_UNIQUE | DICT_CLUSTERED, 2);
 
@@ -1253,7 +1253,7 @@ DbErr DictLoad::load_system_tables() noexcept {
 
   index->m_id = DICT_COLUMNS_ID;
 
-  err = m_dict->index_add_to_cache(index, mtr.read_ulint(hdr + DICT_HDR_COLUMNS, MLOG_4BYTES), false);
+  err = m_sys.m_dict->index_add_to_cache(index, mtr.read_ulint(hdr + DICT_HDR_COLUMNS, MLOG_4BYTES), false);
   ut_a(err == DB_SUCCESS);
 
   /*-------------------------*/
@@ -1279,9 +1279,9 @@ DbErr DictLoad::load_system_tables() noexcept {
 
   table->m_id = DICT_INDEXES_ID;
 
-  m_dict->table_add_to_cache(table);
+  m_sys.m_dict->table_add_to_cache(table);
 
-  m_dict->m_sys_indexes = table;
+  m_sys.m_dict->m_sys_indexes = table;
 
   index = Index::create(table, "CLUST_IND", PageId{DICT_HDR_SPACE, NULL_PAGE_NO}, DICT_UNIQUE | DICT_CLUSTERED, 2);
 
@@ -1290,7 +1290,7 @@ DbErr DictLoad::load_system_tables() noexcept {
 
   index->m_id = DICT_INDEXES_ID;
 
-  err = m_dict->index_add_to_cache(index, mtr.read_ulint(hdr + DICT_HDR_INDEXES, MLOG_4BYTES), false);
+  err = m_sys.m_dict->index_add_to_cache(index, mtr.read_ulint(hdr + DICT_HDR_INDEXES, MLOG_4BYTES), false);
   ut_a(err == DB_SUCCESS);
 
   /*-------------------------*/
@@ -1302,9 +1302,9 @@ DbErr DictLoad::load_system_tables() noexcept {
 
   table->m_id = DICT_FIELDS_ID;
 
-  m_dict->table_add_to_cache(table);
+  m_sys.m_dict->table_add_to_cache(table);
 
-  m_dict->m_sys_fields = table;
+  m_sys.m_dict->m_sys_fields = table;
 
   index = Index::create(table, "CLUST_IND", PageId{DICT_HDR_SPACE, NULL_PAGE_NO}, DICT_UNIQUE | DICT_CLUSTERED, 2);
 
@@ -1313,22 +1313,22 @@ DbErr DictLoad::load_system_tables() noexcept {
 
   index->m_id = DICT_FIELDS_ID;
 
-  err = m_dict->index_add_to_cache(index, mtr.read_ulint(hdr + DICT_HDR_FIELDS, MLOG_4BYTES), false);
+  err = m_sys.m_dict->index_add_to_cache(index, mtr.read_ulint(hdr + DICT_HDR_FIELDS, MLOG_4BYTES), false);
   ut_a(err == DB_SUCCESS);
 
   mtr.commit();
 
   /* Load definitions of other indexes on system tables */
-  err = load_system_table(m_dict->m_sys_tables);
+  err = load_system_table(m_sys.m_dict->m_sys_tables);
   ut_a(err == DB_SUCCESS);
 
-  err = load_system_table(m_dict->m_sys_columns);
+  err = load_system_table(m_sys.m_dict->m_sys_columns);
   ut_a(err == DB_SUCCESS);
 
-  err = load_system_table(m_dict->m_sys_indexes);
+  err = load_system_table(m_sys.m_dict->m_sys_indexes);
   ut_a(err == DB_SUCCESS);
 
-  err = load_system_table(m_dict->m_sys_fields);
+  err = load_system_table(m_sys.m_dict->m_sys_fields);
   ut_a(err == DB_SUCCESS);
 
   return DB_SUCCESS;

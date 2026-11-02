@@ -81,23 +81,9 @@ the x-latch freed? The most efficient way for performing a
 searched delete is obviously to keep the x-latch for several
 steps of query graph execution. */
 
-RowUpdate *srv_row_upd{};
 
-RowUpdate::RowUpdate(Dict *dict, LockSys *lock_sys) noexcept : m_dict(dict), m_lock_sys(lock_sys) {}
 
 RowUpdate::~RowUpdate() noexcept {}
-
-RowUpdate *RowUpdate::create(Dict *dict, LockSys *lock_sys) noexcept {
-  auto ptr = ut_new(sizeof(RowUpdate));
-
-  return new (ptr) RowUpdate(dict, lock_sys);
-}
-
-void RowUpdate::destroy(RowUpdate *&row_upd) noexcept {
-  call_destructor(row_upd);
-  ut_delete(row_upd);
-  row_upd = nullptr;
-}
 
 bool RowUpdate::index_is_referenced(const Index *index, Trx *trx) noexcept {
   auto table = index->m_table;
@@ -110,7 +96,7 @@ bool RowUpdate::index_is_referenced(const Index *index, Trx *trx) noexcept {
   bool froze_data_dict{};
 
   if (trx->m_dict_operation_lock_mode == 0) {
-    m_dict->freeze_data_dictionary(trx);
+    m_sys.m_dict->freeze_data_dictionary(trx);
     froze_data_dict = true;
   }
 
@@ -124,7 +110,7 @@ bool RowUpdate::index_is_referenced(const Index *index, Trx *trx) noexcept {
   }
 
   if (froze_data_dict) {
-    m_dict->unfreeze_data_dictionary(trx);
+    m_sys.m_dict->unfreeze_data_dictionary(trx);
   }
 
   return is_referenced;
@@ -156,7 +142,7 @@ DbErr RowUpdate::check_references_constraints(
   if (trx->m_dict_operation_lock_mode == 0) {
     got_s_lock = true;
 
-    m_dict->freeze_data_dictionary(trx);
+    m_sys.m_dict->freeze_data_dictionary(trx);
   }
 
   for (auto foreign : table->m_referenced_list) {
@@ -169,15 +155,15 @@ DbErr RowUpdate::check_references_constraints(
         (node->m_is_delete || changes_first_fields_binary(entry, index, node->m_update, foreign->m_n_fields))) {
 
       if (foreign->m_foreign_table == nullptr) {
-        (void)m_dict->table_get(foreign->m_foreign_table_name, false);
+        (void)m_sys.m_dict->table_get(foreign->m_foreign_table_name, false);
       }
 
       if (foreign->m_foreign_table) {
-        m_dict->mutex_acquire();
+        m_sys.m_dict->mutex_acquire();
 
         ++foreign->m_foreign_table->m_n_foreign_key_checks_running;
 
-        m_dict->mutex_release();
+        m_sys.m_dict->mutex_release();
       }
 
       /* NOTE that if the thread ends up waiting for a lock
@@ -185,16 +171,16 @@ DbErr RowUpdate::check_references_constraints(
       But the counter on the table protects 'foreign' from
       being dropped while the check is running. */
 
-      err = srv_row_ins->check_foreign_constraint(false, foreign, table, entry, thr);
+      err = m_sys.m_row_ins->check_foreign_constraint(false, foreign, table, entry, thr);
 
       if (foreign->m_foreign_table) {
-        m_dict->mutex_acquire();
+        m_sys.m_dict->mutex_acquire();
 
         ut_a(foreign->m_foreign_table->m_n_foreign_key_checks_running > 0);
 
         --foreign->m_foreign_table->m_n_foreign_key_checks_running;
 
-        m_dict->mutex_release();
+        m_sys.m_dict->mutex_release();
       }
 
       if (err != DB_SUCCESS) {
@@ -208,7 +194,7 @@ DbErr RowUpdate::check_references_constraints(
 
 func_exit:
   if (got_s_lock) {
-    m_dict->unfreeze_data_dictionary(trx);
+    m_sys.m_dict->unfreeze_data_dictionary(trx);
   }
 
   mem_heap_free(heap);
@@ -554,7 +540,7 @@ Upd *RowUpdate::build_difference_binary(
 
 byte *RowUpdate::ext_fetch(const byte *data, ulint local_len, ulint *len, MemHeap *heap) noexcept {
   auto buf = mem_heap_alloc(heap, *len);
-  Blob blob(m_dict->m_store.m_fsp, m_dict->m_store.m_btree);
+  Blob blob(m_sys.m_dict->m_store.m_fsp, m_sys.m_dict->m_store.m_btree);
 
   *len = blob.copy_externally_stored_field_prefix(buf, *len, data, local_len);
   /* We should never update records containing a half-deleted BLOB. */
@@ -857,7 +843,7 @@ void RowUpdate::store_row(UpdNode *node) noexcept {
 DbErr RowUpdate::sec_index_entry(UpdNode *node, QueThr *thr) noexcept {
   DbErr err = DB_SUCCESS;
   auto trx = thr_get_trx(thr);
-  BtreePcursor pcur(m_dict->m_store.m_fsp, m_dict->m_store.m_btree);
+  BtreePcursor pcur(m_sys.m_dict->m_store.m_fsp, m_sys.m_dict->m_store.m_btree);
 
   auto index = node->m_index;
   auto heap = mem_heap_create(1024);
@@ -865,7 +851,7 @@ DbErr RowUpdate::sec_index_entry(UpdNode *node, QueThr *thr) noexcept {
   auto entry = row_build_index_entry(node->m_row, node->m_ext, index, heap);
   ut_a(entry != nullptr);
 
-  log_sys->free_check();
+  m_sys.m_log->free_check();
 
   Mtr mtr;
 
@@ -879,7 +865,7 @@ DbErr RowUpdate::sec_index_entry(UpdNode *node, QueThr *thr) noexcept {
 
   if (unlikely(!found)) {
     log_err("Sec index entry update in ");
-    m_dict->index_name_print(trx, index);
+    m_sys.m_dict->index_name_print(trx, index);
     log_err("\ntuple ");
     dtuple_print(stderr, entry);
     log_err("record ");
@@ -918,7 +904,7 @@ DbErr RowUpdate::sec_index_entry(UpdNode *node, QueThr *thr) noexcept {
   ut_a(entry);
 
   /* Insert new index entry */
-  err = srv_row_ins->index_entry(index, entry, 0, true, thr);
+  err = m_sys.m_row_ins->index_entry(index, entry, 0, true, thr);
 
 func_exit:
   mem_heap_free(heap);
@@ -951,7 +937,7 @@ DbErr RowUpdate::clust_rec_by_insert(
   auto pcur = upd_node->m_pcur;
   auto btr_cur = pcur->get_btr_cur();
 
-  Blob blob(m_dict->m_store.m_fsp, m_dict->m_store.m_btree);
+  Blob blob(m_sys.m_dict->m_store.m_fsp, m_sys.m_dict->m_store.m_btree);
 
   if (upd_node->m_state != UPD_NODE_INSERT_CLUSTERED) {
     Rec rec;
@@ -1024,7 +1010,7 @@ DbErr RowUpdate::clust_rec_by_insert(
     blob.mark_dtuple_inherited_extern(entry, upd_node->m_update);
   }
 
-  err = srv_row_ins->index_entry(index, entry, upd_node->m_upd_ext ? upd_node->m_upd_ext->n_ext : 0, true, thr);
+  err = m_sys.m_row_ins->index_entry(index, entry, upd_node->m_upd_ext ? upd_node->m_upd_ext->n_ext : 0, true, thr);
 
   mem_heap_free(heap);
 
@@ -1060,7 +1046,7 @@ DbErr RowUpdate::clust_rec(UpdNode *upd_node, const Index *index, QueThr *thr, M
     return DB_SUCCESS;
   }
 
-  if (m_dict->m_store.m_fsp->m_buf_pool->m_LRU->buf_pool_running_out()) {
+  if (m_sys.m_dict->m_store.m_fsp->m_buf_pool->m_LRU->buf_pool_running_out()) {
 
     return DB_LOCK_TABLE_FULL;
   }
@@ -1101,7 +1087,7 @@ DbErr RowUpdate::clust_rec(UpdNode *upd_node, const Index *index, QueThr *thr, M
       offsets = record.get_col_offsets(rec_offsets.data(), ULINT_UNDEFINED, &heap, Current_location());
     }
 
-    Blob blob(m_dict->m_store.m_fsp, m_dict->m_store.m_btree);
+    Blob blob(m_sys.m_dict->m_store.m_fsp, m_sys.m_dict->m_store.m_btree);
 
     err = blob.store_big_rec_extern_fields(index, btr_cur->get_block(), rec, offsets, big_rec, mtr);
 
@@ -1192,7 +1178,7 @@ DbErr RowUpdate::clust_step(UpdNode *node, QueThr *thr) noexcept {
 
   if (node->m_is_delete && node->m_table->m_id == DICT_INDEXES_ID) {
 
-    m_dict->m_store.drop_index_tree(pcur->get_rec(), mtr);
+    m_sys.m_dict->m_store.drop_index_tree(pcur->get_rec(), mtr);
 
     mtr->commit();
 
@@ -1220,7 +1206,7 @@ DbErr RowUpdate::clust_step(UpdNode *node, QueThr *thr) noexcept {
 
   if (!node->m_has_clust_rec_x_lock) {
 
-    err = m_lock_sys->clust_rec_modify_check_and_lock(0, pcur->get_block(), rec, index, offsets, thr);
+    err = m_sys.m_lock_sys->clust_rec_modify_check_and_lock(0, pcur->get_block(), rec, index, offsets, thr);
 
     if (err != DB_SUCCESS) {
       mtr->commit();
@@ -1387,7 +1373,7 @@ QueThr *RowUpdate::step(QueThr *thr) noexcept {
       /* It may be that the current session has not yet
       started its transaction, or it has been committed: */
 
-      err = m_lock_sys->lock_table(0, node->m_table, LOCK_IX, thr);
+      err = m_sys.m_lock_sys->lock_table(0, node->m_table, LOCK_IX, thr);
 
       if (err != DB_SUCCESS) {
 
@@ -1467,7 +1453,7 @@ UpdNode *RowUpdate::create_update_node(Table *table, MemHeap *heap) noexcept {
 
   node->m_table = table;
   node->m_in_client_interface = true;
-  node->m_pcur = new BtreePcursor(m_dict->m_store.m_fsp, m_dict->m_store.m_btree);
+  node->m_pcur = new BtreePcursor(m_sys.m_dict->m_store.m_fsp, m_sys.m_dict->m_store.m_btree);
 
   node->m_has_clust_rec_x_lock = true;
   node->m_update_n_fields = table->get_n_cols();

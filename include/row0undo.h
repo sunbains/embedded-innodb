@@ -24,6 +24,8 @@ Created 1/8/1997 Heikki Tuuri
 
 #pragma once
 
+#include "srv0sys.h"
+
 #include "btr0pcur.h"
 #include "dict0types.h"
 // #include "row0types.h"
@@ -39,12 +41,15 @@ struct RowUpdate;
 #include "trx0undo_rec.h"
 
 struct RowUndo {
+  /** The instance this sub-system belongs to. */
+  System &m_sys;
+
   /**
    * @brief Constructs a row undo.
    *
    * @param[in] dict The data dictionary.
    */
-  explicit RowUndo(Dict *dict) noexcept : m_dict(dict) {}
+  explicit RowUndo(System &sys) noexcept : m_sys(sys) {}
 
   /**
    * @brief Creates a row undo.
@@ -53,15 +58,11 @@ struct RowUndo {
    *
    * @return A pointer to the newly created row undo.
    */
-  [[nodiscard]] static RowUndo *create(Dict *dict) noexcept;
-
   /**
    * @brief Destroys a row undo.
    *
    * @param[in,out] row_undo The row undo to destroy.
    */
-  static void destroy(RowUndo *&row_undo) noexcept;
-
   /**
    * @brief Creates a row undo node to a query graph.
    *
@@ -84,8 +85,6 @@ struct RowUndo {
    */
   [[nodiscard]] QueThr *step(QueThr *thr) noexcept;
 
-  /** Data dictionary */
-  Dict *m_dict{};
 };
 
 /* A single query thread will try to perform the undo for all successive
@@ -171,7 +170,7 @@ struct UndoNode {
    *
    * @return DB_SUCCESS if the operation is successfully completed, otherwise an error code.
    */
-  [[nodiscard]] DbErr fetch_undo_log_and_undo(QueThr *thr) noexcept;
+  [[nodiscard]] DbErr fetch_undo_log_and_undo(System &sys, QueThr *thr) noexcept;
 
   /**
    * @brief Removes a clustered index record.
@@ -182,14 +181,14 @@ struct UndoNode {
    *
    * @return DB_SUCCESS if the operation is successful, otherwise DB_OUT_OF_FILE_SPACE.
    */
-  [[nodiscard]] DbErr remove_cluster_rec() noexcept;
+  [[nodiscard]] DbErr remove_cluster_rec(System &sys) noexcept;
 
   /**
    * @brief Parses the row reference and other info in a fresh insert undo record.
    *
    * @param[in] recovery Recovery flag.
    */
-  void parse_insert_undo_rec(IbRecovery recovery) noexcept;
+  void parse_insert_undo_rec(System &sys, IbRecovery recovery) noexcept;
 
   /**
     * @brief Parses the row reference and other info in a modify undo log record.
@@ -197,14 +196,14 @@ struct UndoNode {
    * @param[in] recovery             Recovery flag.
    * @param[in,out] thr              Query thread.
    */
-  void parse_update_undo_rec(IbRecovery recovery, QueThr *thr) noexcept;
+  void parse_update_undo_rec(System &sys, IbRecovery recovery, QueThr *thr) noexcept;
 
   /**
    * @brief Undoes a fresh insert of a row to a table.
    *
    * @return DB_SUCCESS if the operation is successful, otherwise an error code.
    */
-  [[nodiscard]] DbErr undo_insert() noexcept;
+  [[nodiscard]] DbErr undo_insert(System &sys) noexcept;
 
   /**
    * @brief Checks if also the previous version of the clustered index record was
@@ -242,7 +241,7 @@ struct UndoNode {
    *
    * @return DB_SUCCESS, DB_FAIL, or error code: we may run out of file space.
    */
-  [[nodiscard]] DbErr remove_clustered_index_record(QueThr *thr, Mtr *mtr, ulint mode) noexcept;
+  [[nodiscard]] DbErr remove_clustered_index_record(System &sys, QueThr *thr, Mtr *mtr, ulint mode) noexcept;
 
   /**
    * @brief Removes a clustered index record after undo if possible.
@@ -259,7 +258,7 @@ struct UndoNode {
    *
    * @return DB_SUCCESS, DB_FAIL, or error code: we may run out of file space.
    */
-  [[nodiscard]] DbErr remove_clustered_index_record_low(QueThr *thr, Mtr *mtr, ulint mode) noexcept;
+  [[nodiscard]] DbErr remove_clustered_index_record_low(System &sys, QueThr *thr, Mtr *mtr, ulint mode) noexcept;
 
   /**
    * @brief Delete marks or removes a secondary index entry if found.
@@ -271,7 +270,7 @@ struct UndoNode {
    *
    * @return DB_SUCCESS, DB_FAIL, or DB_OUT_OF_FILE_SPACE
    */
-  [[nodiscard]] DbErr delete_mark_or_remove_secondary_index_entry(
+  [[nodiscard]] DbErr delete_mark_or_remove_secondary_index_entry(System &sys, 
     QueThr *thr, Index *index, DTuple *entry, ulint mode
   ) noexcept;
 
@@ -291,7 +290,7 @@ struct UndoNode {
    *
    * @return DB_SUCCESS or DB_OUT_OF_FILE_SPACE
      */
-  [[nodiscard]] DbErr delete_mark_or_remove_secondary_index_entry(QueThr *thr, Index *index, DTuple *entry) noexcept;
+  [[nodiscard]] DbErr delete_mark_or_remove_secondary_index_entry(System &sys, QueThr *thr, Index *index, DTuple *entry) noexcept;
 
   /**
  * Delete unmarks a secondary index entry which must be found. It might not be
@@ -306,7 +305,7 @@ struct UndoNode {
  *
  * @return DB_FAIL or DB_SUCCESS or DB_OUT_OF_FILE_SPACE
  */
-  [[nodiscard]] DbErr del_unmark_secondary_index_and_undo_update(
+  [[nodiscard]] DbErr del_unmark_secondary_index_and_undo_update(System &sys, 
     ulint mode, QueThr *thr, Index *index, const DTuple *entry
   ) noexcept;
 
@@ -354,7 +353,7 @@ struct UndoNode {
    * @param[in,out] thr Query thread.
    *
    * @return	DB_SUCCESS or error code */
-  [[nodiscard]] DbErr undo_update(QueThr *thr) noexcept;
+  [[nodiscard]] DbErr undo_update(System &sys, QueThr *thr) noexcept;
 
   /**
    * Removes a secondary index entry if found.
@@ -367,7 +366,7 @@ struct UndoNode {
    *
    * @return	DB_SUCCESS, DB_FAIL, or DB_OUT_OF_FILE_SPACE
    */
-  [[nodiscard]] DbErr remove_secondary_index_entry(ulint mode, Index *index, DTuple *entry) noexcept;
+  [[nodiscard]] DbErr remove_secondary_index_entry(System &sys, ulint mode, Index *index, DTuple *entry) noexcept;
 
   /**
    * @brief Removes a secondary index entry from the index if found.
@@ -379,7 +378,7 @@ struct UndoNode {
    *
    * @return DB_SUCCESS or DB_OUT_OF_FILE_SPACE
    */
-  [[nodiscard]] DbErr remove_secondary_index_entry(Index *index, DTuple *entry) noexcept;
+  [[nodiscard]] DbErr remove_secondary_index_entry(System &sys, Index *index, DTuple *entry) noexcept;
 
   /** node type: QUE_NODE_UNDO */
   QueCommon m_common{};
@@ -443,5 +442,4 @@ struct UndoNode {
   MemHeap *m_heap{};
 
   /** data dictionary */
-  Dict *m_dict{};
 };

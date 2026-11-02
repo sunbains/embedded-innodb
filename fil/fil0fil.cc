@@ -100,20 +100,18 @@ out of the LRU-list and keep a count of pending operations. When an operation
 completes, we decrement the count and return the file node to the LRU-list if
 the count drops to zero. */
 
-// FIXME: Remove this global variable
-Fil *srv_fil;
-
-extern Aio *srv_aio;
 
 /** The null file address */
 constexpr FilAddr fil_addr_null = {FIL_NULL, 0};
 
-Fil::Fil(ulint max_n_open) {
-  ut_a(max_n_open > 0);
+Fil::Fil(System &sys) noexcept : m_sys(sys), m_file_per_table(sys.m_config.m_fil.m_file_per_table) {
+  const auto &config = m_sys.m_config.m_fil;
+
+  ut_a(config.m_max_n_open_files > 0);
 
   mutex_create(&m_mutex, IF_DEBUG("Fil::mutex", ) IF_SYNC_DEBUG(SYNC_ANY_LATCH, ) Current_location());
 
-  m_max_n_open = max_n_open;
+  m_max_n_open = config.m_max_n_open_files;
 
   UT_LIST_INIT(m_space_list);
   UT_LIST_INIT(m_unflushed_spaces);
@@ -325,8 +323,8 @@ void Fil::node_open_file(FilNode *node, FilSpace *space, bool startup) {
 
     success = os_file_read(node->m_fh, page, UNIV_PAGE_SIZE, 0);
 
-    auto flags = srv_fsp->get_flags(page);
-    auto space_id = srv_fsp->get_space_id(page);
+    auto flags = m_sys.m_fsp->get_flags(page);
+    auto space_id = m_sys.m_fsp->get_space_id(page);
 
     ut_delete(ptr);
 
@@ -927,7 +925,7 @@ void Fil::read_flushed_lsn(os_file_t fh, lsn_t &flushed_lsn) {
 }
 
 void Fil::create_directory_for_tablename(const char *name) {
-  auto len = strlen(srv_config.m_data_home);
+  auto len = strlen(m_sys.m_config.m_fil.m_data_home);
   ut_a(len > 0);
 
   auto namend = strchr(name, '/');
@@ -935,7 +933,7 @@ void Fil::create_directory_for_tablename(const char *name) {
 
   auto path = (char *)mem_alloc(len + (namend - name) + 2);
 
-  strncpy(path, srv_config.m_data_home, len);
+  strncpy(path, m_sys.m_config.m_fil.m_data_home, len);
   ut_a(path[len - 1] == SRV_PATH_SEPARATOR);
 
   strncpy(path + len, name, namend - name);
@@ -1252,11 +1250,11 @@ bool Fil::rename_tablespace_in_mem(FilSpace *space, FilNode *node, const char *p
 
 char *Fil::make_ibd_name(const char *name, bool is_temp) {
   ulint namelen = strlen(name);
-  auto dirlen = strlen(srv_config.m_data_home);
+  auto dirlen = strlen(m_sys.m_config.m_fil.m_data_home);
   auto sz = dirlen + namelen + sizeof("/.ibd");
   auto filename = static_cast<char *>(mem_alloc(sz));
 
-  std::snprintf(filename, sz, "%s%s.ibd", normalize_path(srv_config.m_data_home), name);
+  std::snprintf(filename, sz, "%s%s.ibd", normalize_path(m_sys.m_config.m_fil.m_data_home), name);
 
   return filename;
 }
@@ -1480,11 +1478,11 @@ DbErr Fil::create_new_single_table_tablespace(space_id_t *space_id, const char *
 
   memset(page, '\0', UNIV_PAGE_SIZE);
 
-  srv_fsp->init_fields(page, *space_id, flags);
+  m_sys.m_fsp->init_fields(page, *space_id, flags);
 
   mach_write_to_4(page + FIL_PAGE_SPACE_ID, *space_id);
 
-  srv_buf_pool->m_flusher->init_for_writing(page, 0);
+  m_sys.m_buf_pool->m_flusher->init_for_writing(page, 0);
 
   ret = os_file_write(path, file, page, UNIV_PAGE_SIZE, 0);
 
@@ -1577,8 +1575,8 @@ bool Fil::open_single_table_tablespace(bool check_space_id, space_id_t id, ulint
 
     /* We have to read the tablespace id and flags from the file. */
 
-    space_id = srv_fsp->get_space_id(page);
-    space_flags = srv_fsp->get_flags(page);
+    space_id = m_sys.m_fsp->get_space_id(page);
+    space_flags = m_sys.m_fsp->get_flags(page);
 
     ut_delete(buf2);
 
@@ -1617,7 +1615,7 @@ bool Fil::open_single_table_tablespace(bool check_space_id, space_id_t id, ulint
 void Fil::load_single_table_tablespace(IbRecovery recovery, const char *dbname, const char *filename) {
   char dir[OS_FILE_MAX_PATH];
 
-  strcpy(dir, srv_config.m_data_home);
+  strcpy(dir, m_sys.m_config.m_fil.m_data_home);
 
   auto ptr = normalize_path(dir);
   auto len = strlen(dbname) + strlen(filename) + strlen(dir) + 3;
@@ -1749,8 +1747,8 @@ void Fil::load_single_table_tablespace(IbRecovery recovery, const char *dbname, 
 
     /* We have to read the tablespace id from the file */
 
-    space_id = srv_fsp->get_space_id(page);
-    flags = srv_fsp->get_flags(page);
+    space_id = m_sys.m_fsp->get_space_id(page);
+    flags = m_sys.m_fsp->get_flags(page);
   } else {
     space_id = FIL_NULL;
     flags = 0;
@@ -1766,12 +1764,12 @@ void Fil::load_single_table_tablespace(IbRecovery recovery, const char *dbname, 
 
   if (!success) {
 
-    if (srv_config.m_force_recovery > 0) {
+    if (m_sys.m_config.m_recv.m_force_recovery > 0) {
 
       log_warn(std::format(
         "innodb_force_recovery was set to {}. Continuing crash recovery"
         " even though the tablespace creation of this table failed.",
-        to_int(srv_config.m_force_recovery)
+        to_int(m_sys.m_config.m_recv.m_force_recovery)
       ));
 
       goto func_exit;
@@ -2070,7 +2068,7 @@ bool Fil::extend_space_to_desired_size(page_no_t *actual_size, space_id_t space_
 
     IoCtx io_ctx = {.m_batch = false, .m_fil_node = node, .m_msg = nullptr, .m_io_request = io_request};
 
-    success = srv_aio->submit(std::move(io_ctx), buf, page_size * n_pages, off);
+    success = m_sys.m_aio->submit(std::move(io_ctx), buf, page_size * n_pages, off);
 
     if (success) {
       node->m_size_in_pages += n_pages;
@@ -2300,7 +2298,7 @@ DbErr Fil::data_io(
   IoCtx io_ctx = {.m_batch = batched, .m_fil_node = fil_node, .m_msg = message, .m_io_request = io_request};
 
   /* Queue the aio request */
-  auto err = srv_aio->submit(std::move(io_ctx), buf, len, off);
+  auto err = m_sys.m_aio->submit(std::move(io_ctx), buf, len, off);
   ut_a(err == DB_SUCCESS);
 
   if (is_sync_request) {
@@ -2323,7 +2321,7 @@ bool Fil::aio_wait(ulint segment) {
 
   IoCtx io_ctx{};
 
-  auto err = srv_aio->reap(segment, io_ctx);
+  auto err = m_sys.m_aio->reap(segment, io_ctx);
 
   if (io_ctx.is_shutdown()) {
     return false;
@@ -2347,7 +2345,7 @@ bool Fil::aio_wait(ulint segment) {
   open, and use a special i/o thread to serve insert buffer requests. */
 
   ut_ad(io_ctx.m_fil_node->m_space->m_type == FIL_TABLESPACE);
-  srv_buf_pool->io_complete(reinterpret_cast<BufPage *>(io_ctx.m_msg));
+  m_sys.m_buf_pool->io_complete(reinterpret_cast<BufPage *>(io_ctx.m_msg));
 
   return true;
 }
@@ -2534,7 +2532,7 @@ bool Fil::rmdir(const char *dbname) {
   bool success{};
   char dir[OS_FILE_MAX_PATH];
 
-  std::snprintf(dir, sizeof(dir), "%s%s", srv_config.m_data_home, dbname);
+  std::snprintf(dir, sizeof(dir), "%s%s", m_sys.m_config.m_fil.m_data_home, dbname);
 
   if (::rmdir(dbname) != 0) {
     log_err("Removing directory: ", dbname);
@@ -2547,7 +2545,7 @@ bool Fil::rmdir(const char *dbname) {
 bool Fil::mkdir(const char *dbname) {
   char dir[OS_FILE_MAX_PATH];
 
-  std::snprintf(dir, sizeof(dir), "%s%s", srv_config.m_data_home, dbname);
+  std::snprintf(dir, sizeof(dir), "%s%s", m_sys.m_config.m_fil.m_data_home, dbname);
 
   /* If exists (false) then don't return error. */
   return os_file_create_directory(dir, false);

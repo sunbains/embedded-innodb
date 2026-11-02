@@ -37,7 +37,6 @@ Modified 2024-Oct-15 Sunny Bains
 #include "srv0srv.h"
 #include "trx0trx.h"
 
-DictStore::DictStore(Dict *dict, Btree *btree) noexcept : m_dict{dict}, m_fsp{btree->m_fsp}, m_btree{btree} {}
 
 void DictStore::destroy(DictStore *dict_store) noexcept {
   ut_delete(dict_store);
@@ -53,7 +52,7 @@ DictStore::hdr_t *DictStore::hdr_get(Mtr *mtr) noexcept {
     .m_mtr = mtr
   };
 
-  auto block = m_fsp->m_buf_pool->get(req, nullptr);
+  auto block = m_sys.m_fsp->m_buf_pool->get(req, nullptr);
   auto header = DICT_HDR + block->get_frame();
 
   buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_DICT_HEADER));
@@ -80,7 +79,7 @@ Dict_id DictStore::hdr_get_new_id(DictIdType type) noexcept {
 }
 
 void DictStore::hdr_flush_row_id() noexcept {
-  ut_ad(mutex_own(&m_dict->m_mutex));
+  ut_ad(mutex_own(&m_sys.m_dict->m_mutex));
 
   const auto id = m_row_id;
 
@@ -99,7 +98,7 @@ bool DictStore::bootstrap_system_tables(Mtr *mtr) noexcept {
 
   /* Create the dictionary header file block in a new, allocated file
   segment in the system tablespace */
-  auto block = m_fsp->fseg_create(DICT_HDR_SPACE, 0, DICT_HDR + DICT_HDR_FSEG_HEADER, mtr);
+  auto block = m_sys.m_fsp->fseg_create(DICT_HDR_SPACE, 0, DICT_HDR + DICT_HDR_FSEG_HEADER, mtr);
 
   ut_a(DICT_HDR_PAGE_NO == block->get_page_no());
 
@@ -117,7 +116,7 @@ bool DictStore::bootstrap_system_tables(Mtr *mtr) noexcept {
 
   /* Create the B-tree roots for the clustered indexes of the basic system tables */
 
-  auto root_page_no = m_btree->create(DICT_CLUSTERED | DICT_UNIQUE, DICT_HDR_SPACE, DICT_TABLES_ID, m_dict->m_dummy_index, mtr);
+  auto root_page_no = m_sys.m_btree->create(DICT_CLUSTERED | DICT_UNIQUE, DICT_HDR_SPACE, DICT_TABLES_ID, m_sys.m_dict->m_dummy_index, mtr);
 
   if (root_page_no == FIL_NULL) {
 
@@ -126,7 +125,7 @@ bool DictStore::bootstrap_system_tables(Mtr *mtr) noexcept {
 
   mlog_write_ulint(hdr + DICT_HDR_TABLES, root_page_no, MLOG_4BYTES, mtr);
 
-  root_page_no = m_btree->create(DICT_UNIQUE, DICT_HDR_SPACE, DICT_TABLE_IDS_ID, m_dict->m_dummy_index, mtr);
+  root_page_no = m_sys.m_btree->create(DICT_UNIQUE, DICT_HDR_SPACE, DICT_TABLE_IDS_ID, m_sys.m_dict->m_dummy_index, mtr);
 
   if (root_page_no == FIL_NULL) {
 
@@ -135,7 +134,7 @@ bool DictStore::bootstrap_system_tables(Mtr *mtr) noexcept {
 
   mlog_write_ulint(hdr + DICT_HDR_TABLE_IDS, root_page_no, MLOG_4BYTES, mtr);
 
-  root_page_no = m_btree->create(DICT_CLUSTERED | DICT_UNIQUE, DICT_HDR_SPACE, DICT_COLUMNS_ID, m_dict->m_dummy_index, mtr);
+  root_page_no = m_sys.m_btree->create(DICT_CLUSTERED | DICT_UNIQUE, DICT_HDR_SPACE, DICT_COLUMNS_ID, m_sys.m_dict->m_dummy_index, mtr);
 
   if (root_page_no == FIL_NULL) {
 
@@ -144,7 +143,7 @@ bool DictStore::bootstrap_system_tables(Mtr *mtr) noexcept {
 
   mlog_write_ulint(hdr + DICT_HDR_COLUMNS, root_page_no, MLOG_4BYTES, mtr);
 
-  root_page_no = m_btree->create(DICT_CLUSTERED | DICT_UNIQUE, DICT_HDR_SPACE, DICT_INDEXES_ID, m_dict->m_dummy_index, mtr);
+  root_page_no = m_sys.m_btree->create(DICT_CLUSTERED | DICT_UNIQUE, DICT_HDR_SPACE, DICT_INDEXES_ID, m_sys.m_dict->m_dummy_index, mtr);
 
   if (root_page_no == FIL_NULL) {
 
@@ -153,7 +152,7 @@ bool DictStore::bootstrap_system_tables(Mtr *mtr) noexcept {
 
   mlog_write_ulint(hdr + DICT_HDR_INDEXES, root_page_no, MLOG_4BYTES, mtr);
 
-  root_page_no = m_btree->create(DICT_CLUSTERED | DICT_UNIQUE, DICT_HDR_SPACE, DICT_FIELDS_ID, m_dict->m_dummy_index, mtr);
+  root_page_no = m_sys.m_btree->create(DICT_CLUSTERED | DICT_UNIQUE, DICT_HDR_SPACE, DICT_FIELDS_ID, m_sys.m_dict->m_dummy_index, mtr);
 
   if (root_page_no == FIL_NULL) {
 
@@ -166,7 +165,7 @@ bool DictStore::bootstrap_system_tables(Mtr *mtr) noexcept {
 }
 
 Dict_id DictStore::sys_get_new_row_id() noexcept {
-  m_dict->mutex_acquire();
+  m_sys.m_dict->mutex_acquire();
 
   const auto id = m_row_id;
 
@@ -177,13 +176,13 @@ Dict_id DictStore::sys_get_new_row_id() noexcept {
 
   ++m_row_id;
 
-  m_dict->mutex_release();
+  m_sys.m_dict->mutex_release();
 
   return id;
 }
 
 DTuple *DictStore::create_sys_tables_tuple(const Table *table, MemHeap *heap) noexcept {
-  auto sys_tables = m_dict->m_sys_tables;
+  auto sys_tables = m_sys.m_dict->m_sys_tables;
   auto entry = dtuple_create(heap, 8 + DATA_N_SYS_COLS);
 
   sys_tables->copy_types(entry);
@@ -254,7 +253,7 @@ DTuple *DictStore::create_sys_columns_tuple(const Table *table, ulint i, MemHeap
   const char *col_name;
 
   auto column = table->get_nth_col(i);
-  auto sys_columns = m_dict->m_sys_columns;
+  auto sys_columns = m_sys.m_dict->m_sys_columns;
   auto entry = dtuple_create(heap, 7 + DATA_N_SYS_COLS);
 
   sys_columns->copy_types(entry);
@@ -316,7 +315,7 @@ DTuple *DictStore::create_sys_columns_tuple(const Table *table, ulint i, MemHeap
 DbErr DictStore::build_table_def_step(QueThr *thr, TableNode *node) noexcept {
   Mtr mtr;
 
-  ut_ad(mutex_own(&m_dict->m_mutex));
+  ut_ad(mutex_own(&m_sys.m_dict->m_mutex));
 
   auto table = node->m_table;
 
@@ -347,7 +346,7 @@ DbErr DictStore::build_table_def_step(QueThr *thr, TableNode *node) noexcept {
 
     auto flags = table->m_flags & ~(~0UL << DICT_TF_BITS);
 
-    auto fil = m_fsp->m_fil;
+    auto fil = m_sys.m_fsp->m_fil;
 
     auto err = fil->create_new_single_table_tablespace(&space_id, path_or_name, is_path, flags, FIL_IBD_FILE_INITIAL_SIZE);
 
@@ -360,7 +359,7 @@ DbErr DictStore::build_table_def_step(QueThr *thr, TableNode *node) noexcept {
 
     mtr.start();
 
-    m_fsp->header_init(table->m_space_id, FIL_IBD_FILE_INITIAL_SIZE, &mtr);
+    m_sys.m_fsp->header_init(table->m_space_id, FIL_IBD_FILE_INITIAL_SIZE, &mtr);
 
     mtr.commit();
 
@@ -370,22 +369,22 @@ DbErr DictStore::build_table_def_step(QueThr *thr, TableNode *node) noexcept {
 
   auto row = create_sys_tables_tuple(table, node->m_heap);
 
-  srv_row_ins->set_new_row(node->m_tab_def, row);
+  m_sys.m_row_ins->set_new_row(node->m_tab_def, row);
 
   return DB_SUCCESS;
 }
 
 DbErr DictStore::build_col_def_step(TableNode *node) noexcept {
   auto row = create_sys_columns_tuple(node->m_table, node->m_col_no, node->m_heap);
-  srv_row_ins->set_new_row(node->m_col_def, row);
+  m_sys.m_row_ins->set_new_row(node->m_col_def, row);
 
   return DB_SUCCESS;
 }
 
 DTuple *DictStore::create_sys_indexes_tuple(const Index *index, MemHeap *heap) noexcept {
-  ut_ad(mutex_own(&m_dict->m_mutex));
+  ut_ad(mutex_own(&m_sys.m_dict->m_mutex));
 
-  auto sys_indexes = m_dict->m_sys_indexes;
+  auto sys_indexes = m_sys.m_dict->m_sys_indexes;
   auto table = index->m_table;
   auto entry = dtuple_create(heap, 7 + DATA_N_SYS_COLS);
 
@@ -462,7 +461,7 @@ DTuple *DictStore::create_sys_fields_tuple(const Index *index, ulint i, MemHeap 
   }
 
   auto field = index->get_nth_field(i);
-  auto sys_fields = m_dict->m_sys_fields;
+  auto sys_fields = m_sys.m_dict->m_sys_fields;
   auto entry = dtuple_create(heap, 3 + DATA_N_SYS_COLS);
 
   sys_fields->copy_types(entry);
@@ -523,13 +522,13 @@ DTuple *DictStore::create_search_tuple(const DTuple *tuple, MemHeap *heap) noexc
 }
 
 DbErr DictStore::build_index_def_step(QueThr *thr, IndexNode *node) noexcept {
-  ut_ad(mutex_own(&m_dict->m_mutex));
+  ut_ad(mutex_own(&m_sys.m_dict->m_mutex));
 
   auto trx = thr_get_trx(thr);
   auto index = node->m_index;
 
   {
-    auto table = m_dict->table_get(index->m_table->m_name);
+    auto table = m_sys.m_dict->table_get(index->m_table->m_name);
 
     if (table == nullptr) {
       return DB_TABLE_NOT_FOUND;
@@ -562,7 +561,7 @@ DbErr DictStore::build_index_def_step(QueThr *thr, IndexNode *node) noexcept {
 
   node->m_ind_row = row;
 
-  srv_row_ins->set_new_row(node->m_ind_def, row);
+  m_sys.m_row_ins->set_new_row(node->m_ind_def, row);
 
   /* Note that the index was created by this transaction. */
   index->m_trx_id = trx->m_id;
@@ -575,18 +574,18 @@ DbErr DictStore::build_field_def_step(IndexNode *node) noexcept {
 
   auto row = create_sys_fields_tuple(index, node->m_field_no, node->m_heap);
 
-  srv_row_ins->set_new_row(node->m_field_def, row);
+  m_sys.m_row_ins->set_new_row(node->m_field_def, row);
 
   return DB_SUCCESS;
 }
 
 DbErr DictStore::create_index_tree_step(IndexNode *node) noexcept {
-  ut_ad(mutex_own(&m_dict->m_mutex));
+  ut_ad(mutex_own(&m_sys.m_dict->m_mutex));
 
-  BtreePcursor pcur(m_fsp, m_btree);
+  BtreePcursor pcur(m_sys.m_fsp, m_sys.m_btree);
 
   auto index = node->m_index;
-  auto sys_indexes = m_dict->m_sys_indexes;
+  auto sys_indexes = m_sys.m_dict->m_sys_indexes;
 
   /* Run a mini-transaction in which the index tree is allocated for
   the index and its root address is written to the index entry in
@@ -602,7 +601,7 @@ DbErr DictStore::create_index_tree_step(IndexNode *node) noexcept {
 
   (void)pcur.move_to_next_user_rec(&mtr);
 
-  node->m_page_no = m_btree->create(index->m_type, index->m_page_id.m_space_id, index->m_id, index, &mtr);
+  node->m_page_no = m_sys.m_btree->create(index->m_type, index->m_page_id.m_space_id, index->m_id, index, &mtr);
 
   page_rec_write_index_page_no(pcur.get_rec(), DICT_SYS_INDEXES_PAGE_NO_FIELD, node->m_page_no, &mtr);
 
@@ -619,9 +618,9 @@ DbErr DictStore::create_index_tree_step(IndexNode *node) noexcept {
 }
 
 void DictStore::drop_index_tree(Rec rec, Mtr *mtr) noexcept {
-  ut_ad(mutex_own(&m_dict->m_mutex));
+  ut_ad(mutex_own(&m_sys.m_dict->m_mutex));
 
-  auto sys_indexes = m_dict->table_get("SYS_INDEXES");
+  auto sys_indexes = m_sys.m_dict->table_get("SYS_INDEXES");
   auto sys_index = sys_indexes->m_indexes.front();
   auto heap = mem_heap_create(1000);
   PhyRec record(sys_index, rec);
@@ -645,7 +644,7 @@ void DictStore::drop_index_tree(Rec rec, Mtr *mtr) noexcept {
 
   auto space_id = static_cast<space_id_t>(mtr->read_ulint(field.get(), MLOG_4BYTES));
 
-  if (m_fsp->m_fil->space_get_flags(space_id) == ULINT_UNDEFINED) {
+  if (m_sys.m_fsp->m_fil->space_get_flags(space_id) == ULINT_UNDEFINED) {
     /* It is a single table tablespace and the .ibd file is
     missing: do nothing */
     return;
@@ -654,24 +653,24 @@ void DictStore::drop_index_tree(Rec rec, Mtr *mtr) noexcept {
   /* We free all the pages but the root page first; this operation
   may span several mini-transactions */
 
-  m_btree->free_but_not_root(space_id, root_page_no);
+  m_sys.m_btree->free_but_not_root(space_id, root_page_no);
 
   /* Then we free the root page in the same mini-transaction where
   we write FIL_NULL to the appropriate field in the SYS_INDEXES
   record: this mini-transaction marks the B-tree totally freed */
 
-  m_btree->free_root(space_id, root_page_no, mtr);
+  m_sys.m_btree->free_root(space_id, root_page_no, mtr);
 
   page_rec_write_index_page_no(rec, DICT_SYS_INDEXES_PAGE_NO_FIELD, FIL_NULL, mtr);
 }
 
 page_no_t DictStore::truncate_index_tree(Table *table, space_id_t space_id, BtreePcursor *pcur, Mtr *mtr) noexcept {
-  ut_ad(mutex_own(&m_dict->m_mutex));
+  ut_ad(mutex_own(&m_sys.m_dict->m_mutex));
 
   /* We never drop the system tablespace. */
   bool drop = space_id != SYS_TABLESPACE;
 
-  auto sys_indexes = m_dict->table_get("SYS_INDEXES");
+  auto sys_indexes = m_sys.m_dict->table_get("SYS_INDEXES");
   auto sys_index = sys_indexes->m_indexes.front();
   auto heap = mem_heap_create(1000);
   auto rec = pcur->get_rec();
@@ -698,7 +697,7 @@ page_no_t DictStore::truncate_index_tree(Table *table, space_id_t space_id, Btre
     space_id = mtr->read_ulint(field.get(), MLOG_4BYTES);
   }
 
-  auto fil = m_fsp->m_fil;
+  auto fil = m_sys.m_fsp->m_fil;
 
   if (fil->space_get_flags(space_id) == ULINT_UNDEFINED) {
     /* It is a single table tablespace and the .ibd file is
@@ -722,16 +721,16 @@ page_no_t DictStore::truncate_index_tree(Table *table, space_id_t space_id, Btre
     /* We free all the pages but the root page first; this operation
     may span several mini-transactions */
 
-    m_btree->free_but_not_root(space_id, root_page_no);
+    m_sys.m_btree->free_but_not_root(space_id, root_page_no);
 
     /* Then we free the root page in the same mini-transaction where
     we create the b-tree and write its new root page number to the
     appropriate field in the SYS_INDEXES record: this mini-transaction
     marks the B-tree totally truncated */
 
-    (void)m_btree->page_get(space_id, root_page_no, RW_X_LATCH, mtr);
+    (void)m_sys.m_btree->page_get(space_id, root_page_no, RW_X_LATCH, mtr);
 
-    m_btree->free_root(space_id, root_page_no, mtr);
+    m_sys.m_btree->free_root(space_id, root_page_no, mtr);
   }
 
   /* We will temporarily write FIL_NULL to the PAGE_NO field
@@ -754,7 +753,7 @@ page_no_t DictStore::truncate_index_tree(Table *table, space_id_t space_id, Btre
   /* Find the index corresponding to this SYS_INDEXES record. */
   for (auto index : table->m_indexes) {
     if (index->m_id == index_id) {
-      root_page_no = m_btree->create(type, space_id, index_id, index, mtr);
+      root_page_no = m_sys.m_btree->create(type, space_id, index_id, index, mtr);
       index->m_page_id.m_page_no = root_page_no;
 
       return root_page_no;
@@ -767,7 +766,7 @@ page_no_t DictStore::truncate_index_tree(Table *table, space_id_t space_id, Btre
 }
 
 QueThr *DictStore::create_table_step(QueThr *thr) noexcept {
-  ut_ad(mutex_own(&m_dict->m_mutex));
+  ut_ad(mutex_own(&m_sys.m_dict->m_mutex));
 
   auto trx = thr_get_trx(thr);
   auto node = static_cast<TableNode *>(thr->run_node);
@@ -853,7 +852,7 @@ QueThr *DictStore::create_table_step(QueThr *thr) noexcept {
   }
 
   if (node->m_state == TABLE_ADD_TO_CACHE) {
-    m_dict->table_add_to_cache(node->m_table);
+    m_sys.m_dict->table_add_to_cache(node->m_table);
     return clean_up(DB_SUCCESS);
   } else {
     return clean_up(DB_ERROR);
@@ -861,7 +860,7 @@ QueThr *DictStore::create_table_step(QueThr *thr) noexcept {
 }
 
 QueThr *DictStore::create_index_step(QueThr *thr) noexcept {
-  ut_ad(mutex_own(&m_dict->m_mutex));
+  ut_ad(mutex_own(&m_sys.m_dict->m_mutex));
 
   auto trx = thr_get_trx(thr);
   auto node = static_cast<IndexNode *>(thr->run_node);
@@ -932,9 +931,9 @@ QueThr *DictStore::create_index_step(QueThr *thr) noexcept {
 
       case INDEX_ADD_TO_CACHE: {
         const auto index_id = node->m_index->m_id;
-        const auto err = m_dict->index_add_to_cache(node->m_index, FIL_NULL, true);
+        const auto err = m_sys.m_dict->index_add_to_cache(node->m_index, FIL_NULL, true);
 
-        node->m_index = m_dict->index_get_if_in_cache(index_id);
+        node->m_index = m_sys.m_dict->index_get_if_in_cache(index_id);
         ut_a(!node->m_index == (err != DB_SUCCESS));
 
         if (err != DB_SUCCESS) {
@@ -951,7 +950,7 @@ QueThr *DictStore::create_index_step(QueThr *thr) noexcept {
         auto err = create_index_tree_step(node);
 
         if (err != DB_SUCCESS) {
-          m_dict->index_remove_from_cache(node->m_table, node->m_index);
+          m_sys.m_dict->index_remove_from_cache(node->m_table, node->m_index);
           node->m_index = nullptr;
 
           return clean_up(err);
@@ -985,10 +984,10 @@ QueThr *DictStore::create_index_step(QueThr *thr) noexcept {
 }
 
 DbErr DictStore::create_or_check_foreign_constraint_tables() noexcept {
-  m_dict->mutex_acquire();
+  m_sys.m_dict->mutex_acquire();
 
-  auto sys_foreign = m_dict->table_get("SYS_FOREIGN");
-  auto sys_foreign_cols = m_dict->table_get("SYS_FOREIGN_COLS");
+  auto sys_foreign = m_sys.m_dict->table_get("SYS_FOREIGN");
+  auto sys_foreign_cols = m_sys.m_dict->table_get("SYS_FOREIGN_COLS");
 
   if (sys_foreign != nullptr && sys_foreign_cols != nullptr && sys_foreign->m_indexes.size() == 3 &&
       sys_foreign_cols->m_indexes.size() == 1) {
@@ -1003,24 +1002,24 @@ DbErr DictStore::create_or_check_foreign_constraint_tables() noexcept {
       Table::destroy(sys_foreign_cols, Current_location());
     }
 
-    m_dict->mutex_release();
+    m_sys.m_dict->mutex_release();
 
     return DB_SUCCESS;
   }
 
-  m_dict->mutex_release();
+  m_sys.m_dict->mutex_release();
 
-  auto trx = srv_trx_sys->create_user_trx(nullptr);
+  auto trx = m_sys.m_trx_sys->create_user_trx(nullptr);
   auto started = trx->start(ULINT_UNDEFINED);
   ut_a(started);
 
   trx->m_op_info = "creating foreign key sys tables";
 
-  m_dict->lock_data_dictionary(trx);
+  m_sys.m_dict->lock_data_dictionary(trx);
 
   if (sys_foreign != nullptr) {
     log_warn("Dropping incompletely created SYS_FOREIGN table");
-    if (auto err = m_dict->m_ddl.drop_table("SYS_FOREIGN", trx, true); err != DB_SUCCESS) {
+    if (auto err = m_sys.m_dict->m_ddl.drop_table("SYS_FOREIGN", trx, true); err != DB_SUCCESS) {
       log_warn("DROP table failed with error ", err, " while dropping table SYS_FOREIGN");
     }
     auto err_commit = trx->commit();
@@ -1029,7 +1028,7 @@ DbErr DictStore::create_or_check_foreign_constraint_tables() noexcept {
 
   if (sys_foreign_cols != nullptr) {
     log_warn("Dropping incompletely created SYS_FOREIGN_COLS table");
-    if (auto err = m_dict->m_ddl.drop_table("SYS_FOREIGN_COLS", trx, true); err != DB_SUCCESS) {
+    if (auto err = m_sys.m_dict->m_ddl.drop_table("SYS_FOREIGN_COLS", trx, true); err != DB_SUCCESS) {
       log_warn("DROP table failed with error ", err, " while dropping table SYS_FOREIGN_COLS");
     }
     auto err_commit = trx->commit();
@@ -1066,8 +1065,8 @@ DbErr DictStore::create_or_check_foreign_constraint_tables() noexcept {
 
     log_err("Creation failed tablespace is full dropping incompletely created SYS_FOREIGN tables");
 
-    (void)m_dict->m_ddl.drop_table("SYS_FOREIGN", trx, true);
-    (void)m_dict->m_ddl.drop_table("SYS_FOREIGN_COLS", trx, true);
+    (void)m_sys.m_dict->m_ddl.drop_table("SYS_FOREIGN", trx, true);
+    (void)m_sys.m_dict->m_ddl.drop_table("SYS_FOREIGN_COLS", trx, true);
 
     auto err_commit = trx->commit();
     ut_a(err_commit == DB_SUCCESS);
@@ -1075,9 +1074,9 @@ DbErr DictStore::create_or_check_foreign_constraint_tables() noexcept {
     err = DB_MUST_GET_MORE_FILE_SPACE;
   }
 
-  m_dict->unlock_data_dictionary(trx);
+  m_sys.m_dict->unlock_data_dictionary(trx);
 
-  srv_trx_sys->destroy_user_trx(trx);
+  m_sys.m_trx_sys->destroy_user_trx(trx);
 
   if (err == DB_SUCCESS) {
     log_info("Foreign key constraint system tables created");
@@ -1092,7 +1091,7 @@ DbErr DictStore::foreign_eval_sql(ParsInfo *info, const char *sql, Table *table,
   auto err = que_eval_sql(info, sql, false, trx);
 
   if (err == DB_DUPLICATE_KEY) {
-    mutex_enter(&m_dict->m_foreign_err_mutex);
+    mutex_enter(&m_sys.m_dict->m_foreign_err_mutex);
 
     log_err(std::format(
       "Foreign key constraint creation for table {}. A foreign key constraint of name {} already exists."
@@ -1105,7 +1104,7 @@ DbErr DictStore::foreign_eval_sql(ParsInfo *info, const char *sql, Table *table,
       foreign->m_id
     ));
 
-    mutex_exit(&m_dict->m_foreign_err_mutex);
+    mutex_exit(&m_sys.m_dict->m_foreign_err_mutex);
 
     return err;
   }
@@ -1205,9 +1204,9 @@ DbErr DictStore::add_foreign_to_dictionary(ulint *id_nr, Table *table, Foreign *
 }
 
 DbErr DictStore::add_foreigns_to_dictionary(ulint start_id, Table *table, Trx *trx) noexcept {
-  ut_ad(mutex_own(&m_dict->m_mutex));
+  ut_ad(mutex_own(&m_sys.m_dict->m_mutex));
 
-  if (m_dict->table_get("SYS_FOREIGN") == nullptr) {
+  if (m_sys.m_dict->table_get("SYS_FOREIGN") == nullptr) {
     log_err("table SYS_FOREIGN not found in internal data dictionary");
 
     return DB_ERROR;
@@ -1227,7 +1226,7 @@ DbErr DictStore::add_foreigns_to_dictionary(ulint start_id, Table *table, Trx *t
   return DB_SUCCESS;
 }
 
-TableNode *TableNode::create(Dict *dict, Table *table, MemHeap *heap, bool commit) noexcept {
+TableNode *TableNode::create(System &sys, Dict *dict, Table *table, MemHeap *heap, bool commit) noexcept {
   auto ptr = mem_heap_alloc(heap, sizeof(TableNode));
   auto node = new (ptr) TableNode();
 
@@ -1238,10 +1237,10 @@ TableNode *TableNode::create(Dict *dict, Table *table, MemHeap *heap, bool commi
   node->m_state = TABLE_BUILD_TABLE_DEF;
   node->m_heap = mem_heap_create(256);
 
-  node->m_tab_def = srv_row_ins->node_create(INS_DIRECT, dict->m_sys_tables, heap);
+  node->m_tab_def = sys.m_row_ins->node_create(INS_DIRECT, dict->m_sys_tables, heap);
   node->m_tab_def->m_common.parent = node;
 
-  node->m_col_def = srv_row_ins->node_create(INS_DIRECT, dict->m_sys_columns, heap);
+  node->m_col_def = sys.m_row_ins->node_create(INS_DIRECT, dict->m_sys_columns, heap);
   node->m_col_def->m_common.parent = node;
 
   if (commit) {
@@ -1254,7 +1253,7 @@ TableNode *TableNode::create(Dict *dict, Table *table, MemHeap *heap, bool commi
   return node;
 }
 
-IndexNode *IndexNode::create(Dict *dict, Index *index, MemHeap *heap, bool commit) noexcept {
+IndexNode *IndexNode::create(System &sys, Dict *dict, Index *index, MemHeap *heap, bool commit) noexcept {
   auto ptr = mem_heap_alloc(heap, sizeof(IndexNode));
   auto node = new (ptr) IndexNode();
 
@@ -1266,10 +1265,10 @@ IndexNode *IndexNode::create(Dict *dict, Index *index, MemHeap *heap, bool commi
   node->m_page_no = FIL_NULL;
   node->m_heap = mem_heap_create(256);
 
-  node->m_ind_def = srv_row_ins->node_create(INS_DIRECT, dict->m_sys_indexes, heap);
+  node->m_ind_def = sys.m_row_ins->node_create(INS_DIRECT, dict->m_sys_indexes, heap);
   node->m_ind_def->m_common.parent = node;
 
-  node->m_field_def = srv_row_ins->node_create(INS_DIRECT, dict->m_sys_fields, heap);
+  node->m_field_def = sys.m_row_ins->node_create(INS_DIRECT, dict->m_sys_fields, heap);
   node->m_field_def->m_common.parent = node;
 
   if (commit) {

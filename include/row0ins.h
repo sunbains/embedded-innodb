@@ -24,6 +24,8 @@ Created 4/20/1996 Heikki Tuuri
 
 #pragma once
 
+#include "srv0sys.h"
+
 #include "btr0types.h"
 #include "buf0types.h"
 #include "data0data.h"
@@ -48,6 +50,9 @@ struct Index;
 struct Foreign;
 
 struct RowInsert {
+  /** The instance this sub-system belongs to. */
+  System &m_sys;
+
 
   /**
    * @brief Constructor for RowInsert.
@@ -56,7 +61,7 @@ struct RowInsert {
    * @param[in] lock_sys Lock system.
    * @param[in] row_upd Row update system.
    */
-  RowInsert(Dict *dict, LockSys *lock_sys, RowUpdate *row_upd) noexcept;
+  explicit RowInsert(System &sys) noexcept : m_sys(sys) {}
 
   /**
    * @brief Destructor for RowInsert.
@@ -72,15 +77,11 @@ struct RowInsert {
    *
    * @return Pointer to the newly created RowInsert object.
    */
-  [[nodiscard]] static RowInsert *create(Dict *dict, LockSys *lock_sys, RowUpdate *row_upd) noexcept;
-
   /**
    * @brief Destroys a RowInsert object.
    *
    * @param[in] row_insert Pointer to the RowInsert object to destroy.
    */
-  static void destroy(RowInsert *&row_insert) noexcept;
-
   /**
    * @brief Checks if foreign key constraint fails for an index entry.
    *
@@ -483,14 +484,10 @@ struct RowInsert {
   void alloc_sys_fields(InsertNode *node) noexcept;
 
  public:
-  /** Data dictionary */
-  Dict *m_dict{};
 
   /** Lock system */
-  LockSys *m_lock_sys{};
 
   /** Row update system */
-  RowUpdate *m_row_upd{};
 };
 
 /**

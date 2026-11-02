@@ -50,8 +50,6 @@ constexpr ulint RECV_DATA_BLOCK_SIZE = MEM_MAX_ALLOC_IN_BUF - sizeof(LogRecordDa
 /** Read-ahead area in applying log records to file pages */
 constexpr ulint RECV_READ_AHEAD_AREA = 32;
 
-/** The recovery system */
-RecvSys *recv_sys = nullptr;
 
 /** true when applying redo log records during crash recovery; false
 otherwise.  Note that this is false while a background thread is
@@ -162,8 +160,8 @@ void RecvSys::cleanup_resources() noexcept {
   }
 }
 
-RecvSys::RecvSys() noexcept {
-  mutex_create(&recv_sys->m_mutex, IF_DEBUG("RecvSys::m_mutex", ) IF_SYNC_DEBUG(SYNC_RECV, ) Current_location());
+RecvSys::RecvSys(System &sys) noexcept : m_sys(sys) {
+  mutex_create(&m_mutex, IF_DEBUG("RecvSys::m_mutex", ) IF_SYNC_DEBUG(SYNC_RECV, ) Current_location());
 }
 
 void RecvSys::open(ulint available_memory) noexcept {
@@ -175,7 +173,7 @@ void RecvSys::open(ulint available_memory) noexcept {
   m_heap = mem_heap_create_in_buffer(256);
 
   /* Set appropriate value of recv_n_pool_free_frames. */
-  if (srv_buf_pool->get_curr_size() >= (10 * 1024 * 1024)) {
+  if (m_sys.m_buf_pool->get_curr_size() >= (10 * 1024 * 1024)) {
     /* Buffer pool of size greater than 10 MB. */
     recv_n_pool_free_frames = 512;
   }
@@ -441,7 +439,7 @@ static PageLogRecords *recv_get_log_record(space_id_t space, page_no_t page_no) 
 void RecvSys::add_log_record(
   MlogType type, space_id_t space, page_no_t page_no, byte *body, byte *rec_end, lsn_t start_lsn, lsn_t end_lsn
 ) noexcept {
-  if (srv_fil->tablespace_deleted_or_being_deleted_in_mem(space, -1)) {
+  if (m_sys.m_fil->tablespace_deleted_or_being_deleted_in_mem(space, -1)) {
     /* The tablespace does not exist any more: do not store the
     log record */
 

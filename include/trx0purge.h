@@ -24,6 +24,8 @@ Created 3/26/1996 Heikki Tuuri
 
 #pragma once
 
+#include "srv0sys.h"
+
 #include "fil0fil.h"
 #include "innodb0types.h"
 #include "mtr0mtr.h"
@@ -69,13 +71,16 @@ inline FilAddr trx_purge_get_log_from_hist(FilAddr node_addr) noexcept {
  * The control structure used in the purge operation
  */
 struct PurgeSys {
+  /** The instance this sub-system belongs to. */
+  System &m_sys;
+
 
   /**
    * Constructor.
    *
    * @param trx Transaction instance permanently assigned for the purge
    */
-  explicit PurgeSys(Trx *trx) noexcept;
+  PurgeSys(System &sys, Trx *trx) noexcept;
 
   /**
    * Destructor.

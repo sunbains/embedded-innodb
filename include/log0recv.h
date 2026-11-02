@@ -24,6 +24,8 @@ Created 9/20/1997 Heikki Tuuri
 
 #pragma once
 
+#include "srv0sys.h"
+
 #include "innodb0types.h"
 
 #include "innodb0types.h"
@@ -182,11 +184,14 @@ struct PageLogRecords {
 
 /** Recovery system data structure */
 struct RecvSys {
+  /** The instance this sub-system belongs to. */
+  System &m_sys;
+
   using Page_log_records_map = std::unordered_map<page_no_t, PageLogRecords *>;
   using Tablespace_map = std::unordered_map<space_id_t, Page_log_records_map>;
 
   /** Constructor */
-  RecvSys() noexcept;
+  explicit RecvSys(System &sys) noexcept;
 
   /** Destructor.  */
   ~RecvSys() noexcept;
@@ -199,7 +204,7 @@ struct RecvSys {
   void open(ulint size) noexcept;
 
   /**
-   * Free the recv_sys recovery related data.
+   * Free the this recovery related data.
    */
   void close() noexcept;
 
@@ -299,8 +304,6 @@ struct RecvSys {
   ulint m_n_log_records{};
 };
 
-/** The recovery system */
-extern RecvSys *recv_sys;
 
 /** true when applying redo log records during crash recovery; false
 otherwise.  Note that this is false while a background thread is

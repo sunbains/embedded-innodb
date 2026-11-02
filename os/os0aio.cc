@@ -31,7 +31,6 @@ limitations under the License.
 #include "ut0mem.h"
 #include "ut0mpmcbq.h"
 
-Aio *srv_aio{};
 
 namespace aio {
 
@@ -804,15 +803,12 @@ void IoCtx::validate() const noexcept {
   ut_a(m_fil_node->m_file_name != nullptr);
 }
 
-Aio *Aio::create(ulint max_slots, ulint read_queues, ulint write_queues) noexcept {
-  ut_a(read_queues > 0);
-  ut_a(write_queues > 0);
+std::unique_ptr<Aio> Aio::create(const AioConfig &config) noexcept {
+  /** Maximum number of pending i/o requests per thread. */
+  constexpr ulint N_PENDING_IOS_PER_THREAD = 256;
 
-  return new (ut_new(sizeof(aio::Impl))) aio::Impl(max_slots, read_queues, write_queues);
-}
+  ut_a(config.m_n_read_threads > 0);
+  ut_a(config.m_n_write_threads > 0);
 
-void Aio::destroy(Aio *&aio) noexcept {
-  call_destructor(aio);
-  ut_delete(aio);
-  aio = nullptr;
+  return std::make_unique<aio::Impl>(N_PENDING_IOS_PER_THREAD, config.m_n_read_threads, config.m_n_write_threads);
 }

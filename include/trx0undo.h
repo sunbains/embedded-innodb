@@ -24,6 +24,8 @@ Created 3/26/1996 Heikki Tuuri
 
 #pragma once
 
+#include "srv0sys.h"
+
 #include "innodb0types.h"
 
 #include "data0type.h"
@@ -273,26 +275,25 @@ struct TrxUndo {
 UT_LIST_NODE_GETTER_DEFINITION(TrxUndo, m_undo_list);
 
 struct Undo {
+  /** The instance this sub-system belongs to. */
+  System &m_sys;
+
   /** Constructor
    *
    * @param[in] fsp Use this for file space management.
    */
-  explicit Undo(Fsp *fsp) : m_fsp(fsp) {}
+  explicit Undo(System &sys) noexcept : m_sys(sys) {}
 
   /**
    * Create an undo instance.
    *
    * @param[in] fsp File space management.
    */
-  static Undo *create(Fsp *fsp) noexcept;
-
   /**
    * Destroy the undo instance.
    *
    * @param[in,owm] undo Undo instance.
    */
-  static void destroy(Undo *&undo) noexcept;
-
   /**
    * Gets an undo log page and x-latches it.
    *
@@ -312,7 +313,7 @@ struct Undo {
       .m_mtr = mtr
     };
 
-    auto block = m_fsp->m_buf_pool->get(req, nullptr);
+    auto block = m_sys.m_fsp->m_buf_pool->get(req, nullptr);
     buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_TRX_UNDO_PAGE));
 
     return block->get_frame();
@@ -337,7 +338,7 @@ struct Undo {
       .m_mtr = mtr
     };
 
-    auto block = m_fsp->m_buf_pool->get(req, nullptr);
+    auto block = m_sys.m_fsp->m_buf_pool->get(req, nullptr);
     buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_TRX_UNDO_PAGE));
 
     return block->get_frame();
@@ -635,7 +636,6 @@ struct Undo {
   void mark_as_dict_operation(Trx *trx, TrxUndo *undo, Mtr *mtr) noexcept;
 
  public:
-  Fsp *m_fsp{};
 };
 
 /* @} */

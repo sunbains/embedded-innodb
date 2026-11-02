@@ -42,7 +42,7 @@ Created 3/14/1997 Heikki Tuuri
  * undo log records to determine which records need to be purged.
  */
 struct RowPurge {
-  RowPurge() : m_pcur(srv_fsp, srv_btree_sys) {}
+  RowPurge() : m_pcur(sys.m_fsp, sys.m_btree) {}
 
   /**
    * @brief Repositions the persistent cursor to the clustered index record.
@@ -91,7 +91,7 @@ struct RowPurge {
    * @param mode Deletion mode (BTR_MODIFY_LEAF or BTR_MODIFY_TREE)
    * @return true if successful or record not found, false if operation failed
    */
-  bool remove_sec_if_poss_low(Index *index, const DTuple *entry, ulint mode);
+  bool remove_sec_if_poss_low(System &sys, Index *index, const DTuple *entry, ulint mode);
 
   /**
    * @brief Removes a secondary index record if possible.
@@ -122,7 +122,7 @@ struct RowPurge {
    * have changed. For records with external storage, frees the externally
    * stored field data.
    */
-  void upd_exist_or_extern();
+  void upd_exist_or_extern(System &sys);
 
   /**
    * @brief Parses an undo log record to extract purge information.
@@ -135,7 +135,7 @@ struct RowPurge {
    * @param thr Query execution thread
    * @return true if purge processing is needed, false if record can be skipped
    */
-  bool parse_undo_rec(bool *updated_extern, QueThr *thr);
+  bool parse_undo_rec(System &sys, bool *updated_extern, QueThr *thr);
 
   /**
    * @brief Performs the main purge operation for a single undo log record.
@@ -147,7 +147,7 @@ struct RowPurge {
    * @param thr Query execution thread
    * @return DB_SUCCESS on successful completion
    */
-  ulint purge(QueThr *thr);
+  ulint purge(System &sys, QueThr *thr);
 
   /**
    * @brief Creates a new purge node for query execution.

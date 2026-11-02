@@ -28,10 +28,8 @@ Created 1/8/1996 Heikki Tuuri
 
 #include <ctype.h>
 
-/** The dictionary system */
-Dict *srv_dict_sys{};
 
-Dict::Dict(Btree *btree) noexcept : m_stats_mutex(), m_tables(), m_table_ids(), m_store(this, btree), m_loader(this), m_ddl{this} {
+Dict::Dict(System &sys) noexcept : m_sys(sys), m_store(sys), m_loader(sys), m_ddl(sys) {
   mutex_create(&m_mutex, IF_DEBUG("dict_mutex", ) IF_SYNC_DEBUG(SYNC_DICT, ) Current_location());
 
   m_size = 0;
@@ -69,12 +67,6 @@ Dict::~Dict() noexcept {
   rw_lock_free(&m_lock);
 
   mutex_free(&m_foreign_err_mutex);
-}
-
-Dict *Dict::create(Btree *btree) noexcept {
-  auto ptr = ut_new(sizeof(Dict));
-
-  return new (ptr) Dict(btree);
 }
 
 void Dict::casedn_str(char *a) noexcept {
@@ -1464,11 +1456,6 @@ void Dict::unlock_data_dictionary(Trx *trx) noexcept {
   rw_lock_x_unlock(&m_lock);
 
   trx->m_dict_operation_lock_mode = 0;
-}
-
-void Dict::destroy(Dict *&dict) noexcept {
-  call_destructor(dict);
-  dict = nullptr;
 }
 
 std::string Dict::to_string() noexcept {

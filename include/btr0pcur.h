@@ -166,7 +166,7 @@ struct BtreePcursor {
    * @return True if the cursor position was stored when it was on a user record and it can be restored on a user record
    *         whose ordering fields are identical to the ones of the original user record.
    */
-  [[nodiscard]] bool restore_position(ulint latch_mode, Mtr *mtr, SourceLocation loc) noexcept;
+  [[nodiscard]] bool restore_position(System &sys, ulint latch_mode, Mtr *mtr, SourceLocation loc) noexcept;
 
   /**
    * @brief Releases the page latch and bufferfix reserved by the cursorif the latch mode is BTR_LEAF_SEARCH or BTR_LEAF_MODIFY.

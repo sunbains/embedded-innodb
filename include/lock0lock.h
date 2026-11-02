@@ -24,6 +24,8 @@ Created 5/7/1996 Heikki Tuuri
 
 #pragma once
 
+#include "srv0sys.h"
+
 #include "btr0cur.h"
 #include "lock0types.h"
 #include "que0que.h"
@@ -49,13 +51,16 @@ extern bool lock_print_waits;
 extern FILE *lock_latest_err_stream;
 
 struct LockSys {
+  /** The instance this sub-system belongs to. */
+  System &m_sys;
+
   /**
    * Creates the lock system at database start.
    *
    * @param[in] trx_sys The transaction system.
    * @param[in] n_cells Number of slots in the lock hash table.
    */
-  explicit LockSys(TrxSys *trx_sys, ulint n_cells) noexcept;
+  explicit LockSys(System &sys) noexcept;
 
   /**
    * Closes the lock system at database shutdown.
@@ -623,16 +628,16 @@ struct LockSys {
    * @note The record must be a user record (not a supremum/infinimum record).
    */
   [[nodiscard]] inline const Trx *clust_rec_some_has_impl(const Rec rec, const Index *index, const ulint *offsets) noexcept {
-    ut_ad(mutex_own(&m_trx_sys->m_mutex));
+    ut_ad(mutex_own(&m_sys.m_trx_sys->m_mutex));
     ut_ad(index->is_clustered());
     ut_ad(page_rec_is_user_rec(rec));
 
     const auto trx_id = row_get_rec_trx_id(rec, index, offsets);
 
-    if (srv_trx_sys->is_active(trx_id)) {
+    if (m_sys.m_trx_sys->is_active(trx_id)) {
       /* The modifying or inserting transaction is active */
 
-      return srv_trx_sys->get_on_id(trx_id);
+      return m_sys.m_trx_sys->get_on_id(trx_id);
     } else {
       return nullptr;
     }
@@ -717,8 +722,6 @@ struct LockSys {
    * @return A pointer to the newly created LockSys object, or nullptr if the
    *         allocation fails.
    */
-  [[nodiscard]] static LockSys *create(TrxSys *trx_sys, ulint n_cells) noexcept;
-
   /**
    * @brief Destroys the LockSys instance and deallocates its memory.
    *
@@ -729,8 +732,6 @@ struct LockSys {
    *                         to be destroyed. The pointer will be set to nullptr
    *                         after the instance is destroyed.
    */
-  static void destroy(LockSys *&lock_sys) noexcept;
-
 #ifndef UNIT_TESTING
  private:
 #endif /* !UNIT_TESTING */
@@ -1396,19 +1397,17 @@ struct LockSys {
    *
    * This pointer holds the buffer pool, which manages the buffer pool. The pointer
    * is not owned by the lock system, but by the buffer pool. We extract the buffer pool
-   * pointer from TrxSys::Fil::m_buf_pool to simplify the calls.
+   * pointer from TrxSys::Fil::m_sys.m_buf_pool to simplify the calls.
    *
    * FIXME: This needs to be fixed, reduce these dependencies. We let it go for now
    * to simplify the changes.
    */
-  BufPool *m_buf_pool{};
 
   /**
    * @brief The transaction system.
    *
    * This pointer holds the transaction system, which manages all transactions in the system.
    */
-  TrxSys *m_trx_sys{};
 
   /**
    * @brief Whether to print the InnoDB lock monitor.

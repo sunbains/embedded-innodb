@@ -221,7 +221,7 @@ ulint Blob::blob_get_next_page_no(const byte *blob_header) noexcept {
   return mach_read_from_4(blob_header + BTR_BLOB_HDR_NEXT_PAGE_NO);
 }
 
-void Blob::blob_free(BufBlock *block, Mtr *mtr) noexcept {
+void Blob::blob_free(System &sys, BufBlock *block, Mtr *mtr) noexcept {
   const auto space = block->get_space();
   const auto page_no = block->get_page_no();
 
@@ -229,22 +229,22 @@ void Blob::blob_free(BufBlock *block, Mtr *mtr) noexcept {
 
   mtr->commit();
 
-  mutex_enter(&m_fsp->m_buf_pool->m_mutex);
+  mutex_enter(&sys.m_fsp->m_buf_pool->m_mutex);
   mutex_enter(&block->m_mutex);
 
   /* Only free the block if it is still allocated to the same file page. */
 
   if (block->get_state() == BUF_BLOCK_FILE_PAGE && block->get_space() == space && block->get_page_no() == page_no) {
 
-    auto block_status = m_fsp->m_buf_pool->m_LRU->free_block(&block->m_page, nullptr);
+    auto block_status = sys.m_fsp->m_buf_pool->m_LRU->free_block(&block->m_page, nullptr);
     ut_a(block_status == BufLru::BlockStatus::FREED);
   }
 
-  mutex_exit(&m_fsp->m_buf_pool->m_mutex);
+  mutex_exit(&sys.m_fsp->m_buf_pool->m_mutex);
   mutex_exit(&block->m_mutex);
 }
 
-DbErr Blob::store_big_rec_extern_fields(
+DbErr Blob::store_big_rec_extern_fields(System &sys, 
   const Index *index, BufBlock *rec_block, Rec rec, const RecOffs &offsets, BigRec big_rec_vec,
   Mtr *local_mtr __attribute__((unused))
 ) noexcept {
@@ -258,7 +258,7 @@ DbErr Blob::store_big_rec_extern_fields(
   const auto space_id = rec_block->get_space();
   const auto rec_page_no = rec_block->get_page_no();
 
-  ut_a(m_fsp->m_fil->page_get_type(rec.page_align()) == FIL_PAGE_TYPE_INDEX);
+  ut_a(sys.m_fsp->m_fil->page_get_type(rec.page_align()) == FIL_PAGE_TYPE_INDEX);
 
   /* We have to create a file segment to the tablespace
   for each field and put the pointer to the field in rec */
@@ -300,7 +300,7 @@ DbErr Blob::store_big_rec_extern_fields(
         hint_page_no = prev_page_no + 1;
       }
 
-      auto block = m_btree->page_alloc(index, hint_page_no, FSP_NO_DIR, 0, &mtr);
+      auto block = sys.m_btree->page_alloc(index, hint_page_no, FSP_NO_DIR, 0, &mtr);
 
       if (unlikely(block == nullptr)) {
 
@@ -323,7 +323,7 @@ DbErr Blob::store_big_rec_extern_fields(
           .m_mtr = &mtr
         };
 
-        auto prev_block = m_fsp->m_buf_pool->get(req, nullptr);
+        auto prev_block = sys.m_fsp->m_buf_pool->get(req, nullptr);
 
         buf_block_dbg_add_level(IF_SYNC_DEBUG(prev_block, SYNC_EXTERN_STORAGE));
 
@@ -364,7 +364,7 @@ DbErr Blob::store_big_rec_extern_fields(
         .m_mtr = &mtr
       };
 
-      rec_block = m_fsp->m_buf_pool->get(req, nullptr);
+      rec_block = sys.m_fsp->m_buf_pool->get(req, nullptr);
 
       buf_block_dbg_add_level(IF_SYNC_DEBUG(rec_block, SYNC_NO_ORDER_CHECK));
 
@@ -393,14 +393,14 @@ DbErr Blob::store_big_rec_extern_fields(
   return DB_SUCCESS;
 }
 
-void Blob::check_blob_fil_page_type(space_id_t space_id, page_no_t page_no, const page_t *page, bool read) noexcept {
-  auto type = m_fsp->m_fil->page_get_type(page);
+void Blob::check_blob_fil_page_type(System &sys, space_id_t space_id, page_no_t page_no, const page_t *page, bool read) noexcept {
+  auto type = sys.m_fsp->m_fil->page_get_type(page);
 
   ut_a(space_id == page_get_space_id(page));
   ut_a(page_no == page_get_page_no(page));
 
   if (unlikely(type != FIL_PAGE_TYPE_BLOB)) {
-    ulint flags = m_fsp->m_fil->space_get_flags(space_id);
+    ulint flags = sys.m_fsp->m_fil->space_get_flags(space_id);
 
     if (likely((flags & DICT_TF_FORMAT_MASK) == DICT_TF_FORMAT_51)) {
       /* Old versions of InnoDB did not initialize
@@ -416,7 +416,7 @@ void Blob::check_blob_fil_page_type(space_id_t space_id, page_no_t page_no, cons
   }
 }
 
-void Blob::free_externally_stored_field(
+void Blob::free_externally_stored_field(System &sys, 
   const Index *index, byte *field_ref, const Rec rec, const ulint *offsets, ulint i, TrxRbCtx rb_ctx,
   Mtr *local_mtr __attribute__((unused))
 ) noexcept {
@@ -476,7 +476,7 @@ void Blob::free_externally_stored_field(
     };
 
     IF_SYNC_DEBUG({
-      auto rec_block = m_fsp->m_buf_pool->get(req, nullptr);
+      auto rec_block = sys.m_fsp->m_buf_pool->get(req, nullptr);
       buf_block_dbg_add_level(rec_block, SYNC_NO_ORDER_CHECK)
     });
 
@@ -500,7 +500,7 @@ void Blob::free_externally_stored_field(
     req.m_page_id.m_page_no = page_no;
     req.m_line = __LINE__;
 
-    auto ext_block = m_fsp->m_buf_pool->get(req, nullptr);
+    auto ext_block = sys.m_fsp->m_buf_pool->get(req, nullptr);
 
     buf_block_dbg_add_level(IF_SYNC_DEBUG(ext_block, SYNC_EXTERN_STORAGE));
 
@@ -514,7 +514,7 @@ void Blob::free_externally_stored_field(
     because we did not store it on the page (we save the
     space overhead from an index page header. */
 
-    m_btree->page_free_low(index, ext_block, 0, &mtr);
+    sys.m_btree->page_free_low(index, ext_block, 0, &mtr);
 
     mlog_write_ulint(field_ref + BTR_EXTERN_PAGE_NO, next_page_no, MLOG_4BYTES, &mtr);
 
@@ -571,7 +571,7 @@ void Blob::free_updated_extern_fields(
   }
 }
 
-ulint Blob::copy_blob_prefix(byte *buf, ulint len, space_id_t space_id, page_no_t page_no, ulint offset) noexcept {
+ulint Blob::copy_blob_prefix(System &sys, byte *buf, ulint len, space_id_t space_id, page_no_t page_no, ulint offset) noexcept {
   ulint copied_len = 0;
 
   for (;;) {
@@ -588,7 +588,7 @@ ulint Blob::copy_blob_prefix(byte *buf, ulint len, space_id_t space_id, page_no_
       .m_mtr = &mtr
     };
 
-    auto block = m_fsp->m_buf_pool->get(req, nullptr);
+    auto block = sys.m_fsp->m_buf_pool->get(req, nullptr);
     const auto page = block->get_frame();
 
     buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_EXTERN_STORAGE));

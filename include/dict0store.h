@@ -24,6 +24,8 @@ Created 4/18/1996 Heikki Tuuri
 
 #pragma once
 
+#include "srv0sys.h"
+
 #include "buf0buf.h"
 #include "dict0types.h"
 #include "fsp0fsp.h"
@@ -37,6 +39,9 @@ struct BtreePcursor;
 
 /** Responsible for data dictionary persistence. */
 struct DictStore {
+  /** The instance this sub-system belongs to. */
+  System &m_sys;
+
   using hdr_t = byte;
 
   /** Constructor.
@@ -44,7 +49,7 @@ struct DictStore {
    * @param[in] dict The dictionary object.
    * @param[in] btree The b-tree object.
    */
-  explicit DictStore(Dict *dict, Btree *btree) noexcept;
+  explicit DictStore(System &sys) noexcept : m_sys(sys) {}
 
   /** Destructor. */
   ~DictStore() = default;
@@ -355,8 +360,6 @@ struct DictStore {
    */
   void drop_index_tree(Rec rec, Mtr *mtr) noexcept;
 
-  /** The dictionary . */
-  Dict *m_dict{};
 
   /**
    * The next row id to assign; NOTE that at a checkpoint this must
@@ -366,8 +369,6 @@ struct DictStore {
   Dict_id m_row_id{};
 
   /** File space manager.*/
-  Fsp *m_fsp{};
 
   /** B-tree system.*/
-  Btree *m_btree{};
 };

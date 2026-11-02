@@ -17,6 +17,10 @@ limitations under the License.
 
 #pragma once
 
+#include "srv0cfg.h"
+
+#include <memory>
+
 #include "innodb0types.h"
 
 struct FilNode;
@@ -116,21 +120,14 @@ struct IoCtx {
 
 struct Aio {
   /**
-  * @brief Initializes the asynchronous io system.
-  * Note: The log uses a single thread for IO.
+  * @brief Create the asynchronous i/o system. The log uses a single
+  * thread for i/o.
   *
-  * @param[in] n_slots          Total number of slots per handler
-  * @param[in] n_read_queues    Number of queues for read operations
-  * @param[in] n_write_queues   Number of queues for write operations
-  * 
-  * @retval Aio* Pointer to the created instance. Call destroy() below to delete it.
+  * @param[in] config           Number of read and write queues.
+  *
+  * @return the new instance.
   */
-  static Aio *create(ulint n_slots, ulint n_read_queues, ulint n_write_queues) noexcept;
-
-  /** Destroy an instance that was created using Aio::create()
-   * @param[own] aio The instance to destroy.
-   */
-  static void destroy(Aio *&aio) noexcept;
+  [[nodiscard]] static std::unique_ptr<Aio> create(const AioConfig &config) noexcept;
 
   /** Destructor */
   virtual ~Aio() = default;
