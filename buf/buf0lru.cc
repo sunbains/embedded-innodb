@@ -208,7 +208,7 @@ void BufLru::try_free_flushed_blocks() {
 bool BufLru::buf_pool_running_out() {
   m_sys.m_buf_pool->mutex_acquire();
 
-  auto ret = !recv_recovery_on &&
+  auto ret = !m_sys.m_recv->m_recovery_on &&
              UT_LIST_GET_LEN(m_sys.m_buf_pool->m_free_list) + UT_LIST_GET_LEN(m_sys.m_buf_pool->m_LRU_list) < m_sys.m_buf_pool->m_curr_size / 4;
 
   m_sys.m_buf_pool->mutex_release();
@@ -252,7 +252,7 @@ BufBlock *BufLru::get_free_block() {
 loop:
   m_sys.m_buf_pool->mutex_acquire();
 
-  if (!recv_recovery_on &&
+  if (!m_sys.m_recv->m_recovery_on &&
       UT_LIST_GET_LEN(m_sys.m_buf_pool->m_free_list) + UT_LIST_GET_LEN(m_sys.m_buf_pool->m_LRU_list) < m_sys.m_buf_pool->m_curr_size / 20) {
 
     ut_print_timestamp(stderr);
@@ -268,7 +268,7 @@ loop:
 
     ut_error;
 
-  } else if (!recv_recovery_on && (UT_LIST_GET_LEN(m_sys.m_buf_pool->m_free_list) + UT_LIST_GET_LEN(m_sys.m_buf_pool->m_LRU_list)) <
+  } else if (!m_sys.m_recv->m_recovery_on && (UT_LIST_GET_LEN(m_sys.m_buf_pool->m_free_list) + UT_LIST_GET_LEN(m_sys.m_buf_pool->m_LRU_list)) <
                                     m_sys.m_buf_pool->m_curr_size / 3) {
 
     if (!m_switched_on_monitor) {

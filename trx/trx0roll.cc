@@ -68,7 +68,7 @@ DbErr TrxRollback::general_rollback(System &sys, Trx *trx, bool partial, TrxSave
   /* Tell Innobase server that there might be work for
   utility threads: */
 
-  InnoDB::active_wake_master_thread();
+  sys.m_srv->active_wake_master_thread();
 
   heap = mem_heap_create(512);
 
@@ -108,7 +108,7 @@ DbErr TrxRollback::general_rollback(System &sys, Trx *trx, bool partial, TrxSave
   /* Tell Innobase server that there might be work for
   utility threads: */
 
-  InnoDB::active_wake_master_thread();
+  sys.m_srv->active_wake_master_thread();
 
   return trx->m_error_state;
 }
@@ -702,7 +702,7 @@ void TrxRollback::rollback(System &sys, Trx *trx, TrxSig *sig, QueThr **next_thr
     *next_thr = thr;
     /*		InnoDB::que_task_enqueue_low(thr2); */
   } else {
-    InnoDB::que_task_enqueue_low(thr);
+    sys.m_srv->que_task_enqueue_low(thr);
     /*		InnoDB::que_task_enqueue_low(thr2); */
   }
 }

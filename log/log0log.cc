@@ -126,10 +126,6 @@ bool Log::peek_lsn(lsn_t *lsn) noexcept {
 }
 
 void Log::shutdown() noexcept {
-  if (this == nullptr) {
-    return;
-  }
-
   (void)m_vfile.close();
 
   os_event_free(m_no_flush_event);

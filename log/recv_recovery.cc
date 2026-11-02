@@ -138,7 +138,7 @@ void recv_recover_page(System &sys, bool just_read_in, BufBlock *block) noexcept
         start_lsn = recv->m_start_lsn;
       }
 
-      recv_parse_or_apply_log_rec_body(recv->sys, m_type, buf, buf + recv->m_len, block, &mtr);
+      recv_parse_or_apply_log_rec_body(sys, recv->m_type, buf, buf + recv->m_len, block, &mtr);
 
       end_lsn = recv->m_start_lsn + recv->m_len;
 
@@ -156,8 +156,7 @@ void recv_recover_page(System &sys, bool just_read_in, BufBlock *block) noexcept
   ut_a(sys.m_recv->m_n_log_records > 0);
   --sys.m_recv->m_n_log_records;
 
-  if (recv_max_page_lsn < page_lsn) {
-    recv_max_page_lsn = page_lsn;
+  if (sys.m_recv->m_max_page_lsn < page_lsn) {
   }
 
   log_record->m_state = RECV_PROCESSED;

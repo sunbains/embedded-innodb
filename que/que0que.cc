@@ -208,7 +208,7 @@ void que_thr_end_wait(System &sys, QueThr *thr, QueThr **next_thr) {
     *next_thr = thr;
   } else {
     ut_a(0);
-    InnoDB::que_task_enqueue_low(thr);
+    sys.m_srv->que_task_enqueue_low(thr);
   }
 }
 
@@ -232,7 +232,7 @@ void que_thr_end_wait_no_next_thr(System &sys, QueThr *thr) {
   /* We let the OS thread (not just the query thread) to wait
   for the lock to be released: */
 
-  InnoDB::release_user_thread_if_suspended(thr);
+  sys.m_srv->release_user_thread_if_suspended(thr);
 
   /* InnoDB::que_task_enqueue_low(thr); */
 }
@@ -341,7 +341,7 @@ void que_fork_error_handle(System &sys, Trx *trx __attribute__((unused)), QueFor
   que_thr_move_to_run_state(thr);
 
   ut_error;
-  InnoDB::que_task_enqueue_low(thr);
+  sys.m_srv->que_task_enqueue_low(thr);
 }
 
 /** Tests if all the query threads in the same fork have a given state.
@@ -1075,7 +1075,7 @@ loop:
       /* The ..._user_... function works also for InnoDB's
     internal threads. Let us wait that the lock wait ends. */
 
-      InnoDB::suspend_user_thread(thr);
+      sys.m_srv->suspend_user_thread(thr);
 
       if (thr_get_trx(thr)->m_error_state != DB_SUCCESS) {
         /* thr was chosen as a deadlock victim or there was

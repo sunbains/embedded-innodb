@@ -1265,7 +1265,7 @@ SymNode *pars_column_def(SymNode *sym_node, ParsResWord *type,
   return sym_node;
 }
 
-TableNode *pars_create_table(SymNode *table_sym, SymNode *column_defs,
+TableNode *pars_create_table(System &sys, SymNode *table_sym, SymNode *column_defs,
                               void *not_fit_in_memory __attribute__((unused))) {
   const auto n_cols = que_node_list_get_len(column_defs);
   auto table = Table::create(table_sym->name, DICT_HDR_SPACE, n_cols, 0, false,
@@ -1291,7 +1291,7 @@ TableNode *pars_create_table(SymNode *table_sym, SymNode *column_defs,
   }
 
   auto node =
-      TableNode::create(.m_dict, table, pars_sym_tab_global->heap, true);
+      TableNode::create(sys, table, pars_sym_tab_global->heap, true);
 
   table_sym->table = table;
   table_sym->resolved = true;
@@ -1300,7 +1300,7 @@ TableNode *pars_create_table(SymNode *table_sym, SymNode *column_defs,
   return node;
 }
 
-IndexNode *pars_create_index(ParsResWord *unique_def,
+IndexNode *pars_create_index(System &sys, ParsResWord *unique_def,
                               ParsResWord *clustered_def,
                               SymNode *index_sym, SymNode *table_sym,
                               SymNode *column_list) {
@@ -1329,7 +1329,7 @@ IndexNode *pars_create_index(ParsResWord *unique_def,
   }
 
   auto node =
-      IndexNode::create(.m_dict, index, pars_sym_tab_global->heap, true);
+      IndexNode::create(sys, index, pars_sym_tab_global->heap, true);
 
   table_sym->resolved = true;
   table_sym->token_type = SYM_TABLE;
@@ -1400,7 +1400,7 @@ int pars_get_lex_chars(char *buf, int max_size) {
   return static_cast<int>(len);
 }
 
-void yyerror(const char *p) {
+void yyerror(System &, const char *p) {
   log_fatal("PARSER ERROR: Syntax error in SQL string: ", p);
 }
 
@@ -1420,7 +1420,7 @@ QueFork *pars_sql(System &sys, ParsInfo *info, const char *str) {
   pars_sym_tab_global->next_char_pos = 0;
   pars_sym_tab_global->info = info;
 
-  yyparse();
+  yyparse(sys);
 
   for (auto sym_node : pars_sym_tab_global->sym_list) {
     ut_a(sym_node->resolved);

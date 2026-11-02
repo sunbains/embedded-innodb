@@ -51,59 +51,27 @@ constexpr ulint RECV_DATA_BLOCK_SIZE = MEM_MAX_ALLOC_IN_BUF - sizeof(LogRecordDa
 constexpr ulint RECV_READ_AHEAD_AREA = 32;
 
 
-/** true when applying redo log records during crash recovery; false
-otherwise.  Note that this is false while a background thread is
-rolling back incomplete transactions. */
-bool recv_recovery_on{};
 
-/** true when recv_init_crash_recovery() has been called. */
-bool recv_needed_recovery{};
 
-/** true if buf_page_is_corrupted() should check if the log sequence
-number (FIL_PAGE_LSN) is in the future.  Initially false, and set by
-recv_recovery_from_checkpoint_start_func(). */
-bool recv_lsn_checks_on{};
 
 /* User callback function that is called before InnoDB attempts to
 rollback incomplete transaction after crash recovery. */
-void (*recv_pre_rollback_hook)(){};
 
-/** The following counter is used to decide when to print info on log scan */
-static ulint recv_scan_print_counter;
 
-/** The type of the previous parsed redo log record */
-static ulint recv_previous_parsed_rec_type;
 
-/** The offset of the previous parsed redo log record */
-static ulint recv_previous_parsed_rec_offset;
 
-/** The 'multi' flag of the previous parsed redo log record */
-static ulint recv_previous_parsed_rec_is_multi;
 
-/** Maximum page number encountered in the redo log */
-ulint recv_max_parsed_page_no;
 
-/** This many frames must be left free in the buffer pool when we scan
-the log and store the scanned log records in the buffer pool: we will
-use these free frames to read in pages when we start applying the
-log records to the database.
-This is the default value. If the actual size of the buffer pool is
-larger than 10 MB we'll set this value to 512. */
-ulint recv_n_pool_free_frames;
 
-/** The maximum lsn we see for a page during the recovery process. If this
-is bigger than the lsn we are able to scan up to, that is an indication that
-the recovery failed and the database may be corrupt. */
-lsn_t recv_max_page_lsn;
 
 /**
  * Initialize crash recovery environment. Can be called iff
- * recv_needed_recovery == false.
+ * sys.m_recv->m_needed_recovery == false.
  *
  * @param[in,out] dblwr Doublewrite instance to use for recovery
  * @param[in] recovery The recovery flag.
  */
-void recv_start_crash_recovery(Dblwr *dblwr, IbRecovery recovery) noexcept;
+void recv_start_crash_recovery(System &sys) noexcept;
 
 static std::string to_string(const RecvSys::Tablespace_map &log_records) noexcept {
   std::string str{};
@@ -126,16 +94,6 @@ static std::string to_string(const RecvSys::Tablespace_map &log_records) noexcep
 void recv_sys_var_init(System &sys) noexcept {
   ut_a(sys.m_recv == nullptr);
 
-  recv_lsn_checks_on = false;
-  recv_n_pool_free_frames = 256;
-  recv_recovery_on = false;
-  recv_needed_recovery = false;
-  recv_scan_print_counter = 0;
-  recv_previous_parsed_rec_type = 999999;
-  recv_previous_parsed_rec_offset = 0;
-  recv_previous_parsed_rec_is_multi = 0;
-  recv_max_parsed_page_no = 0;
-  recv_max_page_lsn = 0;
 }
 
 RecvSys::~RecvSys() noexcept {
@@ -172,10 +130,9 @@ void RecvSys::open(ulint available_memory) noexcept {
 
   m_heap = mem_heap_create_in_buffer(256);
 
-  /* Set appropriate value of recv_n_pool_free_frames. */
+  /* Set appropriate value of m_n_pool_free_frames. */
   if (m_sys.m_buf_pool->get_curr_size() >= (10 * 1024 * 1024)) {
     /* Buffer pool of size greater than 10 MB. */
-    recv_n_pool_free_frames = 512;
   }
 
   ut_a(m_buf == nullptr);
@@ -213,7 +170,7 @@ void RecvSys::reset() noexcept {
       "{} pages with log records were left unprocessed! Maximum page number with"
       " log records on it {}",
       m_n_log_records,
-      recv_max_parsed_page_no
+      m_max_parsed_page_no
     ));
   }
 
@@ -612,7 +569,7 @@ void recv_recover_page(System &sys, bool just_read_in, BufBlock *block) noexcept
         start_lsn = recv->m_start_lsn;
       }
 
-      recv_parse_or_apply_log_rec_body(recv->sys, m_type, buf, buf + recv->m_len, block, &mtr);
+      recv_parse_or_apply_log_rec_body(sys, recv->m_type, buf, buf + recv->m_len, block, &mtr);
 
       end_lsn = recv->m_start_lsn + recv->m_len;
 
@@ -630,8 +587,7 @@ void recv_recover_page(System &sys, bool just_read_in, BufBlock *block) noexcept
   ut_a(sys.m_recv->m_n_log_records > 0);
   --sys.m_recv->m_n_log_records;
 
-  if (recv_max_page_lsn < page_lsn) {
-    recv_max_page_lsn = page_lsn;
+  if (sys.m_recv->m_max_page_lsn < page_lsn) {
   }
 
   log_record->m_state = RECV_PROCESSED;
@@ -691,7 +647,7 @@ static ulint recv_read_in_area(System &sys, space_id_t space, page_no_t start_pa
   return n;
 }
 
-void recv_apply_log_recs(System &sys, Dblwr *dblwr, bool flush_and_free_pages) noexcept {
+void recv_apply_log_recs(System &sys, bool flush_and_free_pages) noexcept {
   for (;;) {
     mutex_enter(&sys.m_recv->m_mutex);
 
@@ -783,7 +739,7 @@ void recv_apply_log_recs(System &sys, Dblwr *dblwr, bool flush_and_free_pages) n
     mutex_exit(&sys.m_recv->m_mutex);
     sys.m_log->release();
 
-    auto n_pages = sys.m_buf_pool->m_flusher->batch(dblwr, BUF_FLUSH_LIST, ULINT_MAX, IB_UINT64_T_MAX);
+    auto n_pages = sys.m_buf_pool->m_flusher->batch(sys.m_dblwr.get(), BUF_FLUSH_LIST, ULINT_MAX, IB_UINT64_T_MAX);
     ut_a(n_pages != ULINT_UNDEFINED);
 
     sys.m_buf_pool->m_flusher->wait_batch_end(BUF_FLUSH_LIST);
@@ -859,8 +815,7 @@ static ulint recv_parse_log_rec(System &sys,
     return 0;
   }
 
-  if (*page_no > recv_max_parsed_page_no) {
-    recv_max_parsed_page_no = *page_no;
+  if (*page_no > sys.m_recv->m_max_parsed_page_no) {
   }
 
   return new_ptr - ptr;
@@ -903,14 +858,14 @@ static void recv_report_corrupt_log(System &sys, byte *ptr, byte type, space_id_
     space,
     page_no,
     sys.m_recv->m_recovered_lsn,
-    (ulong)recv_previous_parsed_rec_type,
-    recv_previous_parsed_rec_is_multi,
+    (ulong)sys.m_recv->m_previous_parsed_rec_type,
+    sys.m_recv->m_previous_parsed_rec_is_multi,
     ptr - sys.m_recv->m_buf,
-    recv_previous_parsed_rec_offset
+    sys.m_recv->m_previous_parsed_rec_offset
   ));
 
-  if (ulint(ptr - sys.m_recv->m_buf + 100) > recv_previous_parsed_rec_offset &&
-      ulint(ptr - sys.m_recv->m_buf + 100 - recv_previous_parsed_rec_offset) < 200000) {
+  if (ulint(ptr - sys.m_recv->m_buf + 100) > sys.m_recv->m_previous_parsed_rec_offset &&
+      ulint(ptr - sys.m_recv->m_buf + 100 - sys.m_recv->m_previous_parsed_rec_offset) < 200000) {
     log_err(
       "Hex dump of corrupt log starting 100 bytes before the start"
       " of the previous log rec, and ending 100 bytes after the start"
@@ -918,7 +873,7 @@ static void recv_report_corrupt_log(System &sys, byte *ptr, byte type, space_id_
     );
 
     log_warn_buf(
-      sys.m_recv->m_buf + recv_previous_parsed_rec_offset - 100, ptr - sys.m_recv->m_buf + 200 - recv_previous_parsed_rec_offset
+      sys.m_recv->m_buf + sys.m_recv->m_previous_parsed_rec_offset - 100, ptr - sys.m_recv->m_buf + 200 - sys.m_recv->m_previous_parsed_rec_offset
     );
   }
 
@@ -993,9 +948,6 @@ bool recv_parse_log_recs(System &sys, bool store_to_hash) noexcept {
         return false;
       }
 
-      recv_previous_parsed_rec_type = (ulint)type;
-      recv_previous_parsed_rec_offset = sys.m_recv->m_recovered_offset;
-      recv_previous_parsed_rec_is_multi = 0;
 
       sys.m_recv->m_recovered_offset += len;
       sys.m_recv->m_recovered_lsn = new_recovered_lsn;
@@ -1031,9 +983,6 @@ bool recv_parse_log_recs(System &sys, bool store_to_hash) noexcept {
           return false;
         }
 
-        recv_previous_parsed_rec_type = (ulint)type;
-        recv_previous_parsed_rec_offset = sys.m_recv->m_recovered_offset + total_len;
-        recv_previous_parsed_rec_is_multi = 1;
 
         total_len += len;
 
@@ -1214,13 +1163,10 @@ bool recv_parse_log_recs(System &sys, bool store_to_hash) noexcept {
  * @param[in] contiguous_lsn The LSN up to which the log data is known to be contiguous.
  *
  */
-[[maybe_unused]] static void recv_group_scan_log_recs([[maybe_unused]] Dblwr *dblwr, [[maybe_unused]] IbRecovery recovery, [[maybe_unused]] lsn_t *contiguous_lsn) noexcept {
-}
 
-void recv_start_crash_recovery(Dblwr *dblwr, IbRecovery recovery) noexcept {
-  ut_a(!recv_needed_recovery);
+void recv_start_crash_recovery(System &sys) noexcept {
+  ut_a(!sys.m_recv->m_needed_recovery);
 
-  recv_needed_recovery = true;
 
   log_warn("Database was not shut down normally! Starting crash recovery.");
 }
@@ -1233,7 +1179,7 @@ void recv_start_crash_recovery(Dblwr *dblwr, IbRecovery recovery) noexcept {
  * @param checkpoint_lsn The checkpoint LSN.
  * @param max_flushed_lsn The maximum flushed LSN from data files.
  */
-[[maybe_unused]] static void recv_init_crash_recovery(Dblwr *dblwr, IbRecovery recovery, lsn_t checkpoint_lsn, lsn_t max_flushed_lsn) noexcept {
+[[maybe_unused]] static void recv_init_crash_recovery(System &sys, lsn_t checkpoint_lsn, lsn_t max_flushed_lsn) noexcept {
   /* NOTE: we always do a 'recovery' at startup, but only if there is something wrong we
   will print a message to the user about recovery: */
 
@@ -1254,7 +1200,7 @@ void recv_start_crash_recovery(Dblwr *dblwr, IbRecovery recovery) noexcept {
       ));
     }
 
-    if (!recv_needed_recovery) {
+    if (!sys.m_recv->m_needed_recovery) {
       log_err(
         "The log sequence number in 'system.idb' file does not match"
         " the log sequence number in the ib_logfiles! Checkooint LSN: ",
@@ -1263,21 +1209,15 @@ void recv_start_crash_recovery(Dblwr *dblwr, IbRecovery recovery) noexcept {
         max_flushed_lsn
       );
 
-      recv_start_crash_recovery(dblwr, recovery);
+      recv_start_crash_recovery(sys);
     }
   }
 }
 
-DbErr recv_recovery_from_checkpoint_start(System &sys, Dblwr *dblwr, IbRecovery recovery, lsn_t max_flushed_lsn) noexcept {
-  ut_a(sys.m_recv == nullptr);
-
-  sys.m_recv = static_cast<RecvSys *>(mem_alloc(sizeof(RecvSys)));
-
-  new (sys.m_recv.get()) RecvSys();
-
+DbErr recv_recovery_from_checkpoint_start(System &sys, lsn_t max_flushed_lsn) noexcept {
   sys.m_recv->open(sys.m_buf_pool->get_curr_size());
 
-  if (recovery >= IB_RECOVERY_NO_LOG_REDO) {
+  if (sys.m_config.m_recv.m_force_recovery >= IB_RECOVERY_NO_LOG_REDO) {
     log_warn("The user has set IB_RECOVERY_NO_LOG_REDO on. Skipping log redo");
 
     return DB_SUCCESS;
@@ -1285,7 +1225,6 @@ DbErr recv_recovery_from_checkpoint_start(System &sys, Dblwr *dblwr, IbRecovery 
 
   log_info("Check if we need to do recovery, max flushed LSN is ", max_flushed_lsn);
 
-  recv_recovery_on = true;
 
   sys.m_recv->m_limit_lsn = IB_UINT64_T_MAX;
 
@@ -1335,7 +1274,6 @@ DbErr recv_recovery_from_checkpoint_start(System &sys, Dblwr *dblwr, IbRecovery 
 
   sys.m_log->release();
 
-  recv_lsn_checks_on = true;
 
   /* The database is now ready to start almost normal processing of user
   transactions: transaction rollbacks and the application of the log
@@ -1344,12 +1282,12 @@ DbErr recv_recovery_from_checkpoint_start(System &sys, Dblwr *dblwr, IbRecovery 
   return DB_SUCCESS;
 }
 
-void recv_recovery_from_checkpoint_finish(System &sys, Dblwr *dblwr, IbRecovery recovery) noexcept {
+void recv_recovery_from_checkpoint_finish(System &sys) noexcept {
   /* Apply the hashed log records to the respective file pages */
 
-  if (recovery < IB_RECOVERY_NO_LOG_REDO) {
+  if (sys.m_config.m_recv.m_force_recovery < IB_RECOVERY_NO_LOG_REDO) {
 
-    recv_apply_log_recs(sys, dblwr, false);
+    recv_apply_log_recs(sys, false);
   }
 
   if (sys.m_recv->m_found_corrupt_log) {
@@ -1366,17 +1304,8 @@ void recv_recovery_from_checkpoint_finish(System &sys, Dblwr *dblwr, IbRecovery 
 
   /* Free the resources of the recovery system */
 
-  recv_recovery_on = false;
-
-  ut_a(sys.m_recv != nullptr);
 
   sys.m_recv->close();
-
-  call_destructor(.m_recv);
-
-  mem_free(sys.m_recv.get());
-
-  sys.m_recv.get() = nullptr;
 
   /* Free up the flush_rbt. */
   sys.m_buf_pool->m_flusher->free_flush_list();
@@ -1393,7 +1322,6 @@ void recv_recovery_rollback_active(System &sys) noexcept {
   it's a one-shot. We can safely set it to nullptr after calling it. */
   if (recv_pre_rollback_hook != nullptr) {
     recv_pre_rollback_hook();
-    recv_pre_rollback_hook = nullptr;
   }
 
 #ifdef UNIV_SYNC_DEBUG
@@ -1412,7 +1340,7 @@ void recv_recovery_rollback_active(System &sys) noexcept {
     /* Rollback the uncommitted transactions which have no user
     session */
 
-    os_thread_create(trx_rollback_or_clean_all_recovered, nullptr, nullptr);
+    os_thread_create(trx_rollback_or_clean_all_recovered, &sys, nullptr);
   }
 }
 

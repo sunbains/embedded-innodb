@@ -323,7 +323,7 @@ DbErr DictStore::build_table_def_step(QueThr *thr, TableNode *node) noexcept {
 
   thr_get_trx(thr)->m_table_id = table->m_id;
 
-  if (srv_config.m_file_per_table) {
+  if (m_sys.m_fil->m_file_per_table) {
     /* We create a new single-table tablespace for the table.
     We initially let it be 4 pages:
     - page 0 is the fsp header and an extent descriptor page,
@@ -1226,7 +1226,7 @@ DbErr DictStore::add_foreigns_to_dictionary(ulint start_id, Table *table, Trx *t
   return DB_SUCCESS;
 }
 
-TableNode *TableNode::create(System &sys, Dict *dict, Table *table, MemHeap *heap, bool commit) noexcept {
+TableNode *TableNode::create(System &sys, Table *table, MemHeap *heap, bool commit) noexcept {
   auto ptr = mem_heap_alloc(heap, sizeof(TableNode));
   auto node = new (ptr) TableNode();
 
@@ -1237,10 +1237,10 @@ TableNode *TableNode::create(System &sys, Dict *dict, Table *table, MemHeap *hea
   node->m_state = TABLE_BUILD_TABLE_DEF;
   node->m_heap = mem_heap_create(256);
 
-  node->m_tab_def = sys.m_row_ins->node_create(INS_DIRECT, dict->m_sys_tables, heap);
+  node->m_tab_def = sys.m_row_ins->node_create(INS_DIRECT, sys.m_dict->m_sys_tables, heap);
   node->m_tab_def->m_common.parent = node;
 
-  node->m_col_def = sys.m_row_ins->node_create(INS_DIRECT, dict->m_sys_columns, heap);
+  node->m_col_def = sys.m_row_ins->node_create(INS_DIRECT, sys.m_dict->m_sys_columns, heap);
   node->m_col_def->m_common.parent = node;
 
   if (commit) {
@@ -1253,7 +1253,7 @@ TableNode *TableNode::create(System &sys, Dict *dict, Table *table, MemHeap *hea
   return node;
 }
 
-IndexNode *IndexNode::create(System &sys, Dict *dict, Index *index, MemHeap *heap, bool commit) noexcept {
+IndexNode *IndexNode::create(System &sys, Index *index, MemHeap *heap, bool commit) noexcept {
   auto ptr = mem_heap_alloc(heap, sizeof(IndexNode));
   auto node = new (ptr) IndexNode();
 
@@ -1265,10 +1265,10 @@ IndexNode *IndexNode::create(System &sys, Dict *dict, Index *index, MemHeap *hea
   node->m_page_no = FIL_NULL;
   node->m_heap = mem_heap_create(256);
 
-  node->m_ind_def = sys.m_row_ins->node_create(INS_DIRECT, dict->m_sys_indexes, heap);
+  node->m_ind_def = sys.m_row_ins->node_create(INS_DIRECT, sys.m_dict->m_sys_indexes, heap);
   node->m_ind_def->m_common.parent = node;
 
-  node->m_field_def = sys.m_row_ins->node_create(INS_DIRECT, dict->m_sys_fields, heap);
+  node->m_field_def = sys.m_row_ins->node_create(INS_DIRECT, sys.m_dict->m_sys_fields, heap);
   node->m_field_def->m_common.parent = node;
 
   if (commit) {

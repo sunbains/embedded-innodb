@@ -389,7 +389,7 @@ Rec page_copy_rec_list_end(System &sys, BufBlock *new_block, BufBlock *block, Re
   }
 
   if (!index->is_clustered() && page_is_leaf(page)) {
-    page_update_max_trx_id(new_block, page_get_max_trx_id(page), mtr);
+    page_update_max_trx_id(sys, new_block, page_get_max_trx_id(page), mtr);
   }
 
   /* Update the lock table and possible hash index */
@@ -444,7 +444,7 @@ Rec page_copy_rec_list_start(System &sys, BufBlock *new_block, BufBlock *block, 
   }
 
   if (!index->is_clustered() && page_is_leaf(rec.page_align())) {
-    page_update_max_trx_id(new_block, page_get_max_trx_id(rec.page_align()), mtr);
+    page_update_max_trx_id(sys, new_block, page_get_max_trx_id(rec.page_align()), mtr);
   }
 
   /* Update the lock table and possible hash index */

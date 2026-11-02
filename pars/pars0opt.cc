@@ -990,7 +990,7 @@ void opt_search_plan(System &sys, SelNode *sel_node) {
 
   for (ulint i{}; i < sel_node->m_n_tables; ++i) {
     new (&sel_node->m_plans[i])
-        Plan(sys.m_fsp.get(), sys.m_btree.get(), sys.m_lock_sys.get(), sys.m_row_sel.get());
+        Plan();
   }
 
   /* Analyze the search condition to find out what we know at each

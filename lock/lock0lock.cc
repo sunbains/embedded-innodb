@@ -577,7 +577,7 @@ std::string Lock::table_to_string() const noexcept {
   return str;
 }
 
-std::string Lock::rec_to_string(System &sys, BufPool *buf_pool) const noexcept {
+std::string Lock::rec_to_string(System &sys) const noexcept {
   ut_ad(mutex_own(&sys.m_trx_sys->m_mutex));
   ut_a(type() == LOCK_REC);
 
@@ -663,13 +663,13 @@ std::string Lock::rec_to_string(System &sys, BufPool *buf_pool) const noexcept {
   return str;
 }
 
-std::string Lock::to_string(System &sys, BufPool *buf_pool) const noexcept {
+std::string Lock::to_string(System &sys) const noexcept {
   return std::format(
     "Lock {} type: {} mode: {}, - {}",
     (void *)this,
     get_type_str(),
     get_mode_str(),
-    type() == LOCK_REC ? rec_to_string(sys, buf_pool) : table_to_string()
+    type() == LOCK_REC ? rec_to_string(sys) : table_to_string()
   );
 }
 
@@ -731,7 +731,7 @@ bool LockSys::sec_rec_cons_read_sees(const Rec rec, ReadView *view) const noexce
   system latch. To obey the latching order we must NOT reserve the
   trx system mutex here! */
 
-  if (recv_recovery_on) {
+  if (m_sys.m_recv->m_recovery_on) {
     return false;
   }
 
@@ -968,7 +968,7 @@ Trx *LockSys::sec_rec_some_has_impl_off_trx_sys_mutex(const Rec rec, const Index
   max trx id to the log, and therefore during recovery, this value
   for a page may be incorrect. */
 
-  if (page_get_max_trx_id(page) < m_sys.m_trx_sys->get_min_trx_id() && !recv_recovery_on) {
+  if (page_get_max_trx_id(page) < m_sys.m_trx_sys->get_min_trx_id() && !m_sys.m_recv->m_recovery_on) {
 
     return nullptr;
   }
@@ -1583,7 +1583,7 @@ void LockSys::move_reorganize_page(const BufBlock *block, const BufBlock *oblock
 
       /* Check that all locks were moved. */
       if (unlikely(i != ULINT_UNDEFINED)) {
-        log_fatal(std::format("move_reorganize_page(): {} not moved in {}", i, lock->to_string(m_sys.m_buf_pool.get())));
+        log_fatal(std::format("move_reorganize_page(): {} not moved in {}", i, lock->to_string(m_sys)));
       }
     }
 #endif /* UNIV_DEBUG */
@@ -1699,7 +1699,7 @@ void LockSys::move_rec_list_start(const BufBlock *new_block, const BufBlock *blo
       IF_DEBUG(if (page_rec_is_supremum(rec)) {
         for (auto i = PAGE_HEAP_NO_USER_LOW; i < lock->rec_get_n_bits(); ++i) {
           if (unlikely(lock->rec_is_nth_bit_set(i))) {
-            log_fatal("move_rec_list_start(): {} not moved in {}", i, lock->to_string(m_sys.m_buf_pool.get()));
+            log_fatal("move_rec_list_start(): {} not moved in {}", i, lock->to_string(m_sys));
           }
         }
       })
@@ -1952,7 +1952,7 @@ retry:
 
       log_info("*** WAITING FOR THIS LOCK TO BE GRANTED:n");
 
-      log_info(lock->to_string(m_sys.m_buf_pool.get()));
+      log_info(lock->to_string(m_sys));
       break;
 
     case LOCK_VICTIM_IS_START:
@@ -2040,7 +2040,7 @@ ulint LockSys::deadlock_recursive(Trx *start, Trx *trx, Lock *wait_lock, ulint *
 
         log_info("*** (1) WAITING FOR THIS LOCK TO BE GRANTED:");
 
-        log_info(wait_lock->to_string(m_sys.m_buf_pool.get()));
+        log_info(wait_lock->to_string(m_sys));
 
         log_info("*** (2) TRANSACTION:");
 
@@ -2048,13 +2048,13 @@ ulint LockSys::deadlock_recursive(Trx *start, Trx *trx, Lock *wait_lock, ulint *
 
         log_info("*** (2) HOLDS THE LOCK(S):");
 
-        log_info(found_lock->to_string(m_sys.m_buf_pool.get()));
+        log_info(found_lock->to_string(m_sys));
 
         log_info("*** (2) WAITING FOR THIS LOCK TO BE GRANTED:");
 
-        log_info(wait_lock->to_string(m_sys.m_buf_pool.get()));
+        log_info(wait_lock->to_string(m_sys));
 
-        log_info(start->m_wait_lock->to_string(m_sys.m_buf_pool.get()));
+        log_info(start->m_wait_lock->to_string(m_sys));
 
         if (Trx::weight_cmp(wait_lock->m_trx, start) >= 0) {
           /* Our recursion starting point transaction is 'smaller', let us
@@ -2591,7 +2591,7 @@ void LockSys::print_info_all_transactions() noexcept {
           "------- TRX HAS BEEN WAITING {} SEC FOR THIS LOCK TO BE GRANTED:", difftime(time(nullptr), trx->m_wait_started)
         ));
 
-        log_info(lock->to_string(m_sys.m_buf_pool.get()));
+        log_info(lock->to_string(m_sys));
 
         log_info("------------------");
       }
@@ -2633,7 +2633,7 @@ void LockSys::print_info_all_transactions() noexcept {
           load the page in the buffer pool. */
 
           log_info("RECORD LOCKS on non-existing space ", lock->rec_space_id());
-          log_info(lock->rec_to_string(m_sys.m_buf_pool.get()));
+          log_info(lock->rec_to_string(m_sys));
 
         } else {
 
@@ -2953,7 +2953,7 @@ DbErr LockSys::rec_insert_check_and_lock(
 
     if (likely(!index->is_clustered())) {
       /* Update the page max trx id field */
-      page_update_max_trx_id(block, trx->m_id, mtr);
+      page_update_max_trx_id(m_sys, block, trx->m_id, mtr);
     }
 
     *inherit = false;
@@ -2989,7 +2989,7 @@ DbErr LockSys::rec_insert_check_and_lock(
 
   if (err == DB_SUCCESS && !index->is_clustered()) {
     /* Update the page max trx id field */
-    page_update_max_trx_id(block, trx->m_id, mtr);
+    page_update_max_trx_id(m_sys, block, trx->m_id, mtr);
   }
 
 #ifdef UNIV_DEBUG
@@ -3118,7 +3118,7 @@ DbErr LockSys::sec_rec_modify_check_and_lock(
 
   if (err == DB_SUCCESS) {
     /* Update the page max trx id field */
-    page_update_max_trx_id(block, thr_get_trx(thr)->m_id, mtr);
+    page_update_max_trx_id(m_sys, block, thr_get_trx(thr)->m_id, mtr);
   }
 
   return err;
@@ -3150,7 +3150,7 @@ DbErr LockSys::sec_rec_read_check_and_lock(
   if the max trx id for the page >= min trx id for the trx list or a
   database recovery is running. */
 
-  if ((page_get_max_trx_id(block->m_frame) >= m_sys.m_trx_sys->get_min_trx_id() || recv_recovery_on) && !page_rec_is_supremum(rec)) {
+  if ((page_get_max_trx_id(block->m_frame) >= m_sys.m_trx_sys->get_min_trx_id() || m_sys.m_recv->m_recovery_on) && !page_rec_is_supremum(rec)) {
 
     rec_convert_impl_to_expl(block, rec, index, offsets);
   }

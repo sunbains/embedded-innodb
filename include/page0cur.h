@@ -303,7 +303,7 @@ struct PageCursor {
 
     ut_ad(dtuple_check_typed(tuple));
 
-    search_with_match(System &sys, block, index, tuple, mode, &up_matched_fields, &up_matched_bytes, &low_matched_fields, &low_matched_bytes);
+    search_with_match(sys, block, index, tuple, mode, &up_matched_fields, &up_matched_bytes, &low_matched_fields, &low_matched_bytes);
 
     return low_matched_fields;
   }

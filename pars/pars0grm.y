@@ -44,6 +44,12 @@ extern "C" int yylex();
 
 %}
 
+%code requires {
+class System;
+}
+
+%parse-param {System &sys}
+
 %token PARS_INT_LIT
 %token PARS_FLOAT_LIT
 %token PARS_STR_LIT
@@ -333,7 +339,7 @@ select_statement:
 	search_condition
 	for_update_clause
 	lock_shared_clause
-	order_by_clause		{ $$ = pars_select_statement(
+	order_by_clause		{ $$ = pars_select_statement(sys, 
                                          static_cast<SelNode*>($2),
                                          static_cast<SymNode*>($4),
                                          static_cast<que_node_t*>($5),
@@ -349,9 +355,9 @@ insert_statement_start:
 
 insert_statement:
 	insert_statement_start PARS_VALUES_TOKEN '(' exp_list ')'
-				{ $$ = pars_insert_statement( static_cast<SymNode*>($1), $4, nullptr); }
+				{ $$ = pars_insert_statement(sys,  static_cast<SymNode*>($1), $4, nullptr); }
 	| insert_statement_start select_statement
-				{ $$ = pars_insert_statement( static_cast<SymNode*>($1), nullptr, static_cast<SelNode*>($2)); }
+				{ $$ = pars_insert_statement(sys,  static_cast<SymNode*>($1), nullptr, static_cast<SelNode*>($2)); }
 ;
 
 column_assignment:
@@ -373,32 +379,32 @@ cursor_positioned:
 update_statement_start:
 	PARS_UPDATE_TOKEN PARS_ID_TOKEN
 	PARS_SET_TOKEN
-	column_assignment_list	{ $$ = pars_update_statement_start( false, static_cast<SymNode*>($2), static_cast<ColAssignNode*>($4)); }
+	column_assignment_list	{ $$ = pars_update_statement_start(sys,  false, static_cast<SymNode*>($2), static_cast<ColAssignNode*>($4)); }
 ;
 
 update_statement_searched:
 	update_statement_start
-	search_condition	{ $$ = pars_update_statement( static_cast<UpdNode*>($1), nullptr, static_cast<que_node_t*>($2)); }
+	search_condition	{ $$ = pars_update_statement(sys,  static_cast<UpdNode*>($1), nullptr, static_cast<que_node_t*>($2)); }
 ;
 
 update_statement_positioned:
 	update_statement_start
-	cursor_positioned	{ $$ = pars_update_statement( static_cast<UpdNode*>($1), static_cast<SymNode*>($2), nullptr); }
+	cursor_positioned	{ $$ = pars_update_statement(sys,  static_cast<UpdNode*>($1), static_cast<SymNode*>($2), nullptr); }
 ;
 
 delete_statement_start:
 	PARS_DELETE_TOKEN PARS_FROM_TOKEN
-	PARS_ID_TOKEN		{ $$ = pars_update_statement_start( true, static_cast<SymNode*>($3), nullptr); }
+	PARS_ID_TOKEN		{ $$ = pars_update_statement_start(sys,  true, static_cast<SymNode*>($3), nullptr); }
 ;
 
 delete_statement_searched:
         delete_statement_start
-        search_condition        { $$ = pars_update_statement( static_cast<UpdNode*>($1), nullptr, static_cast<que_node_t*>($2)); }
+        search_condition        { $$ = pars_update_statement(sys,  static_cast<UpdNode*>($1), nullptr, static_cast<que_node_t*>($2)); }
 ;
 
 delete_statement_positioned:
         delete_statement_start
-        cursor_positioned       { $$ = pars_update_statement( static_cast<UpdNode*>($1), static_cast<SymNode*>($2), nullptr); }
+        cursor_positioned       { $$ = pars_update_statement(sys,  static_cast<UpdNode*>($1), static_cast<SymNode*>($2), nullptr); }
 ;
 
 assignment_statement:
@@ -515,7 +521,7 @@ not_fit_in_memory:
 create_table:
 	PARS_CREATE_TOKEN PARS_TABLE_TOKEN
 	PARS_ID_TOKEN '(' column_def_list ')'
-	not_fit_in_memory	{ $$ = pars_create_table(static_cast<SymNode*>($3), static_cast<SymNode*>($5), $7); }
+	not_fit_in_memory	{ $$ = pars_create_table(sys, static_cast<SymNode*>($3), static_cast<SymNode*>($5), $7); }
 ;
 
 column_list:
@@ -539,7 +545,7 @@ create_index:
 	clustered_def
 	PARS_INDEX_TOKEN
 	PARS_ID_TOKEN PARS_ON_TOKEN PARS_ID_TOKEN
-	'(' column_list ')'	{ $$ = pars_create_index(
+	'(' column_list ')'	{ $$ = pars_create_index(sys, 
                                         static_cast<ParsResWord*>($2), static_cast<ParsResWord*>($3),
                                         static_cast<SymNode*>($5), static_cast<SymNode*>($7), static_cast<SymNode*>($9)); }
 ;

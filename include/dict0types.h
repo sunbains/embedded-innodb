@@ -1765,7 +1765,7 @@ struct TableNode {
    *
    * @return The table node.
    */
-  [[nodiscard]] static TableNode *create(System &sys, Dict *dict, Table *table, MemHeap *heap, bool commit) noexcept;
+  [[nodiscard]] static TableNode *create(System &sys, Table *table, MemHeap *heap, bool commit) noexcept;
 
   /** Node type: QUE_NODE_TABLE_CREATE */
   QueCommon *m_common;
@@ -1817,7 +1817,7 @@ struct IndexNode {
    *
    * @return The index node.
    */
-  [[nodiscard]] static IndexNode *create(System &sys, Dict *dict, Index *index, MemHeap *heap, bool commit) noexcept;
+  [[nodiscard]] static IndexNode *create(System &sys, Index *index, MemHeap *heap, bool commit) noexcept;
 
   /** Node type: QUE_NODE_INDEX_CREATE */
   QueCommon *m_common;

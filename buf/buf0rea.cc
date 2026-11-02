@@ -354,7 +354,7 @@ void buf_read_recv_pages(System &sys, bool sync, const PageId &page_id, const pa
   for (ulint i = 0; i < n_stored; i++) {
     ulint count{};
 
-    while (sys.m_buf_pool->m_n_pend_reads >= recv_n_pool_free_frames / 2) {
+    while (sys.m_buf_pool->m_n_pend_reads >= sys.m_recv->m_n_pool_free_frames / 2) {
 
       os_thread_sleep(10000);
 

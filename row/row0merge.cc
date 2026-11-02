@@ -1472,7 +1472,7 @@ static void row_merge_copy_blobs(
 ) /*!< in/out: memory heap */
 {
   ulint i;
-  Blob blob(sys.m_fsp, sys.m_btree);
+  Blob blob{};
   ulint n_fields = dtuple_get_n_fields(tuple);
 
   for (i = 0; i < n_fields; i++) {

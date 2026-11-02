@@ -539,7 +539,7 @@ DbErr RowInsert::update_cascade_client(QueThr *thr, UpdNode *node, Table *table)
 
     que_thr_stop_client(m_sys, thr);
 
-    InnoDB::suspend_user_thread(thr);
+    m_sys.m_srv->suspend_user_thread(thr);
 
     /* Note that a lock wait may also end in a lock wait timeout,
     or this transaction is picked as a victim in selective
@@ -1135,7 +1135,7 @@ do_possible_lock_wait:
 
     que_thr_stop_client(m_sys, thr);
 
-    InnoDB::suspend_user_thread(thr);
+    m_sys.m_srv->suspend_user_thread(thr);
 
     if (trx->m_error_state == DB_SUCCESS) {
 
@@ -1599,7 +1599,7 @@ function_exit:
       offsets = record.get_all_col_offsets(nullptr, &heap, Current_location());
     }
 
-    Blob blob(m_sys.m_fsp.get(), m_sys.m_btree.get());
+    Blob blob{};
 
     err = blob.store_big_rec_extern_fields(m_sys, index, btr_cur.get_block(), rec, offsets, big_rec, &mtr);
 

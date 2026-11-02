@@ -481,11 +481,6 @@ const char *Dict::scan_table_name(
 
   memcpy(ref + database_name_len + 1, table_name, table_name_len + 1);
 
-  if (srv_lower_case_table_names) {
-    /* The table name is always put to lower case on Windows. */
-    ib_utf8_casedown(ref);
-  }
-
   *success = true;
   *ref_name = ref;
   *table = table_get(ref);

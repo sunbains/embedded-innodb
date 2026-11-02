@@ -122,7 +122,7 @@ struct TrxSys {
   /**
    * Destructor
    */
-  ~TrxSys(System &sys) noexcept;
+  ~TrxSys() noexcept;
 
   /**
    * Create an instance of the transaction system.

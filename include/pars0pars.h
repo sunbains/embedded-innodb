@@ -145,7 +145,7 @@ int pars_get_lex_chars(char *buf, int max_size);
  * 
  * @param[in] s Error message string.
  */
-void yyerror(const char *s);
+void yyerror(System &sys, const char *s);
 
 /**
  * @brief Parses a variable declaration.
@@ -435,7 +435,7 @@ SymNode *pars_column_def(SymNode *sym_node, ParsResWord *type, SymNode *len, voi
  * 
  * @return TableNode* Table create subgraph.
  */
-TableNode *pars_create_table(SymNode *table_sym, SymNode *column_defs, void *not_fit_in_memory);
+TableNode *pars_create_table(System &sys, SymNode *table_sym, SymNode *column_defs, void *not_fit_in_memory);
 
 /**
  * @brief Parses an index creation operation.
@@ -448,7 +448,7 @@ TableNode *pars_create_table(SymNode *table_sym, SymNode *column_defs, void *not
  * 
  * @return IndexNode* Index create subgraph.
  */
-IndexNode *pars_create_index(ParsResWord *unique_def, ParsResWord *clustered_def, SymNode *index_sym, SymNode *table_sym, SymNode *column_list
+IndexNode *pars_create_index(System &sys, ParsResWord *unique_def, ParsResWord *clustered_def, SymNode *index_sym, SymNode *table_sym, SymNode *column_list
 );
 
 /**

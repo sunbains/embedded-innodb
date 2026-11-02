@@ -627,8 +627,8 @@ PurgeSys::PurgeSys(System &sys, Trx *trx) noexcept : m_sys(sys), m_trx(trx) {
   m_view = sys.m_trx_sys->oldest_copy_or_open_new(0, m_heap);
 }
 
-PurgeSys::~PurgeSys(System &sys) noexcept {
-  ut_ad(!mutex_own(&sys.m_trx_sys->m_mutex));
+PurgeSys::~PurgeSys() noexcept {
+  ut_ad(!mutex_own(&m_sys.m_trx_sys->m_mutex));
 
   que_graph_free(m_query);
 
@@ -638,12 +638,12 @@ PurgeSys::~PurgeSys(System &sys) noexcept {
   if (m_view != nullptr) {
     /* Because acquiring the kernel mutex is a pre-condition
     of read_view_close(). We don't really need it here. */
-    mutex_enter(&sys.m_trx_sys->m_mutex);
+    mutex_enter(&m_sys.m_trx_sys->m_mutex);
 
-    sys.m_trx_sys->close_read_view(m_view);
+    m_sys.m_trx_sys->close_read_view(m_view);
     m_view = nullptr;
 
-    mutex_exit(&sys.m_trx_sys->m_mutex);
+    mutex_exit(&m_sys.m_trx_sys->m_mutex);
   }
 
   trx_undo_arr_free(m_arr);

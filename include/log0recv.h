@@ -60,7 +60,7 @@ void recv_recover_page(System &sys, bool just_read_in, BufBlock *block) noexcept
  *
  * @return	error code or DB_SUCCESS
  */
-DbErr recv_recovery_from_checkpoint_start(System &sys, Dblwr *dblwr, IbRecovery recovery, lsn_t max_flushed_lsn) noexcept;
+DbErr recv_recovery_from_checkpoint_start(System &sys, lsn_t max_flushed_lsn) noexcept;
 
 /**
  * Completes recovery from a checkpoint.
@@ -68,7 +68,7 @@ DbErr recv_recovery_from_checkpoint_start(System &sys, Dblwr *dblwr, IbRecovery 
  * @param[in,out] dblwr         Doublewrite buffer to use
  * @param[in] recovery          Recovery flag
  */
-void recv_recovery_from_checkpoint_finish(System &sys, Dblwr *dblwr, IbRecovery recovery) noexcept;
+void recv_recovery_from_checkpoint_finish(System &sys) noexcept;
 
 /**
  * Initiates the rollback of active transactions.
@@ -101,7 +101,7 @@ void recv_sys_var_init(System &sys) noexcept;
  * means that no new log records can be generated during the application;
  * the caller must in this case own the log mutex;
 */
-void recv_apply_log_recs(System &sys, Dblwr *dblwr, bool flush_and_free_pages) noexcept;
+void recv_apply_log_recs(System &sys, bool flush_and_free_pages) noexcept;
 
 /**
  * Block of log record data, variable size struct, see note.
@@ -294,6 +294,36 @@ struct RecvSys {
   log record, or there is a log parsing buffer overflow */
   bool m_found_corrupt_log{};
 
+  /** true when applying redo log records during crash recovery; false
+  otherwise. Note that this is false while a background thread is rolling
+  back incomplete transactions. */
+  bool m_recovery_on{};
+
+  /** true when recovery_start() noticed that we are doing a crash recovery */
+  bool m_needed_recovery{};
+
+  /** true if the buffer pool should check that the page lsn is not in the
+  future (FIL_PAGE_LSN). Set by recovery_start(). */
+  bool m_lsn_checks_on{};
+
+  /** The maximum page number, set during log scan */
+  ulint m_max_parsed_page_no{};
+
+  /** The maximum lsn we see for a page during the recovery process. If this
+  is bigger than the lsn we are able to scan up to, that is an indication
+  that the recovery failed and the database may be corrupt. */
+  lsn_t m_max_page_lsn{};
+
+  /** Number of buffer pool frames to keep free during the log scan */
+  ulint m_n_pool_free_frames{};
+
+  ulint m_scan_print_counter{};
+
+  /* For reporting a corrupt log: the previously parsed record. */
+  ulint m_previous_parsed_rec_type{};
+  ulint m_previous_parsed_rec_offset{};
+  ulint m_previous_parsed_rec_is_multi{};
+
   /** memory heap of log records and file addresses*/
   MemHeap *m_heap{};
 
@@ -305,32 +335,12 @@ struct RecvSys {
 };
 
 
-/** true when applying redo log records during crash recovery; false
-otherwise.  Note that this is false while a background thread is
-rolling back incomplete transactions. */
-extern bool recv_recovery_on;
 
-/** true when recv_init_crash_recovery() has been called. */
-extern bool recv_needed_recovery;
 
-/** true if buf_page_is_corrupted() should check if the log sequence
-number (FIL_PAGE_LSN) is in the future.  Initially false, and set by
-recv_recovery_from_checkpoint_start_func(). */
-extern bool recv_lsn_checks_on;
 
-extern void (*recv_pre_rollback_hook)();
 
-/** Maximum page number encountered in the redo log */
-extern ulint recv_max_parsed_page_no;
 
-/** Maximum page LSN encountered during recovery */
-extern lsn_t recv_max_page_lsn;
 
-/** This many frames must be left free in the buffer pool when we scan
-the log and store the scanned log records in the buffer pool: we will
-use these free frames to read in pages when we start applying the
-log records to the database. */
-extern ulint recv_n_pool_free_frames;
 
 /** Size of the parsing buffer; it must accommodate RECV_SCAN_SIZE many times! */
 constexpr ulint RECV_PARSING_BUF_SIZE = 2 * 1024 * 1024;

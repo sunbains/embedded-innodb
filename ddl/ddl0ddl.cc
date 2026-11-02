@@ -136,16 +136,6 @@ bool Ddl::add_table_to_background_drop_list(const char *name) noexcept {
 DbErr Ddl::drop_table(const char *in_name, Trx *trx, bool drop_db) noexcept {
   ut_a(in_name != nullptr);
 
-  if (srv_config.m_created_new_raw) {
-    log_warn(
-      "A new raw disk partition was initialized: we do not allow database modifications"
-      " by the user. Shut down the server and edit your config file so that newraw is replaced"
-      " with raw."
-    );
-
-    return DB_ERROR;
-  }
-
   trx->m_op_info = "dropping table";
 
   /* The table name is prefixed with the database name and a '/'.
@@ -195,10 +185,10 @@ DbErr Ddl::drop_table(const char *in_name, Trx *trx, bool drop_db) noexcept {
   ut_ad(rw_lock_own(&m_sys.m_dict->m_lock, RW_LOCK_EX));
 #endif /* UNIV_SYNC_DEBUG */
 
-  auto func_exit = [trx](DbErr err) -> auto {
+  auto func_exit = [this, trx](DbErr err) -> auto {
     trx->m_op_info = "";
 
-    InnoDB::wake_master_thread();
+    m_sys.m_srv->wake_master_thread();
 
     return err;
   };
@@ -424,21 +414,7 @@ DbErr Ddl::create_table(Table *table, Trx *trx) noexcept {
   ut_ad(mutex_own(&m_sys.m_dict->m_mutex));
   ut_ad(trx->m_dict_operation_lock_mode == RW_X_LATCH);
 
-  if (srv_config.m_created_new_raw) {
-    log_err(
-      "A new raw disk partition was initialized: we do not allow database modifications"
-      " by the user. Shut down the database and edit your config file so that newraw is replaced with raw."
-    );
-
-    Table::destroy(table, Current_location());
-
-    return DB_ERROR;
-
-    /* The table name is prefixed with the database name and a '/'.
-    Certain table names starting with 'innodb_' have their special
-    meaning regardless of the database name.  Thus, we need to
-    ignore the database name prefix in the comparisons. */
-  } else if (strchr(table->m_name, '/') == nullptr) {
+  if (strchr(table->m_name, '/') == nullptr) {
     log_err(std::format("Table id: {} name: {} not prefixed with a database name and '/'", table->m_id, table->m_name));
     Table::destroy(table, Current_location());
 
@@ -512,14 +488,14 @@ DbErr Ddl::create_table(Table *table, Trx *trx) noexcept {
 
   trx->set_dict_operation(TRX_DICT_OP_TABLE);
 
-  auto node = TableNode::create(m_sys.m_dict.get(), table, heap, false);
+  auto node = TableNode::create(m_sys, table, heap, false);
 
   auto thr = pars_complete_graph_for_exec(node, trx, heap);
 
   auto tmp = que_fork_start_command(static_cast<QueFork *>(que_node_get_parent(thr)));
   ut_a(tmp == thr);
 
-  que_run_threads(thr);
+  que_run_threads(m_sys, thr);
 
   auto err = trx->m_error_state;
 
@@ -571,13 +547,13 @@ DbErr Ddl::create_index(Index *index, Trx *trx) noexcept {
 
   /* This heap is destroyed when the query graph is freed. */
   auto heap = mem_heap_create(512);
-  auto node = IndexNode::create(m_sys.m_dict.get(), index, heap, false);
+  auto node = IndexNode::create(m_sys, index, heap, false);
   auto thr = pars_complete_graph_for_exec(node, trx, heap);
   auto tmp = que_fork_start_command(static_cast<QueFork *>(que_node_get_parent(thr)));
 
   ut_a(thr == tmp);
 
-  que_run_threads(thr);
+  que_run_threads(m_sys, thr);
 
   const auto err = trx->m_error_state;
 
@@ -625,15 +601,6 @@ DbErr Ddl::truncate_table(Table *table, Trx *trx) noexcept {
   redo log records on the truncated tablespace, we will assign
   a new tablespace identifier to the truncated tablespace. */
 
-  if (srv_config.m_created_new_raw) {
-    log_info(
-      "A new raw disk partition was initialized: we do not allow database modifications"
-      " by the user. Shut down server and edit config file so that newraw is replaced with raw."
-    );
-
-    return DB_ERROR;
-  }
-
   trx->m_op_info = "truncating table";
 
   /* Serialize data dictionary operations with dictionary mutex:
@@ -647,9 +614,9 @@ DbErr Ddl::truncate_table(Table *table, Trx *trx) noexcept {
   ut_ad(rw_lock_own(&m_sys.m_dict->m_lock, RW_LOCK_EX));
 #endif /* UNIV_SYNC_DEBUG */
 
-  auto func_exit = [trx](DbErr err) -> auto {
+  auto func_exit = [this, trx](DbErr err) -> auto {
     trx->m_op_info = "";
-    InnoDB::wake_master_thread();
+    m_sys.m_srv->wake_master_thread();
 
     return err;
   };
@@ -932,7 +899,7 @@ DbErr Ddl::rename_table(const char *old_name, const char *new_name, Trx *trx) no
     return err;
   };
 
-  if (srv_config.m_created_new_raw || m_sys.m_config.m_recv.m_force_recovery != IB_RECOVERY_DEFAULT) {
+  if (m_sys.m_config.m_recv.m_force_recovery != IB_RECOVERY_DEFAULT) {
     log_err(
       "A new raw disk partition was initialized or innodb_force_recovery is on: we do not allow"
       " database modifications by the user. Shut down the server and ensure that newraw is replaced"
@@ -1096,7 +1063,7 @@ DbErr Ddl::rename_index(const char *table_name, const char *old_name, const char
   ut_a(old_name != nullptr);
   ut_a(table_name != nullptr);
 
-  if (srv_config.m_created_new_raw || m_sys.m_config.m_recv.m_force_recovery != IB_RECOVERY_DEFAULT) {
+  if (m_sys.m_config.m_recv.m_force_recovery != IB_RECOVERY_DEFAULT) {
     log_err(
       "A new raw disk partition was initialized or innodb_force_recovery is on: we do not allow"
       " database modifications by the user. Shut down the server and ensure that newraw is"

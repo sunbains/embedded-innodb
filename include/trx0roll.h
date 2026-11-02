@@ -273,7 +273,11 @@ inline bool trx_undo_rec_reserve(Trx *trx, undo_no_t undo_no) { return TrxRollba
 inline void trx_undo_rec_release(Trx *trx, undo_no_t undo_no) { TrxRollback::undo_rec_release(trx, undo_no); }
 inline void trx_rollback(System &sys, Trx *trx, TrxSig *sig, QueThr **next_thr) { TrxRollback::rollback(sys, trx, sig, next_thr); }
 inline void trx_rollback_or_clean_recovered(System &sys, bool all) { TrxRollback::rollback_or_clean_recovered(sys, all); }
-inline void *trx_rollback_or_clean_all_recovered(System &sys, void *arg) { return TrxRollback::rollback_or_clean_all_recovered(sys, arg); }
+/** Thread entry point for rolling back the recovered transactions.
+@param[in] arg                  The System instance. */
+inline void *trx_rollback_or_clean_all_recovered(void *arg) {
+  return TrxRollback::rollback_or_clean_all_recovered(*static_cast<System *>(arg), nullptr);
+}
 
 inline void trx_finish_rollback_off_kernel(System &sys, QueFork *graph, Trx *trx, QueThr **next_thr) {
   TrxRollback::finish_rollback_off_kernel(sys, graph, trx, next_thr);

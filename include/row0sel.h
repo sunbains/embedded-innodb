@@ -501,7 +501,7 @@ struct Plan {
   Index *m_index{};
 
   /** persistent cursor used to search the index */
-  BtreePcursor m_pcur{sys.m_fsp, sys.m_btree};
+  BtreePcursor m_pcur{};
 
   /** true if cursor traveling upwards */
   bool m_asc{};
@@ -570,7 +570,7 @@ struct Plan {
   DTuple *m_clust_ref{};
 
   /** if index is non-clustered, we use this pcur to search the clustered index */
-  BtreePcursor m_clust_pcur{sys.m_fsp, sys.m_btree};
+  BtreePcursor m_clust_pcur{};
 
   /** memory heap used in building an old version of a row, or nullptr */
   MemHeap *m_old_row_heap{};

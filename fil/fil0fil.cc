@@ -236,7 +236,7 @@ void Fil::node_create(const char *name, ulint size, space_id_t id, bool is_raw) 
   node->m_file_name = mem_strdup(name);
   node->open = false;
 
-  ut_a(!is_raw || srv_start_raw_disk_in_use);
+  ut_a(!is_raw);
 
   node->m_is_raw_disk = is_raw;
   node->m_size_in_pages = size;
@@ -365,11 +365,11 @@ void Fil::node_open_file(FilNode *node, FilSpace *space, bool startup) {
   bool ret;
 
   if (space->m_type == FIL_LOG) {
-    node->m_fh = os_file_create(node->m_file_name, OS_FILE_OPEN, OS_FILE_AIO, OS_LOG_FILE, &ret);
+    node->m_fh = os_file_create(node->m_file_name, OS_FILE_OPEN, OS_FILE_AIO, OS_LOG_FILE, m_sys.m_config.m_fil.m_flush_method, &ret);
   } else if (node->m_is_raw_disk) {
-    node->m_fh = os_file_create(node->m_file_name, OS_FILE_OPEN_RAW, OS_FILE_AIO, OS_DATA_FILE, &ret);
+    node->m_fh = os_file_create(node->m_file_name, OS_FILE_OPEN_RAW, OS_FILE_AIO, OS_DATA_FILE, m_sys.m_config.m_fil.m_flush_method, &ret);
   } else {
-    node->m_fh = os_file_create(node->m_file_name, OS_FILE_OPEN, OS_FILE_AIO, OS_DATA_FILE, &ret);
+    node->m_fh = os_file_create(node->m_file_name, OS_FILE_OPEN, OS_FILE_AIO, OS_DATA_FILE, m_sys.m_config.m_fil.m_flush_method, &ret);
   }
 
   ut_a(ret);
@@ -925,7 +925,7 @@ void Fil::read_flushed_lsn(os_file_t fh, lsn_t &flushed_lsn) {
 }
 
 void Fil::create_directory_for_tablename(const char *name) {
-  auto len = strlen(m_sys.m_config.m_fil.m_data_home);
+  auto len = m_sys.m_config.m_fil.m_data_home.size();
   ut_a(len > 0);
 
   auto namend = strchr(name, '/');
@@ -933,7 +933,7 @@ void Fil::create_directory_for_tablename(const char *name) {
 
   auto path = (char *)mem_alloc(len + (namend - name) + 2);
 
-  strncpy(path, m_sys.m_config.m_fil.m_data_home, len);
+  strncpy(path, m_sys.m_config.m_fil.m_data_home.c_str(), len);
   ut_a(path[len - 1] == SRV_PATH_SEPARATOR);
 
   strncpy(path + len, name, namend - name);
@@ -1250,11 +1250,11 @@ bool Fil::rename_tablespace_in_mem(FilSpace *space, FilNode *node, const char *p
 
 char *Fil::make_ibd_name(const char *name, bool is_temp) {
   ulint namelen = strlen(name);
-  auto dirlen = strlen(m_sys.m_config.m_fil.m_data_home);
+  auto dirlen = m_sys.m_config.m_fil.m_data_home.size();
   auto sz = dirlen + namelen + sizeof("/.ibd");
   auto filename = static_cast<char *>(mem_alloc(sz));
 
-  std::snprintf(filename, sz, "%s%s.ibd", normalize_path(m_sys.m_config.m_fil.m_data_home), name);
+  std::snprintf(filename, sz, "%s%s.ibd", normalize_path(m_sys.m_config.m_fil.m_data_home.c_str()), name);
 
   return filename;
 }
@@ -1397,7 +1397,7 @@ DbErr Fil::create_new_single_table_tablespace(space_id_t *space_id, const char *
 
   bool ret{};
   auto path = make_ibd_name(tablename, is_temp);
-  auto file = os_file_create(path, OS_FILE_CREATE, OS_FILE_NORMAL, OS_DATA_FILE, &ret);
+  auto file = os_file_create(path, OS_FILE_CREATE, OS_FILE_NORMAL, OS_DATA_FILE, m_sys.m_config.m_fil.m_flush_method, &ret);
 
   if (!ret) {
     log_err(std::format("Unable to create file {}.", path));
@@ -1615,7 +1615,7 @@ bool Fil::open_single_table_tablespace(bool check_space_id, space_id_t id, ulint
 void Fil::load_single_table_tablespace(IbRecovery recovery, const char *dbname, const char *filename) {
   char dir[OS_FILE_MAX_PATH];
 
-  strcpy(dir, m_sys.m_config.m_fil.m_data_home);
+  strcpy(dir, m_sys.m_config.m_fil.m_data_home.c_str());
 
   auto ptr = normalize_path(dir);
   auto len = strlen(dbname) + strlen(filename) + strlen(dir) + 3;
@@ -2532,7 +2532,7 @@ bool Fil::rmdir(const char *dbname) {
   bool success{};
   char dir[OS_FILE_MAX_PATH];
 
-  std::snprintf(dir, sizeof(dir), "%s%s", m_sys.m_config.m_fil.m_data_home, dbname);
+  std::snprintf(dir, sizeof(dir), "%s%s", m_sys.m_config.m_fil.m_data_home.c_str(), dbname);
 
   if (::rmdir(dbname) != 0) {
     log_err("Removing directory: ", dbname);
@@ -2545,7 +2545,7 @@ bool Fil::rmdir(const char *dbname) {
 bool Fil::mkdir(const char *dbname) {
   char dir[OS_FILE_MAX_PATH];
 
-  std::snprintf(dir, sizeof(dir), "%s%s", m_sys.m_config.m_fil.m_data_home, dbname);
+  std::snprintf(dir, sizeof(dir), "%s%s", m_sys.m_config.m_fil.m_data_home.c_str(), dbname);
 
   /* If exists (false) then don't return error. */
   return os_file_create_directory(dir, false);

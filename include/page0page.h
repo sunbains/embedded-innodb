@@ -173,7 +173,7 @@ constexpr ulint PAGE_DIR_SLOT_MIN_N_OWNED = 4;
  */
 void page_set_max_trx_id(BufBlock *block, trx_id_t trx_id, Mtr *mtr);
 
-#define page_get_infimum_rec(page) (syssys, , Rec(((page) + page_get_infimum_offset(page))))
+#define page_get_infimum_rec(page) (Rec(((page) + page_get_infimum_offset(page))))
 
 /**
  * Reads the given header field.
@@ -224,7 +224,7 @@ inline bool page_is_leaf(const page_t *page) {
   return *reinterpret_cast<const uint16_t *>(page + (PAGE_HEADER + PAGE_LEVEL)) == 0;
 }
 
-#define page_get_supremum_rec(page) (syssys, , Rec(((page) + page_get_supremum_offset(page))))
+#define page_get_supremum_rec(page) (Rec(((page) + page_get_supremum_offset(page))))
 
 /**
  * Returns the middle record of record list. If there are an even number
@@ -549,7 +549,7 @@ inline trx_id_t page_get_max_trx_id(const page_t *page) {
  * @param[in] trx_id transaction id
  * @param[in,out] mtr mini-transaction
  */
-inline void page_update_max_trx_id(BufBlock *block, trx_id_t trx_id, Mtr *mtr) {
+inline void page_update_max_trx_id(System &sys, BufBlock *block, trx_id_t trx_id, Mtr *mtr) {
   ut_ad(mtr->memo_contains(block, MTR_MEMO_PAGE_X_FIX));
 
   /* During crash recovery, this function may be called on
@@ -557,7 +557,7 @@ inline void page_update_max_trx_id(BufBlock *block, trx_id_t trx_id, Mtr *mtr) {
   true for the dummy indexes constructed during redo log
   application).  In that case, PAGE_MAX_TRX_ID is unused,
   and trx_id is usually zero. */
-  ut_ad(trx_id > 0 || recv_recovery_on);
+  ut_ad(trx_id > 0 || sys.m_recv->m_recovery_on);
   ut_ad(page_is_leaf(block->get_frame()));
 
   if (page_get_max_trx_id(block->get_frame()) < trx_id) {

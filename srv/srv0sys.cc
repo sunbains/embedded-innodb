@@ -265,7 +265,7 @@ static DbErr create_log_file(System &sys, const std::string &filename) noexcept 
   const auto &config = sys.m_config.m_log;
 
   bool success{};
-  auto fh = os_file_create(filename.c_str(), OS_FILE_CREATE, OS_FILE_NORMAL, OS_LOG_FILE, &success);
+  auto fh = os_file_create(filename.c_str(), OS_FILE_CREATE, OS_FILE_NORMAL, OS_LOG_FILE, sys.m_config.m_fil.m_flush_method, &success);
 
   if (!success) {
     return os_file_get_last_error(false) != OS_FILE_ALREADY_EXISTS ? DB_ERROR : DB_TABLE_EXISTS;
@@ -308,7 +308,7 @@ static DbErr open_log_file(System &sys, const std::string &filename) noexcept {
   const auto &config = sys.m_config.m_log;
 
   bool success{};
-  auto fh = os_file_create(filename.c_str(), OS_FILE_OPEN, OS_FILE_AIO, OS_LOG_FILE, &success);
+  auto fh = os_file_create(filename.c_str(), OS_FILE_OPEN, OS_FILE_AIO, OS_LOG_FILE, sys.m_config.m_fil.m_flush_method, &success);
 
   if (!success) {
     log_err("Cannot open log file ", filename);
@@ -338,9 +338,12 @@ static DbErr open_log_file(System &sys, const std::string &filename) noexcept {
 /**
  * @brief Creates the system tablespace.
  *
+ * @param[in] sys               The instance.
+ * @param[in] path              Path to the system tablespace
+ *
  * @return DB_SUCCESS or error code
  */
-static DbErr create_system_tablespace(const std::string &path) noexcept {
+static DbErr create_system_tablespace(System &sys, const std::string &path) noexcept {
   namespace fs = std::filesystem;
 
   ut_a(!path.empty());
@@ -369,7 +372,7 @@ static DbErr create_system_tablespace(const std::string &path) noexcept {
   log_info(std::format("Creating the system tablespace: 'system.idb' of size {} MB ", SYSTEM_IBD_FILE_INITIAL_SIZE / (1024 * 1024)));
 
   bool success{};
-  auto fh = os_file_create(filename.c_str(), OS_FILE_CREATE, OS_FILE_NORMAL, OS_DATA_FILE, &success);
+  auto fh = os_file_create(filename.c_str(), OS_FILE_CREATE, OS_FILE_NORMAL, OS_DATA_FILE, sys.m_config.m_fil.m_flush_method, &success);
 
   if (!success && os_file_get_last_error(false) != OS_FILE_ALREADY_EXISTS) {
     log_err(std::format("Can't create {}", filename.generic_string()));
@@ -405,7 +408,7 @@ static DbErr open_system_tablespace(System &sys, const std::string &path, lsn_t 
   ut_a(fs::status(filename).type() == fs::file_type::regular);
 
   bool success{};
-  auto fh = os_file_create(filename.c_str(), OS_FILE_OPEN, OS_FILE_NORMAL, OS_DATA_FILE, &success);
+  auto fh = os_file_create(filename.c_str(), OS_FILE_OPEN, OS_FILE_NORMAL, OS_DATA_FILE, sys.m_config.m_fil.m_flush_method, &success);
 
   if (!success && os_file_get_last_error(false) != OS_FILE_ALREADY_EXISTS) {
     log_err(std::format("Can't open {}", filename.generic_string()));
@@ -696,7 +699,7 @@ DbErr System::startup(System &sys) noexcept {
     auto filename{home / "system.ibd"};
 
     if (!fs::exists(filename)) {
-      err = create_system_tablespace(filename);
+      err = create_system_tablespace(*this, filename);
 
       if (err == DB_SUCCESS) {
         create_new_db = true;
@@ -781,7 +784,7 @@ DbErr System::startup(System &sys) noexcept {
 
     m_log->acquire();
 
-    m_recv->reset_logs(max_flushed_lsn, true);
+    recv_reset_logs(max_flushed_lsn, true);
 
     m_log->release();
   }
@@ -861,7 +864,7 @@ DbErr System::startup(System &sys) noexcept {
     /* We always try to do a recovery, even if the database had been shut
     down normally: this is the normal startup path */
 
-    err = m_recv->recovery_start(max_flushed_lsn);
+    err = recv_recovery_from_checkpoint_start(*this, max_flushed_lsn);
 
     if (err != DB_SUCCESS) {
       startup_abort(err);
@@ -880,7 +883,7 @@ DbErr System::startup(System &sys) noexcept {
     /* recovery_finish() needs the trx lists which are initialized by
     TrxSys::start(). */
 
-    m_recv->recovery_finish();
+    recv_recovery_from_checkpoint_finish(*this);
 
     if (force_recovery <= IB_RECOVERY_NO_TRX_UNDO) {
       /* In a crash recovery, we check that the info in data dictionary is
@@ -898,7 +901,7 @@ DbErr System::startup(System &sys) noexcept {
       }
     }
 
-    m_recv->rollback_active();
+    recv_recovery_rollback_active(*this);
   }
 
   log_info("Max allowed record size ", page_get_free_space_of_empty() / 2);

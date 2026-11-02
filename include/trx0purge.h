@@ -85,7 +85,7 @@ struct PurgeSys {
   /**
    * Destructor.
    */
-  ~PurgeSys(System &sys) noexcept;
+  ~PurgeSys() noexcept;
 
   /**
    * Checks if trx_id is >= purge_view: then it is guaranteed that its update

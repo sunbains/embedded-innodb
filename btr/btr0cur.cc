@@ -1017,7 +1017,7 @@ DbErr BtreeCursor::update_in_place(System &sys, ulint flags, const Upd *update, 
   }
 
   if (!(flags & BTR_KEEP_SYS_FLAG)) {
-    RowUpdate::rec_sys_fields(rec, index, offsets, trx, roll_ptr);
+    sys.m_row_upd->rec_sys_fields(rec, index, offsets, trx, roll_ptr);
   }
 
   was_delete_marked = rec.get_deleted_flag();
@@ -1029,7 +1029,7 @@ DbErr BtreeCursor::update_in_place(System &sys, ulint flags, const Upd *update, 
   if (was_delete_marked && !rec.get_deleted_flag()) {
     /* The new updated record owns its possible externally stored fields */
 
-    Blob blob{sys.m_fsp, sys.m_btree};
+    Blob blob{};
 
     blob.unmark_extern_fields(rec, index, offsets, mtr);
   }
@@ -1314,7 +1314,7 @@ DbErr BtreeCursor::pessimistic_update(System &sys,
     sys.m_row_upd->index_entry_sys_field(new_entry, index, DATA_TRX_ID, trx->m_id);
   }
 
-  Blob blob{sys.m_fsp, sys.m_btree};
+  Blob blob{};
 
   if ((flags & BTR_NO_UNDO_LOG_FLAG) && offsets.any_extern()) {
     /* We are in a transaction rollback undoing a row
@@ -1383,7 +1383,7 @@ DbErr BtreeCursor::pessimistic_update(System &sys,
     if (!rec.get_deleted_flag()) {
       /* The new inserted record owns its possible externally
       stored fields */
-      Blob blob{sys.m_fsp, sys.m_btree};
+      Blob blob{};
 
       blob.unmark_extern_fields(rec, index, offsets, mtr);
     }
@@ -1415,7 +1415,7 @@ DbErr BtreeCursor::pessimistic_update(System &sys,
     because of BTR_NO_LOCKING_FLAG. */
     auto rec_block = get_block();
 
-    page_update_max_trx_id(rec_block, trx->m_id, mtr);
+    page_update_max_trx_id(sys, rec_block, trx->m_id, mtr);
   }
 
   if (!rec.get_deleted_flag()) {
@@ -1428,7 +1428,7 @@ DbErr BtreeCursor::pessimistic_update(System &sys,
       offsets = record.get_all_col_offsets(offsets, heap, Current_location());
     }
 
-    Blob blob{sys.m_fsp, sys.m_btree};
+    Blob blob{};
 
     blob.unmark_extern_fields(rec, index, offsets, mtr);
   }
@@ -1584,7 +1584,7 @@ DbErr BtreeCursor::del_mark_set_clust_rec(System &sys, ulint flags, bool val, Qu
       auto trx = thr_get_trx(thr);
 
       if (!(flags & BTR_KEEP_SYS_FLAG)) {
-        RowUpdate::rec_sys_fields(rec, index, offsets, trx, roll_ptr);
+        sys.m_row_upd->rec_sys_fields(rec, index, offsets, trx, roll_ptr);
       }
 
       del_mark_set_clust_rec_log(sys, flags, rec, index, val, trx, roll_ptr, mtr);
@@ -1747,7 +1747,7 @@ DbErr BtreeCursor::pessimistic_delete(System &sys, bool has_reserved_extents, Tr
   }
 
   if (offsets.any_extern()) {
-    Blob blob{sys.m_fsp, sys.m_btree};
+    Blob blob{};
 
     blob.free_externally_stored_fields(sys, index, rec, offsets, rb_ctx, mtr);
   }
@@ -1991,7 +1991,7 @@ void BtreeCursor::estimate_number_of_different_key_vals(System &sys, const Index
 
   /* We sample some pages in the index to get an estimate */
 
-  Blob blob(sys.m_fsp.get(), sys.m_btree.get());
+  Blob blob{};
 
   for (ulint i = 0; i < n_sample_pages; i++) {
     Rec supremum;

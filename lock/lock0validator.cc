@@ -111,7 +111,7 @@ bool LockValidator::rec_validate_page(System &sys, PageId page_id) noexcept {
 
   mtr.start();
 
-  auto buf_pool = sys.m_buf_pool;
+  auto buf_pool = sys.m_buf_pool.get();
 
   BufPool::Request req{.m_page_id = page_id, .m_mode = BUF_GET_NO_LATCH, .m_file = __FILE__, .m_line = __LINE__, .m_mtr = &mtr};
 
@@ -183,7 +183,7 @@ bool LockValidator::rec_validate_page(System &sys, PageId page_id) noexcept {
             /* If this thread is holding the file space latch (FilSpace::latch), the following
               check WILL break the latching order and may cause a deadlock of threads. */
 
-            (void)rec_queue_validate(block, Rec(rec_cursor), index, offsets);
+            (void)rec_queue_validate(sys, block, Rec(rec_cursor), index, offsets);
 
             mutex_enter(&sys.m_trx_sys->m_mutex);
 
@@ -234,7 +234,7 @@ bool LockValidator::rec_queue_validate(System &sys, const BufBlock *block, const
         continue;
       }
 
-      ut_ad(lock->m_trx->m_trx_sys == sys.m_trx_sys);
+      ut_ad(lock->m_trx->m_trx_sys == sys.m_trx_sys.get());
 
       validate_trx_state(lock->m_trx);
       ut_ad(sys.m_trx_sys->in_trx_list(lock->m_trx));

@@ -317,7 +317,7 @@ bool BufPool::is_corrupted(const byte *read_buf) {
     return true;
   }
 
-  if (recv_lsn_checks_on) {
+  if (m_sys.m_recv->m_lsn_checks_on) {
     lsn_t current_lsn;
 
     if (m_sys.m_log->peek_lsn(&current_lsn) && current_lsn < mach_read_from_8(read_buf + FIL_PAGE_LSN)) {
@@ -554,11 +554,8 @@ bool BufPool::open(uint64_t pool_size) {
     return false;
   }
 
-  srv_config.m_buf_pool_old_size = pool_size;
-
   m_curr_size = chunk->size;
 
-  srv_config.m_buf_pool_curr_size = m_curr_size * UNIV_PAGE_SIZE;
 
   m_page_hash = new page_hash_t{};
 
@@ -1417,7 +1414,7 @@ void BufPool::io_complete(BufPage *bpage) {
       }
     }
 
-    if (recv_recovery_on) {
+    if (m_sys.m_recv->m_recovery_on) {
       /* Pages must be uncompressed for crash recovery. */
       recv_recover_page(m_sys, true, (BufBlock *)bpage);
     }
