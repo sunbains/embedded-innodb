@@ -306,7 +306,7 @@ void BufFlush::write_complete(BufPage *bpage) {
     m_buf_pool->m_LRU_flush_ended++;
   }
 
-  /* ib_logger(ib_stream, "n pending flush %lu\n",
+  /* ib_logger(stderr, "n pending flush %lu\n",
   m_buf_pool->n_flush[flush_type]); */
 
   if ((m_buf_pool->m_n_flush[flush_type] == 0) && (m_buf_pool->m_init_flush[flush_type] == false)) {
@@ -690,7 +690,7 @@ ulint BufFlush::try_neighbors(Dblwr *dblwr, space_id_t space, page_no_t page_no,
     high = (page_no / area + 1) * area;
   }
 
-  /* ib_logger(ib_stream, "Flush area: low %lu high %lu\n", low, high); */
+  /* ib_logger(stderr, "Flush area: low %lu high %lu\n", low, high); */
 
   if (high > srv_fil->space_get_size(space)) {
     high = srv_fil->space_get_size(space);

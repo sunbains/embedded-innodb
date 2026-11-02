@@ -378,11 +378,10 @@ static void srv_startup_abort(DbErr err) noexcept {
   delete srv_buf_pool;
 }
 
-ib_err_t InnoDB::start() noexcept {
+DbErr InnoDB::start() noexcept {
   ut_a(!srv_was_started);
 
   // FIXME:
-  ib_stream = stderr;
 
   static_assert(sizeof(ulint) == sizeof(uintptr_t));
 

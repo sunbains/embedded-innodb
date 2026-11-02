@@ -256,7 +256,7 @@ struct RowInsert {
   ) noexcept;
 
   /**
-   * @brief Reports a foreign key error to ib_stream when trying to add an index entry to a child table.
+   * @brief Reports a foreign key error to stderr when trying to add an index entry to a child table.
    *
    * This function is called when there is a foreign key constraint violation while adding an index entry to a child table.
    * The addition may be the result of an update operation.

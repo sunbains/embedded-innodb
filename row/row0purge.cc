@@ -140,7 +140,7 @@ bool RowPurge::remove_clust_if_poss_low(ulint mode) {
 void RowPurge::remove_clust_if_poss() {
   ulint n_tries{};
 
-  /*	ib_logger(ib_stream, "Purge: Removing clustered record\n"); */
+  /*	ib_logger(stderr, "Purge: Removing clustered record\n"); */
 
   auto success = remove_clust_if_poss_low(BTR_MODIFY_LEAF);
 
@@ -191,9 +191,9 @@ bool RowPurge::remove_sec_if_poss_low(Index *index, const DTuple *entry, ulint m
     comes to consider the secondary index record a second
     time, it will not exist any more in the index. */
 
-    /* ib_logger(ib_stream,
+    /* ib_logger(stderr,
              "PURGE:........sec entry not found\n"); */
-    /* dtuple_print(ib_stream, entry); */
+    /* dtuple_print(stderr, entry); */
 
     pcur.close();
 
@@ -240,7 +240,7 @@ bool RowPurge::remove_sec_if_poss_low(Index *index, const DTuple *entry, ulint m
 void RowPurge::remove_sec_if_poss(Index *index, DTuple *entry) {
   ulint n_tries{};
 
-  /* ib_logger(ib_stream, "Purge: Removing secondary record\n"); */
+  /* ib_logger(stderr, "Purge: Removing secondary record\n"); */
 
   auto success = remove_sec_if_poss_low(index, entry, BTR_MODIFY_LEAF);
 

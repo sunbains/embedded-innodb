@@ -25,7 +25,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <unistd.h>
 #endif /* HAVE_UNISTD_H */
 
-#include "api0misc.h"
+#include "row0misc.h"
 #include "dict0dict.h"
 #include "innodb0types.h"
 #include "lock0lock.h"
@@ -49,14 +49,7 @@ int ib_create_tempfile(const char *) {
   return fh;
 }
 
-/** Determines if the currently running transaction has been interrupted.
-@return	true if interrupted */
-ib_trx_is_interrupted_handler_t ib_trx_is_interrupted = nullptr;
-
-bool trx_is_interrupted(const Trx *trx) {
-  if (trx->m_client_ctx != nullptr && ib_trx_is_interrupted != nullptr) {
-    return ib_trx_is_interrupted(trx->m_client_ctx);
-  }
+bool trx_is_interrupted(const Trx *) {
   return false;
 }
 
@@ -218,7 +211,7 @@ void ib_update_statistics_if_needed(Table *table) {
   }
 }
 
-const char *ib_strerror(ib_err_t err) {
+const char *db_strerror(DbErr err) noexcept {
   switch (err) {
     case DB_SUCCESS:
       return "Success";

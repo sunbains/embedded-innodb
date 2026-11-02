@@ -26,7 +26,7 @@ Created 9/20/1997 Heikki Tuuri
 
 #include "innodb0types.h"
 
-#include "api0api.h"
+#include "innodb0types.h"
 #include "buf0dblwr.h"
 #include "buf0types.h"
 #include "log0log.h"
@@ -315,7 +315,7 @@ number (FIL_PAGE_LSN) is in the future.  Initially false, and set by
 recv_recovery_from_checkpoint_start_func(). */
 extern bool recv_lsn_checks_on;
 
-extern ib_cb_t recv_pre_rollback_hook;
+extern void (*recv_pre_rollback_hook)();
 
 /** Maximum page number encountered in the redo log */
 extern ulint recv_max_parsed_page_no;

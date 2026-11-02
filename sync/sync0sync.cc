@@ -467,7 +467,7 @@ void mutex_get_debug_info(Mutex *mutex, const char **file_name, ulint *line, os_
 }
 
 /** Prints debug info of currently reserved mutexes. */
-static void mutex_list_print_info(ib_stream_t ib_stream) /*!< in: stream where to print */
+static void mutex_list_print_info(FILE *ib_stream) /*!< in: stream where to print */
 {
   Mutex *mutex;
   const char *file_name;
@@ -637,7 +637,7 @@ static bool sync_thread_levels_g(
         mutex = slot->latch;
 
         ib_logger(
-          ib_stream,
+          stderr,
           "sync levels should be"
           " > %lu but a level is %lu\n",
           (ulong)limit,
@@ -645,7 +645,7 @@ static bool sync_thread_levels_g(
         );
 
         if (mutex->magic_n == MUTEX_MAGIC_N) {
-          ib_logger(ib_stream, "Mutex created at %s %lu\n", mutex->cfile_name, (ulong)mutex->cline);
+          ib_logger(stderr, "Mutex created at %s %lu\n", mutex->cfile_name, (ulong)mutex->cline);
 
           if (mutex_get_lock_word(mutex) != 0) {
             const char *file_name;
@@ -655,7 +655,7 @@ static bool sync_thread_levels_g(
             mutex_get_debug_info(mutex, &file_name, &line, &thread_id);
 
             ib_logger(
-              ib_stream,
+              stderr,
               "Locked mutex:"
               " addr %p thread %ld"
               " file %s line %ld\n",
@@ -665,7 +665,7 @@ static bool sync_thread_levels_g(
               (ulong)line
             );
           } else {
-            ib_logger(ib_stream, "Not locked\n");
+            ib_logger(stderr, "Not locked\n");
           }
         } else {
           rw_lock_print(lock);
@@ -876,7 +876,7 @@ void sync_thread_add_level(void *latch, ulint level) {
     case SYNC_TRX_I_S_LAST_READ:
       if (!sync_thread_levels_g(array, level, true)) {
         ib_logger(
-          ib_stream,
+          stderr,
           "sync_thread_levels_g(array, %lu)"
           " does not hold!\n",
           level
@@ -1092,7 +1092,7 @@ void sync_close() {
   sync_initialized = false;
 }
 
-void sync_print_wait_info(ib_stream_t ib_stream) {
+void sync_print_wait_info(FILE *ib_stream) {
   IF_SYNC_DEBUG(
     ib_logger(ib_stream, "Mutex exits %lu, rws exits %lu, rwx exits %lu\n", mutex_exit_count, rw_s_exit_count, rw_x_exit_count);
   )
@@ -1120,7 +1120,7 @@ void sync_print_wait_info(ib_stream_t ib_stream) {
   );
 }
 
-void sync_print(ib_stream_t ib_stream) {
+void sync_print(FILE *ib_stream) {
   IF_SYNC_DEBUG(mutex_list_print_info(ib_stream); rw_lock_list_print_info(ib_stream);)
 
   sync_array_print_info(ib_stream, sync_primary_wait_array);

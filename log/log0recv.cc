@@ -68,7 +68,7 @@ bool recv_lsn_checks_on{};
 
 /* User callback function that is called before InnoDB attempts to
 rollback incomplete transaction after crash recovery. */
-ib_cb_t recv_pre_rollback_hook{};
+void (*recv_pre_rollback_hook)(){};
 
 /** The following counter is used to decide when to print info on log scan */
 static ulint recv_scan_print_counter;

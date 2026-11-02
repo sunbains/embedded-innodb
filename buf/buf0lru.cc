@@ -257,10 +257,10 @@ loop:
   if (!recv_recovery_on &&
       UT_LIST_GET_LEN(srv_buf_pool->m_free_list) + UT_LIST_GET_LEN(srv_buf_pool->m_LRU_list) < srv_buf_pool->m_curr_size / 20) {
 
-    ut_print_timestamp(ib_stream);
+    ut_print_timestamp(stderr);
 
     ib_logger(
-      ib_stream,
+      stderr,
       "  ERROR: over 95 percent of the buffer pool is occupied by lock heaps!"
       " Check that your transactions do not set too many row locks."
       " Your buffer pool size is %lu MB. Maybe you should make the buffer pool bigger?"
@@ -277,9 +277,9 @@ loop:
 
       /* Over 67 % of the buffer pool is occupied by lock heaps. This may be a memory leak! */
 
-      ut_print_timestamp(ib_stream);
+      ut_print_timestamp(stderr);
       ib_logger(
-        ib_stream,
+        stderr,
         "  WARNING: over 67 percent of the buffer pool is occupied by"
         " lock heaps! Check that your transactions do not set too many"
         " row locks. Your buffer pool size is %lu MB.Maybe you should"
@@ -331,9 +331,9 @@ loop:
   }
 
   if (n_iterations > 30) {
-    ut_print_timestamp(ib_stream);
+    ut_print_timestamp(stderr);
     ib_logger(
-      ib_stream,
+      stderr,
       "  Warning: difficult to find free blocks in\n"
       "the buffer pool (%lu search iterations)!"
       " Consider\n"
@@ -738,10 +738,10 @@ BufPageState BufLru::block_remove_hashed_page(BufPage *bpage) {
   auto hashed_bpage = srv_buf_pool->hash_get_page(PageId(bpage->m_space, bpage->m_page_no));
 
   if (unlikely(bpage != hashed_bpage)) {
-    ib_logger(ib_stream, "Error: page %lu %lu not found in the hash table ", (ulong)bpage->m_space, (ulong)bpage->m_page_no);
+    ib_logger(stderr, "Error: page %lu %lu not found in the hash table ", (ulong)bpage->m_space, (ulong)bpage->m_page_no);
     if (hashed_bpage) {
       ib_logger(
-        ib_stream,
+        stderr,
         "In hash table we find block %p of %lu %lu which is not %p",
         (const void *)hashed_bpage,
         (ulong)hashed_bpage->m_space,
@@ -937,22 +937,22 @@ void BufLru::print() {
 
   for (auto bpage = UT_LIST_GET_FIRST(srv_buf_pool->m_LRU_list); bpage != nullptr; bpage = UT_LIST_GET_NEXT(m_LRU_list, bpage)) {
 
-    ib_logger(ib_stream, "BLOCK space %lu page %lu ", (ulong)bpage->get_space(), (ulong)bpage->get_page_no());
+    ib_logger(stderr, "BLOCK space %lu page %lu ", (ulong)bpage->get_space(), (ulong)bpage->get_page_no());
 
     if (buf_page_is_old(bpage)) {
-      ib_logger(ib_stream, "old ");
+      ib_logger(stderr, "old ");
     }
 
     if (bpage->m_buf_fix_count > 0) {
-      ib_logger(ib_stream, "buffix count %lu ", (ulong)bpage->m_buf_fix_count);
+      ib_logger(stderr, "buffix count %lu ", (ulong)bpage->m_buf_fix_count);
     }
 
     if (buf_page_get_io_fix(bpage)) {
-      ib_logger(ib_stream, "io_fix %lu ", (ulong)buf_page_get_io_fix(bpage));
+      ib_logger(stderr, "io_fix %lu ", (ulong)buf_page_get_io_fix(bpage));
     }
 
     if (bpage->m_oldest_modification > 0) {
-      ib_logger(ib_stream, "modif. ");
+      ib_logger(stderr, "modif. ");
     }
 
     switch (bpage->get_state()) {
@@ -963,7 +963,7 @@ void BufLru::print() {
         frame = reinterpret_cast<BufBlock *>(bpage)->get_frame();
 
         ib_logger(
-          ib_stream,
+          stderr,
           "\ntype %lu index id %lu\n",
           (ulong)srv_fil->page_get_type(frame),
           (ulong)srv_btree_sys->page_get_index_id(frame)
@@ -971,7 +971,7 @@ void BufLru::print() {
         break;
 
       default:
-        ib_logger(ib_stream, "\n!state %lu!\n", (ulong)bpage->get_state());
+        ib_logger(stderr, "\n!state %lu!\n", (ulong)bpage->get_state());
         break;
     }
   }

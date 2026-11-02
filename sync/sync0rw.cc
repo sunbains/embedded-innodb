@@ -326,7 +326,7 @@ lock_loop:
 
   if (srv_print_latch_waits) {
     ib_logger(
-      ib_stream,
+      stderr,
       "Thread %lu spin wait rw-s-lock at %p"
       " cfile %s cline %lu rnds %lu\n",
       (ulong)os_thread_pf(os_thread_get_curr_id()),
@@ -363,7 +363,7 @@ lock_loop:
 
     if (srv_print_latch_waits) {
       ib_logger(
-        ib_stream,
+        stderr,
         "Thread %lu OS wait rw-s-lock at %p"
         " cfile %s cline %lu\n",
         os_thread_pf(os_thread_get_curr_id()),
@@ -545,7 +545,7 @@ lock_loop:
 
   if (srv_print_latch_waits) {
     ib_logger(
-      ib_stream,
+      stderr,
       "Thread %lu spin wait rw-x-lock at %p"
       " cfile %s cline %lu rnds %lu\n",
       os_thread_pf(os_thread_get_curr_id()),
@@ -569,7 +569,7 @@ lock_loop:
 
   if (srv_print_latch_waits) {
     ib_logger(
-      ib_stream,
+      stderr,
       "Thread %lu OS wait for rw-x-lock at %p"
       " cfile %s cline %lu\n",
       os_thread_pf(os_thread_get_curr_id()),
@@ -720,7 +720,7 @@ bool rw_lock_is_locked(RwLock *lock, ulint lock_type) {
 }
 
 #ifdef UNIV_SYNC_DEBUG
-void rw_lock_list_print_info(ib_stream_t ib_stream) {
+void rw_lock_list_print_info(FILE *ib_stream) {
   RwLock *lock;
   ulint count = 0;
   RwLockDebug *info;
@@ -768,7 +768,7 @@ void rw_lock_print(RwLock *lock) {
   RwLockDebug *info;
 
   ib_logger(
-    ib_stream,
+    stderr,
     "-------------\n"
     "RW-LATCH INFO\n"
     "RW-LATCH: %p ",
@@ -778,9 +778,9 @@ void rw_lock_print(RwLock *lock) {
   if (lock->m_lock_word != X_LOCK_DECR) {
 
     if (rw_lock_get_waiters(lock)) {
-      ib_logger(ib_stream, " Waiters for the lock exist\n");
+      ib_logger(stderr, " Waiters for the lock exist\n");
     } else {
-      ib_logger(ib_stream, "\n");
+      ib_logger(stderr, "\n");
     }
 
     info = UT_LIST_GET_FIRST(lock->m_debug_list);
@@ -795,24 +795,24 @@ void rw_lock_debug_print(RwLockDebug *info) {
   auto rwt = info->lock_type;
 
   ib_logger(
-    ib_stream, "Locked: thread %ld file %s line %ld  ", (ulong)os_thread_pf(info->thread_id), info->file_name, (ulong)info->line
+    stderr, "Locked: thread %ld file %s line %ld  ", (ulong)os_thread_pf(info->thread_id), info->file_name, (ulong)info->line
   );
 
   if (rwt == RW_LOCK_SHARED) {
-    ib_logger(ib_stream, "S-LOCK");
+    ib_logger(stderr, "S-LOCK");
   } else if (rwt == RW_LOCK_EX) {
-    ib_logger(ib_stream, "X-LOCK");
+    ib_logger(stderr, "X-LOCK");
   } else if (rwt == RW_LOCK_WAIT_EX) {
-    ib_logger(ib_stream, "WAIT X-LOCK");
+    ib_logger(stderr, "WAIT X-LOCK");
   } else {
     ut_error;
   }
 
   if (info->pass != 0) {
-    ib_logger(ib_stream, " pass value %lu", (ulong)info->pass);
+    ib_logger(stderr, " pass value %lu", (ulong)info->pass);
   }
 
-  ib_logger(ib_stream, "\n");
+  ib_logger(stderr, "\n");
 }
 
 ulint rw_lock_n_locked() {

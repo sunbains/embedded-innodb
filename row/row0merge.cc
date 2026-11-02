@@ -24,7 +24,7 @@ Completed by Sunny Bains and Marko Makela
 *******************************************************/
 
 #include "row0merge.h"
-#include "api0misc.h"
+#include "row0misc.h"
 #include "btr0blob.h"
 #include "btr0btr.h"
 #include "data0data.h"
@@ -556,8 +556,8 @@ static bool row_merge_read(
   auto success = os_file_read_no_error_handling(OS_FILE_FROM_FD(fd), buf, sizeof(*buf), off);
 
   if (!success) {
-    ut_print_timestamp(ib_stream);
-    ib_logger(ib_stream, "  failed to read merge block at %lu\n", off);
+    ut_print_timestamp(stderr);
+    ib_logger(stderr, "  failed to read merge block at %lu\n", off);
   }
 
   return success;
@@ -824,7 +824,7 @@ static byte *row_merge_write_eof(
   ut_ad(foffs);
 #ifdef UNIV_DEBUG
   if (row_merge_print_write) {
-    ib_logger(ib_stream, "row_merge_write %p,%p,%d,%lu EOF\n", (void *)b, (void *)block, fd, (ulong)*foffs);
+    ib_logger(stderr, "row_merge_write %p,%p,%d,%lu EOF\n", (void *)b, (void *)block, fd, (ulong)*foffs);
   }
 #endif /* UNIV_DEBUG */
 
@@ -1172,7 +1172,7 @@ static DbErr row_merge_blocks(
 #ifdef UNIV_DEBUG
   if (row_merge_print_block) {
     ib_logger(
-      ib_stream,
+      stderr,
       "row_merge_blocks fd=%d ofs=%lu + fd=%d ofs=%lu"
       " = fd=%d ofs=%lu\n",
       file->fd,
@@ -1274,7 +1274,7 @@ static bool row_merge_blocks_copy(
 #ifdef UNIV_DEBUG
   if (row_merge_print_block) {
     ib_logger(
-      ib_stream,
+      stderr,
       "row_merge_blocks_copy fd=%d ofs=%lu"
       " = fd=%d ofs=%lu\n",
       file->fd,

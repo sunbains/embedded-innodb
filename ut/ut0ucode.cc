@@ -26,7 +26,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 
 #include <algorithm>
 
-#include "api0ucode.h"
+#include "ut0ucode.h"
 #include "ut0mem.h"
 
 const charset_t *ib_ucode_get_connection_charset() {

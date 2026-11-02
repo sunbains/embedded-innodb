@@ -40,10 +40,10 @@ ulint *ut_dbg_null_ptr = nullptr;
 #endif /* !UT_DBG_USE_ABORT */
 
 void ut_dbg_assertion_failed(const char *expr, const char *file, ulint line) {
-  ut_print_timestamp(ib_stream);
+  ut_print_timestamp(stderr);
 
   ib_logger(
-    ib_stream,
+    stderr,
     " Assertion failure in thread %lu in file %s line %lu",
     os_thread_pf(os_thread_get_curr_id()),
     basename((char *)file),
@@ -51,11 +51,11 @@ void ut_dbg_assertion_failed(const char *expr, const char *file, ulint line) {
   );
 
   if (expr) {
-    ib_logger(ib_stream, " see: %s\n", expr);
+    ib_logger(stderr, " see: %s\n", expr);
   }
 
   ib_logger(
-    ib_stream,
+    stderr,
     " We intentionally generate a memory trap. Please submit a detailed bug report on the Embedded InnoDB GitHub repository: "
   );
 #if defined(UNIV_SYNC_DEBUG) || !defined(UT_DBG_USE_ABORT)
@@ -66,7 +66,7 @@ void ut_dbg_assertion_failed(const char *expr, const char *file, ulint line) {
 #if defined(UNIV_SYNC_DEBUG) || !defined(UT_DBG_USE_ABORT)
 void ut_dbg_stop_thread(const char *file, ulint line) {
   ib_logger(
-    ib_stream, "Thread %lu stopped in file %s line %lu\n", os_thread_pf(os_thread_get_curr_id()), basename((char *)file), line
+    stderr, "Thread %lu stopped in file %s line %lu\n", os_thread_pf(os_thread_get_curr_id()), basename((char *)file), line
   );
   os_thread_sleep(1000000000);
 }

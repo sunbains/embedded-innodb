@@ -24,7 +24,7 @@ Created 4/20/1996 Heikki Tuuri
 
 #include "row0row.h"
 
-#include "api0ucode.h"
+#include "ut0ucode.h"
 #include "btr0btr.h"
 #include "data0type.h"
 #include "dict0dict.h"
@@ -354,19 +354,19 @@ void row_build_row_ref_in_tuple(DTuple *ref, Rec rec, const Index *index, const 
   ut_ad(!index->is_clustered());
 
   if (unlikely(index->m_table == nullptr)) {
-    ib_logger(ib_stream, "table ");
+    ib_logger(stderr, "table ");
   notfound:
     ut_print_name(index->m_table->m_name);
-    ib_logger(ib_stream, " for index ");
+    ib_logger(stderr, " for index ");
     ut_print_name(index->m_name);
-    ib_logger(ib_stream, " not found\n");
+    ib_logger(stderr, " not found\n");
     ut_error;
   }
 
   auto clust_index = index->get_clustered_index();
 
   if (unlikely(!clust_index)) {
-    ib_logger(ib_stream, "clust index for table ");
+    ib_logger(stderr, "clust index for table ");
     goto notfound;
   }
 

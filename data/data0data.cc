@@ -121,7 +121,7 @@ static bool dfield_check_typed_no_assert(const Dfield *field) /*!< in: data fiel
   if (dfield_get_type(field)->mtype > DATA_CLIENT || dfield_get_type(field)->mtype < DATA_VARCHAR) {
 
     ib_logger(
-      ib_stream, "Error: data field type %lu, len %lu\n", (ulong)dfield_get_type(field)->mtype, (ulong)dfield_get_len(field)
+      stderr, "Error: data field type %lu, len %lu\n", (ulong)dfield_get_type(field)->mtype, (ulong)dfield_get_len(field)
     );
     return (false);
   }
@@ -134,11 +134,11 @@ bool dtuple_check_typed_no_assert(const DTuple *tuple) {
   ulint i;
 
   if (dtuple_get_n_fields(tuple) > REC_MAX_N_FIELDS) {
-    ib_logger(ib_stream, "Error: index entry has %lu fields\n", (ulong)dtuple_get_n_fields(tuple));
+    ib_logger(stderr, "Error: index entry has %lu fields\n", (ulong)dtuple_get_n_fields(tuple));
   dump:
-    ib_logger(ib_stream, "Tuple contents: ");
-    dtuple_print(ib_stream, tuple);
-    ib_logger(ib_stream, "\n");
+    ib_logger(stderr, "Tuple contents: ");
+    dtuple_print(stderr, tuple);
+    ib_logger(stderr, "\n");
 
     return (false);
   }
@@ -160,7 +160,7 @@ bool dfield_check_typed(const Dfield *field) {
   if (dfield_get_type(field)->mtype > DATA_CLIENT || dfield_get_type(field)->mtype < DATA_VARCHAR) {
 
     ib_logger(
-      ib_stream, "Error: data field type %lu, len %lu\n", (ulong)dfield_get_type(field)->mtype, (ulong)dfield_get_len(field)
+      stderr, "Error: data field type %lu, len %lu\n", (ulong)dfield_get_type(field)->mtype, (ulong)dfield_get_len(field)
     );
 
     ut_error;
@@ -228,7 +228,7 @@ void dfield_print(const Dfield *dfield) {
   auto data = (const byte *)dfield_get_data(dfield);
 
   if (dfield_is_null(dfield)) {
-    ib_logger(ib_stream, "nullptr");
+    ib_logger(stderr, "nullptr");
 
     return;
   }
@@ -238,16 +238,16 @@ void dfield_print(const Dfield *dfield) {
     case DATA_VARCHAR:
       for (i = 0; i < len; i++) {
         int c = *data++;
-        ib_logger(ib_stream, "%c", isprint(c) ? c : ' ');
+        ib_logger(stderr, "%c", isprint(c) ? c : ' ');
       }
 
       if (dfield_is_ext(dfield)) {
-        ib_logger(ib_stream, "(external)");
+        ib_logger(stderr, "(external)");
       }
       break;
     case DATA_INT:
       ut_a(len == 4); /* only works for 32-bit integers */
-      ib_logger(ib_stream, "%d", (int)mach_read_from_4(data));
+      ib_logger(stderr, "%d", (int)mach_read_from_4(data));
       break;
     default:
       ut_error;
@@ -262,7 +262,7 @@ void dfield_print_also_hex(const Dfield *dfield) {
   auto data = (const byte *)dfield_get_data(dfield);
 
   if (dfield_is_null(dfield)) {
-    ib_logger(ib_stream, "nullptr");
+    ib_logger(stderr, "nullptr");
 
     return;
   }
@@ -279,9 +279,9 @@ void dfield_print_also_hex(const Dfield *dfield) {
 
           if (!(prtype & DATA_UNSIGNED)) {
             val &= ~0x80;
-            ib_logger(ib_stream, "%ld", (long)val);
+            ib_logger(stderr, "%ld", (long)val);
           } else {
-            ib_logger(ib_stream, "%lu", (ulong)val);
+            ib_logger(stderr, "%lu", (ulong)val);
           }
           break;
 
@@ -290,9 +290,9 @@ void dfield_print_also_hex(const Dfield *dfield) {
 
           if (!(prtype & DATA_UNSIGNED)) {
             val &= ~0x8000;
-            ib_logger(ib_stream, "%ld", (long)val);
+            ib_logger(stderr, "%ld", (long)val);
           } else {
-            ib_logger(ib_stream, "%lu", (ulong)val);
+            ib_logger(stderr, "%lu", (ulong)val);
           }
           break;
 
@@ -301,9 +301,9 @@ void dfield_print_also_hex(const Dfield *dfield) {
 
           if (!(prtype & DATA_UNSIGNED)) {
             val &= ~0x800000;
-            ib_logger(ib_stream, "%ld", (long)val);
+            ib_logger(stderr, "%ld", (long)val);
           } else {
-            ib_logger(ib_stream, "%lu", (ulong)val);
+            ib_logger(stderr, "%lu", (ulong)val);
           }
           break;
 
@@ -312,24 +312,24 @@ void dfield_print_also_hex(const Dfield *dfield) {
 
           if (!(prtype & DATA_UNSIGNED)) {
             val &= ~0x80000000;
-            ib_logger(ib_stream, "%ld", (long)val);
+            ib_logger(stderr, "%ld", (long)val);
           } else {
-            ib_logger(ib_stream, "%lu", (ulong)val);
+            ib_logger(stderr, "%lu", (ulong)val);
           }
           break;
 
         case 6:
           id = mach_read_from_6(data);
-          ib_logger(ib_stream, "{%lu %lu}", id, id);
+          ib_logger(stderr, "{%lu %lu}", id, id);
           break;
 
         case 7:
           id = mach_read_from_7(data);
-          ib_logger(ib_stream, "{%lu %lu}", id, id);
+          ib_logger(stderr, "{%lu %lu}", id, id);
           break;
         case 8:
           id = mach_read_from_8(data);
-          ib_logger(ib_stream, "{%lu %lu}", id, id);
+          ib_logger(stderr, "{%lu %lu}", id, id);
           break;
         default:
           goto print_hex;
@@ -341,25 +341,25 @@ void dfield_print_also_hex(const Dfield *dfield) {
         case DATA_TRX_ID:
           id = mach_read_from_6(data);
 
-          ib_logger(ib_stream, "trx_id %lu", TRX_ID_PREP_PRINTF(id));
+          ib_logger(stderr, "trx_id %lu", TRX_ID_PREP_PRINTF(id));
           break;
 
         case DATA_ROLL_PTR:
           id = mach_read_from_7(data);
 
-          ib_logger(ib_stream, "roll_ptr {%lu %lu}", id, id);
+          ib_logger(stderr, "roll_ptr {%lu %lu}", id, id);
           break;
 
         case DATA_ROW_ID:
           id = mach_read_from_6(data);
 
-          ib_logger(ib_stream, "row_id {%lu %lu}", id, id);
+          ib_logger(stderr, "row_id {%lu %lu}", id, id);
           break;
 
         default:
           id = mach_uint64_read_compressed(data);
 
-          ib_logger(ib_stream, "mix_id {%lu %lu}", id, id);
+          ib_logger(stderr, "mix_id {%lu %lu}", id, id);
       }
       break;
 
@@ -373,14 +373,14 @@ void dfield_print_also_hex(const Dfield *dfield) {
         if (!isprint(c)) {
           print_also_hex = true;
 
-          ib_logger(ib_stream, "\\x%02x", (unsigned char)c);
+          ib_logger(stderr, "\\x%02x", (unsigned char)c);
         } else {
-          ib_logger(ib_stream, "%c", c);
+          ib_logger(stderr, "%c", c);
         }
       }
 
       if (dfield_is_ext(dfield)) {
-        ib_logger(ib_stream, "(external)");
+        ib_logger(stderr, "(external)");
       }
 
       if (!print_also_hex) {
@@ -393,14 +393,14 @@ void dfield_print_also_hex(const Dfield *dfield) {
     case DATA_BINARY:
     default:
     print_hex:
-      ib_logger(ib_stream, " Hex: ");
+      ib_logger(stderr, " Hex: ");
 
       for (i = 0; i < len; i++) {
-        ib_logger(ib_stream, "%02lx", (ulint)*data++);
+        ib_logger(stderr, "%02lx", (ulint)*data++);
       }
 
       if (dfield_is_ext(dfield)) {
-        ib_logger(ib_stream, "(external)");
+        ib_logger(stderr, "(external)");
       }
   }
 }
@@ -408,7 +408,7 @@ void dfield_print_also_hex(const Dfield *dfield) {
 /**
  * @brief Print a dfield value using buf_to_hex_string.
  *
- * @param ib_stream Output stream.
+ * @param stderr Output stream.
  * @param dfield    Dfield to be printed.
  */
 static void dfield_print_raw(std::ostream &o, const Dfield *dfield) {
@@ -443,7 +443,7 @@ std::ostream &dtuple_print(std::ostream &o, const DTuple *tuple) {
   return o;
 }
 
-void dtuple_print(ib_stream_t ib_stream, const DTuple *tuple) {
+void dtuple_print(FILE *ib_stream, const DTuple *tuple) {
   std::ostringstream os{};
 
   dtuple_print(os, tuple);
@@ -472,10 +472,10 @@ BigRec* dtuple_convert_big_rec(const Index *index, DTuple *entry, ulint *n_ext) 
   auto size = rec_get_converted_size(index, entry, *n_ext);
 
   if (unlikely(size > 1000000000)) {
-    ib_logger(ib_stream, "Warning: tuple size very big: %lu\n", (ulong)size);
-    ib_logger(ib_stream, "Tuple contents: ");
-    dtuple_print(ib_stream, entry);
-    ib_logger(ib_stream, "\n");
+    ib_logger(stderr, "Warning: tuple size very big: %lu\n", (ulong)size);
+    ib_logger(stderr, "Tuple contents: ");
+    dtuple_print(stderr, entry);
+    ib_logger(stderr, "\n");
   }
 
   heap = mem_heap_create(size + dtuple_get_n_fields(entry) * sizeof(BigRecField) + 1000);

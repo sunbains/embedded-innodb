@@ -30,8 +30,8 @@ Created 12/19/1997 Heikki Tuuri
 *******************************************************/
 
 #include "row0sel.h"
-#include "api0misc.h"
-#include "api0ucode.h"
+#include "row0misc.h"
+#include "ut0ucode.h"
 #include "btr0blob.h"
 #include "btr0btr.h"
 #include "btr0cur.h"
@@ -1562,7 +1562,7 @@ QueThr *RowSel::fetch_step(QueThr *thr) noexcept {
   sel_node->m_common.parent = fetch_node;
 
   if (sel_node->m_state == SEL_NODE_CLOSED) {
-    ib_logger(ib_stream, "Error: fetch called on a closed cursor\n");
+    ib_logger(stderr, "Error: fetch called on a closed cursor\n");
 
     thr_get_trx(thr)->m_error_state = DB_ERROR;
 

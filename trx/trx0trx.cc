@@ -23,8 +23,8 @@ Created 3/26/1996 Heikki Tuuri
 *******************************************************/
 
 #include "trx0trx.h"
-#include "api0misc.h"
-#include "api0ucode.h"
+#include "row0misc.h"
+#include "ut0ucode.h"
 #include "lock0lock.h"
 #include "log0log.h"
 #include "os0proc.h"

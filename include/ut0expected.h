@@ -24,17 +24,17 @@ Created 2025-07-26 by Sunny Bains
 #pragma once
 
 #include <expected>
-#include "innodb.h"
+#include "db0err.h"
 
 /** Type alias for expected results with InnoDB error codes */
 template <typename T>
-using Expected = std::expected<T, ib_err_t>;
+using Expected = std::expected<T, DbErr>;
 
 /** Type alias for void expected results */
-using VoidExpected = std::expected<void, ib_err_t>;
+using VoidExpected = std::expected<void, DbErr>;
 
 /** Helper function to create an unexpected error result */
-constexpr auto make_unexpected(ib_err_t err) noexcept {
+constexpr auto make_unexpected(DbErr err) noexcept {
   return std::unexpected(err);
 }
 

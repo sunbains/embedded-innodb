@@ -410,7 +410,7 @@ void que_graph_free_recursive(que_node_t *node) {
 
       if (thr->magic_n != QUE_THR_MAGIC_N) {
         ib_logger(
-          ib_stream,
+          stderr,
           "que_thr struct appears corrupt;"
           " magic n %lu\n",
           (unsigned long)thr->magic_n
@@ -531,7 +531,7 @@ void que_graph_free_recursive(que_node_t *node) {
 
       break;
     default:
-      ib_logger(ib_stream, "que_node struct appears corrupt; type %lu\n", (unsigned long)que_node_get_type(node));
+      ib_logger(stderr, "que_node struct appears corrupt; type %lu\n", (unsigned long)que_node_get_type(node));
       ut_error;
   }
 }
@@ -761,7 +761,7 @@ void que_thr_stop_for_client_no_error(QueThr *thr, Trx *trx) {
   ut_ad(thr->graph->n_active_thrs == 1);
 
   if (thr->magic_n != QUE_THR_MAGIC_N) {
-    ib_logger(ib_stream, "que_thr struct appears corrupt; magic n %lu\n", (unsigned long)thr->magic_n);
+    ib_logger(stderr, "que_thr struct appears corrupt; magic n %lu\n", (unsigned long)thr->magic_n);
 
     ut_error;
   }
@@ -776,7 +776,7 @@ void que_thr_stop_for_client_no_error(QueThr *thr, Trx *trx) {
 
 void que_thr_move_to_run_state_for_client(QueThr *thr, Trx *trx) {
   if (thr->magic_n != QUE_THR_MAGIC_N) {
-    ib_logger(ib_stream, "que_thr struct appears corrupt; magic n %lu\n", (unsigned long)thr->magic_n);
+    ib_logger(stderr, "que_thr struct appears corrupt; magic n %lu\n", (unsigned long)thr->magic_n);
 
     ut_error;
   } else if (!thr->is_active) {
@@ -896,7 +896,7 @@ void que_node_print_info(que_node_t *node) {
     str = "UNKNOWN NODE TYPE";
   }
 
-  ib_logger(ib_stream, "Node type %lu: %s, address %p\n", (ulong)type, str, (void *)node);
+  ib_logger(stderr, "Node type %lu: %s, address %p\n", (ulong)type, str, (void *)node);
 }
 
 /** Performs an execution step on a query thread.
@@ -918,7 +918,7 @@ inline QueThr *que_thr_step(QueThr *thr) {
 
 #ifdef UNIV_DEBUG
   if (que_trace_on) {
-    ib_logger(ib_stream, "To execute: ");
+    ib_logger(stderr, "To execute: ");
     que_node_print_info(node);
   }
 #endif /* UNIV_DEBUG */

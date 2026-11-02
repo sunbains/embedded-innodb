@@ -425,9 +425,9 @@ void os_file_free();
 /**
  * @brief Prints info about the IO subsystem.
  *
- * @param ib_stream Stream where to print.
+ * @param stderr Stream where to print.
  */
-void os_file_print(ib_stream_t ib_stream);
+void os_file_print(FILE *out);
 
 /**
  * @brief Returns information about the specified file.

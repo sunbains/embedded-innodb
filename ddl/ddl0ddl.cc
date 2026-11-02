@@ -7,7 +7,7 @@ Created 12 Oct 2008.
 *******************************************************/
 
 #include "ddl0ddl.h"
-#include "api0misc.h"
+#include "row0misc.h"
 #include "btr0pcur.h"
 #include "dict0dict.h"
 #include "fil0fil.h"

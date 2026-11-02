@@ -17,7 +17,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 #pragma once
 
-#include "api0api.h"
+#include "innodb0types.h"
 #include "log0types.h"
 #include "log_buffer.h"
 #include "log0wal.h"

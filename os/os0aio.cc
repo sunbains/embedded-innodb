@@ -373,7 +373,7 @@ struct Impl : public Aio {
   /**
   * @brief Prints info of the aio arrays.
   *
-  * @param ib_stream Stream where to print.
+  * @param stderr Stream where to print.
   */
   virtual std::string to_string() noexcept;
 

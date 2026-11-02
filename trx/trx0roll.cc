@@ -593,13 +593,13 @@ try_again:
     if (progress_pct != trx_roll_progress_printed_pct) {
       if (trx_roll_progress_printed_pct == 0) {
         ib_logger(
-          ib_stream,
+          stderr,
           "\nProgress in percents:"
           " %lu",
           (ulong)progress_pct
         );
       } else {
-        ib_logger(ib_stream, " %lu", (ulong)progress_pct);
+        ib_logger(stderr, " %lu", (ulong)progress_pct);
       }
       trx_roll_progress_printed_pct = progress_pct;
     }

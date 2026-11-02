@@ -1774,7 +1774,7 @@ ulint BufPool::get_n_pending_ios() {
   return m_n_pend_reads + m_n_flush[BUF_FLUSH_LRU] + m_n_flush[BUF_FLUSH_LIST] + m_n_flush[BUF_FLUSH_SINGLE_PAGE];
 }
 
-void BufPool::print_io(ib_stream_t ib_stream) {
+void BufPool::print_io(FILE *ib_stream) {
   time_t current_time = time(nullptr);
   double time_elapsed = difftime(current_time, m_last_printout_time);
 

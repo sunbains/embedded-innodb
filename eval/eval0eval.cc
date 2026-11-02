@@ -241,12 +241,12 @@ static void eval_predefined_2(FuncNode *func_node) /*!< in: predefined function 
       arg = que_node_get_next(arg);
     }
 
-    ib_logger(ib_stream, "\n");
+    ib_logger(stderr, "\n");
 
   } else if (func == PARS_ASSERT_TOKEN) {
 
     if (!eval_node_get_bool_val(arg1)) {
-      ib_logger(ib_stream, "SQL assertion fails in a stored procedure!\n");
+      ib_logger(stderr, "SQL assertion fails in a stored procedure!\n");
     }
 
     ut_a(eval_node_get_bool_val(arg1));

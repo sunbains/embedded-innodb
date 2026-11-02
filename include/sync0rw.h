@@ -258,7 +258,7 @@ bool rw_lock_is_locked(
 void rw_lock_print(RwLock *lock); /** in: rw-lock */
 /** Prints debug info of currently locked rw-locks. */
 
-void rw_lock_list_print_info(ib_stream_t ib_stream); /** in: stream where to print */
+void rw_lock_list_print_info(FILE *ib_stream); /** in: stream where to print */
 
 /** Returns the number of currently locked rw-locks.
 Works only in the debug version.

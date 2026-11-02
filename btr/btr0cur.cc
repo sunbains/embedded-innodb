@@ -637,7 +637,7 @@ DbErr BtreeCursor::optimistic_insert(
 #ifdef UNIV_DEBUG
   if (m_print_record_ops && thr != nullptr) {
     trx_report(thr_get_trx(thr), index, "insert into ");
-    dtuple_print(ib_stream, entry);
+    dtuple_print(stderr, entry);
   }
 #endif /* UNIV_DEBUG */
 
@@ -727,7 +727,7 @@ DbErr BtreeCursor::optimistic_insert(
 
     if (unlikely(!*rec)) {
       log_err(std::format("Cannot insert tuple into {}: ", index->m_name));
-      dtuple_print(ib_stream, entry);
+      dtuple_print(stderr, entry);
       ut_error;
     }
   }

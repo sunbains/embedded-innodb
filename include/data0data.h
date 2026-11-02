@@ -119,10 +119,10 @@ void dfield_print(const Dfield *dfield);
 void dfield_print_also_hex(const Dfield *dfield);
 
 /** The following function prints the contents of a tuple.
- * @param ib_stream - output stream
+ * @param stderr - output stream
  * @param tuple - tuple
  */
-void dtuple_print(ib_stream_t ib_stream, const DTuple *tuple);
+void dtuple_print(FILE *out, const DTuple *tuple);
 
 /** Moves parts of long fields in entry to the big record vector so that
  * the size of tuple drops below the maximum record size allowed in the

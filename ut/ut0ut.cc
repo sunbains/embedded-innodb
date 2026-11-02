@@ -41,7 +41,7 @@ Created 5/11/1994 Heikki Tuuri
 #include <time.h>
 #include <cstdarg>
 
-#include "api0ucode.h"
+#include "ut0ucode.h"
 #include "trx0trx.h"
 #include "ut0ut.h"
 
@@ -72,8 +72,8 @@ int ut_usectime(ulint *sec, ulint *ms) noexcept {
 
     if (ret == -1) {
       errno_gettimeofday = errno;
-      ut_print_timestamp(ib_stream);
-      ib_logger(ib_stream, "  gettimeofday(): %s\n", strerror(errno_gettimeofday));
+      ut_print_timestamp(stderr);
+      ib_logger(stderr, "  gettimeofday(): %s\n", strerror(errno_gettimeofday));
       os_thread_sleep(100000); /* 0.1 sec */
       errno = errno_gettimeofday;
     } else {
@@ -115,7 +115,7 @@ double ut_difftime(ib_time_t time2, ib_time_t time1) noexcept {
   return difftime(time2, time1);
 }
 
-void ut_print_timestamp(ib_stream_t ib_stream) noexcept {
+void ut_print_timestamp(FILE *ib_stream) noexcept {
   time_t tm;
   struct tm cal_tm;
   struct tm *cal_tm_ptr;

@@ -41,7 +41,7 @@ Created 10/21/1995 Heikki Tuuri
 #include <array>
 #include <vector>
 
-#include "api0misc.h"
+#include "row0misc.h"
 #include "buf0buf.h"
 #include "fil0fil.h"
 #include "os0file.h"
@@ -248,11 +248,11 @@ static int os_file_lock(int fd, const char *name) {
   lk.l_whence = SEEK_SET;
   lk.l_start = lk.l_len = 0;
   if (fcntl(fd, F_SETLK, &lk) == -1) {
-    ib_logger(ib_stream, "Unable to lock %s, error: %d\n", name, errno);
+    ib_logger(stderr, "Unable to lock %s, error: %d\n", name, errno);
 
     if (errno == EAGAIN || errno == EACCES) {
       ib_logger(
-        ib_stream,
+        stderr,
         "Check that you do not already have another instance of your application is"
         " using the same InnoDB data or log files.\n"
       );
@@ -278,8 +278,8 @@ FILE *os_file_create_tmpfile() {
   }
 
   if (file == nullptr) {
-    ut_print_timestamp(ib_stream);
-    ib_logger(ib_stream, "Unable to create temporary file; errno: %d\n", errno);
+    ut_print_timestamp(stderr);
+    ib_logger(stderr, "Unable to create temporary file; errno: %d\n", errno);
     if (fd >= 0) {
       close(fd);
     }
@@ -397,11 +397,11 @@ void os_file_set_nocache(int fd, const char *file_name, const char *operation_na
     auto errno_save = errno;
 
     ib_logger(
-      ib_stream, "  Failed to set O_DIRECT on file %s: %s: %s, continuing anyway\n", file_name, operation_name, strerror(errno_save)
+      stderr, "  Failed to set O_DIRECT on file %s: %s: %s, continuing anyway\n", file_name, operation_name, strerror(errno_save)
     );
     if (errno_save == EINVAL) {
       ib_logger(
-        ib_stream,
+        stderr,
         "  O_DIRECT is known to result in "
         "'Invalid argument' on Linux on tmpfs."
       );
@@ -613,8 +613,8 @@ static int os_file_fsync(os_file_t file) {
     if (ret == -1 && errno == ENOLCK) {
       if (failures % 100 == 0) {
 
-        ut_print_timestamp(ib_stream);
-        ib_logger(ib_stream, "fsync(): No locks available; retrying\n");
+        ut_print_timestamp(stderr);
+        ib_logger(stderr, "fsync(): No locks available; retrying\n");
       }
 
       os_thread_sleep(200000 /* 0.2 sec */);
@@ -949,7 +949,7 @@ bool os_file_create_subdirs_if_needed(const char *path) {
   return success;
 }
 
-void os_file_print(ib_stream_t ib_stream) {
+void os_file_print(FILE *ib_stream) {
   ib_logger(ib_stream, "\n");
   auto current_time = time(nullptr);
   auto time_elapsed = 0.001 + difftime(current_time, os_last_printout);

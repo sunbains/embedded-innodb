@@ -413,7 +413,7 @@ void mem_heap_validate_or_print(
   }
 
   if (print) {
-    ib_logger(ib_stream, "Memory heap:");
+    ib_logger(stderr, "Memory heap:");
   }
 
   while (block != nullptr) {
@@ -422,7 +422,7 @@ void mem_heap_validate_or_print(
     if ((block->type == MEM_HEAP_BUFFER) && (mem_block_get_len(block) > UNIV_PAGE_SIZE)) {
 
       ib_logger(
-        ib_stream,
+        stderr,
         "Error: mem block %p"
         " length %lu > UNIV_PAGE_SIZE\n",
         (void *)block,
@@ -460,7 +460,7 @@ static void mem_heap_print(MemHeap *heap) /*!< in: memory heap */
 
   mem_heap_validate_or_print(heap, nullptr, true, &error, &us_size, &phys_size, &n_blocks);
   ib_logger(
-    ib_stream,
+    stderr,
     "\nheap type: %lu; size: user size %lu;"
     " physical size %lu; blocks %lu.\n",
     (ulong)heap->type,

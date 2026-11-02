@@ -46,7 +46,7 @@ extern bool lock_print_waits;
 #endif /* UNIV_DEBUG */
 
 /* Buffer for storing information about the most recent deadlock error */
-extern ib_stream_t lock_latest_err_stream;
+extern FILE *lock_latest_err_stream;
 
 struct LockSys {
   /**
@@ -570,10 +570,10 @@ struct LockSys {
    *
    * This function outputs details of a table lock to the specified stream.
    *
-   * @param[in] ib_stream The stream where the lock information will be printed.
+   * @param[in] stderr The stream where the lock information will be printed.
    * @param[in] lock The table type lock whose information is to be printed.
    */
-  void table_print(ib_stream_t ib_stream, const Lock *lock) noexcept;
+  void table_print(FILE *out, const Lock *lock) noexcept;
 
   /**
    * @brief Prints information about a record lock.
@@ -592,7 +592,7 @@ struct LockSys {
    * This function outputs details of locks held by all transactions to the specified stream.
    * If the trx system mutex cannot be obtained, the function exits without printing any information.
    *
-   * @param[in] ib_stream The stream where the lock information will be printed.
+   * @param[in] stderr The stream where the lock information will be printed.
    * @param[in] nowait Whether to wait for the trx system mutex.
    *
    * @return false if not able to obtain trx system mutex and exits without printing info.

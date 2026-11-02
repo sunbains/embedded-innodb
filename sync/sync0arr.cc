@@ -80,7 +80,7 @@ struct SyncCell {
 
   /** Reports info of a wait array cell.
   @param[in,out] stream         Where to print */
-  void print(ib_stream_t ib_stream);
+  void print(FILE *out);
 
   /** pointer to the object the thread is waiting for; if nullptr the cell is free for use */
   void *m_wait_object{};
@@ -149,8 +149,8 @@ struct SyncCheck {
 
   /** Prints info of the wait array.
   NOTE! caller must own the mutex
-  @param[in,out] ib_stream        Where to print. */
-  void output_info(ib_stream_t ib_stream);
+  @param[in,out] stderr        Where to print. */
+  void output_info(FILE *out);
 
   /** Reserves the mutex semaphore protecting a sync array. */
   void acquire();
@@ -362,7 +362,7 @@ void sync_array_wait_event(SyncCheck *arr, ulint index) {
 
   if (sync_array_detect_deadlock(arr, &cell, &cell, 0)) {
 
-    ib_logger(ib_stream, "########################################\n");
+    ib_logger(stderr, "########################################\n");
     ut_error;
   }
 
@@ -376,7 +376,7 @@ void sync_array_wait_event(SyncCheck *arr, ulint index) {
   sync_array_free_cell(arr, index);
 }
 
-void SyncCell::print(ib_stream_t ib_stream) {
+void SyncCell::print(FILE *ib_stream) {
   const auto type = m_request_type;
 
   ib_logger(
@@ -496,7 +496,7 @@ bool SyncCheck::deadlock_step(SyncCell *start, os_thread_id_t thread, ulint pass
 
     /* Deadlock */
     ib_logger(
-      ib_stream,
+      stderr,
       "########################################\n"
       "DEADLOCK of threads detected!\n"
     );
@@ -540,7 +540,7 @@ bool SyncCheck::detect_deadlock(SyncCell *start, SyncCell *cell, ulint depth) {
 
       if (deadlock_step(start, thread, 0, depth)) {
         ib_logger(
-          ib_stream,
+          stderr,
           "Mutex %p owned by thread %lu file %s "
           "line %lu\n",
           mutex,
@@ -549,7 +549,7 @@ bool SyncCheck::detect_deadlock(SyncCell *start, SyncCell *cell, ulint depth) {
           (ulong)mutex->line
         );
 
-        cell->print(ib_stream);
+        cell->print(stderr);
 
         return true;
       }
@@ -574,8 +574,8 @@ bool SyncCheck::detect_deadlock(SyncCell *start, SyncCell *cell, ulint depth) {
         he is blocked by start thread */
 
         if (deadlock_step(start, thread, debug->pass, depth)) {
-          ib_logger(ib_stream, "rw-lock %p ", (void *)lock);
-          cell->_print(ib_stream);
+          ib_logger(stderr, "rw-lock %p ", (void *)lock);
+          cell->_print(stderr);
           rw_lock_debug_print(debug);
           return true;
         }
@@ -599,8 +599,8 @@ bool SyncCheck::detect_deadlock(SyncCell *start, SyncCell *cell, ulint depth) {
 	start thread */
 
         if (deadlock_step(start, m_thread, debug->pass, depth)) {
-          ib_logger(ib_stream, "rw-lock %p ", (void *)lock);
-          cell->print(ib_stream);
+          ib_logger(stderr, "rw-lock %p ", (void *)lock);
+          cell->print(stderr);
           rw_lock_debug_print(debug);
           return true;
         }
@@ -723,8 +723,8 @@ bool sync_array_print_long_waits() {
   for (auto &cell : arr->m_cells) {
 
     if (cell.m_wait_object != nullptr && cell.m_waiting && difftime(time(nullptr), cell.m_reservation_time) > 240) {
-      ib_logger(ib_stream, "Warning: a long semaphore wait:\n");
-      cell.print(ib_stream);
+      ib_logger(stderr, "Warning: a long semaphore wait:\n");
+      cell.print(stderr);
       noticed = true;
     }
 
@@ -735,7 +735,7 @@ bool sync_array_print_long_waits() {
 
   if (noticed) {
 
-    ib_logger(ib_stream, "###### Starts InnoDB Monitor for 30 secs to print diagnostic info:");
+    ib_logger(stderr, "###### Starts InnoDB Monitor for 30 secs to print diagnostic info:");
 
     auto old_val = srv_print_innodb_monitor;
 
@@ -745,7 +745,7 @@ bool sync_array_print_long_waits() {
     call hanging inside the operating system, let us print right
     now the values of pending calls of these. */
 
-    ib_logger(ib_stream, "Pending preads %lu, pwrites %lu\n", (ulong)os_file_n_pending_preads, (ulong)os_file_n_pending_pwrites);
+    ib_logger(stderr, "Pending preads %lu, pwrites %lu\n", (ulong)os_file_n_pending_preads, (ulong)os_file_n_pending_pwrites);
 
     srv_print_innodb_monitor = true;
 
@@ -755,7 +755,7 @@ bool sync_array_print_long_waits() {
 
     srv_print_innodb_monitor = old_val;
     ib_logger(
-      ib_stream,
+      stderr,
       "###### Diagnostic info printed to the "
       "standard error stream"
     );
@@ -764,7 +764,7 @@ bool sync_array_print_long_waits() {
   return fatal;
 }
 
-void SyncCheck::output_info(ib_stream_t ib_stream) {
+void SyncCheck::output_info(FILE *ib_stream) {
   ib_logger(ib_stream, "OS WAIT ARRAY INFO: reservation count %ld, signal count %ld\n", (long)m_res_count, (long)m_sg_count);
 
   ulint i{};
@@ -783,7 +783,7 @@ void SyncCheck::output_info(ib_stream_t ib_stream) {
   }
 }
 
-void sync_array_print_info(ib_stream_t ib_stream, SyncCheck *arr) {
+void sync_array_print_info(FILE *ib_stream, SyncCheck *arr) {
   arr->acquire();
 
   arr->output_info(ib_stream);

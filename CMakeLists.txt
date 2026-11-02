@@ -212,8 +212,6 @@ INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/include)
 INCLUDE_DIRECTORIES(SYSTEM ${CMAKE_SOURCE_DIR}/../wal-cpp/include)
 
 SET(INNODB_SOURCES
-      api/api0api.cc api/api0misc.cc api/api0ucode.cc
-      api/api0cfg.cc api/api0status.cc api/api0sql.cc
       btr/btr0blob.cc btr/btr0btr.cc btr/btr0cur.cc btr/btr0pcur.cc
       buf/buf0buf.cc buf/buf0dblwr.cc
       buf/buf0flu.cc buf/buf0lru.cc buf/buf0rea.cc
@@ -239,7 +237,7 @@ SET(INNODB_SOURCES
       que/que0que.cc
       read/read0read.cc
       rem/rem0cmp.cc rem/rem0rec.cc
-      row/row0ext.cc row/row0ins.cc row/row0merge.cc
+      row/row0misc.cc row/row0ext.cc row/row0ins.cc row/row0merge.cc
       row/row0pread.cc
       row/row0purge.cc row/row0row.cc row/row0prebuilt.cc
       row/row0sel.cc row/row0undo.cc row/row0upd.cc row/row0vers.cc
@@ -249,7 +247,7 @@ SET(INNODB_SOURCES
       trx/trx0roll.cc trx/trx0rseg.cc
       trx/trx0sys.cc trx/trx0trx.cc trx/trx0undo.cc
       usr/usr0sess.cc ut/ut0dbg.cc ut/ut0mem.cc
-      ut/ut0rnd.cc ut/ut0ut.cc)
+      ut/ut0ucode.cc ut/ut0rnd.cc ut/ut0ut.cc)
 
 IF(CMAKE_BUILD_TYPE MATCHES Debug)
   ADD_DEFINITIONS(-O0 -g -Wall -DUNIV_DEBUG -Werror -Wno-interference-size)
@@ -290,7 +288,8 @@ IF(UNIT_TESTING)
 
   # Add test directories
   ADD_SUBDIRECTORY(unit-tests)
-  ADD_SUBDIRECTORY(tests)
+  # tests/ is being ported from the removed C API to the System C++ API.
+  # ADD_SUBDIRECTORY(tests)
 ELSE(UNIT_TESTING)
   MESSAGE(STATUS "UNIT_TESTING is disabled")
 ENDIF(UNIT_TESTING)
@@ -314,31 +313,6 @@ INSTALL(FILES   COPYING
     COPYING.Percona
     COPYING.Sun_Microsystems
   DESTINATION .)
-
-INSTALL(FILES   innodb.h
-  DESTINATION include)
-
-INSTALL(FILES   tests/ib_cfg.cc
-    tests/ib_compressed.cc
-    tests/ib_cursor.cc
-    tests/ib_index.cc
-    tests/ib_logger.cc
-    tests/ib_search.cc
-    tests/ib_status.cc
-    tests/ib_test1.cc
-    tests/ib_test2.cc
-    tests/ib_test3.cc
-    tests/ib_test5.cc
-    tests/ib_types.cc
-    tests/ib_update.cc
-    tests/test0aux.cc
-    tests/test0aux.h
-    tests/README
-  DESTINATION examples)
-
-INSTALL(FILES   tests/CMakeLists.examples
-  DESTINATION examples
-  RENAME CMakeLists.txt)
 
 INSTALL(TARGETS innodb
   RUNTIME DESTINATION bin

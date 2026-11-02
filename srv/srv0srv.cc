@@ -41,7 +41,9 @@ Created 10/8/1995 Heikki Tuuri
 
 #include "srv0srv.h"
 
-#include "api0ucode.h"
+#include <cstdarg>
+
+#include "ut0ucode.h"
 #include "btr0cur.h"
 
 #include "buf0flu.h"
@@ -210,7 +212,7 @@ int64_t srv_n_lock_wait_time = 0;
 ulint srv_n_lock_max_wait_time = 0;
 
 /** Set the following to 0 if you want InnoDB to write messages on
-ib_stream on startup/shutdown */
+stderr on startup/shutdown */
 bool srv_print_verbose_log = true;
 bool srv_print_innodb_monitor = false;
 bool srv_print_innodb_tablespace_monitor = false;
@@ -501,10 +503,6 @@ static char *data_path_buf;
 /* global variable for indicating if we've paniced or not. If we have,
    we try not to do anything at all. */
 int srv_panic_status = 0;
-
-void *ib_panic_data = nullptr;
-
-ib_panic_handler_t ib_panic = nullptr;
 
 /**
  * Adds a slash or a backslash to the end of a string if it is missing
@@ -1219,7 +1217,7 @@ static void srv_refresh_innodb_monitor_stats() noexcept {
   mutex_exit(&srv_innodb_monitor_mutex);
 }
 
-bool InnoDB::printf_innodb_monitor(ib_stream_t ib_stream, bool nowait, ulint *trx_start, ulint *trx_end) noexcept {
+bool InnoDB::printf_innodb_monitor(FILE *ib_stream, bool nowait, ulint *trx_start, ulint *trx_end) noexcept {
   mutex_enter(&srv_innodb_monitor_mutex);
 
   auto current_time = time(nullptr);
@@ -1484,7 +1482,7 @@ loop:
         last_srv_print_monitor = true;
       }
 
-      if (!printf_innodb_monitor(ib_stream, MUTEX_NOWAIT(mutex_skipped), nullptr, nullptr)) {
+      if (!printf_innodb_monitor(stderr, MUTEX_NOWAIT(mutex_skipped), nullptr, nullptr)) {
         ++mutex_skipped;
       } else {
         /* Reset the counter */
@@ -1497,7 +1495,7 @@ loop:
     if (srv_config.m_status) {
       mutex_enter(&srv_monitor_file_mutex);
 
-      if (!printf_innodb_monitor(ib_stream, MUTEX_NOWAIT(mutex_skipped), nullptr, nullptr)) {
+      if (!printf_innodb_monitor(stderr, MUTEX_NOWAIT(mutex_skipped), nullptr, nullptr)) {
         ++mutex_skipped;
       } else {
         mutex_skipped = 0;
@@ -2164,19 +2162,13 @@ void InnoDB::panic(int panic_ib_error, char *fmt, ...) noexcept {
 
   va_start(ap, fmt);
 
-  if (ib_panic) {
-    ib_panic(ib_panic_data, panic_ib_error, fmt, ap);
-    return;
-  } else {
-    log_warn("Database forced shutdown! err: {}", panic_ib_error);
-    // Note: va_list cannot be used with std::format-based logging
-    // Output the format string directly for now
-    std::vfprintf(stderr, fmt, ap);
-    std::fputc('\n', stderr);
-    exit(EXIT_FAILURE);
-  }
+  log_warn("Database forced shutdown! err: {}", panic_ib_error);
+  std::vfprintf(stderr, fmt, ap);
+  std::fputc('\n', stderr);
 
   va_end(ap);
+
+  exit(EXIT_FAILURE);
 }
 
 std::string InnoDB::get_log_dir() noexcept {

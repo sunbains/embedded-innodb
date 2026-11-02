@@ -181,85 +181,85 @@ void dtype_print(const Dtype *type) /*!< in: type */
 
   switch (mtype) {
     case DATA_VARCHAR:
-      ib_logger(ib_stream, "DATA_VARCHAR");
+      ib_logger(stderr, "DATA_VARCHAR");
       break;
 
     case DATA_CHAR:
-      ib_logger(ib_stream, "DATA_CHAR");
+      ib_logger(stderr, "DATA_CHAR");
       break;
 
     case DATA_BINARY:
-      ib_logger(ib_stream, "DATA_BINARY");
+      ib_logger(stderr, "DATA_BINARY");
       break;
 
     case DATA_FIXBINARY:
-      ib_logger(ib_stream, "DATA_FIXBINARY");
+      ib_logger(stderr, "DATA_FIXBINARY");
       break;
 
     case DATA_BLOB:
-      ib_logger(ib_stream, "DATA_BLOB");
+      ib_logger(stderr, "DATA_BLOB");
       break;
 
     case DATA_INT:
-      ib_logger(ib_stream, "DATA_INT");
+      ib_logger(stderr, "DATA_INT");
       break;
 
     case DATA_CLIENT:
-      ib_logger(ib_stream, "DATA_CLIENT");
+      ib_logger(stderr, "DATA_CLIENT");
       break;
 
     case DATA_SYS:
-      ib_logger(ib_stream, "DATA_SYS");
+      ib_logger(stderr, "DATA_SYS");
       break;
 
     case DATA_FLOAT:
-      ib_logger(ib_stream, "DATA_FLOAT");
+      ib_logger(stderr, "DATA_FLOAT");
       break;
 
     case DATA_DOUBLE:
-      ib_logger(ib_stream, "DATA_DOUBLE");
+      ib_logger(stderr, "DATA_DOUBLE");
       break;
 
     case DATA_DECIMAL:
-      ib_logger(ib_stream, "DATA_DECIMAL");
+      ib_logger(stderr, "DATA_DECIMAL");
       break;
 
     default:
-      ib_logger(ib_stream, "type %lu", (ulong)mtype);
+      ib_logger(stderr, "type %lu", (ulong)mtype);
       break;
   }
 
   len = type->len;
 
   if ((type->mtype == DATA_SYS) || (type->mtype == DATA_VARCHAR) || (type->mtype == DATA_CHAR)) {
-    ib_logger(ib_stream, " ");
+    ib_logger(stderr, " ");
     if (prtype == DATA_ROW_ID) {
-      ib_logger(ib_stream, "DATA_ROW_ID");
+      ib_logger(stderr, "DATA_ROW_ID");
       len = DATA_ROW_ID_LEN;
     } else if (prtype == DATA_ROLL_PTR) {
-      ib_logger(ib_stream, "DATA_ROLL_PTR");
+      ib_logger(stderr, "DATA_ROLL_PTR");
       len = DATA_ROLL_PTR_LEN;
     } else if (prtype == DATA_TRX_ID) {
-      ib_logger(ib_stream, "DATA_TRX_ID");
+      ib_logger(stderr, "DATA_TRX_ID");
       len = DATA_TRX_ID_LEN;
     } else if (prtype == DATA_ENGLISH) {
-      ib_logger(ib_stream, "DATA_ENGLISH");
+      ib_logger(stderr, "DATA_ENGLISH");
     } else {
-      ib_logger(ib_stream, "prtype %lu", (ulong)prtype);
+      ib_logger(stderr, "prtype %lu", (ulong)prtype);
     }
   } else {
     if (prtype & DATA_UNSIGNED) {
-      ib_logger(ib_stream, " DATA_UNSIGNED");
+      ib_logger(stderr, " DATA_UNSIGNED");
     }
 
     if (prtype & DATA_BINARY_TYPE) {
-      ib_logger(ib_stream, " DATA_BINARY_TYPE");
+      ib_logger(stderr, " DATA_BINARY_TYPE");
     }
 
     if (prtype & DATA_NOT_NULL) {
-      ib_logger(ib_stream, " DATA_NOT_NULL");
+      ib_logger(stderr, " DATA_NOT_NULL");
     }
   }
 
-  ib_logger(ib_stream, " len %lu", (ulong)len);
+  ib_logger(stderr, " len %lu", (ulong)len);
 }

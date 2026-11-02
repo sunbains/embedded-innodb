@@ -24,8 +24,8 @@ Created 7/1/1994 Heikki Tuuri
 
 #include "rem0cmp.h"
 
-#include "api0api.h"
-#include "api0ucode.h"
+#include "innodb0types.h"
+#include "ut0ucode.h"
 #include "srv0srv.h"
 
 /*		ALPHABETICAL ORDER
@@ -235,39 +235,14 @@ static int cmp_whole_field(
       /* fall through */
     case DATA_VARCLIENT:
     case DATA_CLIENT: {
-      ib_col_meta_t ib_col_meta;
+      /* Client defined types are ordered as binary strings. */
+      const auto ret = memcmp(a, b, std::min<ulint>(a_length, b_length));
 
-      /* FIXME: We should do this once at a higher level. Current
-      impact is on perfromance. */
-      ib_col_meta.type = ib_col_type_t(mtype);
-
-      /* FIXME: Set the length where it's known. */
-      ib_col_meta.type_len = 0;
-      ib_col_meta.attr = IB_COL_NONE;
-      ib_col_meta.client_type = prtype & DATA_CLIENT_TYPE_MASK;
-
-      const auto attr{to_int(ib_col_meta.attr)};
-
-      if (prtype & DATA_NOT_NULL) {
-        ib_col_meta.attr = static_cast<ib_col_attr_t>(attr | IB_COL_NOT_NULL);
+      if (ret != 0) {
+        return ret < 0 ? -1 : 1;
       }
 
-      if (prtype & DATA_UNSIGNED) {
-        ib_col_meta.attr = static_cast<ib_col_attr_t>(attr | IB_COL_UNSIGNED);
-      }
-
-      if (prtype & DATA_CUSTOM_TYPE) {
-        ib_col_meta.attr = static_cast<ib_col_attr_t>(attr | IB_COL_CUSTOM1);
-      }
-
-      if (prtype & (DATA_CUSTOM_TYPE << 1)) {
-        ib_col_meta.attr = static_cast<ib_col_attr_t>(attr | IB_COL_CUSTOM2);
-      }
-
-      if (prtype & (DATA_CUSTOM_TYPE << 2)) {
-        ib_col_meta.attr = static_cast<ib_col_attr_t>(attr | IB_COL_CUSTOM3);
-      }
-      return ib_client_compare(&ib_col_meta, a, a_length, b, b_length);
+      return a_length < b_length ? -1 : (a_length > b_length ? 1 : 0);
     }
     default:
       log_fatal("Unknown type number ", mtype);

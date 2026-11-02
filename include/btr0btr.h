@@ -528,7 +528,7 @@ struct Btree {
     page_no_t page_no = mach_read_from_4(field.get());
 
     if (unlikely(page_no == 0)) {
-      ib_logger(ib_stream, "a nonsensical page number 0 in a node ptr record at offset %lun", (ulong)page_offset(rec.get()));
+      ib_logger(stderr, "a nonsensical page number 0 in a node ptr record at offset %lun", (ulong)page_offset(rec.get()));
       buf_page_print(rec.page_align(), 0);
     }
 

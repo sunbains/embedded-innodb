@@ -168,8 +168,8 @@ double ut_difftime(ib_time_t time2, ib_time_t time1) noexcept;
 
 /** Prints a timestamp to a file.
  *
- * @param[in] ib_stream File where to print the timestamp */
-void ut_print_timestamp(ib_stream_t ib_stream) noexcept;
+ * @param[in] stderr File where to print the timestamp */
+void ut_print_timestamp(FILE *out) noexcept;
 
 /** Sprintfs a timestamp to a buffer, 13..14 chars plus terminating NUL.
  *
@@ -237,7 +237,7 @@ int ut_snprintf(char *str, size_t size, const char *format, ...) noexcept;
 ulint ut_format_name(char *buf, ulint buf_size, const char *name) noexcept;
 
 // FIXME: Use logger
-#define ib_stream stderr
+#define stderr stderr
 
 /** Calculates the maximum of two ulints.
  * @param[in] n1 First number

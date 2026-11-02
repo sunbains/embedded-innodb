@@ -27,8 +27,8 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <vector>
 
 #include "api0api.h"
-#include "api0misc.h"
-#include "api0ucode.h"
+#include "row0misc.h"
+#include "ut0ucode.h"
 #include "btr0blob.h"
 #include "btr0pcur.h"
 #include "ddl0ddl.h"

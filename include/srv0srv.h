@@ -41,7 +41,7 @@ Created 10/10/1995 Heikki Tuuri
 
 #include "innodb0types.h"
 
-#include "api0api.h"
+#include "innodb0types.h"
 #include "os0sync.h"
 #include "que0types.h"
 #include "sync0sync.h"
@@ -514,7 +514,7 @@ struct InnoDB {
   /**
    * Outputs to a file the output of the InnoDB Monitor.
    *
-   * @param[in] ib_stream	output stream
+   * @param[in] stderr	output stream
    * @param[in] nowait	whether to wait for kernel mutex
    * @param[out] trx_start	file position of the start of the list of active
    *  transactions
@@ -523,7 +523,7 @@ struct InnoDB {
    * @return false if not all information printed due to failure to obtain
    *  necessary mutex
    */
-  [[nodiscard]] static bool printf_innodb_monitor(ib_stream_t ib_stream, bool nowait, ulint *trx_start, ulint *trx_end) noexcept;
+  [[nodiscard]] static bool printf_innodb_monitor(FILE *out, bool nowait, ulint *trx_start, ulint *trx_end) noexcept;
 
   /**
    * Function to pass InnoDB status variables to client
@@ -572,7 +572,7 @@ struct InnoDB {
    *
    * @return	DB_SUCCESS or error code
    */
-  [[nodiscard]] static ib_err_t start() noexcept;
+  [[nodiscard]] static DbErr start() noexcept;
 
   /**
    * @return the log home directory

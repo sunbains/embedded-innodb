@@ -24,7 +24,7 @@ Created 5/7/1996 Heikki Tuuri
 
 #include "lock0lock.h"
 
-#include "api0ucode.h"
+#include "ut0ucode.h"
 #include "trx0purge.h"
 
 /** Restricts the length of search we will do in the waits-for

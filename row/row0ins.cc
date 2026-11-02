@@ -23,7 +23,7 @@ Created 4/20/1996 Heikki Tuuri
 *******************************************************/
 
 #include "row0ins.h"
-#include "api0misc.h"
+#include "row0misc.h"
 #include "btr0blob.h"
 #include "btr0btr.h"
 #include "btr0cur.h"
@@ -477,7 +477,7 @@ void RowInsert::foreign_report_err(
 
   if (entry != nullptr) {
     log_err(" tuple:");
-    dtuple_print(ib_stream, entry);
+    dtuple_print(stderr, entry);
   }
 
   log_err("\nBut in child table ", foreign->m_foreign_table_name, ", in index ", foreign->m_foreign_index->m_name);
@@ -507,7 +507,7 @@ void RowInsert::foreign_report_add_err(Trx *trx, const Foreign *foreign, Rec rec
     log_err(" tuple:");
     /* TODO: DB_TRX_ID and DB_ROLL_PTR may be uninitialized.
     It would be better to only display the user columns. */
-    dtuple_print(ib_stream, entry);
+    dtuple_print(stderr, entry);
   }
 
   log_err("But in parent table ", foreign->m_referenced_table_name, ", in index ", foreign->m_referenced_index->m_name);
@@ -985,7 +985,7 @@ run_again:
       ));
       m_dict->print_info_on_foreign_key_in_create_format(trx, foreign, true);
       log_err("Trying to add to index {}", foreign->m_foreign_index->m_name, " tuple: ");
-      dtuple_print(ib_stream, entry);
+      dtuple_print(stderr, entry);
       log_err(
         "\nBut the parent table {}", foreign->m_referenced_table_name, " does not currently exist! Or, it's .ibd file is missing."
       );

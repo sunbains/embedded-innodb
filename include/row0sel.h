@@ -24,7 +24,7 @@ Created 12/19/1997 Heikki Tuuri
 
 #pragma once
 
-#include "api0api.h"
+#include "innodb0types.h"
 #include "btr0pcur.h"
 #include "data0data.h"
 #include "dict0types.h"

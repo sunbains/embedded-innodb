@@ -770,7 +770,7 @@ DbErr UndoNode::del_unmark_secondary_index_and_undo_update(
 
   if (unlikely(!row_search_index_entry(index, entry, mode, &pcur, &mtr))) {
     log_err("Sec index del undo failed in ", index->m_name, " tuple: ");
-    dtuple_print(ib_stream, entry);
+    dtuple_print(stderr, entry);
     log_err("\nrecord ");
     log_err("\nrec: ", pcur.get_rec().to_string());
     log_err("\ntrx: ", trx->to_string(0));

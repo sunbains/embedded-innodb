@@ -1895,6 +1895,6 @@ extern int level;
 
 // FIXME: Change to proper C++ style streams
 /** The first argument to the InnoDB error logging function. */
-using ib_stream_t = FILE *;
+using FILE *= FILE *;
 
-extern ib_stream_t ib_stream;
+extern FILE *stderr;

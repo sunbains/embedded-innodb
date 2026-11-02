@@ -881,7 +881,7 @@ DbErr RowUpdate::sec_index_entry(UpdNode *node, QueThr *thr) noexcept {
     log_err("Sec index entry update in ");
     m_dict->index_name_print(trx, index);
     log_err("\ntuple ");
-    dtuple_print(ib_stream, entry);
+    dtuple_print(stderr, entry);
     log_err("record ");
     log_err(rec.to_string());
     log_info(trx->to_string(0));

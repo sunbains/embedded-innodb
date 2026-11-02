@@ -73,7 +73,7 @@ void *os_mem_alloc_large(ulint *n) {
   shmid = shmget(IPC_PRIVATE, (size_t)size, SHM_HUGETLB | SHM_R | SHM_W);
   if (shmid < 0) {
     ib_logger(
-      ib_stream,
+      stderr,
       "HugeTLB: Warning: Failed to allocate"
       " %lu bytes. errno %d\n",
       size,
@@ -87,7 +87,7 @@ void *os_mem_alloc_large(ulint *n) {
     ptr = shmat(shmid, NULL, 0);
     if (ptr == (void *)-1) {
       ib_logger(
-        ib_stream,
+        stderr,
         "HugeTLB: Warning: Failed to"
         " attach shared memory segment, errno %d\n",
         errno
@@ -113,7 +113,7 @@ void *os_mem_alloc_large(ulint *n) {
     return (ptr);
   }
 
-  ib_logger(ib_stream, "InnoDB HugeTLB: Warning: Using conventional memory pool\n");
+  ib_logger(stderr, "InnoDB HugeTLB: Warning: Using conventional memory pool\n");
 skip:
 #endif /* HAVE_LARGE_PAGES && UNIV_LINUX */
 
@@ -128,7 +128,7 @@ skip:
   size = *n = ut_2pow_round(*n + (size - 1), size);
   ptr = mmap(nullptr, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | OS_MAP_ANON, -1, 0);
   if (ptr == (void *)-1) {
-    ib_logger(ib_stream, "mmap(%lu bytes) failed;errno %lu\n", (ulong)size, (ulong)errno);
+    ib_logger(stderr, "mmap(%lu bytes) failed;errno %lu\n", (ulong)size, (ulong)errno);
     ptr = nullptr;
   } else {
     ut_allocated_memory(size);

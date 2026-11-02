@@ -581,8 +581,8 @@ struct BufPool {
   [[nodiscard]] ulint get_n_pending_ios();
 
   /** Prints info of the buffer i/o.
-  @para,[in,out] ib_stream      File write to write. */
-  void print_io(ib_stream_t ib_stream);
+  @para,[in,out] stderr      File write to write. */
+  void print_io(FILE *out);
 
   /** Returns the ratio in percents of modified pages in the buffer pool /
   database pages in the buffer pool.

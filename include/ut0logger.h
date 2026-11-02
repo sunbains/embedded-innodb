@@ -2,7 +2,7 @@
 
 #pragma once
 
-#include "innodb.h"
+#include <cstdio>
 
 #include <chrono>
 #include <iomanip>
@@ -17,6 +17,14 @@
 #include <cstring>
 
 namespace logger {
+
+enum Level { Debug, Info, Warn, Error, Fatal };
+
+/** Name of the program, printed in the message header. Defined by the application. */
+extern const char *Progname;
+
+/** Messages below this level are suppressed. Defined by the application. */
+extern int level;
 
 inline std::string now() noexcept {
   auto now = std::chrono::system_clock::now();

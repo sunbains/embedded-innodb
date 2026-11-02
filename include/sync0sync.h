@@ -93,10 +93,10 @@ bool sync_all_freed(void);
 /*#####################################################################
 FUNCTION PROTOTYPES FOR DEBUGGING */
 /** Prints wait info of the sync system. */
-void sync_print_wait_info(ib_stream_t ib_stream); /** in: stream where to print */
+void sync_print_wait_info(FILE *ib_stream); /** in: stream where to print */
 
 /** Prints info of the sync system. */
-void sync_print(ib_stream_t ib_stream); /** in: stream where to print */
+void sync_print(FILE *ib_stream); /** in: stream where to print */
 
 #ifdef UNIV_DEBUG
 /** Checks that the mutex has been initialized.

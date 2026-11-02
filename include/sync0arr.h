@@ -102,6 +102,6 @@ bool sync_array_print_long_waits(void);
 
 /** Prints info of the wait array. */
 void sync_array_print_info(
-  ib_stream_t ib_stream, /** in: stream where to print */
+  FILE *ib_stream, /** in: stream where to print */
   SyncCheck *arr
 ); /** in: wait array */
