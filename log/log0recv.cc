@@ -335,6 +335,10 @@ byte *recv_parse_or_apply_log_rec_body(System &sys, MlogType type, byte *ptr, by
     case MLOG_FILE_DELETE:
       ptr = sys.m_fil->op_log_parse_or_replay(ptr, end_ptr, type, 0, 0);
       break;
+    case MLOG_FILE_EXTEND:
+      /* The new size; replayed when parsed, see recv_extend(). */
+      ptr = end_ptr < ptr + 4 ? nullptr : ptr + 4;
+      break;
     default:
       ptr = nullptr;
       sys.m_recv->m_found_corrupt_log = true;
@@ -752,6 +756,19 @@ void recv_apply_log_recs(System &sys, bool flush_and_free_pages) noexcept {
  *
  * @return	length of the record, or 0 if the record was not complete
  */
+/**
+ * Replays MLOG_FILE_EXTEND when it is parsed: the file is extended before
+ * any record of a page in the new part is applied (they follow it in the
+ * log). Idempotent: nothing if the file is already that big.
+ *
+ * @param[in] sys               The instance.
+ * @param[in] space             The tablespace.
+ * @param[in] body              The record body: the new size, 4 bytes.
+ */
+static void recv_extend(System &sys, space_id_t space, const byte *body) noexcept {
+  sys.m_fil->extend_replay(space, page_no_t(mach_read_from_4(body)));
+}
+
 static ulint recv_parse_log_rec(System &sys, 
   byte *ptr, byte *end_ptr, MlogType *type, space_id_t *space, page_no_t *page_no, byte **body
 ) noexcept {
@@ -938,6 +955,8 @@ bool recv_parse_log_recs(System &sys, bool store_to_hash) noexcept {
         the log record, and check that it becomes identical with the
         original page */
 
+      } else if (type == MLOG_FILE_EXTEND) {
+        recv_extend(sys, space, body);
       } else if (type == MLOG_FILE_CREATE || type == MLOG_FILE_RENAME || type == MLOG_FILE_DELETE) {
         ut_a(space != SYS_TABLESPACE);
 
@@ -1012,7 +1031,11 @@ bool recv_parse_log_recs(System &sys, bool store_to_hash) noexcept {
           break;
         }
 
-        if (store_to_hash) {
+        if (!store_to_hash) {
+          /* Debug checking only. */
+        } else if (type == MLOG_FILE_EXTEND) {
+          recv_extend(sys, space, body);
+        } else {
           sys.m_recv->add_log_record(type, space, page_no, body, ptr + len, old_lsn, new_recovered_lsn);
         }
 

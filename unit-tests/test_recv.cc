@@ -21,6 +21,7 @@ RecvSys: parsing redo records, and crash recovery of a killed instance. */
 #include "ut0env.h"
 #include "ut0perf.h"
 
+#include "dict0dict.h"
 #include "fil0fil.h"
 #include "log0log.h"
 #include "log0recv.h"
@@ -357,8 +358,25 @@ TEST_F(RecvParseTest, FileOpsTruncated) {
 /** The types that are not redo records are corrupt log: they would stop
 the parsing of the log at once. */
 TEST_F(RecvParseTest, UnknownType) {
-  for (int type : {0, 3, 5, 6, 7, 12, 27, 36, 40, 47}) {
+  /* 36 is MLOG_FILE_EXTEND. */
+  for (int type : {0, 3, 5, 6, 7, 12, 27, 37, 40, 47}) {
     expect_corrupt(*m_sys, MlogType(type), {});
+  }
+}
+
+/** MLOG_FILE_EXTEND: a 4 byte body (the new size), truncated nullptr and
+not corrupt. Parsing does not extend anything: recovery replays it when it
+stores the parsed records. */
+TEST_F(RecvParseTest, FileExtend) {
+  std::vector<byte> b(4);
+
+  mach_write_to_4(b.data(), 1234);
+
+  EXPECT_EQ(recv_parse_or_apply_log_rec_body(*m_sys, MLOG_FILE_EXTEND, b.data(), b.data() + 4, nullptr, nullptr), b.data() + 4);
+
+  for (size_t n = 0; n < 4; ++n) {
+    EXPECT_EQ(recv_parse_or_apply_log_rec_body(*m_sys, MLOG_FILE_EXTEND, b.data(), b.data() + n, nullptr, nullptr), nullptr) << n;
+    EXPECT_FALSE(m_sys->m_recv->m_found_corrupt_log) << n;
   }
 }
 
@@ -1560,6 +1578,96 @@ TEST_F(RecvTest, StaleTail) {
   /* The model: the same changes, not applied. */
   m_apply = false;
   expected = committed(100);
+
+  expect_rows(expected);
+  restart();
+  expect_rows(expected);
+}
+
+/** An extension is not synced when done, it is redo logged: recovery
+extends the file when it parses MLOG_FILE_EXTEND. The child logs an
+extension of the table's file by 200 pages without doing it, as if the
+extension had not reached the disk before the crash; the file must be that
+big after recovery, and usable. */
+TEST_F(RecvTest, LostExtension) {
+  ut::Rows expected;
+  off_t before{};
+
+  const auto ibd = m_dir.m_path / (std::string(ut::TABLE) + ".ibd");
+
+  crash_hook(
+    [&] {
+      expected = committed(100);
+
+      auto &sys = *m_sys;
+
+      sys.m_dict->mutex_acquire();
+
+      const auto space = sys.m_dict->table_get(ut::TABLE)->m_space_id;
+
+      sys.m_dict->mutex_release();
+
+      const auto size = page_no_t(sys.m_fil->space_get_size(space));
+
+      ASSERT_GT(size, 0U);
+
+      Mtr mtr;
+
+      mtr.start();
+      sys.m_fil->extend_write_log(space, size + 200, &mtr);
+      mtr.commit(sys);
+
+      sys.m_log->buffer_flush_to_disk();
+    },
+    [&] { before = off_t(ut::fs::file_size(ibd)); }
+  );
+
+  /* Recovery made the file 200 pages bigger. */
+  EXPECT_GE(off_t(ut::fs::file_size(ibd)), before + off_t(200 * UNIV_PAGE_SIZE));
+
+  m_apply = false;
+  expected = committed(100);
+
+  expect_rows(expected);
+
+  /* The new part is usable: fill it (applied, not only the model). */
+  m_apply = true;
+
+  auto trx = b();
+
+  for (uint32_t k = 1000; k < 1400; ++k) {
+    ut::Row row{k, k % 17, ut::blob(k, 3000)};
+
+    ASSERT_EQ(ins(trx, row), DB_SUCCESS) << k;
+    expected[k] = row;
+  }
+
+  c(trx);
+
+  expect_rows(expected);
+  restart();
+  expect_rows(expected);
+}
+
+/** A crash right after extensions that were never synced: the rows in the
+new pages are recovered (the file size may or may not have reached the
+disk, recovery extends it from the log either way). */
+TEST_F(RecvTest, UnsyncedExtensions) {
+  ut::Rows expected;
+
+  crash_model([&] {
+    /* Big rows: the table's file is extended many times. */
+    auto trx = b();
+
+    for (uint32_t k = 0; k < 400; ++k) {
+      ut::Row row{k, k % 13, ut::blob(k, 8000)};
+
+      EXPECT_EQ(ins(trx, row), DB_SUCCESS) << k;
+      expected[k] = row;
+    }
+
+    c(trx);
+  });
 
   expect_rows(expected);
   restart();

@@ -716,7 +716,7 @@ BUG: it asserts instead (debug build): on the error it prints the tuple with
 dtuple_print() (data/data0data.cc:436) which ends in ut_ad(dtuple_validate())
 -> dtuple_check_typed() -> ut_error in dfield_check_typed() (data0data.cc:158).
 The same in upstream 7c21eac0. Fix: no validation in dtuple_print(). */
-TEST_F(TupleTest, DISABLED_CheckTypedNoAssert) {
+TEST_F(TupleTest, CheckTypedNoAssert) {
   Heap heap;
   auto t = dtuple_create(heap, 2);
 
@@ -752,7 +752,7 @@ BUG: data/data0data.cc:604 Dfield::print() writes the reference with
 operator<<(const byte *): as a NUL terminated string, read past the 20
 bytes and the field up to a NUL somewhere (here the field has none). Fix:
 print the 20 bytes in hex (buf_to_hex_string()). */
-TEST_F(TupleTest, DISABLED_PrintExternal) {
+TEST_F(TupleTest, PrintExternal) {
   std::vector<byte> buf(REC_MAX_INDEX_COL_LEN + BTR_EXTERN_FIELD_REF_SIZE, 'a');
   Dfield f{};
 
@@ -1787,7 +1787,7 @@ take the prefix length from field i of the secondary index instead of field
 i of the clustered index (upstream 7c21eac0 row0row.c:465 uses clust_index).
 SP's field 0 is s(3): the 4 byte key k is cut to 3 bytes and the reference
 finds no clustered record. */
-TEST_F(RowRefTest, DISABLED_FromPrefixIndex) {
+TEST_F(RowRefTest, FromPrefixIndex) {
   auto sp = index(m_t, "SP");
   auto clust = index(m_t);
   std::vector<std::pair<DTuple *, uint32_t>> refs;
@@ -1821,7 +1821,7 @@ TEST_F(RowRefTest, DISABLED_FromPrefixIndex) {
 /** Through the API: a search on SP with access to the clustered record finds
 the row (the clustered lookup builds the reference with
 row_build_row_ref_in_tuple(), see DISABLED_FromPrefixIndex). */
-TEST_F(RowRefTest, DISABLED_PrefixIndexClusterAccess) {
+TEST_F(RowRefTest, PrefixIndexClusterAccess) {
   auto trx = begin();
   api::Cursor *crsr{};
   api::Cursor *sec{};
@@ -1859,7 +1859,7 @@ TEST_F(RowRefTest, DISABLED_PrefixIndexClusterAccess) {
 index on the whole column, SS(s): the secondary record holds s once, whole;
 the reference must cut it to the 4 bytes of the clustered key (the same
 divergence as DISABLED_FromPrefixIndex, the other way around). */
-TEST_F(RowTest, DISABLED_RefOfPrefixPrimaryKey) {
+TEST_F(RowTest, RefOfPrefixPrimaryKey) {
   const auto t = name();
   const auto err = create_table(
     *m_sys,
@@ -2202,7 +2202,7 @@ nullptr and row_ext_create() is never called (upstream 7c21eac0 row0row.c
 `for (i = j = 0; ...)`). The prefixes then come from the local 768 bytes
 (enough in this format), but a reference that is not yet set is not seen
 (row_build_index_entry() should return nullptr for it, see ZeroRef). */
-TEST_F(RowExtTest, DISABLED_BuildMakesCache) {
+TEST_F(RowExtTest, BuildMakesCache) {
   auto clust = index(m_t);
   size_t n{};
 
@@ -2235,7 +2235,7 @@ TEST_F(RowExtTest, DISABLED_BuildMakesCache) {
 upstream).
 BUG: row/row0row.cc:181,186 read the fields with the parameter offsets,
 not local_offsets: with offsets == nullptr it dereferences null. */
-TEST_F(RowExtTest, DISABLED_BuildWithoutOffsets) {
+TEST_F(RowExtTest, BuildWithoutOffsets) {
   auto clust = index(m_t);
 
   for_each_rec(*m_sys, clust, [&](const Rec rec, const RecOffs &offs) {
@@ -2256,7 +2256,7 @@ BUG: api/api0api.cc:919 IndexSchema::add_col() and the dictionary accept
 any prefix length (the same upstream). With PB(b(1000)) and a 20000 byte b,
 the delete of the row asserts in row_build_index_entry() at
 row/row0row.cc:100 ut_a(ind_field->m_prefix_len <= len || ...). */
-TEST_F(RowTest, DISABLED_PrefixLongerThanLocal) {
+TEST_F(RowTest, PrefixLongerThanLocal) {
   const auto t = name();
   const auto err = create_table(
     *m_sys,
@@ -3078,7 +3078,10 @@ TEST_F(QueTest, StartCommand) {
   /* A graph waiting for a command stops its thread: suspended. */
   fork->state = QUE_FORK_COMMAND_WAIT;
   mutex_enter(&m_sys->m_trx_sys->m_mutex);
+  /* The state of the query thread: the trx mutex's too (lock0lock.h). */
+  trx_mutex_enter(trx);
   EXPECT_TRUE(que_thr_stop(*m_sys, t1));
+  trx_mutex_exit(trx);
   mutex_exit(&m_sys->m_trx_sys->m_mutex);
   EXPECT_EQ(t1->state, QUE_THR_SUSPENDED);
 
@@ -3498,7 +3501,7 @@ length of the value and reads on to a NUL. TO_NUMBER(SUBSTR('12345', 0, 2))
 is 12345, not 12 (and a value not followed by a NUL is read past its end).
 The same in upstream. Fix: convert at most dfield_get_len() bytes (copy to a
 NUL terminated buffer, or std::from_chars). */
-TEST_F(EvalTest, DISABLED_ToNumberOfSubstr) {
+TEST_F(EvalTest, ToNumberOfSubstr) {
   ASSERT_EQ(run("n INT;", "n", "n := TO_NUMBER(SUBSTR('12345', 0, 2));\nEMIT;"), DB_SUCCESS);
   ASSERT_EQ(m_rows.size(), 1UL);
   EXPECT_EQ(m_rows[0][0], i4(12));

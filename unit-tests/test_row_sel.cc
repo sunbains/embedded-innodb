@@ -780,24 +780,27 @@ class RowSelIdxTest : public SharedDb {
   std::vector<RecLock> locks_of(const Trx *trx, const Index *index) {
     std::vector<std::pair<PageId, std::pair<ulint, ulint>>> raw;
 
-    mutex_enter(&m_sys->m_trx_sys->m_mutex);
+    /* All the page shards of the lock system: latched X. */
+    m_sys->m_lock_sys->x_lock();
 
-    for (const auto &[page_id, locks] : m_sys->m_lock_sys->m_rec_locks) {
-      for (auto lock : locks) {
-        if (lock->m_trx != trx) {
-          continue;
-        }
+    for (auto &shard : m_sys->m_lock_sys->m_page_shards) {
+      for (const auto &[page_id, locks] : shard.m_locks) {
+        for (auto lock : locks) {
+          if (lock->m_trx != trx) {
+            continue;
+          }
 
-        for (ulint h{}; h < lock->rec_get_n_bits(); ++h) {
-          if (lock->rec_is_nth_bit_set(h)) {
-            /* The mode and the gap flags, without LOCK_REC. */
-            raw.emplace_back(page_id, std::pair(h, ulint(lock->precise_mode() & ~LOCK_TYPE_MASK)));
+          for (ulint h{}; h < lock->rec_get_n_bits(); ++h) {
+            if (lock->rec_is_nth_bit_set(h)) {
+              /* The mode and the gap flags, without LOCK_REC. */
+              raw.emplace_back(page_id, std::pair(h, ulint(lock->precise_mode() & ~LOCK_TYPE_MASK)));
+            }
           }
         }
       }
     }
 
-    mutex_exit(&m_sys->m_trx_sys->m_mutex);
+    m_sys->m_lock_sys->x_unlock();
 
     std::vector<RecLock> v;
 
@@ -962,6 +965,7 @@ TEST_F(RowSelIdxTest, SecModes) {
       }
     }
 
+    cur.close();
     commit(trx);
   }
 }
@@ -1021,6 +1025,7 @@ TEST_F(RowSelIdxTest, SecPrefixScan) {
       at = cur.next();
       ASSERT_EQ(at.m_err, DB_SUCCESS);
       EXPECT_EQ(at.m_row->m_a, 4U);
+      cur.close();
       commit(trx);
     }
   }
@@ -1590,6 +1595,7 @@ TEST_F(RowSelMtPerf, PointSelectSizes) {
     });
 
     EXPECT_LT(r.ns_per_op(), 5e6) << sz.m_name;
+    cur.close();
     commit(trx);
   }
 }

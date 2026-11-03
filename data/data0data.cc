@@ -433,7 +433,6 @@ std::ostream &dtuple_print(std::ostream &o, const DTuple *tuple) {
 
     o << ";\n";
   }
-  ut_ad(dtuple_validate(tuple));
   return o;
 }
 
@@ -605,7 +604,13 @@ std::ostream &Dfield::print(std::ostream &out) const {
   out << "Dfield { data:" << (void *)data << ", ext=" << (ulint)ext << " ";
 
   if (dfield_is_ext(this)) {
-    out << (static_cast<byte *>(data) + len - BTR_EXTERN_FIELD_REF_SIZE);
+    auto ref = static_cast<const byte *>(data) + len - BTR_EXTERN_FIELD_REF_SIZE;
+
+    out << "ref:";
+
+    for (ulint i{}; i < BTR_EXTERN_FIELD_REF_SIZE; ++i) {
+      out << std::format("{:02x}", ref[i]);
+    }
   }
 
   out << ", len=" << len << ", type=TBD" << "}";

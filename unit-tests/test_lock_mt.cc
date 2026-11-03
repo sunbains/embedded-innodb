@@ -22,336 +22,21 @@ cases are in test_lock.cc.
 
   LockMt          in-memory lock queues on fake pages, of started
                   transactions without query threads: a thread requests a
-                  lock as rec_lock_slow() / lock_table() do and polls for
-                  the grant (Srv::suspend_user_thread() sleeps instead). A
-                  checker thread validates the queues while they run, a
-                  model checks each grant against what the others hold.
-  LockMtDb        transactions of a started instance through the API: real
-                  waits and wakeups, deadlocks, commits and rollbacks, page
-                  splits and purge with gap locks held, isolation levels,
-                  lock wait timeouts (1 s, 0 s) and interrupts.
+                  lock with LockSys::rec_lock_for() (what the check and
+                  lock functions do, the shard latches and all) and polls
+                  for the grant (Srv::suspend_user_thread() sleeps instead).
+                  The storms make their requests with the lock system
+                  latched X, so that a model can check each grant against
+                  what the others hold, atomically with it; a checker
+                  thread validates the queues, with X, while they run.
   LockMtPerf      the in-memory lock queues, timed against the thread count.
-  LockMtDbPerf    the hand-over of a row between threads, timed. */
 
-#include "ut0env.h"
-#include "ut0perf.h"
+The tests through the API are in test_lock_mt_db.cc; the scaffolding of
+both in lock_mt_util.h. */
 
-#include "buf0buf.h"
-#include "dict0dict.h"
-#include "lock0lock.h"
-#include "lock0types.h"
-#include "page0page.h"
-#include "trx0purge.h"
-#include "trx0sys.h"
-#include "trx0trx.h"
-#include "ut0logger.h"
-
-#include <algorithm>
-#include <array>
-#include <atomic>
-#include <barrier>
-#include <chrono>
-#include <cstdlib>
-#include <cstring>
-#include <format>
-#include <future>
-#include <map>
-#include <memory>
-#include <mutex>
-#include <numeric>
-#include <random>
-#include <set>
-#include <string>
-#include <thread>
-#include <vector>
-
-using namespace std::chrono_literals;
-
-/** The node of a table lock in the queue of its table, for walking
-Table::m_locks: each file that walks it defines it (lock/lock0lock.cc,
-lock/lock0validator.cc). */
-struct TableLockGetNode {
-  static const UtListNode<Lock> &get_node(const Lock &lock) { return lock.m_table.m_locks; }
-};
+#include "lock_mt_util.h"
 
 namespace {
-
-using Clock = std::chrono::steady_clock;
-
-/* The deadlock storms make hundreds of deadlocks and the engine logs each
-one, with its transactions and locks, at the Info level. Keep the warnings. */
-[[maybe_unused]] const bool quiet = [] {
-  logger::level = logger::Warn;
-  return true;
-}();
-
-/** A space id no real tablespace has: locks on its pages exist only in the lock table. */
-constexpr space_id_t FAKE_SPACE = 0xFFFF0;
-
-/** The limits of the deadlock search: LOCK_MAX_N_STEPS_IN_DEADLOCK_CHECK
-and LOCK_MAX_DEPTH_IN_DEADLOCK_CHECK, lock/lock0lock.cc:32 and :36. */
-constexpr ulint MAX_STEPS = 1000000;
-constexpr ulint MAX_DEPTH = 200;
-
-/** LOCK_EXCEED_MAX_DEPTH, the result of LockSys::deadlock_recursive() when
-the search is too deep or too long (lock/lock0lock.cc). */
-constexpr ulint EXCEED = 3;
-
-constexpr ulint SUP = PAGE_HEAP_NO_SUPREMUM;
-
-/** What an insert requests: rec_insert_check_and_lock(). */
-constexpr ulint II = LOCK_X | LOCK_GAP | LOCK_INSERT_INTENTION;
-
-/** The largest heap number of a page: 13 bits in the record header. */
-constexpr ulint MAX_HEAP_NO = 8191;
-
-/** A page frame with only the header field that lock creation reads: the
-number of records in the heap, which sizes the lock bitmaps. */
-struct Frame {
-  explicit Frame(ulint n_heap) : m_buf(static_cast<byte *>(std::aligned_alloc(UNIV_PAGE_SIZE, UNIV_PAGE_SIZE))) {
-    memset(m_buf, 0, UNIV_PAGE_SIZE);
-    set_n_heap(n_heap);
-  }
-
-  ~Frame() { std::free(m_buf); }
-
-  Frame(const Frame &) = delete;
-  Frame &operator=(const Frame &) = delete;
-
-  void set_n_heap(ulint n_heap) { mach_write_to_2(m_buf + PAGE_HEADER + PAGE_N_HEAP, n_heap); }
-
-  byte *m_buf;
-};
-
-/** A page that exists only in the lock table: a frame and a block for it. */
-struct FakePage {
-  explicit FakePage(page_no_t page_no, ulint n_heap = 10) : m_frame(n_heap) {
-    m_block.m_frame = m_frame.m_buf;
-    buf_block_set_state(&m_block, BUF_BLOCK_READY_FOR_USE);
-    buf_block_set_file_page(&m_block, PageId{FAKE_SPACE, page_no});
-  }
-
-  FakePage(const FakePage &) = delete;
-  FakePage &operator=(const FakePage &) = delete;
-
-  [[nodiscard]] PageId id() const { return m_block.get_page_id(); }
-
-  Frame m_frame;
-  BufBlock m_block{};
-};
-
-/** The conflict rules of the record locks, written out apart from
-Lock::rec_blocks(): must a request for req of one transaction wait for a
-lock held (or requested earlier) by another one?
-- S is compatible with S.
-- An insert intention never makes anything wait.
-- An insert intention waits for any lock that covers the gap: a gap lock or
-  a plain (next-key) lock, not a lock on the record only.
-- Any other gap request never waits: gap locks only stop inserts.
-- A request for the record (plain or record only) waits for a lock that
-  covers the record: plain or record only, not a gap lock.
-On the supremum every lock is a gap lock. */
-bool conflicts(ulint req, ulint held, bool sup) {
-  if ((req & LOCK_MODE_MASK) == LOCK_S && (held & LOCK_MODE_MASK) == LOCK_S) {
-    return false;
-  } else if (held & LOCK_INSERT_INTENTION) {
-    return false;
-  }
-
-  const bool held_gap_only = sup || (held & LOCK_GAP);
-  const bool held_rec_only = !sup && (held & LOCK_REC_NOT_GAP);
-
-  if (req & LOCK_INSERT_INTENTION) {
-    return !held_rec_only;
-  } else if (sup || (req & LOCK_GAP)) {
-    return false;
-  } else {
-    return !held_gap_only;
-  }
-}
-
-/** Lock::reset(): the lock is granted or cancelled. (Lock::reset() and
-LockSys::rec_has_expl() are inline functions defined in lock/lock0lock.cc
-only: they can't be called from here, these are copies.) */
-void reset_wait(Lock *lock) {
-  lock->m_type_mode = LockMode(lock->m_type_mode & ~LOCK_WAIT);
-  lock->m_trx->m_wait_lock = nullptr;
-}
-
-/** LockSys::rec_has_expl(): a granted lock of trx on the record at least
-as strong as precise_mode. */
-const Lock *has_expl(LockSys &lock_sys, PageId page_id, ulint precise_mode, ulint heap_no, const Trx *trx) {
-  auto it = lock_sys.m_rec_locks.find(page_id);
-
-  if (it == lock_sys.m_rec_locks.end()) {
-    return nullptr;
-  }
-
-  for (auto lock : it->second) {
-    if (lock->m_trx == trx && lock->rec_is_nth_bit_set(heap_no) &&
-        Lock::mode_stronger_or_eq(lock->mode(), LockMode(precise_mode & LOCK_MODE_MASK)) && !lock->is_waiting() &&
-        (!lock->rec_is_not_gap() || (precise_mode & LOCK_REC_NOT_GAP) || heap_no == SUP) &&
-        (!lock->rec_is_gap() || (precise_mode & LOCK_GAP) || heap_no == SUP) && !lock->rec_is_insert_intention()) {
-      return lock;
-    }
-  }
-
-  return nullptr;
-}
-
-/** The compatibility of the table lock modes IS, IX, S, X. */
-bool table_compatible(ulint a, ulint b) {
-  constexpr bool compat[4][4] = {
-    {true, true, true, false},
-    {true, true, false, false},
-    {true, false, true, false},
-    {false, false, false, false},
-  };
-
-  return compat[a & LOCK_MODE_MASK][b & LOCK_MODE_MASK];
-}
-
-/** @return the test table, from the dictionary cache. */
-Table *get_table(System &sys) {
-  sys.m_dict->mutex_acquire();
-  auto table = sys.m_dict->table_get(ut::TABLE);
-  sys.m_dict->mutex_release();
-
-  return table;
-}
-
-/** Report a latency as a PERF line: ns is the value, shown as ns/op. */
-void report_ns(const std::string &name, int threads, double ns) {
-  ut::report(ut::BenchResult{name, threads, 1, ns / 1e9});
-}
-
-/** @return the p-th percentile of v, which it sorts. */
-double percentile(std::vector<double> &v, double p) {
-  if (v.empty()) {
-    return 0;
-  }
-
-  std::sort(v.begin(), v.end());
-
-  return v[std::min(v.size() - 1, size_t(p / 100.0 * double(v.size())))];
-}
-
-/** A DbTest whose started instance is shared by the tests of a suite: the
-first test starts it, the end of the suite shuts it down. Each test starts
-with an empty test table, purged. */
-class SharedDb : public ut::DbTest {
- protected:
-  static void TearDownTestSuite() {
-    if (s_sys != nullptr) {
-      EXPECT_EQ(s_sys->shutdown(IB_SHUTDOWN_NORMAL), DB_SUCCESS);
-      s_sys.reset();
-    }
-
-    s_dir.reset();
-  }
-
-  void SetUp() override {
-    if (s_dir == nullptr) {
-      s_dir = std::make_unique<ut::TestDir>();
-    }
-
-    m_config = ut::make_config(s_dir->m_path);
-
-    /* The storms commit thousands of transactions: flush the log once a second. */
-    m_config.m_log.m_flush_at_trx_commit = 2;
-
-    if (s_sys == nullptr) {
-      start();
-    } else {
-      m_sys = std::move(s_sys);
-    }
-
-    m_lock_sys = m_sys->m_lock_sys.get();
-    m_mutex = &m_sys->m_trx_sys->m_mutex;
-    m_table = get_table(*m_sys);
-    m_index = m_table->get_first_index();
-
-    clear();
-  }
-
-  void TearDown() override { s_sys = std::move(m_sys); }
-
-  /** Delete all the rows of the test table and purge them. */
-  void clear() {
-    auto trx = begin(IB_TRX_READ_COMMITTED);
-
-    for (const auto &[k, row] : scan(trx)) {
-      EXPECT_EQ(remove(trx, k), DB_SUCCESS);
-    }
-
-    commit(trx);
-    purge();
-  }
-
-  /** Run purge until it has nothing left to do. */
-  void purge() {
-    for (int i = 0; i < 100000 && m_sys->m_trx_sys->m_purge->run() > 0; ++i) {
-    }
-
-    (void)m_sys->m_trx_sys->m_purge->run();
-  }
-
-  /** @return true if trx waits for a lock. */
-  bool waiting(Trx *trx) {
-    mutex_enter(m_mutex);
-    const auto waits = trx->m_que_state == TRX_QUE_LOCK_WAIT;
-    mutex_exit(m_mutex);
-
-    return waits;
-  }
-
-  /** @return true once trx waits for a lock, false after timeout. */
-  bool wait_for_lock_wait(Trx *trx, std::chrono::milliseconds timeout = 10s) {
-    const auto end = Clock::now() + timeout;
-
-    while (Clock::now() < end) {
-      if (waiting(trx)) {
-        return true;
-      }
-
-      std::this_thread::sleep_for(1ms);
-    }
-
-    return false;
-  }
-
-  /** Lock the test table in trx with mode, through a cursor. */
-  DbErr lock_table(Trx *trx, CursorLockMode mode) {
-    api::Cursor *crsr{};
-
-    if (auto err = api::cursor_open_table(*m_sys, ut::TABLE, trx, &crsr); err != DB_SUCCESS) {
-      return err;
-    }
-
-    auto err = crsr->lock(*m_sys, mode);
-
-    (void)api::Cursor::close(*m_sys, crsr);
-
-    return err;
-  }
-
-  /** @return the number of pages with record locks, and of table locks on the test table. */
-  std::pair<size_t, size_t> n_locks() {
-    mutex_enter(m_mutex);
-    const auto n = std::pair{m_lock_sys->m_rec_locks.size(), size_t(m_table->m_locks.size())};
-    mutex_exit(m_mutex);
-
-    return n;
-  }
-
-  static inline std::unique_ptr<System> s_sys;
-  static inline std::unique_ptr<ut::TestDir> s_dir;
-
-  LockSys *m_lock_sys{};
-  Mutex *m_mutex{};
-  Table *m_table{};
-  Index *m_index{};
-};
 
 /** In-memory lock queues on fake pages, of started transactions. */
 class LockMt : public SharedDb {
@@ -373,47 +58,35 @@ class LockMt : public SharedDb {
     SharedDb::TearDown();
   }
 
-  /** A record lock request of trx, made as LockSys::rec_lock_slow() and
-  rec_enqueue_waiting() make it, without the query thread; an insert
-  intention as rec_insert_check_and_lock() does: no lock unless it waits.
-  The trx sys mutex is held.
+  /** A record lock request of trx, made by LockSys::rec_lock_for(): what
+  the check and lock functions do (an insert intention as
+  rec_insert_check_and_lock(): no lock unless it waits), without a query
+  thread. Called with the lock system latched X (the latches it takes are
+  then no-ops) by the storms, without it by the perf tests.
   @return GRANTED, WAIT (trx->m_wait_lock is the request), or DEADLOCK: the
   request is cancelled and trx is the victim. */
   Got rec_request(Trx *trx, const BufBlock &block, ulint mode, ulint heap_no) {
-    const auto page_id = block.get_page_id();
+    const auto err = m_lock_sys->rec_lock_for(trx, LockMode(mode), &block, heap_no, m_index);
 
-    if (mode & LOCK_INSERT_INTENTION) {
-      if (m_lock_sys->rec_other_has_conflicting(page_id, LockMode(mode), heap_no, trx) == nullptr) {
-        return GRANTED;
-      }
-    } else if (has_expl(*m_lock_sys, page_id, mode, heap_no, trx) != nullptr) {
+    if (err == DB_SUCCESS) {
       return GRANTED;
-    } else if (m_lock_sys->rec_other_has_conflicting(page_id, LockMode(mode), heap_no, trx) == nullptr) {
-      (void)m_lock_sys->rec_add_to_queue(LockMode(LOCK_REC | mode), &block, heap_no, m_index, trx);
-      return GRANTED;
-    }
-
-    auto lock = m_lock_sys->rec_create(LockMode(mode | LOCK_WAIT), &block, heap_no, m_index, trx);
-
-    if (m_lock_sys->deadlock_occurs(lock, trx)) {
-      reset_wait(lock);
-      lock->rec_reset_nth_bit(heap_no);
+    } else if (err == DB_DEADLOCK) {
       return DEADLOCK;
     }
 
-    if (trx->m_wait_lock == nullptr) {
-      /* Another transaction was the deadlock victim and the request was granted. */
-      return GRANTED;
-    }
+    EXPECT_EQ(err, DB_LOCK_WAIT);
 
-    trx->m_que_state = TRX_QUE_LOCK_WAIT;
-    trx->m_was_chosen_as_deadlock_victim = false;
+    trx_mutex_enter(trx);
+    const bool granted = trx->m_wait_lock == nullptr && !trx->m_was_chosen_as_deadlock_victim;
+    trx_mutex_exit(trx);
 
-    return WAIT;
+    /* Another transaction was the deadlock victim and the request was granted. */
+    return granted ? GRANTED : WAIT;
   }
 
-  /** Poll until the lock wait of trx ends. on_grant() runs with the trx
-  sys mutex held when it ends with a grant.
+  /** Poll until the lock wait of trx ends: its wait state, with its trx
+  mutex. on_grant() runs with the lock system latched X when it ends with a
+  grant (the wait state of trx does not change any more).
   @return true if the request was granted, false if trx was chosen as a
   deadlock victim, or if the wait lasted longer than limit: a lost grant,
   the test fails and the wait is cancelled. */
@@ -422,34 +95,41 @@ class LockMt : public SharedDb {
     const auto end = Clock::now() + limit;
 
     for (int i{};; ++i) {
-      mutex_enter(m_mutex);
+      trx_mutex_enter(trx);
+      const bool waits = trx->m_wait_lock != nullptr;
+      trx_mutex_exit(trx);
 
-      if (trx->m_wait_lock == nullptr) {
+      if (!waits) {
+        x_enter();
+
+        trx_mutex_enter(trx);
         const auto victim = trx->m_was_chosen_as_deadlock_victim;
-
         trx->m_was_chosen_as_deadlock_victim = false;
+        trx_mutex_exit(trx);
 
         if (!victim) {
           on_grant();
         }
 
-        mutex_exit(m_mutex);
+        x_exit();
 
         return !victim;
       }
 
       if (Clock::now() > end) {
-        const auto queue = dump(trx->m_wait_lock);
+        x_enter();
 
-        m_lock_sys->cancel_waiting_and_release(trx->m_wait_lock);
-        mutex_exit(m_mutex);
+        if (trx->m_wait_lock != nullptr) {
+          const auto queue = dump(trx->m_wait_lock);
 
-        ADD_FAILURE() << "trx " << trx->m_id << " waited for more than " << limit.count() << " ms, the queue:" << queue;
+          m_lock_sys->cancel_waiting_and_release(trx->m_wait_lock);
+          ADD_FAILURE() << "trx " << trx->m_id << " waited for more than " << limit.count() << " ms, the queue:" << queue;
+        }
+
+        x_exit();
 
         return false;
       }
-
-      mutex_exit(m_mutex);
 
       if (i < 100) {
         std::this_thread::yield();
@@ -463,6 +143,32 @@ class LockMt : public SharedDb {
     return await(trx, [] {});
   }
 
+  /** Poll until the lock wait of trx ends, with its trx mutex only (no X
+  latch: the perf tests). @return true if granted. */
+  bool await_fast(Trx *trx) {
+    for (int i{};; ++i) {
+      trx_mutex_enter(trx);
+      const bool waits = trx->m_wait_lock != nullptr;
+      const bool victim = !waits && trx->m_was_chosen_as_deadlock_victim;
+
+      if (victim) {
+        trx->m_was_chosen_as_deadlock_victim = false;
+      }
+
+      trx_mutex_exit(trx);
+
+      if (!waits) {
+        return !victim;
+      }
+
+      if (i < 100) {
+        std::this_thread::yield();
+      } else {
+        std::this_thread::sleep_for(20us);
+      }
+    }
+  }
+
   /** @return the locks of the queue of lock, for a failure message. */
   std::string dump(const Lock *lock) {
     std::string s;
@@ -471,8 +177,8 @@ class LockMt : public SharedDb {
       for (auto l : m_table->m_locks) {
         s += std::format(" [trx {} mode {:#x}]", l->m_trx->m_id, Lock_mode_type(l->precise_mode()));
       }
-    } else if (auto it = m_lock_sys->m_rec_locks.find(lock->page_id()); it != m_lock_sys->m_rec_locks.end()) {
-      for (auto l : it->second) {
+    } else if (auto q = m_lock_sys->rec_queue(lock->page_id()); q != nullptr) {
+      for (auto l : *q) {
         s += std::format(" [trx {} mode {:#x} heap_no", l->m_trx->m_id, Lock_mode_type(l->precise_mode()));
 
         for (ulint h{}; h < l->rec_get_n_bits(); ++h) {
@@ -497,10 +203,10 @@ class LockMt : public SharedDb {
 
   /** Fail the test with the broken invariants found. */
   void report_errors() {
-    mutex_enter(m_mutex);
+    x_enter();
     auto errors = std::move(m_errors);
     m_errors.clear();
-    mutex_exit(m_mutex);
+    x_exit();
 
     for (size_t i{}; i < std::min<size_t>(errors.size(), 20); ++i) {
       ADD_FAILURE() << errors[i];
@@ -543,7 +249,8 @@ class LockMt : public SharedDb {
   void check_queues() {
     std::vector<const Lock *> q;
 
-    for (const auto &[page_id, locks] : m_lock_sys->m_rec_locks) {
+    for (auto &shard : m_lock_sys->m_page_shards) {
+     for (const auto &[page_id, locks] : shard.m_locks) {
       if (page_id.m_space_id != FAKE_SPACE) {
         continue;
       }
@@ -567,6 +274,7 @@ class LockMt : public SharedDb {
           check_queue(q, h, page_id.m_page_no);
         }
       }
+     }
     }
 
     q.clear();
@@ -649,9 +357,9 @@ class LockMt : public SharedDb {
   struct Checker {
     Checker(LockMt *test, std::chrono::microseconds period) : m_thread([this, test, period] {
       while (!m_stop.load(std::memory_order_acquire)) {
-        mutex_enter(test->m_mutex);
+        test->x_enter();
         test->check_queues();
-        mutex_exit(test->m_mutex);
+        test->x_exit();
         ++m_n;
         std::this_thread::sleep_for(period);
       }
@@ -674,22 +382,26 @@ class LockMt : public SharedDb {
 
   /** @return the number of fake pages with record locks. */
   size_t n_fake_pages() {
-    mutex_enter(m_mutex);
+    x_enter();
 
-    const auto n = std::count_if(m_lock_sys->m_rec_locks.begin(), m_lock_sys->m_rec_locks.end(), [](const auto &e) {
-      return e.first.m_space_id == FAKE_SPACE;
-    });
+    size_t n{};
 
-    mutex_exit(m_mutex);
+    for (auto &shard : m_lock_sys->m_page_shards) {
+      n += size_t(std::count_if(shard.m_locks.begin(), shard.m_locks.end(), [](const auto &e) {
+        return e.first.m_space_id == FAKE_SPACE;
+      }));
+    }
+
+    x_exit();
 
     return size_t(n);
   }
 
   /** Release the locks of trx in memory and commit it. */
   void finish(Trx *trx) {
-    mutex_enter(m_mutex);
+    x_enter();
     model_drop(trx);
-    mutex_exit(m_mutex);
+    x_exit();
     commit(trx);
   }
 
@@ -752,7 +464,7 @@ TEST_F(LockMt, RecStorm) {
 
           ++n_req;
 
-          mutex_enter(m_mutex);
+          x_enter();
 
           const auto since = m_seq;
           const auto got = rec_request(trx, page->m_block, mode, heap_no);
@@ -761,7 +473,7 @@ TEST_F(LockMt, RecStorm) {
             model_grant(trx, page_no, heap_no, mode, since);
           }
 
-          mutex_exit(m_mutex);
+          x_exit();
 
           if (got == WAIT) {
             ++n_waits;
@@ -777,9 +489,9 @@ TEST_F(LockMt, RecStorm) {
           std::this_thread::yield();
         }
 
-        mutex_enter(m_mutex);
+        x_enter();
         model_drop(trx);
-        mutex_exit(m_mutex);
+        x_exit();
 
         if (victim || rng() % 4 == 0) {
           rollback(trx);
@@ -796,9 +508,9 @@ TEST_F(LockMt, RecStorm) {
 
   checker.stop();
 
-  mutex_enter(m_mutex);
+  x_enter();
   check_queues();
-  mutex_exit(m_mutex);
+  x_exit();
 
   EXPECT_EQ(n_req.load(), n_granted.load() + n_victims.load());
   EXPECT_GT(n_waits.load(), 0u) << "no request waited: the storm tests nothing";
@@ -811,7 +523,7 @@ TEST_F(LockMt, RecStorm) {
 /** Cycles of 2 to 32 transactions formed concurrently: each holds a record,
 and its thread requests the record of the next one, all at the same time.
 Exactly one transaction per cycle is the victim, the others are granted in
-turn. The victim follows the weight rule of deadlock_recursive(): the
+turn. The victim follows the weight rule of deadlock_occurs(): the
 requester that closed the cycle, unless the transaction that waits for it
 (the one before it in the cycle) weighs less (Trx::weight_cmp(): locks and
 undo records), then that one. Each transaction weighs 2 + extra locks + 1
@@ -835,7 +547,7 @@ TEST_F(LockMt, DeadlockCycles) {
       trxs.push_back(begin());
     }
 
-    mutex_enter(m_mutex);
+    x_enter();
 
     for (int i{}; i < n; ++i) {
       EXPECT_EQ(rec_request(trxs[i], ring.m_block, LOCK_X | LOCK_REC_NOT_GAP, 2 + i), GRANTED);
@@ -845,7 +557,7 @@ TEST_F(LockMt, DeadlockCycles) {
       }
     }
 
-    mutex_exit(m_mutex);
+    x_exit();
 
     std::barrier sync(n);
     std::atomic<int> closer{-1};
@@ -858,7 +570,7 @@ TEST_F(LockMt, DeadlockCycles) {
 
         sync.arrive_and_wait();
 
-        mutex_enter(m_mutex);
+        x_enter();
 
         const auto got = rec_request(trx, ring.m_block, LOCK_X | LOCK_REC_NOT_GAP, 2 + (i + 1) % n);
 
@@ -869,7 +581,7 @@ TEST_F(LockMt, DeadlockCycles) {
           EXPECT_EQ(closer.exchange(i), -1) << "two requests closed the cycle";
         }
 
-        mutex_exit(m_mutex);
+        x_exit();
 
         victim[i] = got == DEADLOCK || (got == WAIT && !await(trx));
 
@@ -911,6 +623,61 @@ TEST_F(LockMt, DeadlockCycles) {
   }
 }
 
+/** Cycles of 2 to 16 transactions formed concurrently in different page
+shards, with no lock system latch held by the test: each transaction holds a
+record of a page of its own, and its thread requests the record of the next
+one, all at the same time. Each request publishes its edge and walks latch
+free (lock0deadlock.h): two requests closing a cycle at once, in two shards,
+must not both miss the other's edge (the edges are stored and loaded
+sequentially consistent). Exactly one victim per cycle, the others granted,
+nobody waits for a timeout (await() fails after 20 s). 60 rounds. */
+TEST_F(LockMt, DeadlockCyclesSharded) {
+  constexpr std::array<int, 6> sizes{2, 2, 3, 4, 8, 16};
+
+  std::mt19937 rng(43);
+
+  for (int round{}; round < 60; ++round) {
+    const int n = sizes[rng() % sizes.size()];
+    std::vector<std::unique_ptr<FakePage>> pages;
+    std::vector<Trx *> trxs;
+
+    for (int i{}; i < n; ++i) {
+      pages.push_back(std::make_unique<FakePage>(page_no_t(5000 + 97 * i)));
+      trxs.push_back(begin());
+      ASSERT_EQ(rec_request(trxs[i], pages[i]->m_block, LOCK_X | LOCK_REC_NOT_GAP, 2), GRANTED);
+    }
+
+    std::barrier sync(n);
+    std::vector<int> victim(n);
+    std::vector<std::thread> threads;
+
+    for (int i{}; i < n; ++i) {
+      threads.emplace_back([&, i] {
+        auto trx = trxs[i];
+
+        sync.arrive_and_wait();
+
+        const auto got = rec_request(trx, pages[(i + 1) % n]->m_block, LOCK_X | LOCK_REC_NOT_GAP, 2);
+
+        victim[i] = got == DEADLOCK || (got == WAIT && !await(trx));
+
+        if (victim[i]) {
+          rollback(trx);
+        } else {
+          commit(trx);
+        }
+      });
+    }
+
+    for (auto &t : threads) {
+      t.join();
+    }
+
+    EXPECT_EQ(std::count(victim.begin(), victim.end(), 1), 1) << "round " << round << ": cycle of " << n;
+    EXPECT_EQ(n_fake_pages(), 0u);
+  }
+}
+
 /** The depth limit of the deadlock search (200): a chain of waits whose
 last waiting transaction is at depth 200 is searched to its end, no
 deadlock; one transaction more and the search gives up: the requester is
@@ -923,7 +690,7 @@ TEST_F(LockMt, DeadlockDepthEdge) {
       t.push_back(begin());
     }
 
-    mutex_enter(m_mutex);
+    x_enter();
 
     for (int i{}; i < n; ++i) {
       (void)m_lock_sys->rec_create_low(PageId{FAKE_SPACE, page_no_t(i)}, LOCK_X, 2, 16, m_index, t[i]);
@@ -940,7 +707,7 @@ TEST_F(LockMt, DeadlockDepthEdge) {
     EXPECT_EQ(m_lock_sys->deadlock_occurs(req, t[0]), expected) << n << " transactions";
 
     for (auto trx : t) {
-      m_lock_sys->release_off_trx_sys_mutex(trx);
+      m_lock_sys->release(trx);
     }
 
     for (auto trx : t) {
@@ -948,7 +715,7 @@ TEST_F(LockMt, DeadlockDepthEdge) {
       trx->m_que_state = TRX_QUE_RUNNING;
     }
 
-    mutex_exit(m_mutex);
+    x_exit();
 
     for (auto trx : t) {
       commit(trx);
@@ -956,50 +723,222 @@ TEST_F(LockMt, DeadlockDepthEdge) {
   }
 }
 
-/** The step limit (1,000,000 transactions visited) and the depth limit of
-the deadlock search, at their edges: a chain a -> b -> c (a waits for b,
-which waits for c). The search counts a step at each transaction it enters
-and gives up at an edge when it is past either limit: started with the
-step count one short of the limit it gives up at b's edge, two short it
-does not; started at depth 200 it gives up, at 199 it does not. (A real
-search would need a million waiting transactions to reach the step limit.) */
+/** The depth limit of the deadlock search at its edge: a chain a -> b -> c
+(a waits for b, which waits for c). The search follows one edge per waiting
+transaction (Trx::m_blocking_trx) and gives up at an edge when it is past
+the limit: started at depth 200 it gives up at b's edge, at 199 it does not.
+There is no step limit any more (it was 1,000,000 transactions visited by
+the old depth first search over the queues): a walk of one edge per
+transaction takes at most depth steps, the depth limit bounds it. */
 TEST_F(LockMt, SearchLimits) {
   auto a = begin();
   auto b = begin();
   auto c = begin();
 
-  mutex_enter(m_mutex);
+  x_enter();
 
   (void)m_lock_sys->rec_create_low(PageId{FAKE_SPACE, 1}, LOCK_X, 2, 16, m_index, b);
   (void)m_lock_sys->rec_create_low(PageId{FAKE_SPACE, 2}, LOCK_X, 2, 16, m_index, c);
   (void)m_lock_sys->rec_create_low(PageId{FAKE_SPACE, 2}, LockMode(LOCK_X | LOCK_WAIT), 2, 16, m_index, b);
   b->m_que_state = TRX_QUE_LOCK_WAIT;
 
-  auto req = m_lock_sys->rec_create_low(PageId{FAKE_SPACE, 1}, LockMode(LOCK_X | LOCK_WAIT), 2, 16, m_index, a);
+  (void)m_lock_sys->rec_create_low(PageId{FAKE_SPACE, 1}, LockMode(LOCK_X | LOCK_WAIT), 2, 16, m_index, a);
 
-  const auto search = [&](ulint cost, ulint depth) {
-    for (auto t : {a, b, c}) {
-      t->m_deadlock_mark = 0;
-    }
+  EXPECT_EQ(a->m_blocking_trx.load(), b);
+  EXPECT_EQ(b->m_blocking_trx.load(), c);
+  EXPECT_EQ(c->m_blocking_trx.load(), nullptr);
 
-    return m_lock_sys->deadlock_recursive(a, a, req, &cost, depth);
-  };
+  Trx *pred{};
 
-  EXPECT_EQ(search(MAX_STEPS - 1, 0), EXCEED);
-  EXPECT_EQ(search(MAX_STEPS - 2, 0), 0u);
-  EXPECT_EQ(search(0, MAX_DEPTH), EXCEED);
-  EXPECT_EQ(search(0, MAX_DEPTH - 1), 0u);
+  EXPECT_EQ(m_lock_sys->deadlock_search(a, MAX_DEPTH, &pred), DeadlockWalk::TOO_DEEP);
+  EXPECT_EQ(m_lock_sys->deadlock_search(a, MAX_DEPTH - 1, &pred), DeadlockWalk::NONE);
+  EXPECT_EQ(m_lock_sys->deadlock_search(a, 0, &pred), DeadlockWalk::NONE);
 
   for (auto t : {a, b, c}) {
-    m_lock_sys->release_off_trx_sys_mutex(t);
+    m_lock_sys->release(t);
     t->m_wait_lock = nullptr;
     t->m_que_state = TRX_QUE_RUNNING;
   }
 
-  mutex_exit(m_mutex);
+  x_exit();
 
   for (auto t : {a, b, c}) {
     commit(t);
+  }
+}
+
+/** The edges of the waits-for graph: a waiting transaction publishes a
+transaction that blocks it (Trx::m_blocking_trx) when it starts to wait; a
+release that leaves it waiting moves the edge to a blocker that is still
+there; the grant clears it. a and b hold S on a record, w waits for X: its
+edge names a or b. The one it names commits: the edge moves to the other.
+That one commits: w is granted, no edge. */
+TEST_F(LockMt, WaitEdges) {
+  FakePage page(1);
+
+  auto a = begin();
+  auto b = begin();
+  auto w = begin();
+
+  x_enter();
+  ASSERT_EQ(rec_request(a, page.m_block, LOCK_S | LOCK_REC_NOT_GAP, 2), GRANTED);
+  ASSERT_EQ(rec_request(b, page.m_block, LOCK_S | LOCK_REC_NOT_GAP, 2), GRANTED);
+  ASSERT_EQ(rec_request(w, page.m_block, LOCK_X | LOCK_REC_NOT_GAP, 2), WAIT);
+
+  auto first = w->m_blocking_trx.load();
+
+  ASSERT_TRUE(first == a || first == b);
+
+  auto second = first == a ? b : a;
+
+  x_exit();
+
+  commit(first);
+
+  x_enter();
+  EXPECT_EQ(w->m_blocking_trx.load(), second) << "the edge did not move to the remaining blocker";
+  EXPECT_NE(w->m_wait_lock, nullptr);
+  x_exit();
+
+  commit(second);
+
+  EXPECT_TRUE(await(w));
+
+  x_enter();
+  EXPECT_EQ(w->m_blocking_trx.load(), nullptr);
+  x_exit();
+
+  commit(w);
+}
+
+/** A cycle that the one edge graph does not hold: a and b hold S on record
+2, w holds X on record 3 and waits for X on record 2 (blocked by a and b; a
+comes first in the queue and neither waits, its edge names a); b requests
+record 3, held by w. The full graph has the cycle b -> w -> b; the one edge
+walk from b goes b -> w -> a and stops at a, which runs (and could be an
+idle client transaction that never ends). w has two blockers, so the full
+search runs and finds the cycle at b's request (lock0deadlock.h): b gets the
+deadlock at once (it closed the cycle, and w weighs the same), not when a
+ends. a commits, w is granted. 20 rounds. */
+TEST_F(LockMt, DeadlockPastRunningBlocker) {
+  FakePage page(1);
+
+  for (int round{}; round < 20; ++round) {
+    auto a = begin();
+    auto b = begin();
+    auto w = begin();
+
+    x_enter();
+    ASSERT_EQ(rec_request(a, page.m_block, LOCK_S | LOCK_REC_NOT_GAP, 2), GRANTED);
+    ASSERT_EQ(rec_request(b, page.m_block, LOCK_S | LOCK_REC_NOT_GAP, 2), GRANTED);
+    ASSERT_EQ(rec_request(w, page.m_block, LOCK_X | LOCK_REC_NOT_GAP, 3), GRANTED);
+    ASSERT_EQ(rec_request(w, page.m_block, LOCK_X | LOCK_REC_NOT_GAP, 2), WAIT);
+
+    /* The queue order makes a the chosen blocker; there are two. */
+    EXPECT_EQ(w->m_blocking_trx.load(), a);
+    EXPECT_TRUE(w->m_blocking_multi.load());
+
+    const auto got = rec_request(b, page.m_block, LOCK_X | LOCK_REC_NOT_GAP, 3);
+
+    EXPECT_EQ(got, DEADLOCK) << "round " << round << ": the cycle b -> w -> b past the running a was missed";
+    EXPECT_FALSE(w->m_was_chosen_as_deadlock_victim);
+    x_exit();
+
+    rollback(b);
+    commit(a);
+
+    EXPECT_TRUE(await(w));
+    commit(w);
+
+    EXPECT_EQ(n_fake_pages(), 0u);
+  }
+}
+
+/** Upgrades with idle readers: k transactions (2 to 8) and m idle ones (0
+to 3) hold S on a record, in a random order in the queue; then the k
+request X, one after the other in a random order. Each upgrader is blocked
+by every other holder, the idle ones included, so the waits-for graph of
+the upgraders has cycles that pass by idle transactions that never end: the
+one edge walk can stop at an idle one, the full search must find them (see
+lock0deadlock.h). Each request ends at once (no hang until a timeout); the
+victims roll back; in the end exactly k - 1 upgraders are victims, and the
+last one is granted when the idle ones commit. 300 rounds. */
+TEST_F(LockMt, UpgradesPastIdleReaders) {
+  FakePage page(1);
+  std::mt19937 rng(31);
+
+  for (int round{}; round < 300; ++round) {
+    const int k = 2 + int(rng() % 7);
+    const int m = int(rng() % 4);
+    std::vector<Trx *> up;
+    std::vector<Trx *> idle;
+    std::vector<Trx *> all;
+
+    for (int i{}; i < k; ++i) {
+      up.push_back(begin());
+      all.push_back(up.back());
+    }
+
+    for (int i{}; i < m; ++i) {
+      idle.push_back(begin());
+      all.push_back(idle.back());
+    }
+
+    std::shuffle(all.begin(), all.end(), rng);
+
+    x_enter();
+
+    for (auto t : all) {
+      ASSERT_EQ(rec_request(t, page.m_block, LOCK_S | LOCK_REC_NOT_GAP, 2), GRANTED);
+    }
+
+    x_exit();
+
+    std::shuffle(up.begin(), up.end(), rng);
+
+    int n_victims{};
+    std::set<Trx *> gone;
+
+    for (auto t : up) {
+      x_enter();
+      const auto got = rec_request(t, page.m_block, LOCK_X | LOCK_REC_NOT_GAP, 2);
+
+      std::vector<Trx *> victims;
+
+      if (got == DEADLOCK) {
+        victims.push_back(t);
+      }
+
+      for (auto u : up) {
+        if (u->m_was_chosen_as_deadlock_victim) {
+          u->m_was_chosen_as_deadlock_victim = false;
+          victims.push_back(u);
+        }
+      }
+
+      x_exit();
+
+      for (auto v : victims) {
+        ++n_victims;
+        gone.insert(v);
+        rollback(v);
+      }
+    }
+
+    EXPECT_EQ(n_victims, k - 1) << "round " << round << ": k " << k << " m " << m;
+
+    for (auto t : idle) {
+      commit(t);
+    }
+
+    for (auto t : up) {
+      if (!gone.contains(t)) {
+        EXPECT_TRUE(await(t, [] {}, 10s)) << "round " << round;
+        commit(t);
+      }
+    }
+
+    EXPECT_EQ(n_fake_pages(), 0u);
   }
 }
 
@@ -1027,9 +966,9 @@ TEST_F(LockMt, HandoffFifo) {
 
     auto holder = begin();
 
-    mutex_enter(m_mutex);
+    x_enter();
     ASSERT_EQ(rec_request(holder, page.m_block, LOCK_X | LOCK_REC_NOT_GAP, HEAP_NO), GRANTED);
-    mutex_exit(m_mutex);
+    x_exit();
 
     for (int i{}; i < N; ++i) {
       trxs.push_back(begin());
@@ -1044,9 +983,9 @@ TEST_F(LockMt, HandoffFifo) {
           std::this_thread::yield();
         }
 
-        mutex_enter(m_mutex);
+        x_enter();
         const auto got = rec_request(trxs[i], page.m_block, modes[i], HEAP_NO);
-        mutex_exit(m_mutex);
+        x_exit();
 
         ticket.store(i + 1, std::memory_order_release);
 
@@ -1071,9 +1010,9 @@ TEST_F(LockMt, HandoffFifo) {
 
         EXPECT_TRUE(ok) << i;
 
-        mutex_enter(m_mutex);
+        x_enter();
         released[i] = 1;
-        mutex_exit(m_mutex);
+        x_exit();
 
         commit(trxs[i]);
       });
@@ -1124,7 +1063,7 @@ TEST_F(LockMt, ManyOnOne) {
 
       sync.arrive_and_wait();
 
-      mutex_enter(m_mutex);
+      x_enter();
 
       const auto since = m_seq;
       const auto got = rec_request(trx, page.m_block, mode, HEAP_NO);
@@ -1133,7 +1072,7 @@ TEST_F(LockMt, ManyOnOne) {
         model_grant(trx, 1, HEAP_NO, mode, since);
       }
 
-      mutex_exit(m_mutex);
+      x_exit();
 
       bool ok = got == GRANTED;
 
@@ -1160,12 +1099,12 @@ TEST_F(LockMt, ManyOnOne) {
   EXPECT_EQ(n_victims.load(), 0);
 }
 
-/** One transaction holds 100,000 record locks on 2,000 pages, more than
-the 1,000 locks a release frees before it lets the trx sys mutex go
-(LOCK_RELEASE_TRX_SYS_MUTEX_INTERVAL), and the record with the largest heap
-number of a page with 8,192 records. 8 threads wait for records of it. Its
-commit releases the locks in three slices with the mutex free in between,
-while the checker runs: every waiter is granted, no lock is left. */
+/** One transaction holds 100,000 record locks on 2,000 pages (in most of
+the page shards), and the record with the largest heap number of a page
+with 8,192 records. 8 threads wait for records of it. Its commit releases
+the locks shard by shard, at most LOCK_RELEASE_BATCH locks per hold of a
+shard latch, while the checker runs (with X, between the batches): every
+waiter is granted, no lock is left. */
 TEST_F(LockMt, BigTrx) {
   constexpr page_no_t N_PAGES = 2000;
   constexpr ulint N_HEAPS = 50;
@@ -1181,7 +1120,7 @@ TEST_F(LockMt, BigTrx) {
 
   auto holder = begin();
 
-  mutex_enter(m_mutex);
+  x_enter();
 
   for (auto &page : pages) {
     for (ulint h = 2; h < N_HEAPS + 2; ++h) {
@@ -1200,9 +1139,9 @@ TEST_F(LockMt, BigTrx) {
 
   const auto n_structs = holder->m_trx_locks.size();
 
-  mutex_exit(m_mutex);
+  x_exit();
 
-  EXPECT_GT(n_structs, 2 * 1000u) << "the release must cross the interval twice";
+  EXPECT_GT(n_structs, 2 * LockSys::LOCK_RELEASE_BATCH) << "the release must take several batches";
 
   std::atomic<int> n_waiting{};
   std::atomic<int> n_granted{};
@@ -1216,9 +1155,9 @@ TEST_F(LockMt, BigTrx) {
       auto &block = t == 0 ? big.m_block : pages[rng() % N_PAGES]->m_block;
       const auto heap_no = t == 0 ? MAX_HEAP_NO : 2 + rng() % N_HEAPS;
 
-      mutex_enter(m_mutex);
+      x_enter();
       const auto got = rec_request(trx, block, LOCK_S | LOCK_REC_NOT_GAP, heap_no);
-      mutex_exit(m_mutex);
+      x_exit();
 
       EXPECT_EQ(got, WAIT);
       ++n_waiting;
@@ -1251,6 +1190,317 @@ TEST_F(LockMt, BigTrx) {
   std::printf("BigTrx: commit of %lu locks in %lu structs: %.1f ms\n", (unsigned long)(N_PAGES * N_HEAPS + 2), (unsigned long)n_structs, ms.count());
 }
 
+/** The release of a lock with W waiters behind it grants them in one pass
+over the page queue, O(W) (the per record summaries of the grant pass), not
+O(W^2) like a scan from the front of the queue for each waiter. Two shapes,
+each at W = 256 and W = 4096: (1) one holder of W records of a page and an X
+waiter for each record; (2) one holder of a record in X and W waiters for it
+in S, all granted together. Every waiter is granted. The time per grant at
+4096 is less than 4 times the time at 256, the best of 3 runs (a quadratic
+release is 16 times). */
+TEST_F(LockMt, ReleaseLinear) {
+  auto run = [&](ulint w, bool one_rec) -> double {
+    FakePage page(1, one_rec ? 10 : w + 2);
+    auto holder = begin();
+    std::vector<Trx *> trxs;
+
+    for (ulint i{}; i < w; ++i) {
+      trxs.push_back(begin());
+    }
+
+    x_enter();
+
+    for (ulint i{}; i < (one_rec ? 1 : w); ++i) {
+      EXPECT_EQ(rec_request(holder, page.m_block, LOCK_X | LOCK_REC_NOT_GAP, 2 + i), GRANTED);
+    }
+
+    for (ulint i{}; i < w; ++i) {
+      const auto mode = one_rec ? LOCK_S | LOCK_REC_NOT_GAP : LOCK_X | LOCK_REC_NOT_GAP;
+      EXPECT_EQ(rec_request(trxs[i], page.m_block, mode, one_rec ? 2 : 2 + i), WAIT);
+    }
+
+    const auto start = Clock::now();
+
+    m_lock_sys->release(holder);
+
+    const std::chrono::duration<double> secs = Clock::now() - start;
+
+    for (auto trx : trxs) {
+      EXPECT_EQ(trx->m_wait_lock, nullptr) << "a waiter was not granted";
+    }
+
+    x_exit();
+
+    commit(holder);
+
+    for (auto trx : trxs) {
+      commit(trx);
+    }
+
+    return secs.count() / double(w);
+  };
+
+  for (bool one_rec : {false, true}) {
+    double small{1e9};
+    double big{1e9};
+
+    for (int i{}; i < 3; ++i) {
+      small = std::min(small, run(256, one_rec));
+      big = std::min(big, run(4096, one_rec));
+    }
+
+    std::printf("ReleaseLinear %s: %.0f ns per grant at W=256, %.0f ns at W=4096\n", one_rec ? "one record" : "W records", small * 1e9, big * 1e9);
+
+    EXPECT_LT(big, 4 * small) << (one_rec ? "one record" : "W records") << ": the release is not linear in the waiters";
+  }
+}
+
+/** The deadlock check of a request that waits costs the same with 10 and
+with 4,000 idle active transactions (it used to clear a mark on every active
+transaction first, O(active)): at 4,000 it is less than 3 times the cost at
+10, plus 2 us for noise, the best of 5 batches of 200 checks. */
+TEST_F(LockMt, DeadlockIdle) {
+  FakePage page(1);
+
+  auto cost = [&](int n_idle) -> double {
+    std::vector<Trx *> idle;
+
+    for (int i{}; i < n_idle; ++i) {
+      idle.push_back(begin());
+    }
+
+    auto holder = begin();
+    auto req_trx = begin();
+
+    x_enter();
+    EXPECT_EQ(rec_request(holder, page.m_block, LOCK_X | LOCK_REC_NOT_GAP, 2), GRANTED);
+    auto req = m_lock_sys->rec_create(LockMode(LOCK_X | LOCK_REC_NOT_GAP | LOCK_WAIT), &page.m_block, 2, m_index, req_trx);
+    x_exit();
+
+    double best{1e9};
+
+    for (int b{}; b < 5; ++b) {
+      x_enter();
+
+      const auto start = Clock::now();
+
+      for (int i{}; i < 200; ++i) {
+        EXPECT_FALSE(m_lock_sys->deadlock_occurs(req, req_trx));
+      }
+
+      best = std::min(best, std::chrono::duration<double>(Clock::now() - start).count() / 200);
+
+      x_exit();
+    }
+
+    x_enter();
+    m_lock_sys->release(req_trx);
+    req_trx->m_wait_lock = nullptr;
+    x_exit();
+
+    commit(req_trx);
+    commit(holder);
+
+    for (auto trx : idle) {
+      commit(trx);
+    }
+
+    return best;
+  };
+
+  const auto few = cost(10);
+  const auto many = cost(4000);
+
+  std::printf("DeadlockIdle: %.0f ns per check with 10 idle transactions, %.0f ns with 4000\n", few * 1e9, many * 1e9);
+
+  EXPECT_LT(many, 3 * few + 2e-6) << "the deadlock check depends on the number of active transactions";
+}
+
+/** @return two page numbers of FAKE_SPACE after from: one in the same page
+shard as from, one in another. */
+std::pair<page_no_t, page_no_t> shard_pages(page_no_t from) {
+  const auto shard = LockSys::page_shard_no(PageId{FAKE_SPACE, from});
+  page_no_t same{};
+  page_no_t other{};
+
+  for (page_no_t p = from + 1; same == 0 || other == 0; ++p) {
+    if (LockSys::page_shard_no(PageId{FAKE_SPACE, p}) == shard) {
+      same = same == 0 ? p : same;
+    } else {
+      other = other == 0 ? p : other;
+    }
+  }
+
+  return {same, other};
+}
+
+/** Locks moved between two pages by a page operation
+(update_copy_and_discard(): the locks on the supremum of one page go to the
+supremum of the other, the first page is discarded), the
+two pages in the same page shard and in two different shards (the operation
+takes both shard latches, in the order of their numbers). A holds S on the
+supremum of the donor (a gap lock), w waits there with an insert intention;
+the move takes both to the receiver, w still waiting behind a there, its
+edge to a, the donor without locks. a commits: w is granted on the
+receiver. Meanwhile 4 threads lock and release records of other pages of the
+same two shards. 50 rounds of each. */
+TEST_F(LockMt, ShardBoundary) {
+  const page_no_t donor_no = 7;
+  const auto [same_no, other_no] = shard_pages(donor_no);
+
+  ASSERT_EQ(LockSys::page_shard_no(PageId{FAKE_SPACE, same_no}), LockSys::page_shard_no(PageId{FAKE_SPACE, donor_no}));
+  ASSERT_NE(LockSys::page_shard_no(PageId{FAKE_SPACE, other_no}), LockSys::page_shard_no(PageId{FAKE_SPACE, donor_no}));
+
+  std::atomic<bool> stop{};
+  std::atomic<uint64_t> n_ops{};
+  std::vector<std::thread> threads;
+
+  /* The noise: pages of the shards of the donor and of the receivers. */
+  const auto [same2, other2] = shard_pages(other_no);
+  std::vector<std::unique_ptr<FakePage>> noise;
+
+  for (auto p : {shard_pages(same_no).first, same2, other2, shard_pages(donor_no + 1000).first}) {
+    noise.push_back(std::make_unique<FakePage>(p));
+  }
+
+  for (int t{}; t < 4; ++t) {
+    threads.emplace_back([&, t] {
+      auto trx = begin();
+
+      while (!stop.load()) {
+        auto &page = *noise[t % noise.size()];
+
+        EXPECT_EQ(rec_request(trx, page.m_block, LOCK_X | LOCK_REC_NOT_GAP, 2 + n_ops % 5), GRANTED);
+        m_lock_sys->release(trx);
+        ++n_ops;
+      }
+
+      commit(trx);
+    });
+  }
+
+  for (auto receiver_no : {same_no, other_no}) {
+    for (int round{}; round < 50; ++round) {
+      FakePage donor(donor_no);
+      FakePage receiver(receiver_no);
+
+      auto a = begin();
+      auto w = begin();
+
+      ASSERT_EQ(rec_request(a, donor.m_block, LOCK_S, SUP), GRANTED);
+      ASSERT_EQ(rec_request(w, donor.m_block, II, SUP), WAIT);
+
+      /* The page operation, with its own latches: the donor is discarded. */
+      m_lock_sys->update_copy_and_discard(&receiver.m_block, &donor.m_block);
+
+      x_enter();
+
+      EXPECT_EQ(m_lock_sys->rec_queue(donor.id()), nullptr) << "locks left on the donor";
+      ASSERT_NE(w->m_wait_lock, nullptr);
+      EXPECT_EQ(w->m_wait_lock->page_id(), receiver.id());
+      EXPECT_EQ(w->m_blocking_trx.load(), a);
+
+      x_exit();
+
+      commit(a);
+
+      EXPECT_TRUE(await(w)) << "receiver " << receiver_no << " round " << round;
+
+      commit(w);
+    }
+  }
+
+  stop = true;
+
+  for (auto &t : threads) {
+    t.join();
+  }
+
+  EXPECT_GT(n_ops.load(), 0u);
+  EXPECT_EQ(n_fake_pages(), 0u);
+}
+
+/** A commit of a transaction with 100,000 record locks, on 100,000 pages
+(spread over all the page shards), while 8 threads lock and release records
+of pages of their own, in the same shards: the commit holds a shard latch
+for at most LOCK_RELEASE_BATCH locks and nothing global, so no other thread
+waits long. The longest lock and release of the others during the commit is
+under 20 ms (100 ms with a sanitizer); it was a hold of the trx sys mutex for
+1,000 locks at a time, and every other operation needed that mutex. */
+TEST_F(LockMt, BigCommitOtherShards) {
+  constexpr page_no_t N_LOCKS = 100000;
+  constexpr int N_THREADS = 8;
+
+  auto holder = begin();
+
+  /* Pages without frames: the locks are made directly, each under the
+  latch of its shard. */
+  for (page_no_t p{}; p < N_LOCKS; ++p) {
+    const PageId page_id{FAKE_SPACE, 200000 + p};
+    LockSys::PageLatch latch(*m_lock_sys, page_id);
+
+    (void)m_lock_sys->rec_create_low(page_id, LockMode(LOCK_X | LOCK_REC_NOT_GAP), 2, 16, m_index, holder);
+  }
+
+  std::atomic<bool> committing{};
+  std::atomic<bool> stop{};
+  std::vector<std::vector<double>> lat(N_THREADS);
+  std::vector<std::thread> threads;
+
+  for (int t{}; t < N_THREADS; ++t) {
+    threads.emplace_back([&, t] {
+      FakePage mine(100000 + t);
+      auto trx = begin();
+
+      while (!stop.load()) {
+        const auto start = Clock::now();
+
+        EXPECT_EQ(rec_request(trx, mine.m_block, LOCK_X | LOCK_REC_NOT_GAP, 2), GRANTED);
+        m_lock_sys->release(trx);
+
+        if (committing.load()) {
+          lat[t].push_back(std::chrono::duration<double, std::milli>(Clock::now() - start).count());
+        }
+      }
+
+      commit(trx);
+    });
+  }
+
+  std::this_thread::sleep_for(20ms);
+
+  committing = true;
+
+  const auto start = Clock::now();
+
+  commit(holder);
+
+  const std::chrono::duration<double, std::milli> ms = Clock::now() - start;
+
+  committing = false;
+  stop = true;
+
+  for (auto &t : threads) {
+    t.join();
+  }
+
+  std::vector<double> all;
+
+  for (auto &v : lat) {
+    all.insert(all.end(), v.begin(), v.end());
+  }
+
+  ASSERT_FALSE(all.empty());
+
+  const auto max = *std::max_element(all.begin(), all.end());
+
+  std::printf("BigCommitOtherShards: commit of %lu locks %.1f ms; others: %zu ops, p50 %.3f ms, p99 %.3f ms, max %.3f ms\n",
+    (unsigned long)N_LOCKS, ms.count(), all.size(), percentile(all, 50), percentile(all, 99), max);
+
+  EXPECT_LT(max, SANITIZER ? 100.0 : 20.0) << "another thread waited long for the commit";
+  EXPECT_EQ(n_fake_pages(), 0u);
+}
+
 /** A lock bitmap is sized for the records the page has when the lock is
 made, plus a margin of 64. After the page grew, a request of the same
 transaction for a record past the end of the bitmap gets a new lock with a
@@ -1263,7 +1513,7 @@ TEST_F(LockMt, BitmapGrow) {
   auto a = begin();
   auto b = begin();
 
-  mutex_enter(m_mutex);
+  x_enter();
 
   ASSERT_EQ(rec_request(a, page.m_block, LOCK_X | LOCK_REC_NOT_GAP, 5), GRANTED);
 
@@ -1287,12 +1537,12 @@ TEST_F(LockMt, BitmapGrow) {
   EXPECT_TRUE(second->rec_is_nth_bit_set(250));
   EXPECT_FALSE(first->rec_is_nth_bit_set(250));
 
-  mutex_exit(m_mutex);
+  x_exit();
 
   auto result = std::async(std::launch::async, [&] {
-    mutex_enter(m_mutex);
+    x_enter();
     const auto got = rec_request(b, page.m_block, LOCK_S | LOCK_REC_NOT_GAP, 250);
-    mutex_exit(m_mutex);
+    x_exit();
 
     return got == WAIT && await(b);
   });
@@ -1370,16 +1620,16 @@ TEST_F(LockMt, TableStorm) {
             victim = true;
             ++n_victims;
 
-            mutex_enter(m_mutex);
+            x_enter();
             victims.emplace(t, r);
-            mutex_exit(m_mutex);
+            x_exit();
 
             break;
           }
 
           ++n_ok;
 
-          mutex_enter(m_mutex);
+          x_enter();
 
           for (const auto &h : held) {
             if (h.m_trx != trx && !table_compatible(mode, h.m_mode)) {
@@ -1389,16 +1639,16 @@ TEST_F(LockMt, TableStorm) {
           }
 
           held.push_back(TableHeld{trx, mode, t, r});
-          mutex_exit(m_mutex);
+          x_exit();
         }
 
         for (int k = int(rng() % 20); k > 0; --k) {
           std::this_thread::yield();
         }
 
-        mutex_enter(m_mutex);
+        x_enter();
         std::erase_if(held, [trx](const auto &h) { return h.m_trx == trx; });
-        mutex_exit(m_mutex);
+        x_exit();
 
         if (victim) {
           rollback(trx);
@@ -1415,7 +1665,7 @@ TEST_F(LockMt, TableStorm) {
 
   checker.stop();
 
-  mutex_enter(m_mutex);
+  x_enter();
 
   for (const auto &v : violations) {
     if (!victims.contains(std::pair{v.m_t, v.m_r})) {
@@ -1423,7 +1673,7 @@ TEST_F(LockMt, TableStorm) {
     }
   }
 
-  mutex_exit(m_mutex);
+  x_exit();
 
   EXPECT_EQ(n_req.load(), n_ok.load() + n_victims.load());
   EXPECT_EQ(n_locks().second, 0u) << "table locks left";
@@ -1431,1101 +1681,13 @@ TEST_F(LockMt, TableStorm) {
   std::printf("TableStorm: %lu requests, %lu deadlock victims\n", (unsigned long)n_req.load(), (unsigned long)n_victims.load());
 }
 
-/** Transactions of a started instance, through the API. */
-class LockMtDb : public SharedDb {
- protected:
-  /** The lock wait timeout of the instance, for the life of a Timeout,
-  restored after. Set with the trx sys mutex held, when no thread waits for
-  a lock: the lock timeout thread reads it with the mutex, a waiting
-  thread after it took the mutex once its wait ended. */
-  struct Timeout {
-    Timeout(LockMtDb *test, std::chrono::seconds timeout) : m_test(test) {
-      m_old = set(timeout);
-    }
-
-    ~Timeout() { (void)set(m_old); }
-
-    std::chrono::seconds set(std::chrono::seconds timeout) {
-      mutex_enter(m_test->m_mutex);
-      const auto old = m_test->m_sys->m_config.m_lock.m_wait_timeout;
-      m_test->m_sys->m_config.m_lock.m_wait_timeout = timeout;
-      mutex_exit(m_test->m_mutex);
-
-      return old;
-    }
-
-    LockMtDb *m_test;
-    std::chrono::seconds m_old{};
-  };
-
-  /** Position crsr on the row with key k. @return DB_SUCCESS or DB_RECORD_NOT_FOUND */
-  DbErr seek(api::Cursor *crsr, uint32_t k) {
-    auto key = crsr->clust_search_tuple_create();
-    int res{-1};
-    auto err = key->write_u32(0, k);
-
-    if (err == DB_SUCCESS) {
-      err = crsr->moveto(*m_sys, key, IB_CUR_GE, &res);
-    }
-
-    api::Tuple::destroy(key);
-
-    if ((err == DB_SUCCESS && res != 0) || err == DB_END_OF_INDEX) {
-      err = DB_RECORD_NOT_FOUND;
-    }
-
-    return err;
-  }
-
-  /** a += 1 in the row k, read and written under an X lock.
-  @param[out] old the value of a read */
-  DbErr incr(Trx *trx, uint32_t k, uint32_t *old = nullptr) {
-    auto &sys = *m_sys;
-    api::Cursor *crsr{};
-
-    if (auto err = api::cursor_open_table(sys, ut::TABLE, trx, &crsr); err != DB_SUCCESS) {
-      return err;
-    }
-
-    auto err = crsr->lock(sys, IB_LOCK_IX);
-
-    if (err == DB_SUCCESS) {
-      err = crsr->set_lock_mode(sys, IB_LOCK_X);
-    }
-
-    if (err == DB_SUCCESS) {
-      err = seek(crsr, k);
-    }
-
-    if (err == DB_SUCCESS) {
-      auto old_tpl = crsr->clust_read_tuple_create();
-      auto new_tpl = crsr->clust_read_tuple_create();
-      uint32_t a{};
-
-      err = crsr->read_row(sys, old_tpl);
-
-      if (err == DB_SUCCESS) {
-        err = old_tpl->read_u32(1, &a);
-      }
-
-      if (err == DB_SUCCESS) {
-        err = new_tpl->copy(old_tpl);
-      }
-
-      if (err == DB_SUCCESS) {
-        err = new_tpl->write_u32(1, a + 1);
-      }
-
-      if (err == DB_SUCCESS) {
-        err = crsr->update_row(sys, old_tpl, new_tpl);
-      }
-
-      if (err == DB_SUCCESS && old != nullptr) {
-        *old = a;
-      }
-
-      api::Tuple::destroy(old_tpl);
-      api::Tuple::destroy(new_tpl);
-    }
-
-    (void)api::Cursor::close(sys, crsr);
-
-    return err;
-  }
-
-  /** A locking read (S) of the keys in [lo, hi]: from lo up to the first
-  row after hi, which it locks too. @param[out] keys the keys in [lo, hi] */
-  DbErr range(Trx *trx, uint32_t lo, uint32_t hi, std::vector<uint32_t> *keys) {
-    auto &sys = *m_sys;
-    api::Cursor *crsr{};
-
-    keys->clear();
-
-    if (auto err = api::cursor_open_table(sys, ut::TABLE, trx, &crsr); err != DB_SUCCESS) {
-      return err;
-    }
-
-    auto err = crsr->lock(sys, IB_LOCK_IS);
-
-    if (err == DB_SUCCESS) {
-      err = crsr->set_lock_mode(sys, IB_LOCK_S);
-    }
-
-    if (err == DB_SUCCESS) {
-      auto key = crsr->clust_search_tuple_create();
-      int res{};
-
-      err = key->write_u32(0, lo);
-
-      if (err == DB_SUCCESS) {
-        err = crsr->moveto(sys, key, IB_CUR_GE, &res);
-      }
-
-      api::Tuple::destroy(key);
-    }
-
-    auto tpl = crsr->clust_read_tuple_create();
-
-    while (err == DB_SUCCESS) {
-      uint32_t k{};
-
-      err = crsr->read_row(sys, tpl);
-
-      if (err == DB_SUCCESS) {
-        err = tpl->read_u32(0, &k);
-      }
-
-      if (err != DB_SUCCESS || k > hi) {
-        break;
-      }
-
-      keys->push_back(k);
-      tpl = tpl->clear();
-      err = crsr->next(sys);
-    }
-
-    api::Tuple::destroy(tpl);
-    (void)api::Cursor::close(sys, crsr);
-
-    return err == DB_END_OF_INDEX || err == DB_RECORD_NOT_FOUND ? DB_SUCCESS : err;
-  }
-
-  /** @return the committed rows. */
-  ut::Rows rows() {
-    auto trx = begin(IB_TRX_READ_COMMITTED);
-    auto rows = scan(trx);
-
-    commit(trx);
-
-    return rows;
-  }
-
-  /** @return the a of row k, committed. */
-  uint32_t value(uint32_t k) {
-    const auto all = rows();
-    auto it = all.find(k);
-
-    EXPECT_NE(it, all.end()) << "no row " << k;
-
-    return it == all.end() ? 0 : it->second.m_a;
-  }
-
-  /** @return the result of the operation of trx in another thread, which
-  must end within timeout: if it does not, trx is interrupted (so that the
-  thread ends) and the test fails. */
-  template <typename T>
-  T get(std::future<T> &result, Trx *trx, std::chrono::milliseconds timeout = 10s) {
-    if (result.wait_for(timeout) != std::future_status::ready) {
-      ADD_FAILURE() << "the operation of trx " << trx->m_id << " did not end in " << timeout.count() << " ms";
-      api::trx_interrupt(trx);
-    }
-
-    return result.get();
-  }
-};
-
-/** Read-modify-write of random rows: 8 threads, each transaction adds 1
-to 2 or 3 of 16 rows in random order, deadlocks happen and the victims roll
-back. Every committed increment is there at the end and no other: no
-update is lost (the X locks exclude each other through the real waits and
-wakeups), no deadlock victim leaves a change. No lock is left. */
-TEST_F(LockMtDb, UpdateStorm) {
-  constexpr int N_THREADS = 8;
-  constexpr int N_TRXS = 120;
-  constexpr uint32_t N_ROWS = 16;
-
-  ut::Rows initial;
-
-  for (uint32_t k = 1; k <= N_ROWS; ++k) {
-    initial[k] = ut::Row{k, 0, ""};
-  }
-
-  load(initial);
-
-  std::vector<std::array<uint32_t, N_ROWS + 1>> counts(N_THREADS);
-  std::atomic<int> n_deadlocks{};
-  std::atomic<int> n_other{};
-  std::vector<std::thread> threads;
-
-  for (int t{}; t < N_THREADS; ++t) {
-    threads.emplace_back([&, t] {
-      std::mt19937 rng(t);
-      auto &count = counts[t];
-
-      count.fill(0);
-
-      for (int i{}; i < N_TRXS; ++i) {
-        auto trx = begin();
-        std::vector<uint32_t> keys;
-        DbErr err{DB_SUCCESS};
-
-        for (int n = 2 + int(rng() % 2); n > 0; --n) {
-          keys.push_back(1 + rng() % N_ROWS);
-        }
-
-        for (auto k : keys) {
-          if ((err = incr(trx, k)) != DB_SUCCESS) {
-            break;
-          }
-        }
-
-        if (err == DB_SUCCESS) {
-          commit(trx);
-
-          for (auto k : keys) {
-            ++count[k];
-          }
-        } else {
-          ++(err == DB_DEADLOCK ? n_deadlocks : n_other);
-
-          if (err != DB_DEADLOCK) {
-            ADD_FAILURE() << "incr: " << err;
-          }
-
-          rollback(trx);
-        }
-      }
-    });
-  }
-
-  for (auto &t : threads) {
-    t.join();
-  }
-
-  const auto all = rows();
-
-  for (uint32_t k = 1; k <= N_ROWS; ++k) {
-    uint32_t expected{};
-
-    for (const auto &c : counts) {
-      expected += c[k];
-    }
-
-    EXPECT_EQ(all.at(k).m_a, expected) << "row " << k;
-  }
-
-  EXPECT_EQ(n_other.load(), 0);
-  EXPECT_EQ(n_locks(), std::pair(size_t(0), size_t(0))) << "locks left";
-
-  std::printf("UpdateStorm: %d deadlocks\n", n_deadlocks.load());
-}
-
-/** One row held by an update, 16 updates of it queued behind in a known
-order: when the holder commits they are granted in queue order, one at a
-time, each reading the value the one ahead wrote: FIFO, no lost update and
-no wakeup lost in the hand-over from each committing thread to the next. */
-TEST_F(LockMtDb, HotRowFifo) {
-  constexpr int N = 16;
-
-  load({{1, ut::Row{1, 0, ""}}});
-
-  for (int round{}; round < 3; ++round) {
-    const auto base = value(1);
-    auto holder = begin();
-
-    ASSERT_EQ(incr(holder, 1), DB_SUCCESS);
-
-    std::vector<Trx *> trxs;
-    std::vector<uint32_t> seen(N);
-    std::vector<DbErr> errs(N, DB_ERROR);
-    std::vector<std::thread> threads;
-
-    for (int i{}; i < N; ++i) {
-      auto trx = begin();
-
-      trxs.push_back(trx);
-
-      threads.emplace_back([&, i, trx] {
-        errs[i] = incr(trx, 1, &seen[i]);
-
-        if (errs[i] == DB_SUCCESS) {
-          commit(trx);
-        } else {
-          rollback(trx);
-        }
-      });
-
-      EXPECT_TRUE(wait_for_lock_wait(trxs[i])) << i;
-    }
-
-    commit(holder);
-
-    for (auto &t : threads) {
-      t.join();
-    }
-
-    for (int i{}; i < N; ++i) {
-      EXPECT_EQ(errs[i], DB_SUCCESS) << i;
-      EXPECT_EQ(seen[i], base + 1 + i) << "request " << i << " was not granted in queue order";
-    }
-
-    EXPECT_EQ(value(1), base + 1 + N);
-  }
-}
-
-/** 256 transactions wait for one row at once, each to add 1 to it: when
-the holder commits each is granted once and sees a different value, the
-row ends 257 higher: 256 threads suspended and woken in turn. */
-TEST_F(LockMtDb, ManyWaiters) {
-  constexpr int N = 256;
-
-  load({{1, ut::Row{1, 0, ""}}});
-
-  auto holder = begin();
-
-  ASSERT_EQ(incr(holder, 1), DB_SUCCESS);
-
-  std::vector<Trx *> trxs;
-  std::vector<uint32_t> seen(N);
-  std::vector<DbErr> errs(N, DB_ERROR);
-  std::vector<std::thread> threads;
-
-  for (int i{}; i < N; ++i) {
-    trxs.push_back(begin());
-  }
-
-  for (int i{}; i < N; ++i) {
-    threads.emplace_back([&, i] {
-      errs[i] = incr(trxs[i], 1, &seen[i]);
-
-      if (errs[i] == DB_SUCCESS) {
-        commit(trxs[i]);
-      } else {
-        rollback(trxs[i]);
-      }
-    });
-  }
-
-  for (int i{}; i < N; ++i) {
-    EXPECT_TRUE(wait_for_lock_wait(trxs[i], 30s)) << i;
-  }
-
-  commit(holder);
-
-  for (auto &t : threads) {
-    t.join();
-  }
-
-  std::sort(seen.begin(), seen.end());
-
-  for (int i{}; i < N; ++i) {
-    EXPECT_EQ(errs[i], DB_SUCCESS) << i;
-    EXPECT_EQ(seen[i], uint32_t(i + 1)) << "two transactions read the same value: a lost update";
-  }
-
-  EXPECT_EQ(value(1), uint32_t(N + 1));
-}
-
-/** Cycles of 2, 3 and 8 transactions through the API, made at the same
-time from their threads: each updates its own row, then the next one's.
-Exactly one gets DB_DEADLOCK per cycle and is rolled back; the others get
-their rows in turn and commit: all rows but the victim's end up 2 higher
-in all, the victim's two changes are gone. */
-TEST_F(LockMtDb, DeadlockRounds) {
-  ut::Rows initial;
-
-  for (uint32_t k = 1; k <= 8; ++k) {
-    initial[k] = ut::Row{k, 0, ""};
-  }
-
-  load(initial);
-
-  for (auto [n, rounds] : {std::pair{2, 8}, std::pair{3, 5}, std::pair{8, 3}}) {
-    for (int r{}; r < rounds; ++r) {
-      uint32_t before{};
-
-      for (const auto &[k, row] : rows()) {
-        before += row.m_a;
-      }
-
-      std::barrier sync(n);
-      std::vector<DbErr> errs(n, DB_ERROR);
-      std::vector<std::thread> threads;
-
-      for (int i{}; i < n; ++i) {
-        threads.emplace_back([&, i] {
-          auto trx = begin();
-          auto err = incr(trx, 1 + i);
-
-          sync.arrive_and_wait();
-
-          if (err == DB_SUCCESS) {
-            err = incr(trx, 1 + (i + 1) % n);
-          }
-
-          if (err == DB_SUCCESS) {
-            commit(trx);
-          } else {
-            rollback(trx);
-          }
-
-          errs[i] = err;
-        });
-      }
-
-      for (auto &t : threads) {
-        t.join();
-      }
-
-      EXPECT_EQ(std::count(errs.begin(), errs.end(), DB_DEADLOCK), 1) << "cycle of " << n;
-      EXPECT_EQ(std::count(errs.begin(), errs.end(), DB_SUCCESS), n - 1) << "cycle of " << n;
-
-      uint32_t after{};
-
-      for (const auto &[k, row] : rows()) {
-        after += row.m_a;
-      }
-
-      EXPECT_EQ(after - before, uint32_t(2 * n - 2)) << "cycle of " << n;
-    }
-  }
-
-  EXPECT_EQ(n_locks(), std::pair(size_t(0), size_t(0))) << "locks left";
-}
-
-/** A transaction holds 8 rows, an update waits for each: it rolls back
-(round 0) or commits (round 1), every waiter is granted and reads what the
-end of the holder left: the old value after the rollback, the holder's
-after the commit. */
-TEST_F(LockMtDb, ReleaseWakesAll) {
-  constexpr int N = 8;
-  ut::Rows initial;
-
-  for (uint32_t k = 1; k <= N; ++k) {
-    initial[k] = ut::Row{k, 10, ""};
-  }
-
-  load(initial);
-
-  for (int round{}; round < 2; ++round) {
-    const bool commit_holder = round == 1;
-    const auto base = value(1);
-    auto holder = begin();
-
-    for (uint32_t k = 1; k <= N; ++k) {
-      ASSERT_EQ(incr(holder, k), DB_SUCCESS);
-    }
-
-    std::vector<Trx *> trxs;
-    std::vector<uint32_t> seen(N);
-    std::vector<std::future<DbErr>> results;
-
-    for (int i{}; i < N; ++i) {
-      auto trx = begin();
-
-      trxs.push_back(trx);
-      results.push_back(std::async(std::launch::async, [&, i, trx] { return incr(trx, 1 + i, &seen[i]); }));
-    }
-
-    for (int i{}; i < N; ++i) {
-      EXPECT_TRUE(wait_for_lock_wait(trxs[i])) << i;
-    }
-
-    if (commit_holder) {
-      commit(holder);
-    } else {
-      rollback(holder);
-    }
-
-    for (int i{}; i < N; ++i) {
-      EXPECT_EQ(get(results[i], trxs[i]), DB_SUCCESS) << i;
-      EXPECT_EQ(seen[i], uint32_t(base + (commit_holder ? 1 : 0))) << i;
-      commit(trxs[i]);
-    }
-  }
-
-  for (const auto &[k, row] : rows()) {
-    /* Round 0: +1 by the waiter; round 1: +1 by the holder, +1 by the waiter. */
-    EXPECT_EQ(row.m_a, 13u) << k;
-  }
-}
-
-/** A rollback to a savepoint undoes the changes after it but keeps their
-locks (api::savepoint_rollback()): an update waiting for a row changed after
-the savepoint still waits after the rollback to it, and when the holder
-commits it reads the value from before the savepoint. */
-TEST_F(LockMtDb, SavepointKeepsLocks) {
-  load({{1, ut::Row{1, 0, ""}}, {2, ut::Row{2, 0, ""}}});
-
-  auto t = begin();
-
-  ASSERT_EQ(incr(t, 1), DB_SUCCESS);
-
-  api::savepoint_take(t, "sp", 2);
-
-  ASSERT_EQ(incr(t, 2), DB_SUCCESS);
-
-  auto w = begin();
-  uint32_t seen{99};
-  auto result = std::async(std::launch::async, [&] { return incr(w, 2, &seen); });
-
-  ASSERT_TRUE(wait_for_lock_wait(w));
-
-  EXPECT_EQ(api::savepoint_rollback(*m_sys, t, "sp", 2), DB_SUCCESS);
-
-  EXPECT_EQ(result.wait_for(300ms), std::future_status::timeout) << "the rollback to the savepoint released the lock";
-  EXPECT_TRUE(waiting(w));
-
-  commit(t);
-
-  EXPECT_EQ(get(result, w), DB_SUCCESS);
-  EXPECT_EQ(seen, 0u) << "the change after the savepoint was not undone";
-
-  commit(w);
-
-  EXPECT_EQ(value(1), 1u);
-  EXPECT_EQ(value(2), 1u);
-}
-
-/** An insert after a savepoint, and an insert of the same key by another
-transaction that waits for it (the duplicate check). The rollback to the
-savepoint removes the row: the waiter is woken, but the gap where the row
-was stays locked by the first transaction (its lock on the row is inherited
-by the next one as a gap lock), so the second insert waits until it
-commits, then succeeds. One row, no hang. */
-TEST_F(LockMtDb, SavepointInsert) {
-  load({{40, ut::Row{40, 0, ""}}, {60, ut::Row{60, 0, ""}}});
-
-  auto t = begin();
-
-  ASSERT_EQ(incr(t, 40), DB_SUCCESS);
-
-  api::savepoint_take(t, "sp", 2);
-
-  ASSERT_EQ(insert(t, ut::Row{50, 1, "t"}), DB_SUCCESS);
-
-  auto w = begin();
-  auto result = std::async(std::launch::async, [&] { return insert(w, ut::Row{50, 2, "w"}); });
-
-  ASSERT_TRUE(wait_for_lock_wait(w));
-
-  EXPECT_EQ(api::savepoint_rollback(*m_sys, t, "sp", 2), DB_SUCCESS);
-
-  EXPECT_EQ(result.wait_for(300ms), std::future_status::timeout) << "the insert got into the gap the first transaction still locks";
-
-  commit(t);
-
-  EXPECT_EQ(get(result, w), DB_SUCCESS);
-
-  commit(w);
-
-  const auto all = rows();
-
-  ASSERT_TRUE(all.contains(50));
-  EXPECT_EQ(all.at(50).m_a, 2u);
-  EXPECT_EQ(all.size(), 3u);
-}
-
-/** Locking range reads (S) against concurrent inserts and deletes, with
-rows big enough that the inserts split pages and the deletes, once purged,
-merge them, while the gap locks are held. Each reader reads its range twice
-in one transaction. REPEATABLE READ: the two reads are the same, no
-phantom (the next-key locks and their inheritance through splits, merges
-and purge keep the gaps closed). READ COMMITTED: the rows of the first read
-are all in the second (they stay locked), new ones may appear. */
-TEST_F(LockMtDb, PhantomStorm) {
-  constexpr int N_WRITERS = 4;
-  constexpr int N_READERS = 4;
-  constexpr uint32_t N_KEYS = 2000;
-  constexpr auto DURATION = 2500ms;
-
-  ut::Rows initial;
-
-  for (uint32_t k = 10; k <= N_KEYS; k += 10) {
-    initial[k] = ut::Row{k, k, ut::blob(k, 50)};
-  }
-
-  load(initial);
-
-  std::atomic<bool> stop{};
-  std::atomic<int> n_inserts{};
-  std::atomic<int> n_deletes{};
-  std::atomic<int> n_reads{};
-  std::atomic<int> n_new_rc{};
-  std::atomic<int> n_deadlocks{};
-  std::vector<std::thread> threads;
-
-  for (int t{}; t < N_WRITERS; ++t) {
-    threads.emplace_back([&, t] {
-      std::mt19937 rng(t);
-      std::vector<uint32_t> mine;
-
-      while (!stop.load()) {
-        auto trx = begin();
-        DbErr err;
-
-        if (!mine.empty() && rng() % 3 == 0) {
-          const auto i = rng() % mine.size();
-
-          err = remove(trx, mine[i]);
-
-          if (err == DB_SUCCESS) {
-            mine[i] = mine.back();
-            mine.pop_back();
-            ++n_deletes;
-          }
-        } else {
-          uint32_t k = 1 + rng() % (N_KEYS + 50);
-
-          k += k % 10 == 0 ? 1 : 0;
-          err = insert(trx, ut::Row{k, k, ut::blob(k, 300)});
-
-          if (err == DB_SUCCESS) {
-            mine.push_back(k);
-            ++n_inserts;
-          }
-        }
-
-        if (err == DB_SUCCESS || err == DB_DUPLICATE_KEY || err == DB_RECORD_NOT_FOUND) {
-          commit(trx);
-        } else {
-          /* The insert or the delete did not happen. */
-          EXPECT_EQ(err, DB_DEADLOCK);
-          ++n_deadlocks;
-          rollback(trx);
-        }
-      }
-    });
-  }
-
-  for (int t{}; t < N_READERS; ++t) {
-    threads.emplace_back([&, t] {
-      std::mt19937 rng(100 + t);
-      const auto level = t % 2 == 0 ? IB_TRX_REPEATABLE_READ : IB_TRX_READ_COMMITTED;
-
-      while (!stop.load()) {
-        const uint32_t lo = rng() % (N_KEYS + 100);
-        const uint32_t hi = lo + 60;
-        std::vector<uint32_t> first;
-        std::vector<uint32_t> second;
-        auto trx = begin(level);
-
-        auto err = range(trx, lo, hi, &first);
-
-        if (err == DB_SUCCESS) {
-          std::this_thread::sleep_for(std::chrono::microseconds(rng() % 3000));
-          err = range(trx, lo, hi, &second);
-        }
-
-        if (err != DB_SUCCESS) {
-          EXPECT_EQ(err, DB_DEADLOCK);
-          ++n_deadlocks;
-          rollback(trx);
-          continue;
-        }
-
-        commit(trx);
-        ++n_reads;
-
-        if (level == IB_TRX_REPEATABLE_READ) {
-          EXPECT_EQ(first, second) << "a phantom in [" << lo << ", " << hi << "] under REPEATABLE READ";
-        } else {
-          EXPECT_TRUE(std::includes(second.begin(), second.end(), first.begin(), first.end()))
-            << "a row read and locked under READ COMMITTED disappeared from [" << lo << ", " << hi << "]";
-          n_new_rc += second.size() > first.size() ? 1 : 0;
-        }
-      }
-    });
-  }
-
-  std::this_thread::sleep_for(DURATION);
-  stop = true;
-
-  for (auto &t : threads) {
-    t.join();
-  }
-
-  EXPECT_GT(n_reads.load(), 0);
-  EXPECT_GT(n_inserts.load(), 0);
-  EXPECT_EQ(n_locks(), std::pair(size_t(0), size_t(0))) << "locks left";
-
-  std::printf("PhantomStorm: %d inserts, %d deletes, %d range reads, %d deadlocks, %d READ COMMITTED reads saw new rows\n",
-    n_inserts.load(), n_deletes.load(), n_reads.load(), n_deadlocks.load(), n_new_rc.load());
-}
-
-/** A locking read holds a lock on a delete-marked row, then purge removes
-the row: the gap stays locked (the lock is inherited by the next row as a
-gap lock), inserts on both sides of the removed row wait until the reader
-commits. */
-TEST_F(LockMtDb, PurgedGap) {
-  load({{10, ut::Row{10, 10, ""}}, {20, ut::Row{20, 20, ""}}, {30, ut::Row{30, 30, ""}}});
-
-  auto d = begin();
-
-  ASSERT_EQ(remove(d, 20), DB_SUCCESS);
-  commit(d);
-
-  auto reader = begin(IB_TRX_REPEATABLE_READ);
-  std::vector<uint32_t> keys;
-
-  ASSERT_EQ(range(reader, 15, 25, &keys), DB_SUCCESS);
-  EXPECT_TRUE(keys.empty());
-
-  purge();
-
-  std::vector<Trx *> trxs;
-  std::vector<std::future<DbErr>> results;
-
-  for (uint32_t k : {15u, 25u}) {
-    trxs.push_back(begin());
-    results.push_back(std::async(std::launch::async, [&, k, trx = trxs.back()] { return insert(trx, ut::Row{k, k, ""}); }));
-  }
-
-  for (auto trx : trxs) {
-    EXPECT_TRUE(wait_for_lock_wait(trx, 3s)) << "an insert into the gap of a purged row the reader locked did not wait";
-  }
-
-  commit(reader);
-
-  for (size_t i{}; i < trxs.size(); ++i) {
-    EXPECT_EQ(get(results[i], trxs[i]), DB_SUCCESS);
-    commit(trxs[i]);
-  }
-
-  EXPECT_EQ(rows().size(), 4u);
-}
-
-/** A locking read of an empty table locks the supremum of the root page
-(REPEATABLE READ): an insert waits until the reader commits; under READ
-COMMITTED the read locks no gap and the insert does not wait. */
-TEST_F(LockMtDb, EmptyTableGap) {
-  for (auto level : {IB_TRX_REPEATABLE_READ, IB_TRX_READ_COMMITTED}) {
-    auto reader = begin(level);
-    std::vector<uint32_t> keys;
-
-    ASSERT_EQ(range(reader, 0, 1000, &keys), DB_SUCCESS);
-    EXPECT_TRUE(keys.empty());
-
-    auto writer = begin();
-    auto result = std::async(std::launch::async, [&] { return insert(writer, ut::Row{5, 5, ""}); });
-
-    if (level == IB_TRX_REPEATABLE_READ) {
-      EXPECT_TRUE(wait_for_lock_wait(writer, 3s)) << "an insert into an empty table read under REPEATABLE READ did not wait";
-      commit(reader);
-      EXPECT_EQ(get(result, writer), DB_SUCCESS);
-    } else {
-      EXPECT_EQ(get(result, writer, 3s), DB_SUCCESS) << "an insert waited for a READ COMMITTED read";
-      commit(reader);
-    }
-
-    rollback(writer);
-    purge();
-  }
-}
-
-/** Table locks through the API: a holds S, b waits for X, then 8
-transactions request IS, which S allows but the waiting X does not: they
-all wait behind it (no barging). a commits: b is granted, the IS requests
-still wait; b commits: they are all granted. */
-TEST_F(LockMtDb, TableNoBarging) {
-  constexpr int N = 8;
-
-  auto a = begin();
-  auto b = begin();
-
-  ASSERT_EQ(lock_table(a, IB_LOCK_S), DB_SUCCESS);
-
-  auto rb = std::async(std::launch::async, [&] { return lock_table(b, IB_LOCK_X); });
-
-  ASSERT_TRUE(wait_for_lock_wait(b));
-
-  std::vector<Trx *> trxs;
-  std::vector<std::future<DbErr>> results;
-
-  for (int i{}; i < N; ++i) {
-    trxs.push_back(begin());
-    results.push_back(std::async(std::launch::async, [&, trx = trxs.back()] { return lock_table(trx, IB_LOCK_IS); }));
-  }
-
-  for (auto trx : trxs) {
-    EXPECT_TRUE(wait_for_lock_wait(trx)) << "an IS request barged past a waiting X";
-  }
-
-  commit(a);
-
-  EXPECT_EQ(get(rb, b), DB_SUCCESS);
-
-  std::this_thread::sleep_for(100ms);
-
-  for (auto &r : results) {
-    EXPECT_EQ(r.wait_for(0ms), std::future_status::timeout) << "IS granted while X is held";
-  }
-
-  commit(b);
-
-  for (int i{}; i < N; ++i) {
-    EXPECT_EQ(get(results[i], trxs[i]), DB_SUCCESS);
-    commit(trxs[i]);
-  }
-}
-
-/** Two transactions with S on the table both upgrade to X: a deadlock.
-Exactly one gets DB_DEADLOCK and is rolled back, the other gets X. */
-TEST_F(LockMtDb, TableUpgradeDeadlock) {
-  for (int round{}; round < 4; ++round) {
-    auto a = begin();
-    auto b = begin();
-
-    ASSERT_EQ(lock_table(a, IB_LOCK_S), DB_SUCCESS);
-    ASSERT_EQ(lock_table(b, IB_LOCK_S), DB_SUCCESS);
-
-    std::barrier sync(2);
-    std::array<DbErr, 2> errs{DB_ERROR, DB_ERROR};
-    std::array<Trx *, 2> trxs{a, b};
-    std::vector<std::thread> threads;
-
-    for (int i{}; i < 2; ++i) {
-      threads.emplace_back([&, i] {
-        sync.arrive_and_wait();
-        errs[i] = lock_table(trxs[i], IB_LOCK_X);
-
-        if (errs[i] == DB_SUCCESS) {
-          commit(trxs[i]);
-        } else {
-          rollback(trxs[i]);
-        }
-      });
-    }
-
-    for (auto &t : threads) {
-      t.join();
-    }
-
-    EXPECT_EQ(std::count(errs.begin(), errs.end(), DB_DEADLOCK), 1);
-    EXPECT_EQ(std::count(errs.begin(), errs.end(), DB_SUCCESS), 1);
-  }
-}
-
-/** A cycle through a table lock and a record lock: a and b each update a
-row (IX on the table, X on the row), b asks for S on the table and waits
-for a's IX, a asks for b's row. The deadlock search goes from a's record
-lock wait to b's table lock wait and back to a: exactly one of them gets
-DB_DEADLOCK, the other completes. */
-TEST_F(LockMtDb, MixedDeadlock) {
-  load({{1, ut::Row{1, 0, ""}}, {2, ut::Row{2, 0, ""}}});
-
-  for (int round{}; round < 3; ++round) {
-    auto a = begin();
-    auto b = begin();
-
-    ASSERT_EQ(incr(a, 1), DB_SUCCESS);
-    ASSERT_EQ(incr(b, 2), DB_SUCCESS);
-
-    auto rb = std::async(std::launch::async, [&] { return lock_table(b, IB_LOCK_S); });
-
-    ASSERT_TRUE(wait_for_lock_wait(b));
-
-    auto ra = std::async(std::launch::async, [&] { return incr(a, 2); });
-
-    const auto ea = get(ra, a);
-    const auto eb = get(rb, b);
-
-    EXPECT_EQ(int(ea == DB_DEADLOCK) + int(eb == DB_DEADLOCK), 1) << "a: " << ea << " b: " << eb;
-
-    /* The survivor waited for the victim's rollback, then got its lock. */
-    EXPECT_TRUE(ea == DB_SUCCESS || eb == DB_SUCCESS);
-
-    if (ea == DB_SUCCESS) {
-      rollback(b);
-      commit(a);
-    } else {
-      rollback(a);
-      commit(b);
-    }
-  }
-
-  EXPECT_EQ(n_locks(), std::pair(size_t(0), size_t(0))) << "locks left";
-}
-
-/** A transaction waiting for a row is interrupted (api::trx_interrupt()):
-its wait ends with DB_INTERRUPTED within the period of the lock timeout
-thread (1 s), its statement is rolled back but not the transaction: it
-still holds the row it updated before, a third transaction waits for that.
-Then an interrupt races the holder's commit: the waiter either gets the row
-or DB_INTERRUPTED without changing it, never both. */
-TEST_F(LockMtDb, InterruptWait) {
-  load({{1, ut::Row{1, 0, ""}}, {2, ut::Row{2, 0, ""}}});
-
-  auto h = begin();
-  auto w = begin();
-
-  ASSERT_EQ(incr(h, 1), DB_SUCCESS);
-  ASSERT_EQ(incr(w, 2), DB_SUCCESS);
-
-  auto result = std::async(std::launch::async, [&] { return incr(w, 1); });
-
-  ASSERT_TRUE(wait_for_lock_wait(w));
-
-  const auto start = Clock::now();
-
-  api::trx_interrupt(w);
-
-  EXPECT_EQ(get(result, w, 5s), DB_INTERRUPTED);
-  EXPECT_LT(Clock::now() - start, 3s);
-
-  auto t3 = begin();
-  auto r3 = std::async(std::launch::async, [&] { return incr(t3, 2); });
-
-  EXPECT_TRUE(wait_for_lock_wait(t3)) << "the interrupt released the locks of the earlier statements";
-
-  rollback(w);
-
-  EXPECT_EQ(get(r3, t3), DB_SUCCESS);
-  commit(t3);
-  commit(h);
-
-  EXPECT_EQ(value(1), 1u);
-  EXPECT_EQ(value(2), 1u);
-
-  /* The race. */
-  for (int round{}; round < 2; ++round) {
-    const auto before = value(1);
-    auto h2 = begin();
-    auto w2 = begin();
-
-    ASSERT_EQ(incr(h2, 1), DB_SUCCESS);
-
-    auto r = std::async(std::launch::async, [&] { return incr(w2, 1); });
-
-    ASSERT_TRUE(wait_for_lock_wait(w2));
-
-    api::trx_interrupt(w2);
-
-    if (round == 1) {
-      std::this_thread::sleep_for(500ms);
-    }
-
-    commit(h2);
-
-    const auto err = get(r, w2, 5s);
-
-    commit(w2);
-
-    if (err == DB_SUCCESS) {
-      EXPECT_EQ(value(1), before + 2);
-    } else {
-      EXPECT_EQ(err, DB_INTERRUPTED);
-      EXPECT_EQ(value(1), before + 1);
-    }
-  }
-}
-
-/** A wait for a row with a lock wait timeout of 1 s ends with
-DB_LOCK_WAIT_TIMEOUT no sooner than 1 s and no later than the next check
-of the lock timeout thread (1 s period, 1 s resolution: 3 s); the whole
-transaction is rolled back (rollback on timeout): the row it changed before
-is free at once. The holder is unaffected. */
-TEST_F(LockMtDb, TimeoutBounds) {
-  const Timeout timeout(this, 1s);
-
-  load({{1, ut::Row{1, 0, ""}}, {2, ut::Row{2, 0, ""}}});
-
-  auto h = begin();
-  auto w = begin();
-
-  ASSERT_EQ(incr(h, 1), DB_SUCCESS);
-  ASSERT_EQ(incr(w, 2), DB_SUCCESS);
-
-  const auto start = Clock::now();
-  const auto err = incr(w, 1);
-  const std::chrono::duration<double> secs = Clock::now() - start;
-
-  EXPECT_EQ(err, DB_LOCK_WAIT_TIMEOUT);
-  EXPECT_GE(secs.count(), 1.0);
-  EXPECT_LT(secs.count(), 3.5);
-
-  auto t3 = begin();
-  auto r3 = std::async(std::launch::async, [&] { return incr(t3, 2); });
-
-  EXPECT_EQ(get(r3, t3, 500ms), DB_SUCCESS) << "the timed out transaction still holds its row";
-
-  commit(t3);
-  rollback(w);
-  commit(h);
-
-  EXPECT_EQ(value(1), 1u);
-  EXPECT_EQ(value(2), 1u);
-}
-
-/** The holder commits close to the 1 s timeout of the waiter, earlier and
-later from round to round: the waiter either gets the row (DB_SUCCESS, its
-change is there) or times out (its transaction is rolled back, its change
-is not there, it holds no lock), never both. */
-TEST_F(LockMtDb, TimeoutGrantRace) {
-  const Timeout timeout(this, 1s);
-
-  load({{1, ut::Row{1, 0, ""}}});
-
-  int n_granted{};
-  int n_timeouts{};
-
-  for (auto delay : {900ms, 1600ms, 2300ms}) {
-    const auto before = value(1);
-    auto h = begin();
-    auto w = begin();
-
-    ASSERT_EQ(incr(h, 1), DB_SUCCESS);
-
-    auto r = std::async(std::launch::async, [&] { return incr(w, 1); });
-
-    ASSERT_TRUE(wait_for_lock_wait(w));
-
-    std::this_thread::sleep_for(delay);
-
-    commit(h);
-
-    const auto err = get(r, w, 5s);
-
-    if (err == DB_SUCCESS) {
-      ++n_granted;
-      commit(w);
-      EXPECT_EQ(value(1), before + 2);
-    } else {
-      ++n_timeouts;
-      EXPECT_EQ(err, DB_LOCK_WAIT_TIMEOUT);
-
-      mutex_enter(m_mutex);
-      EXPECT_TRUE(w->m_trx_locks.empty()) << "a timed out transaction holds locks";
-      mutex_exit(m_mutex);
-
-      rollback(w);
-      EXPECT_EQ(value(1), before + 1);
-    }
-  }
-
-  std::printf("TimeoutGrantRace: %d granted, %d timed out\n", n_granted, n_timeouts);
-}
-
-/** A timeout of 0 s is not "wait forever": a wait ends with
-DB_LOCK_WAIT_TIMEOUT at the first check of the lock timeout thread after the
-clock (1 s resolution) moved, within 2.5 s. */
-TEST_F(LockMtDb, Timeout0) {
-  const Timeout timeout(this, 0s);
-
-  load({{1, ut::Row{1, 0, ""}}});
-
-  auto h = begin();
-  auto w = begin();
-
-  ASSERT_EQ(incr(h, 1), DB_SUCCESS);
-
-  const auto start = Clock::now();
-  auto r = std::async(std::launch::async, [&] { return incr(w, 1); });
-
-  EXPECT_EQ(get(r, w, 5s), DB_LOCK_WAIT_TIMEOUT);
-  EXPECT_LT(Clock::now() - start, 2500ms);
-
-  rollback(w);
-  commit(h);
-}
-
 /** The in-memory lock queues under threads, timed. */
 class LockMtPerf : public LockMt {};
 
-constexpr std::array<int, 5> THREADS{1, 2, 4, 8, 16};
 
 /** Each thread locks and releases records of a page of its own: no
-conflict, only the trx sys mutex (the lock_sys mutex) shared. */
+conflict; the shard latches (different shards) and the slots of the global
+latch (S) are all they take. */
 TEST_F(LockMtPerf, RecUncontended) {
   for (int n : THREADS) {
     std::vector<std::unique_ptr<FakePage>> pages;
@@ -2537,10 +1699,8 @@ TEST_F(LockMtPerf, RecUncontended) {
     }
 
     auto r = ut::bench_mt(std::format("rec_uncontended_t{}", n), n, 20000, [&](int t, uint64_t i) {
-      mutex_enter(m_mutex);
       ut::keep(rec_request(trxs[t], pages[t]->m_block, LOCK_X | LOCK_REC_NOT_GAP, 2 + i % 8));
-      m_lock_sys->release_off_trx_sys_mutex(trxs[t]);
-      mutex_exit(m_mutex);
+      m_lock_sys->release(trxs[t]);
     });
 
     for (auto trx : trxs) {
@@ -2564,10 +1724,8 @@ TEST_F(LockMtPerf, RecHotS) {
     }
 
     auto r = ut::bench_mt(std::format("rec_hot_s_t{}", n), n, 20000, [&](int t, uint64_t) {
-      mutex_enter(m_mutex);
       ut::keep(rec_request(trxs[t], page.m_block, LOCK_S | LOCK_REC_NOT_GAP, 2));
-      m_lock_sys->release_off_trx_sys_mutex(trxs[t]);
-      mutex_exit(m_mutex);
+      m_lock_sys->release(trxs[t]);
     });
 
     for (auto trx : trxs) {
@@ -2595,19 +1753,15 @@ TEST_F(LockMtPerf, RecHotX) {
     auto r = ut::bench_mt(std::format("rec_hot_x_t{}", n), n, n == 1 ? 20000 : 4000, [&](int t, uint64_t) {
       const auto start = Clock::now();
 
-      mutex_enter(m_mutex);
       const auto got = rec_request(trxs[t], page.m_block, LOCK_X | LOCK_REC_NOT_GAP, 2);
-      mutex_exit(m_mutex);
 
       if (got == WAIT) {
-        (void)await(trxs[t]);
+        (void)await_fast(trxs[t]);
       }
 
       lat[t].push_back(std::chrono::duration<double, std::nano>(Clock::now() - start).count());
 
-      mutex_enter(m_mutex);
-      m_lock_sys->release_off_trx_sys_mutex(trxs[t]);
-      mutex_exit(m_mutex);
+      m_lock_sys->release(trxs[t]);
     });
 
     std::vector<double> all;
@@ -2628,10 +1782,10 @@ TEST_F(LockMtPerf, RecHotX) {
 }
 
 /** One transaction holds W records of a page in X (one lock), W
-transactions wait each for one of them. Its release grants them all: each
-grant scans the page queue from its front to the waiting lock
-(rec_dequeue_from_page() -> rec_has_to_wait_in_queue()), O(W^2) for the
-release. The time per grant grows with W. */
+transactions wait each for one of them. Its release grants them all in one
+pass over the page queue (rec_grant_pass()), O(W) for the release: the time
+per grant does not grow with W. (It was a scan of the queue from its front
+for each waiter, O(W^2).) */
 TEST_F(LockMtPerf, GrantScan) {
   for (ulint w : {64, 256, 1024, 4096}) {
     FakePage page(1, w + 2);
@@ -2642,7 +1796,7 @@ TEST_F(LockMtPerf, GrantScan) {
       trxs.push_back(begin());
     }
 
-    mutex_enter(m_mutex);
+    x_enter();
 
     for (ulint i{}; i < w; ++i) {
       EXPECT_EQ(rec_request(holder, page.m_block, LOCK_X | LOCK_REC_NOT_GAP, 2 + i), GRANTED);
@@ -2657,11 +1811,11 @@ TEST_F(LockMtPerf, GrantScan) {
     const std::chrono::duration<double> enqueue = Clock::now() - enqueue_start;
     const auto start = Clock::now();
 
-    m_lock_sys->release_off_trx_sys_mutex(holder);
+    m_lock_sys->release(holder);
 
     const std::chrono::duration<double> secs = Clock::now() - start;
 
-    mutex_exit(m_mutex);
+    x_exit();
 
     ut::report(ut::BenchResult{std::format("grant_scan_w{}", w), 1, w, secs.count()});
     ut::report(ut::BenchResult{std::format("enqueue_wait_w{}", w), 1, w, enqueue.count()});
@@ -2676,9 +1830,8 @@ TEST_F(LockMtPerf, GrantScan) {
 }
 
 /** The cost of the deadlock check of a request that waits, no deadlock:
-(1) behind L transactions holding S on the record, the search visits each;
-(2) behind one holder with T idle transactions active: deadlock_occurs()
-first clears the mark of every active transaction, O(T) at every wait. */
+(1) behind L transactions holding S on the record; (2) behind one holder
+with T idle transactions active, which the check does not visit. */
 TEST_F(LockMtPerf, DeadlockCost) {
   FakePage page(1);
 
@@ -2691,7 +1844,7 @@ TEST_F(LockMtPerf, DeadlockCost) {
 
     auto req_trx = begin();
 
-    mutex_enter(m_mutex);
+    x_enter();
 
     for (auto trx : trxs) {
       EXPECT_EQ(rec_request(trx, page.m_block, LOCK_S | LOCK_REC_NOT_GAP, 2), GRANTED);
@@ -2699,18 +1852,25 @@ TEST_F(LockMtPerf, DeadlockCost) {
 
     auto req = m_lock_sys->rec_create(LockMode(LOCK_X | LOCK_REC_NOT_GAP | LOCK_WAIT), &page.m_block, 2, m_index, req_trx);
 
-    mutex_exit(m_mutex);
+    x_exit();
 
+    /* The full check, with X held for the whole loop; and the latch free
+    walk of a request (deadlock_suspect()), which decides if the full check
+    must run: behind S holders (several blockers) it must. */
+    x_enter();
     auto r = ut::bench(std::format("deadlock_check_queue{}", l), 2000, [&](uint64_t) {
-      mutex_enter(m_mutex);
       ut::keep(m_lock_sys->deadlock_occurs(req, req_trx));
-      mutex_exit(m_mutex);
     });
+    x_exit();
 
-    mutex_enter(m_mutex);
-    m_lock_sys->release_off_trx_sys_mutex(req_trx);
+    ut::keep(ut::bench(std::format("deadlock_walk_queue{}", l), 2000, [&](uint64_t) {
+      ut::keep(m_lock_sys->deadlock_suspect(req_trx));
+    }));
+
+    x_enter();
+    m_lock_sys->release(req_trx);
     req_trx->m_wait_lock = nullptr;
-    mutex_exit(m_mutex);
+    x_exit();
 
     commit(req_trx);
 
@@ -2731,21 +1891,27 @@ TEST_F(LockMtPerf, DeadlockCost) {
     auto holder = begin();
     auto req_trx = begin();
 
-    mutex_enter(m_mutex);
+    x_enter();
     EXPECT_EQ(rec_request(holder, page.m_block, LOCK_X | LOCK_REC_NOT_GAP, 2), GRANTED);
     auto req = m_lock_sys->rec_create(LockMode(LOCK_X | LOCK_REC_NOT_GAP | LOCK_WAIT), &page.m_block, 2, m_index, req_trx);
-    mutex_exit(m_mutex);
+    x_exit();
 
+    x_enter();
     auto r = ut::bench(std::format("deadlock_check_idle{}", n_idle), 2000, [&](uint64_t) {
-      mutex_enter(m_mutex);
       ut::keep(m_lock_sys->deadlock_occurs(req, req_trx));
-      mutex_exit(m_mutex);
     });
+    x_exit();
 
-    mutex_enter(m_mutex);
-    m_lock_sys->release_off_trx_sys_mutex(req_trx);
+    /* What a request pays: the latch free walk, one edge to a running
+    holder, no full check. */
+    ut::keep(ut::bench(std::format("deadlock_walk_idle{}", n_idle), 2000, [&](uint64_t) {
+      ut::keep(m_lock_sys->deadlock_suspect(req_trx));
+    }));
+
+    x_enter();
+    m_lock_sys->release(req_trx);
     req_trx->m_wait_lock = nullptr;
-    mutex_exit(m_mutex);
+    x_exit();
 
     commit(req_trx);
     commit(holder);
@@ -2758,47 +1924,37 @@ TEST_F(LockMtPerf, DeadlockCost) {
   }
 }
 
-/** The trx sys mutex (which is the lock_sys mutex) under the hot S record
-load: how long a thread waits to get it and how long it holds it, p50 and
-p99, by thread count; and the longest hold: the release of a transaction
-with 1,000 locks, the interval after which a release lets the mutex go. */
+/** The hot S record load: the latency of a lock and its release (the page
+shard latch of the record shared by all, and the slots of the global latch),
+p50 and p99, by thread count; and the release of a transaction with 1,000
+locks on 1,000 pages: shard by shard, nothing global held (it was one hold
+of the trx sys mutex). */
 TEST_F(LockMtPerf, MutexHold) {
   FakePage page(1);
 
   for (int n : THREADS) {
     std::vector<Trx *> trxs;
-    std::vector<std::vector<double>> waits(n);
-    std::vector<std::vector<double>> holds(n);
+    std::vector<std::vector<double>> ops(n);
 
     for (int t{}; t < n; ++t) {
       trxs.push_back(begin());
     }
 
-    ut::bench_mt(std::format("mutex_hot_s_t{}", n), n, 10000, [&](int t, uint64_t) {
+    ut::bench_mt(std::format("latch_hot_s_t{}", n), n, 10000, [&](int t, uint64_t) {
       const auto t0 = Clock::now();
-      mutex_enter(m_mutex);
-      const auto t1 = Clock::now();
       ut::keep(rec_request(trxs[t], page.m_block, LOCK_S | LOCK_REC_NOT_GAP, 2));
-      m_lock_sys->release_off_trx_sys_mutex(trxs[t]);
-      const auto t2 = Clock::now();
-      mutex_exit(m_mutex);
-
-      waits[t].push_back(std::chrono::duration<double, std::nano>(t1 - t0).count());
-      holds[t].push_back(std::chrono::duration<double, std::nano>(t2 - t1).count());
+      m_lock_sys->release(trxs[t]);
+      ops[t].push_back(std::chrono::duration<double, std::nano>(Clock::now() - t0).count());
     });
 
-    std::vector<double> w;
-    std::vector<double> h;
+    std::vector<double> all;
 
     for (int t{}; t < n; ++t) {
-      w.insert(w.end(), waits[t].begin(), waits[t].end());
-      h.insert(h.end(), holds[t].begin(), holds[t].end());
+      all.insert(all.end(), ops[t].begin(), ops[t].end());
     }
 
-    report_ns(std::format("mutex_wait_p50_t{}", n), n, percentile(w, 50));
-    report_ns(std::format("mutex_wait_p99_t{}", n), n, percentile(w, 99));
-    report_ns(std::format("mutex_hold_p50_t{}", n), n, percentile(h, 50));
-    report_ns(std::format("mutex_hold_p99_t{}", n), n, percentile(h, 99));
+    report_ns(std::format("latch_op_p50_t{}", n), n, percentile(all, 50));
+    report_ns(std::format("latch_op_p99_t{}", n), n, percentile(all, 99));
 
     for (auto trx : trxs) {
       commit(trx);
@@ -2813,116 +1969,19 @@ TEST_F(LockMtPerf, MutexHold) {
 
   auto big = begin();
 
-  mutex_enter(m_mutex);
-
   for (auto &p : pages) {
     ut::keep(rec_request(big, p->m_block, LOCK_X | LOCK_REC_NOT_GAP, 2));
   }
 
   const auto start = Clock::now();
 
-  m_lock_sys->release_off_trx_sys_mutex(big);
+  m_lock_sys->release(big);
 
   const std::chrono::duration<double, std::nano> ns = Clock::now() - start;
 
-  mutex_exit(m_mutex);
-
-  report_ns("mutex_hold_release_1000_locks", 1, ns.count());
+  report_ns("release_1000_locks", 1, ns.count());
 
   commit(big);
-}
-
-/** Transactions of a started instance, timed. */
-class LockMtDbPerf : public LockMtDb {};
-
-/** Each thread runs transactions that take an intention lock on the test
-table, IS or IX, through the API, and commit: compatible, the table queue
-holds up to one lock per thread. The same without the lock, as the base. */
-TEST_F(LockMtDbPerf, TableIntent) {
-  for (int n : THREADS) {
-    ut::bench_mt(std::format("trx_begin_commit_t{}", n), n, 2000, [&](int, uint64_t) {
-      auto trx = begin();
-      commit(trx);
-    });
-
-    auto r = ut::bench_mt(std::format("table_is_ix_trx_t{}", n), n, 2000, [&](int t, uint64_t) {
-      auto trx = begin();
-      EXPECT_EQ(lock_table(trx, t % 2 == 0 ? IB_LOCK_IS : IB_LOCK_IX), DB_SUCCESS);
-      commit(trx);
-    });
-
-    EXPECT_LT(r.ns_per_op(), 1e7);
-  }
-}
-
-/** P pairs of threads, each pair handing a row of its own over: the
-holder commits while the other waits for the row; the time from the start
-of the commit to the return of the waiter's update, by number of pairs
-running at once (the wakeup through the server slot event, the trx sys
-mutex shared by all). */
-TEST_F(LockMtDbPerf, HandoffPairs) {
-  constexpr int N = 40;
-
-  ut::Rows initial;
-
-  for (uint32_t k = 1; k <= 8; ++k) {
-    initial[k] = ut::Row{k, 0, ""};
-  }
-
-  load(initial);
-
-  for (int pairs : {1, 2, 4, 8}) {
-    std::vector<std::vector<double>> lat(pairs);
-    std::vector<std::thread> threads;
-
-    for (int p{}; p < pairs; ++p) {
-      threads.emplace_back([&, p] {
-        const uint32_t k = 1 + p;
-
-        for (int i{}; i < N; ++i) {
-          auto holder = begin();
-
-          if (incr(holder, k) != DB_SUCCESS) {
-            ADD_FAILURE() << "incr";
-            rollback(holder);
-            return;
-          }
-
-          auto waiter = begin();
-          Clock::time_point granted;
-
-          auto result = std::async(std::launch::async, [&] {
-            auto err = incr(waiter, k);
-            granted = Clock::now();
-            return err;
-          });
-
-          EXPECT_TRUE(wait_for_lock_wait(waiter));
-
-          const auto start = Clock::now();
-
-          commit(holder);
-
-          EXPECT_EQ(get(result, waiter), DB_SUCCESS);
-          lat[p].push_back(std::chrono::duration<double, std::nano>(granted - start).count());
-          commit(waiter);
-        }
-      });
-    }
-
-    for (auto &t : threads) {
-      t.join();
-    }
-
-    std::vector<double> all;
-
-    for (auto &v : lat) {
-      all.insert(all.end(), v.begin(), v.end());
-    }
-
-    report_ns(std::format("api_handoff_p50_pairs{}", pairs), pairs, percentile(all, 50));
-    report_ns(std::format("api_handoff_p99_pairs{}", pairs), pairs, percentile(all, 99));
-  }
 }
 
 }  // namespace

@@ -23,6 +23,7 @@ a query graph
 Created 12/29/1997 Heikki Tuuri
 *******************************************************/
 
+#include <charconv>
 #include "eval0eval.h"
 
 #include "data0data.h"
@@ -637,7 +638,18 @@ inline void eval_predefined(FuncNode *func_node) /*!< in: function node */
 
   } else if (func == PARS_TO_NUMBER_TOKEN) {
 
-    int_val = atoi((char *)dfield_get_data(que_node_get_val(arg1)));
+    auto f = que_node_get_val(arg1);
+    auto p = static_cast<const char *>(dfield_get_data(f));
+    auto end = p + dfield_get_len(f);
+
+    while (p < end && *p == ' ') {
+      ++p;
+    }
+
+    int32_t v{};
+
+    (void)std::from_chars(p, end, v);
+    int_val = v;
 
   } else if (func == PARS_SYSDATE_TOKEN) {
     int_val = (lint)ut_time();

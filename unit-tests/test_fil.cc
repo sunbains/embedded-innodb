@@ -24,6 +24,7 @@ on a started System: scratch tablespaces are created in the test database
 directory with Fil::create_new_single_table_tablespace() and used with
 synchronous Fil::data_io(), bypassing the buffer pool. */
 
+#include <chrono>
 #include "ut0env.h"
 #include "ut0perf.h"
 
@@ -697,14 +698,43 @@ TEST_F(FilIoTest, ExtendKeepsData) {
   }
 }
 
-/** An extension is flushed to disk. */
+/** An extension is not synced when done (it is redo logged, recovery redoes
+it): it marks the space unflushed, and the next flush of the unflushed spaces
+makes it durable. */
 TEST_F(FilIoTest, ExtendFlushes) {
   const auto id = create(name("x"));
+
+  /* The space's own flag: the flush count is of all spaces. */
+  auto unflushed = [&] {
+    mutex_enter(&fil().m_mutex);
+
+    const auto r = fil().space_get_by_id(id)->m_is_in_unflushed_spaces;
+
+    mutex_exit(&fil().m_mutex);
+
+    return r;
+  };
+
+  fil().flush_file_spaces();
+  ASSERT_FALSE(unflushed());
+
   const auto flushes = fil().get_flushes();
   page_no_t actual{};
 
   ASSERT_TRUE(fil().extend_space_to_desired_size(&actual, id, 128));
+  EXPECT_EQ(actual, 128U);
+  EXPECT_TRUE(unflushed());
+
+  fil().flush_file_spaces();
+  EXPECT_FALSE(unflushed());
   EXPECT_GT(fil().get_flushes(), flushes);
+
+  /* The count is of all spaces: a background flush of another space may be
+  in progress, wait (bounded) for it to drain. */
+  for (int k = 0; k < 500 && fil().get_pending_flushes() > 0; ++k) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+  }
+
   EXPECT_EQ(fil().get_pending_flushes(), 0UL);
 }
 

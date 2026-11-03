@@ -183,7 +183,7 @@ struct Log {
   /** LSN of the last checkpoint, protected by m_mutex. */
   lsn_t m_last_checkpoint_lsn{};
 
-  /** Number of the next checkpoint. */
+  /** Number of the next checkpoint, protected by m_checkpoint_mutex. */
   uint64_t m_next_checkpoint_no{};
 
   /** Serializes checkpoints. */

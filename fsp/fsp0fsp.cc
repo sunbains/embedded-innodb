@@ -745,11 +745,20 @@ bool Fsp::try_extend_data_file_with_pages(space_id_t space, page_no_t page_no, f
 
   ut_a(page_no >= size);
 
+  /* A small tablespace used to grow one page at a time, an extension and a
+  sync for each of its first 64 pages. Grow it to at least twice its size,
+  up to one extent: about 4 extensions for a new table, and it wastes at
+  most half of an extent. */
+  const page_no_t want = std::max<page_no_t>(page_no + 1, std::min<page_no_t>(2 * size, FSP_EXTENT_SIZE));
+
   page_no_t actual_size;
-  auto success = m_sys.m_fil->extend_space_to_desired_size(&actual_size, space, page_no + 1);
+  auto success = m_sys.m_fil->extend_space_to_desired_size(&actual_size, space, want);
 
   /* actual_size now has the space size in pages; it may be less than
   we wanted if we ran out of disk space */
+
+  /* Before FSP_SIZE: recovery extends the file when it parses this. */
+  m_sys.m_fil->extend_write_log(space, actual_size, mtr);
 
   mlog_write_ulint(header + FSP_SIZE, actual_size, MLOG_4BYTES, mtr);
 
@@ -803,6 +812,10 @@ bool Fsp::try_extend_data_file(ulint *actual_increase, space_id_t space, fsp_hea
     auto success = m_sys.m_fil->extend_space_to_desired_size(&actual_size, space, size + size_increase);
     ut_a(success);
   }
+
+  /* Recovery extends the file when it parses this (the extension is not
+  synced). The file size, not the aligned FSP_SIZE below. */
+  m_sys.m_fil->extend_write_log(space, actual_size, mtr);
 
   /* We ignore any fragments of a full megabyte when storing the size
   to the space header */

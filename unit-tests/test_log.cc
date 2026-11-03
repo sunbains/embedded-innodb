@@ -127,6 +127,40 @@ off_t allocated(const ut::fs::path &path) {
   return off_t(st.st_blocks) * 512;
 }
 
+/** The bytes of data stored inside the file size, holes excluded. Unlike
+st_blocks this does not count what the file system preallocates past the
+end of a growing file (XFS speculative preallocation, up to the file size). */
+off_t data_bytes(const ut::fs::path &path) {
+  const auto fd = ::open(path.c_str(), O_RDONLY);
+
+  EXPECT_NE(fd, -1);
+
+  const auto size = ::lseek(fd, 0, SEEK_END);
+  off_t total{};
+  off_t off{};
+
+  while (off < size) {
+    const auto data = ::lseek(fd, off, SEEK_DATA);
+
+    if (data == -1) {
+      break;
+    }
+
+    auto hole = ::lseek(fd, data, SEEK_HOLE);
+
+    if (hole == -1) {
+      hole = size;
+    }
+
+    total += hole - data;
+    off = hole;
+  }
+
+  ::close(fd);
+
+  return total;
+}
+
 /** @return n bytes of a pattern that depends on seed and the position. */
 std::vector<byte> pattern(ulint n, uint32_t seed) {
   std::vector<byte> v(n);
@@ -1057,15 +1091,15 @@ TEST_F(LogTest, CheckpointAtEnd) {
   EXPECT_LE(ckpt, log.get_lsn());
 
   /* Close to a megabyte of log, all before the checkpoint: it reads as
-  zeros and most of it takes no space (the file system may keep some
-  space preallocated past the end of the file). */
+  zeros and most of it takes no space. Count the data inside the file
+  size: st_blocks also counts what XFS preallocates past the end. */
   const auto size = off_t(ut::fs::file_size(path));
   const auto hole = off_t(ckpt / DATA_SIZE * BLOCK_SIZE);
   const auto file = read_file(path);
 
   EXPECT_GT(hole, 500000);
   EXPECT_TRUE(std::all_of(file.begin(), file.begin() + hole, [](byte b) { return b == 0; }));
-  EXPECT_LT(allocated(path), size - hole / 2);
+  EXPECT_LT(data_bytes(path), size - hole / 2);
 
   expect_rows(rows);
 }

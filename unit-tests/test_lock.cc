@@ -48,6 +48,7 @@ LockSys: record and table locks.
 
 #include <array>
 #include <future>
+#include <random>
 #include <thread>
 #include <vector>
 
@@ -60,6 +61,18 @@ constexpr ulint N_BITS = 104;
 
 /** A space id no real tablespace has: locks on its pages exist only in the lock table. */
 constexpr space_id_t FAKE_SPACE = 0xFFFF0;
+
+/** @return the queue of a page, or nullptr: looked up with the lock system
+latched X (the tests are single threaded here: the queue stays). */
+Rec_locks *queue_of(LockSys *lock_sys, const PageId &page_id) {
+  LockSys::Exclusive x(*lock_sys);
+  return lock_sys->rec_queue(page_id);
+}
+
+/** @return true if a page has record locks. */
+bool has_queue(LockSys *lock_sys, const PageId &page_id) {
+  return queue_of(lock_sys, page_id) != nullptr;
+}
 
 /** The frame of a page for a block: lock creation sizes its bitmap from
 the number of records in the page heap. */
@@ -117,10 +130,10 @@ class LockTest : public ut::SysTest {
   void TearDown() override {
     /* Release all the locks first: a release can grant a waiting lock of
     another transaction, that must still be marked as waiting then. */
-    mutex_enter(m_mutex);
+    m_lock_sys->x_lock();
 
     for (auto t : m_trxs) {
-      m_lock_sys->release_off_trx_sys_mutex(t);
+      m_lock_sys->release(t);
     }
 
     for (auto t : m_trxs) {
@@ -128,7 +141,7 @@ class LockTest : public ut::SysTest {
       t->m_que_state = TRX_QUE_RUNNING;
     }
 
-    mutex_exit(m_mutex);
+    m_lock_sys->x_unlock();
 
     for (auto &t : m_trxs) {
       m_sys->m_trx_sys->destroy_user_trx(t);
@@ -146,63 +159,63 @@ class LockTest : public ut::SysTest {
 
   /** A record lock of trx on page_id, heap_no, created with the trx sys mutex. */
   Lock *rec_lock(const PageId &page_id, ulint type_mode, ulint heap_no, Trx *trx) {
-    mutex_enter(m_mutex);
+    m_lock_sys->x_lock();
     auto lock = m_lock_sys->rec_create_low(page_id, LockMode(type_mode), heap_no, N_BITS, nullptr, trx);
-    mutex_exit(m_mutex);
+    m_lock_sys->x_unlock();
 
     return lock;
   }
 
   /** A record lock request added to the queue, as the engine does once it knows it need not wait. */
   Lock *add(const BufBlock &block, ulint type_mode, ulint heap_no, Trx *trx) {
-    mutex_enter(m_mutex);
+    m_lock_sys->x_lock();
     auto lock = m_lock_sys->rec_add_to_queue(LockMode(type_mode), &block, heap_no, nullptr, trx);
-    mutex_exit(m_mutex);
+    m_lock_sys->x_unlock();
 
     return lock;
   }
 
   /** @return true if a request of trx for type_mode on page_id, heap_no would have to wait. */
   bool waits(const PageId &page_id, ulint type_mode, ulint heap_no, Trx *trx) {
-    mutex_enter(m_mutex);
+    m_lock_sys->x_lock();
     auto lock = m_lock_sys->rec_other_has_conflicting(page_id, LockMode(type_mode), heap_no, trx);
-    mutex_exit(m_mutex);
+    m_lock_sys->x_unlock();
 
     return lock != nullptr;
   }
 
   /** @return true if the waiting lock has to keep waiting behind the locks ahead of it. */
   bool must_wait(Lock *lock) {
-    mutex_enter(m_mutex);
-    const auto &queue = m_lock_sys->m_rec_locks.at(lock->page_id());
+    m_lock_sys->x_lock();
+    const auto &queue = *m_lock_sys->rec_queue(lock->page_id());
     auto ret = m_lock_sys->rec_has_to_wait_in_queue(queue, lock, lock->rec_find_set_bit());
-    mutex_exit(m_mutex);
+    m_lock_sys->x_unlock();
 
     return ret;
   }
 
   /** Remove lock from its queue, granting the waiters that can go. */
   void dequeue(Lock *lock) {
-    mutex_enter(m_mutex);
+    m_lock_sys->x_lock();
     m_lock_sys->rec_dequeue_from_page(lock);
-    mutex_exit(m_mutex);
+    m_lock_sys->x_unlock();
   }
 
   void release(Trx *trx) {
-    mutex_enter(m_mutex);
-    m_lock_sys->release_off_trx_sys_mutex(trx);
-    mutex_exit(m_mutex);
+    m_lock_sys->x_lock();
+    m_lock_sys->release(trx);
+    m_lock_sys->x_unlock();
   }
 
   /** @return the lock of trx on page_id with bit heap_no set, or nullptr. */
   const Lock *find(const PageId &page_id, ulint heap_no, const Trx *trx) {
-    auto it = m_lock_sys->m_rec_locks.find(page_id);
+    auto q = queue_of(m_lock_sys, page_id);
 
-    if (it == m_lock_sys->m_rec_locks.end()) {
+    if (q == nullptr) {
       return nullptr;
     }
 
-    for (auto lock : it->second) {
+    for (auto lock : *q) {
       if (lock->m_trx == trx && lock->rec_is_nth_bit_set(heap_no)) {
         return lock;
       }
@@ -215,8 +228,8 @@ class LockTest : public ut::SysTest {
   std::vector<const Lock *> queue(const PageId &page_id, ulint heap_no) {
     std::vector<const Lock *> locks;
 
-    if (auto it = m_lock_sys->m_rec_locks.find(page_id); it != m_lock_sys->m_rec_locks.end()) {
-      for (auto lock : it->second) {
+    if (auto q = queue_of(m_lock_sys, page_id); q != nullptr) {
+      for (auto lock : *q) {
         if (lock->rec_is_nth_bit_set(heap_no)) {
           locks.push_back(lock);
         }
@@ -228,9 +241,9 @@ class LockTest : public ut::SysTest {
 
   /** @return the number of locks on page_id, set bits or not. */
   size_t n_locks(const PageId &page_id) {
-    auto it = m_lock_sys->m_rec_locks.find(page_id);
+    auto q = queue_of(m_lock_sys, page_id);
 
-    return it == m_lock_sys->m_rec_locks.end() ? 0 : it->second.size();
+    return q == nullptr ? 0 : q->size();
   }
 
   LockSys *m_lock_sys{};
@@ -325,7 +338,7 @@ TEST_F(LockTest, RecCreateFlags) {
       EXPECT_EQ(lock->rec_find_set_bit(), heap_no);
       EXPECT_EQ(lock->m_trx, t);
       EXPECT_EQ(t->m_trx_locks.back(), lock);
-      EXPECT_EQ(m_lock_sys->m_rec_locks.at(page_id).back(), lock);
+      EXPECT_EQ(queue_of(m_lock_sys, page_id)->back(), lock);
       EXPECT_EQ(lock->is_waiting(), (f & LOCK_WAIT) != 0);
       EXPECT_EQ(t->m_wait_lock, (f & LOCK_WAIT) ? lock : nullptr);
 
@@ -447,9 +460,9 @@ TEST_F(LockTest, ConflictIsFirstBlocker) {
   auto first = rec_lock(page_id, LOCK_S, 4, b);
   (void)rec_lock(page_id, LOCK_S, 4, c);
 
-  mutex_enter(m_mutex);
+  m_lock_sys->x_lock();
   EXPECT_EQ(m_lock_sys->rec_other_has_conflicting(page_id, LOCK_X, 4, a), first);
-  mutex_exit(m_mutex);
+  m_lock_sys->x_unlock();
 }
 
 /** rec_add_to_queue() sets a bit in a lock of the same transaction and
@@ -663,7 +676,7 @@ TEST_F(LockTest, ReleaseAll) {
   release(a);
 
   EXPECT_TRUE(a->m_trx_locks.empty());
-  EXPECT_FALSE(m_lock_sys->m_rec_locks.contains(PageId{FAKE_SPACE, 20}));
+  EXPECT_FALSE(has_queue(m_lock_sys, PageId{FAKE_SPACE, 20}));
   EXPECT_EQ(n_locks(PageId{FAKE_SPACE, 21}), 1u);
   EXPECT_EQ(queue(PageId{FAKE_SPACE, 21}, 7), (std::vector<const Lock *>{kept}));
   EXPECT_FALSE(waiter->is_waiting());
@@ -682,12 +695,12 @@ TEST_F(LockTest, ReleaseMany) {
 
   auto kept = rec_lock(PageId{FAKE_SPACE + 1, 7}, LOCK_S, 60, b);
 
-  EXPECT_EQ(m_lock_sys->m_rec_locks.size(), 2500u);
+  EXPECT_EQ(m_lock_sys->get_n_rec_locks(), 2500u);
 
   release(a);
 
   EXPECT_TRUE(a->m_trx_locks.empty());
-  EXPECT_EQ(m_lock_sys->m_rec_locks.size(), 1u);
+  EXPECT_EQ(m_lock_sys->get_n_rec_locks(), 1u);
   EXPECT_EQ(queue(PageId{FAKE_SPACE + 1, 7}, 60), (std::vector<const Lock *>{kept}));
 }
 
@@ -704,9 +717,9 @@ TEST_F(LockTest, ResetAndReleaseWait) {
 
   b->m_que_state = TRX_QUE_LOCK_WAIT;
 
-  mutex_enter(m_mutex);
+  m_lock_sys->x_lock();
   m_lock_sys->rec_reset_and_release_wait(page_id, 4);
-  mutex_exit(m_mutex);
+  m_lock_sys->x_unlock();
 
   EXPECT_TRUE(queue(page_id, 4).empty());
   EXPECT_FALSE(la->rec_is_nth_bit_set(4));
@@ -732,9 +745,9 @@ TEST_F(LockTest, InheritX) {
   (void)rec_lock(page_id, LOCK_X | LOCK_REC_NOT_GAP, 4, a);
   (void)rec_lock(page_id, LOCK_X | LOCK_WAIT, 4, b);
 
-  mutex_enter(m_mutex);
+  m_lock_sys->x_lock();
   m_lock_sys->rec_inherit_to_gap(&block, &block, 6, 4);
-  mutex_exit(m_mutex);
+  m_lock_sys->x_unlock();
 
   auto ha = find(page_id, 6, a);
   auto hb = find(page_id, 6, b);
@@ -763,9 +776,9 @@ TEST_F(LockTest, InheritSkips) {
   (void)rec_lock(page_id, LOCK_X, 4, rc);
   (void)rec_lock(page_id, LOCK_X | LOCK_GAP | LOCK_INSERT_INTENTION, 4, ii);
 
-  mutex_enter(m_mutex);
+  m_lock_sys->x_lock();
   m_lock_sys->rec_inherit_to_gap(&block, &block, 6, 4);
-  mutex_exit(m_mutex);
+  m_lock_sys->x_unlock();
 
   EXPECT_TRUE(queue(page_id, 6).empty());
 }
@@ -792,9 +805,9 @@ TEST_F(LockTest, InheritS) {
   (void)rec_lock(page_id, LOCK_S, 4, rr);
   (void)rec_lock(page_id, LOCK_S | LOCK_REC_NOT_GAP, 4, rc);
 
-  mutex_enter(m_mutex);
+  m_lock_sys->x_lock();
   m_lock_sys->rec_inherit_to_gap(&block, &block, 6, 4);
-  mutex_exit(m_mutex);
+  m_lock_sys->x_unlock();
 
   ASSERT_NE(find(page_id, 6, rr), nullptr);
   ASSERT_NE(find(page_id, 6, rc), nullptr);
@@ -813,9 +826,9 @@ TEST_F(LockTest, InheritToSupremum) {
 
   (void)rec_lock(page_id, LOCK_X, 4, a);
 
-  mutex_enter(m_mutex);
+  m_lock_sys->x_lock();
   m_lock_sys->rec_inherit_to_gap(&block, &block, PAGE_HEAP_NO_SUPREMUM, 4);
-  mutex_exit(m_mutex);
+  m_lock_sys->x_unlock();
 
   auto lock = find(page_id, PAGE_HEAP_NO_SUPREMUM, a);
 
@@ -843,9 +856,9 @@ TEST_F(LockTest, InheritIfGapLock) {
   (void)rec_lock(page_id, LOCK_X | LOCK_REC_NOT_GAP, 5, rec);
   (void)rec_lock(page_id, LOCK_X | LOCK_GAP | LOCK_INSERT_INTENTION, 5, ii);
 
-  mutex_enter(m_mutex);
+  m_lock_sys->x_lock();
   m_lock_sys->rec_inherit_to_gap_if_gap_lock(&block, 4, 5);
-  mutex_exit(m_mutex);
+  m_lock_sys->x_unlock();
 
   ASSERT_NE(find(page_id, 4, s), nullptr);
   ASSERT_NE(find(page_id, 4, gap), nullptr);
@@ -906,9 +919,9 @@ TEST_F(LockTest, RecMoveKeepsFlags) {
   ASSERT_NE(rec_lock(page_id, LOCK_X | LOCK_REC_NOT_GAP | LOCK_WAIT, heap_no, waiter), nullptr);
   ASSERT_NE(rec_lock(page_id, LOCK_S | LOCK_GAP, heap_no, gapper), nullptr);
 
-  mutex_enter(m_mutex);
+  m_lock_sys->x_lock();
   m_lock_sys->rec_move(&block, &block, PAGE_HEAP_NO_INFIMUM, heap_no);
-  mutex_exit(m_mutex);
+  m_lock_sys->x_unlock();
 
   for (auto t : {holder, waiter, gapper}) {
     EXPECT_EQ(find(page_id, heap_no, t), nullptr) << "a lock was left on the donor";
@@ -949,10 +962,10 @@ TEST_F(LockTest, RecMoveRoundTrip) {
   ASSERT_NE(rec_lock(page_id, LOCK_X | LOCK_REC_NOT_GAP, heap_no, a), nullptr);
   ASSERT_NE(rec_lock(page_id, LOCK_S | LOCK_WAIT, heap_no, b), nullptr);
 
-  mutex_enter(m_mutex);
+  m_lock_sys->x_lock();
   m_lock_sys->rec_move(&block, &block, PAGE_HEAP_NO_INFIMUM, heap_no);
   m_lock_sys->rec_move(&block, &block, heap_no, PAGE_HEAP_NO_INFIMUM);
-  mutex_exit(m_mutex);
+  m_lock_sys->x_unlock();
 
   EXPECT_EQ(find(page_id, PAGE_HEAP_NO_INFIMUM, a), nullptr);
   EXPECT_EQ(find(page_id, PAGE_HEAP_NO_INFIMUM, b), nullptr);
@@ -988,9 +1001,9 @@ TEST_F(LockTest, RecMoveKeepsOrder) {
   (void)rec_lock(from_id, LOCK_X | LOCK_WAIT, 5, b);
   (void)rec_lock(from_id, LOCK_S | LOCK_WAIT, 5, c);
 
-  mutex_enter(m_mutex);
+  m_lock_sys->x_lock();
   m_lock_sys->rec_move(&to, &from, 3, 5);
-  mutex_exit(m_mutex);
+  m_lock_sys->x_unlock();
 
   EXPECT_TRUE(queue(from_id, 5).empty());
 
@@ -1021,9 +1034,9 @@ TEST_F(LockTest, RecMoveNothing) {
 
   auto lock = rec_lock(page_id, LOCK_S, 4, trx());
 
-  mutex_enter(m_mutex);
+  m_lock_sys->x_lock();
   m_lock_sys->rec_move(&block, &block, 6, 5);
-  mutex_exit(m_mutex);
+  m_lock_sys->x_unlock();
 
   EXPECT_EQ(queue(page_id, 4), (std::vector<const Lock *>{lock}));
   EXPECT_TRUE(queue(page_id, 6).empty());
@@ -1090,11 +1103,11 @@ TEST_F(LockTest, DiscardPage) {
     ++heap_no;
   }
 
-  mutex_enter(m_mutex);
+  m_lock_sys->x_lock();
   m_lock_sys->rec_free_all_from_discard_page(page_id);
-  mutex_exit(m_mutex);
+  m_lock_sys->x_unlock();
 
-  EXPECT_FALSE(m_lock_sys->m_rec_locks.contains(page_id));
+  EXPECT_FALSE(has_queue(m_lock_sys, page_id));
 
   for (auto t : trxs) {
     EXPECT_TRUE(t->m_trx_locks.empty());
@@ -1110,9 +1123,9 @@ TEST_F(LockTest, DiscardOne) {
   auto la = rec_lock(page_id, LOCK_S, 4, a);
   auto lb = rec_lock(page_id, LOCK_S, 5, b);
 
-  mutex_enter(m_mutex);
+  m_lock_sys->x_lock();
   m_lock_sys->rec_discard(la);
-  mutex_exit(m_mutex);
+  m_lock_sys->x_unlock();
 
   EXPECT_TRUE(a->m_trx_locks.empty());
   EXPECT_EQ(n_locks(page_id), 1u);
@@ -1297,10 +1310,10 @@ class LockPageTest : public SharedDb {
 
   /** Release the locks of the transactions of the test and commit them. */
   void finish() {
-    mutex_enter(m_mutex);
+    m_lock_sys->x_lock();
 
     for (auto t : m_trxs) {
-      m_lock_sys->release_off_trx_sys_mutex(t);
+      m_lock_sys->release(t);
     }
 
     for (auto t : m_trxs) {
@@ -1308,7 +1321,7 @@ class LockPageTest : public SharedDb {
       t->m_que_state = TRX_QUE_RUNNING;
     }
 
-    mutex_exit(m_mutex);
+    m_lock_sys->x_unlock();
 
     for (auto t : m_trxs) {
       commit(t);
@@ -1342,9 +1355,9 @@ class LockPageTest : public SharedDb {
   static Rec infimum(const BufBlock &block) { return Rec(block.m_frame + PAGE_INFIMUM); }
 
   Lock *rec_lock(const PageId &page_id, ulint type_mode, ulint heap_no, Trx *trx) {
-    mutex_enter(m_mutex);
+    m_lock_sys->x_lock();
     auto lock = m_lock_sys->rec_create_low(page_id, LockMode(type_mode), heap_no, N_BITS, m_index, trx);
-    mutex_exit(m_mutex);
+    m_lock_sys->x_unlock();
 
     return lock;
   }
@@ -1353,17 +1366,17 @@ class LockPageTest : public SharedDb {
   std::vector<const Lock *> queue(const PageId &page_id, ulint heap_no) {
     std::vector<const Lock *> locks;
 
-    mutex_enter(m_mutex);
+    m_lock_sys->x_lock();
 
-    if (auto it = m_lock_sys->m_rec_locks.find(page_id); it != m_lock_sys->m_rec_locks.end()) {
-      for (auto lock : it->second) {
+    if (auto q = m_lock_sys->rec_queue(page_id); q != nullptr) {
+      for (auto lock : *q) {
         if (lock->rec_is_nth_bit_set(heap_no)) {
           locks.push_back(lock);
         }
       }
     }
 
-    mutex_exit(m_mutex);
+    m_lock_sys->x_unlock();
 
     return locks;
   }
@@ -1612,7 +1625,7 @@ TEST_F(LockPageTest, MergeRight) {
   m_lock_sys->update_merge_right(&right, rec(right, 5), &left);
 
   expect_q(r, 5, {{a, LOCK_X | LOCK_GAP}});
-  EXPECT_FALSE(m_lock_sys->m_rec_locks.contains(l));
+  EXPECT_FALSE(has_queue(m_lock_sys, l));
   EXPECT_EQ(b->m_wait_lock, nullptr);
   EXPECT_EQ(b->m_que_state, TRX_QUE_RUNNING);
   (void)waiting;
@@ -1643,7 +1656,7 @@ TEST_F(LockPageTest, MergeLeft) {
 
   expect_q(l, 10, {{a, LOCK_X | LOCK_GAP}});
   expect_q(l, PAGE_HEAP_NO_SUPREMUM, {{b, LOCK_S}});
-  EXPECT_FALSE(m_lock_sys->m_rec_locks.contains(r));
+  EXPECT_FALSE(has_queue(m_lock_sys, r));
 }
 
 /** A raise of the root moves the locks of the root supremum to the
@@ -1686,7 +1699,7 @@ TEST_F(LockPageTest, CopyAndDiscard) {
   m_lock_sys->update_copy_and_discard(&new_block, &old_block);
 
   expect_q(new_block.get_page_id(), PAGE_HEAP_NO_SUPREMUM, {{a, LOCK_S}});
-  EXPECT_FALSE(m_lock_sys->m_rec_locks.contains(old_block.get_page_id()));
+  EXPECT_FALSE(has_queue(m_lock_sys, old_block.get_page_id()));
 }
 
 /** A discarded page: the heir inherits the X locks of all its records,
@@ -1716,7 +1729,7 @@ TEST_F(LockPageTest, Discard) {
   /* S locks are inherited too (only X locks were, before the fix of
   rec_inherit_to_gap). */
   expect_q(heir.get_page_id(), 5, {{a, LOCK_X | LOCK_GAP}, {b, LOCK_X | LOCK_GAP}, {a, LOCK_S | LOCK_GAP}});
-  EXPECT_FALSE(m_lock_sys->m_rec_locks.contains(p));
+  EXPECT_FALSE(has_queue(m_lock_sys, p));
   EXPECT_EQ(b->m_wait_lock, nullptr);
 }
 
@@ -1833,10 +1846,10 @@ class LockDbTest : public SharedDb {
 
   /** Release the in-memory locks and commit the transactions of trx(). */
   void finish() {
-    mutex_enter(m_mutex);
+    m_lock_sys->x_lock();
 
     for (auto t : m_trxs) {
-      m_lock_sys->release_off_trx_sys_mutex(t);
+      m_lock_sys->release(t);
     }
 
     for (auto t : m_trxs) {
@@ -1844,7 +1857,7 @@ class LockDbTest : public SharedDb {
       t->m_que_state = TRX_QUE_RUNNING;
     }
 
-    mutex_exit(m_mutex);
+    m_lock_sys->x_unlock();
 
     for (auto t : m_trxs) {
       commit(t);
@@ -1855,7 +1868,7 @@ class LockDbTest : public SharedDb {
 
   /** A record lock of trx on the clustered index; a waiting one puts trx in the lock wait state. */
   Lock *rec_lock(const PageId &page_id, ulint type_mode, ulint heap_no, Trx *trx) {
-    mutex_enter(m_mutex);
+    m_lock_sys->x_lock();
 
     auto lock = m_lock_sys->rec_create_low(page_id, LockMode(type_mode), heap_no, N_BITS, m_index, trx);
 
@@ -1863,16 +1876,16 @@ class LockDbTest : public SharedDb {
       trx->m_que_state = TRX_QUE_LOCK_WAIT;
     }
 
-    mutex_exit(m_mutex);
+    m_lock_sys->x_unlock();
 
     return lock;
   }
 
   /** @return true if the waiting request lock of trx closes a cycle and trx is the victim. */
   bool deadlock(Lock *lock, Trx *trx) {
-    mutex_enter(m_mutex);
+    m_lock_sys->x_lock();
     auto ret = m_lock_sys->deadlock_occurs(lock, trx);
-    mutex_exit(m_mutex);
+    m_lock_sys->x_unlock();
 
     return ret;
   }
@@ -1882,9 +1895,9 @@ class LockDbTest : public SharedDb {
     const auto end = std::chrono::steady_clock::now() + timeout;
 
     while (std::chrono::steady_clock::now() < end) {
-      mutex_enter(m_mutex);
+      trx_mutex_enter(trx);
       const auto waiting = trx->m_que_state == TRX_QUE_LOCK_WAIT;
-      mutex_exit(m_mutex);
+      trx_mutex_exit(trx);
 
       if (waiting) {
         return true;
@@ -2335,6 +2348,137 @@ TEST_F(LockDbTest, DeadlockApiVictimWeight) {
   commit(heavy);
 }
 
+/** The one pass grant decision of a table queue (table_grant_pass()) against
+the scan of the locks ahead of each waiter (table_has_to_wait_in_queue()),
+on 2,000 random queues of IS, IX, S and X, granted and waiting, several of a
+mode, of different and of the same transactions. They agree for every waiter. */
+TEST_F(LockDbTest, TableGrantPassEquivalence) {
+  constexpr std::array<LockMode, 4> modes{LOCK_IS, LOCK_IX, LOCK_S, LOCK_X};
+
+  std::vector<Trx *> trxs;
+
+  for (int i{}; i < 12; ++i) {
+    trxs.push_back(trx());
+  }
+
+  std::mt19937 rng(78);
+  size_t n_waiters{};
+
+  for (int round{}; round < 2000; ++round) {
+    std::vector<bool> waits(trxs.size());
+
+    m_lock_sys->x_lock();
+
+    for (int i = 2 + int(rng() % 10); i > 0; --i) {
+      const auto t = rng() % trxs.size();
+      const bool wait = rng() % 2 == 0 && !waits[t];
+
+      (void)m_lock_sys->table_create(m_table, LockMode(modes[rng() % modes.size()] | (wait ? LOCK_WAIT : 0)), trxs[t]);
+      waits[t] = waits[t] || wait;
+    }
+
+    LockSys::GrantPlan plan;
+
+    m_lock_sys->table_grant_pass(m_table, &plan);
+
+    for (auto [lock, granted] : plan) {
+      EXPECT_EQ(granted, !m_lock_sys->table_has_to_wait_in_queue(const_cast<Lock *>(lock))) << "round " << round;
+      ++n_waiters;
+    }
+
+    for (auto t : trxs) {
+      m_lock_sys->release(t);
+      t->m_wait_lock = nullptr;
+      t->m_blocking_trx = nullptr;
+      t->m_que_state = TRX_QUE_RUNNING;
+    }
+
+    m_lock_sys->x_unlock();
+  }
+
+  EXPECT_GT(n_waiters, 0u);
+}
+
+/** The deadlock that the one edge walk misses (lock0deadlock.h): a, b and i
+hold S on a record; a requests X: it waits for b and i, its edge names one
+of them; b requests X: it waits for a (a's S and a's waiting X) and for i;
+a and b are deadlocked whatever i does, i is an idle transaction that never
+ends. The walk from b goes b -> a -> i (or b -> i) and stops at i, which does
+not wait; the full search finds b -> a -> b at once: the request of b gets
+the deadlock (a and b weigh the same: b, the requester, is the victim). */
+TEST_F(LockDbTest, DeadlockPastIdleBlocker) {
+  const PageId r{FAKE_SPACE, 1};
+
+  for (int order{}; order < 2; ++order) {
+    auto a = trx();
+    auto b = trx();
+    auto i = trx();
+
+    /* The idle holder first in the queue in one round, last in the other. */
+    if (order == 0) {
+      (void)rec_lock(r, LOCK_S | LOCK_REC_NOT_GAP, 2, i);
+    }
+
+    (void)rec_lock(r, LOCK_S | LOCK_REC_NOT_GAP, 2, a);
+    (void)rec_lock(r, LOCK_S | LOCK_REC_NOT_GAP, 2, b);
+
+    if (order == 1) {
+      (void)rec_lock(r, LOCK_S | LOCK_REC_NOT_GAP, 2, i);
+    }
+
+    auto areq = rec_lock(r, LOCK_X | LOCK_REC_NOT_GAP | LOCK_WAIT, 2, a);
+
+    EXPECT_FALSE(deadlock(areq, a));
+
+    auto breq = rec_lock(r, LOCK_X | LOCK_REC_NOT_GAP | LOCK_WAIT, 2, b);
+
+    EXPECT_TRUE(deadlock(breq, b)) << "order " << order << ": a deadlock past an idle blocker was missed";
+    EXPECT_FALSE(a->m_was_chosen_as_deadlock_victim);
+
+    finish();
+  }
+}
+
+/** A cycle closed through an edge that the one edge graph does not hold, at
+depth 2: d holds X on r4, then waits for X on q, which i (idle) and a hold
+in S: d's edge names one of them (neither waits yet). e holds X on r3 and
+waits for r4 (held by d). a requests r3 (held by e): the cycle a -> e -> d
+-> a closes through the edge d -> a, which d's edge may not name. The walk
+from a may end at i; the full search finds it: a deadlock at a's request. */
+TEST_F(LockDbTest, DeadlockClosedOffEdge) {
+  const PageId q{FAKE_SPACE, 1};
+  const PageId r3{FAKE_SPACE, 3};
+  const PageId r4{FAKE_SPACE, 4};
+
+  for (int order{}; order < 2; ++order) {
+    auto a = trx();
+    auto d = trx();
+    auto e = trx();
+    auto i = trx();
+
+    (void)rec_lock(r4, LOCK_X | LOCK_REC_NOT_GAP, 2, d);
+    (void)rec_lock(r3, LOCK_X | LOCK_REC_NOT_GAP, 2, e);
+
+    (void)rec_lock(q, LOCK_S | LOCK_REC_NOT_GAP, 2, order == 0 ? i : a);
+    (void)rec_lock(q, LOCK_S | LOCK_REC_NOT_GAP, 2, order == 0 ? a : i);
+
+    auto dreq = rec_lock(q, LOCK_X | LOCK_REC_NOT_GAP | LOCK_WAIT, 2, d);
+    EXPECT_FALSE(deadlock(dreq, d));
+
+    auto ereq = rec_lock(r4, LOCK_X | LOCK_REC_NOT_GAP | LOCK_WAIT, 2, e);
+    EXPECT_FALSE(deadlock(ereq, e));
+
+    auto areq = rec_lock(r3, LOCK_X | LOCK_REC_NOT_GAP | LOCK_WAIT, 2, a);
+    const bool victim = deadlock(areq, a);
+
+    /* Either a is the victim, or another member of the cycle was chosen. */
+    EXPECT_TRUE(victim || d->m_was_chosen_as_deadlock_victim || e->m_was_chosen_as_deadlock_victim)
+      << "order " << order << ": the cycle a -> e -> d -> a was missed";
+
+    finish();
+  }
+}
+
 /** remove_all_on_table() (DROP and TRUNCATE) removes the table locks of
 the transactions and their record locks on the table. */
 TEST_F(LockDbTest, RemoveAllOnTableTableLocks) {
@@ -2364,7 +2508,7 @@ TEST_F(LockDbTest, RemoveAllOnTableRecLocks) {
   m_lock_sys->remove_all_on_table(m_table, true);
 
   EXPECT_TRUE(a->m_trx_locks.empty());
-  EXPECT_FALSE(m_lock_sys->m_rec_locks.contains(page_id));
+  EXPECT_FALSE(has_queue(m_lock_sys, page_id));
 }
 
 /** A transaction that alone holds IX on a table has it exclusively. */
@@ -2406,6 +2550,102 @@ TEST_F(LockDbTest, SrcTable) {
 }
 
 /** The in-memory lock queues, timed. */
+/** The one pass grant decision of a release (rec_grant_pass()) against the
+old one, a scan of the locks ahead of each waiter (rec_has_to_wait_in_queue()),
+on 3,000 random page queues: every mode class (S, X; plain, gap, record only,
+insert intention), the supremum (all gap), several locks of a class from
+different transactions and from the waiter's own transaction, granted locks
+covering several records, up to 12 waiters. They agree for every waiter. */
+TEST_F(LockTest, GrantPassEquivalence) {
+  const std::array<ulint, 7> modes{
+    LOCK_S, LOCK_X, LOCK_S | LOCK_GAP, LOCK_X | LOCK_GAP, LOCK_S | LOCK_REC_NOT_GAP, LOCK_X | LOCK_REC_NOT_GAP,
+    LOCK_X | LOCK_GAP | LOCK_INSERT_INTENTION
+  };
+  const std::array<ulint, 4> heaps{PAGE_HEAP_NO_SUPREMUM, 2, 3, 4};
+
+  std::vector<Trx *> trxs;
+
+  for (int i{}; i < 16; ++i) {
+    trxs.push_back(trx());
+  }
+
+  std::mt19937 rng(77);
+  size_t n_waiters{};
+  size_t n_granted{};
+
+  for (int round{}; round < 3000; ++round) {
+    const PageId page_id{FAKE_SPACE, page_no_t(1000 + round)};
+    const int n = 2 + int(rng() % 14);
+    std::vector<bool> waits(trxs.size());
+
+    for (int i{}; i < n; ++i) {
+      auto t = int(rng() % trxs.size());
+      auto mode = modes[rng() % modes.size()];
+      const auto heap_no = heaps[rng() % heaps.size()];
+      const bool wait = rng() % 2 == 0 && !waits[t];
+
+      if (heap_no == PAGE_HEAP_NO_SUPREMUM) {
+        mode &= ~LOCK_REC_NOT_GAP;
+      }
+
+      auto lock = rec_lock(page_id, mode | (wait ? LOCK_WAIT : 0), heap_no, trxs[t]);
+
+      if (wait) {
+        waits[t] = true;
+      } else {
+        /* A granted lock may cover more records. */
+        for (auto h : heaps) {
+          if (rng() % 3 == 0) {
+            lock->rec_set_nth_bit(h);
+          }
+        }
+      }
+    }
+
+    m_lock_sys->x_lock();
+
+    auto &queue = *m_lock_sys->rec_queue(page_id);
+    LockSys::GrantPlan plan;
+
+    m_lock_sys->rec_grant_pass(queue, &plan);
+
+    size_t n_wait{};
+
+    for (auto lock : queue) {
+      if (lock->is_waiting()) {
+        ++n_wait;
+      }
+    }
+
+    EXPECT_EQ(plan.size(), n_wait) << "round " << round;
+
+    for (auto [lock, granted] : plan) {
+      const auto must_wait = m_lock_sys->rec_has_to_wait_in_queue(queue, const_cast<Lock *>(lock), lock->rec_find_set_bit());
+
+      EXPECT_EQ(granted, !must_wait) << "round " << round << " lock " << Lock_mode_type(lock->precise_mode()) << " heap_no "
+                                     << lock->rec_find_set_bit();
+
+      ++n_waiters;
+      n_granted += granted ? 1 : 0;
+    }
+
+    /* Release all, as the teardown does: the waits end. */
+    for (auto t : trxs) {
+      m_lock_sys->release(t);
+      t->m_wait_lock = nullptr;
+      t->m_blocking_trx = nullptr;
+      t->m_que_state = TRX_QUE_RUNNING;
+    }
+
+    m_lock_sys->x_unlock();
+  }
+
+  EXPECT_GT(n_granted, 0u);
+  EXPECT_LT(n_granted, n_waiters);
+
+  std::printf("GrantPassEquivalence: %zu waiters, %zu would be granted\n", n_waiters, n_granted);
+}
+
 class LockPerf : public LockTest {};
 
 /** Create and release one record lock, uncontended. */
@@ -2413,10 +2653,14 @@ TEST_F(LockPerf, RecCreateRelease) {
   auto a = trx();
 
   auto r = ut::bench("rec_create_release", 200000, [&](uint64_t i) {
-    mutex_enter(m_mutex);
-    ut::keep(m_lock_sys->rec_create_low(PageId{FAKE_SPACE, page_no_t(i % 64)}, LOCK_X, 2, N_BITS, nullptr, a));
-    m_lock_sys->release_off_trx_sys_mutex(a);
-    mutex_exit(m_mutex);
+    const PageId page_id{FAKE_SPACE, page_no_t(i % 64)};
+
+    {
+      LockSys::PageLatch latch(*m_lock_sys, page_id);
+      ut::keep(m_lock_sys->rec_create_low(page_id, LOCK_X, 2, N_BITS, nullptr, a));
+    }
+
+    m_lock_sys->release(a);
   });
 
   EXPECT_LT(r.ns_per_op(), 20000);
@@ -2431,21 +2675,21 @@ TEST_F(LockPerf, AddToQueue) {
   init_block(block, frame, PageId{FAKE_SPACE, 1});
 
   auto r = ut::bench("rec_add_to_queue", 200000, [&](uint64_t i) {
-    mutex_enter(m_mutex);
-    ut::keep(m_lock_sys->rec_add_to_queue(LockMode(LOCK_REC | LOCK_S), &block, 2 + i % 70, nullptr, a));
-
-    if (i % 70 == 69) {
-      m_lock_sys->release_off_trx_sys_mutex(a);
+    {
+      LockSys::PageLatch latch(*m_lock_sys, block.get_page_id());
+      ut::keep(m_lock_sys->rec_add_to_queue(LockMode(LOCK_REC | LOCK_S), &block, 2 + i % 70, nullptr, a));
     }
 
-    mutex_exit(m_mutex);
+    if (i % 70 == 69) {
+      m_lock_sys->release(a);
+    }
   });
 
   EXPECT_LT(r.ns_per_op(), 20000);
 }
 
 /** Threads each with a transaction locking records of pages of its own,
-releasing every 64 locks: the cost of the shared trx sys mutex. */
+releasing every 64 locks: the page shard latches, no global mutex. */
 TEST_F(LockPerf, DisjointMt) {
   for (int n_threads : {1, 2, 4, 8, 16}) {
     std::vector<Trx *> trxs;
@@ -2455,14 +2699,16 @@ TEST_F(LockPerf, DisjointMt) {
     }
 
     auto r = ut::bench_mt(std::format("disjoint_rec_lock_t{}", n_threads), n_threads, 50000, [&](int t, uint64_t i) {
-      mutex_enter(m_mutex);
-      ut::keep(m_lock_sys->rec_create_low(PageId{FAKE_SPACE + 1 + t, page_no_t(i % 64)}, LOCK_X, 2, N_BITS, nullptr, trxs[t]));
+      const PageId page_id{FAKE_SPACE + 1 + t, page_no_t(i % 64)};
 
-      if (i % 64 == 63) {
-        m_lock_sys->release_off_trx_sys_mutex(trxs[t]);
+      {
+        LockSys::PageLatch latch(*m_lock_sys, page_id);
+        ut::keep(m_lock_sys->rec_create_low(page_id, LOCK_X, 2, N_BITS, nullptr, trxs[t]));
       }
 
-      mutex_exit(m_mutex);
+      if (i % 64 == 63) {
+        m_lock_sys->release(trxs[t]);
+      }
     });
 
     EXPECT_LT(r.ns_per_op(), 100000) << n_threads;
@@ -2479,10 +2725,9 @@ TEST_F(LockPerf, Handoff) {
   auto r = ut::bench("grant_handoff", 100000, [&](uint64_t i) {
     auto next = t[(i + 1) % 2];
 
-    mutex_enter(m_mutex);
+    LockSys::PageLatch latch(*m_lock_sys, page_id);
     auto waiter = m_lock_sys->rec_create_low(page_id, LockMode(LOCK_X | LOCK_WAIT), 2, N_BITS, nullptr, next);
     m_lock_sys->rec_dequeue_from_page(holder);
-    mutex_exit(m_mutex);
 
     holder = waiter;
   });
@@ -2510,7 +2755,11 @@ TEST_F(LockDbPerf, DeadlockCheck) {
 
     auto req = rec_lock(PageId{FAKE_SPACE, 1}, LOCK_X | LOCK_WAIT, 2, t[0]);
 
+    /* The check itself, with the global latch in X for the whole loop (a
+    request takes X only for the full search, not for the latch free walk). */
+    m_lock_sys->x_lock();
     auto r = ut::bench(std::format("deadlock_check_chain{}", n), 2000, [&](uint64_t) { EXPECT_FALSE(deadlock(req, t[0])); });
+    m_lock_sys->x_unlock();
 
     EXPECT_LT(r.ns_per_op(), 5000.0 * n);
 

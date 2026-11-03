@@ -32,6 +32,9 @@ class System;
 #include "mem0types.h"
 #include "ut0lst.h"
 
+#include <bit>
+#include <cstring>
+
 struct Lock;
 struct Trx;
 struct BufPool;
@@ -339,14 +342,54 @@ struct Lock {
    *
    * @return The bit index, which is the heap number of the record, or ULINT_UNDEFINED if none is found.
    */
-  [[nodiscard]] ulint rec_find_set_bit() const noexcept {
+  [[nodiscard]] ulint rec_find_set_bit() const noexcept { return rec_find_next_set_bit(0); }
+
+  /**
+   * @brief Looks for a set bit at or after a position in a record lock bitmap.
+   *
+   * Scans 64 bits at a time: a waiting lock has one bit set in a bitmap
+   * of up to 8,256 bits, and the release and deadlock paths look for it.
+   *
+   * @param[in] from The first bit to look at.
+   *
+   * @return The bit index, which is the heap number of the record, or ULINT_UNDEFINED if none is found.
+   */
+  [[nodiscard]] ulint rec_find_next_set_bit(ulint from) const noexcept {
+    static_assert(std::endian::native == std::endian::little, "byte i of a 64 bit word holds bits 8i..8i+7");
+
     ut_ad(type() == LOCK_REC);
 
-    for (ulint i{}; i < rec_get_n_bits(); ++i) {
+    const auto bitmap = reinterpret_cast<const byte *>(&this[1]);
+    const ulint n_bytes = m_n_bits / 8;
+    ulint i = from / 8;
 
-      if (rec_is_nth_bit_set(i)) {
+    if (i >= n_bytes) {
+      return ULINT_UNDEFINED;
+    }
 
-        return i;
+    if (from % 8 != 0) {
+      const auto b = uint32_t(bitmap[i]) >> (from % 8);
+
+      if (b != 0) {
+        return from + ulint(std::countr_zero(b));
+      }
+
+      ++i;
+    }
+
+    for (; i + 8 <= n_bytes; i += 8) {
+      uint64_t w;
+
+      std::memcpy(&w, bitmap + i, sizeof(w));
+
+      if (w != 0) {
+        return i * 8 + ulint(std::countr_zero(w));
+      }
+    }
+
+    for (; i < n_bytes; ++i) {
+      if (bitmap[i] != 0) {
+        return i * 8 + ulint(std::countr_zero(uint32_t(bitmap[i])));
       }
     }
 

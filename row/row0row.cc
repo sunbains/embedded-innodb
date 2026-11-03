@@ -170,7 +170,7 @@ DTuple *row_build(System &sys,
 
   ulint j{};
 
-  for (ulint i{}, j = 0; i < n_fields; ++i) {
+  for (ulint i{}; i < n_fields; ++i) {
     const auto ind_field = index->get_nth_field(i);
     Column const *col = ind_field->m_col;
     const ulint col_no = col->get_no();
@@ -178,12 +178,12 @@ DTuple *row_build(System &sys,
 
     if (ind_field->m_prefix_len == 0) {
       ulint len;
-      const auto field = rec.get_nth_field(offsets, i, &len);
+      const auto field = rec.get_nth_field(local_offsets, i, &len);
 
       dfield_set_data(dfield, field, len);
     }
 
-    if (rec_offs_nth_extern(offsets, i)) {
+    if (rec_offs_nth_extern(local_offsets, i)) {
       dfield_set_ext(dfield);
 
       if (likely_null(col_table)) {
@@ -320,7 +320,7 @@ DTuple *row_build_row_ref(ulint type, const Index *index, Rec rec, MemHeap *heap
     column, or the full column, and we must adjust the length
     accordingly. */
 
-    auto clust_col_prefix_len = index->get_nth_field(i)->m_prefix_len;
+    auto clust_col_prefix_len = clust_index->get_nth_field(i)->m_prefix_len;
 
     if (clust_col_prefix_len > 0) {
       if (len != UNIV_SQL_NULL) {
@@ -405,7 +405,7 @@ void row_build_row_ref_in_tuple(DTuple *ref, Rec rec, const Index *index, const 
     column, or the full column, and we must adjust the length
     accordingly. */
 
-    const auto clust_col_prefix_len = index->get_nth_field(i)->m_prefix_len;
+    const auto clust_col_prefix_len = clust_index->get_nth_field(i)->m_prefix_len;
 
     if (clust_col_prefix_len > 0) {
       if (len != UNIV_SQL_NULL) {

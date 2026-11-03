@@ -439,8 +439,18 @@ BufChunk *BufPool::chunk_init(BufChunk *chunk, ulint mem_size) {
   /* Round down to a multiple of page size, although it already should be. */
   mem_size = ut_2pow_round(mem_size, UNIV_PAGE_SIZE);
 
+  const auto n_wanted = mem_size / UNIV_PAGE_SIZE;
+
   /* Reserve space for the block descriptors. */
   mem_size += ut_2pow_round((mem_size / UNIV_PAGE_SIZE) * sizeof(BufBlock) + (UNIV_PAGE_SIZE - 1), UNIV_PAGE_SIZE);
+
+  /* os_mem_alloc_large() (mmap) aligns to the OS page, not to UNIV_PAGE_SIZE:
+  aligning the first frame below then cost a frame whenever the mapping
+  wasn't UNIV_PAGE_SIZE aligned, and the pool came out one page smaller than
+  configured depending on where the kernel put it (BufPoolTest.Size failed
+  under TSan, whose mappings differ). One frame of slack; the size is capped
+  to n_wanted below. */
+  mem_size += UNIV_PAGE_SIZE;
 
   chunk->mem_size = mem_size;
   chunk->mem = os_mem_alloc_large(&chunk->mem_size);
@@ -470,7 +480,7 @@ BufChunk *BufPool::chunk_init(BufChunk *chunk, ulint mem_size) {
       size--;
     }
 
-    chunk->size = size;
+    chunk->size = std::min<ulint>(size, n_wanted);
   }
 
   /* Init block structs and assign frames for them. Then we assign the frames

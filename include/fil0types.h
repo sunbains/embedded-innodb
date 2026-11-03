@@ -209,6 +209,11 @@ struct FilSpace {
   processed on this space */
   bool m_is_being_deleted;
 
+  /** true while Fil::extend_space_to_desired_size() writes the new part of
+  the last file without Fil::m_mutex: another extension of the space waits
+  for it (Fil::m_io_cv). Protected by Fil::m_mutex. */
+  bool m_is_being_extended;
+
   /** base node for the file chain */
   UT_LIST_BASE_NODE_T(FilNode, m_chain) m_chain;
 

@@ -308,7 +308,11 @@ static void prefetch_buf_alloc(SymNode *column) noexcept {
 void RowSel::free_prefetch_buf(SelBuf *sel_buf) noexcept {
   for (ulint i{}; i < SEL_MAX_N_PREFETCH; ++i) {
     sel_buf[i].clear();
+    sel_buf[i].~SelBuf();
   }
+
+  /* The array itself, from prefetch_buf_alloc() (upstream freed it too). */
+  mem_free(sel_buf);
 }
 
 inline void Plan::pop_prefetched_row() noexcept {

@@ -516,19 +516,22 @@ struct Srv {
   /* Set by each monitor thread at start and exit, polled by
   prepare_for_shutdown(): atomics (release on clear, so that the thread's
   last writes are visible once the flag is seen clear). */
-  std::atomic<bool> m_lock_timeout_active{};
   std::atomic<bool> m_monitor_active{};
   std::atomic<bool> m_error_monitor_active{};
 
-  bool m_print_innodb_monitor{};
-  bool m_print_innodb_tablespace_monitor{};
-  bool m_print_innodb_table_monitor{};
+  /* Set by DDL on the special monitor table names (and by tests), polled by
+  the monitor thread without a latch: ut::Relaxed, a request is a hint that
+  is acted on at the next poll. */
+  ut::Relaxed<bool> m_print_innodb_monitor{};
+  ut::Relaxed<bool> m_print_innodb_tablespace_monitor{};
+  ut::Relaxed<bool> m_print_innodb_table_monitor{};
 
   /** What the master thread is doing, for the monitor output (read by the
   monitor threads without a latch: relaxed, points to string literals). */
   ut::Relaxed<const char *> m_main_thread_op_info{""};
 
-  /** When this event is set the lock timeout and monitor threads run. */
+  /** When this event is set the monitor threads run. (There is no lock
+  timeout thread: a lock wait times out by itself, see suspend_user_thread().) */
   CondVar *m_lock_timeout_thread_event{};
 
   /** Number of active threads by type, written under the trx_sys mutex.
@@ -560,7 +563,6 @@ struct Srv {
   /** Background threads started by create_thread() that are still running. */
   std::atomic_int m_n_background_threads{};
 
-  void lock_timeout_thread() noexcept;
   void error_monitor_thread() noexcept;
   void monitor_thread() noexcept;
   void master_thread() noexcept;
@@ -586,19 +588,12 @@ struct Srv {
   NOTE! The trx_sys mutex has to be reserved by the caller! */
   [[nodiscard]] ulint table_reserve_slot(SrvThreadType type) noexcept;
 
-  /** Reserves a slot in the thread table for the current user OS thread.
-  NOTE! The trx_sys mutex has to be reserved by the caller! */
-  [[nodiscard]] SrvSlot *table_reserve_slot_for_user_thread() noexcept;
-
   /** Suspends the calling thread to wait for the event in its thread slot.
   NOTE! The trx_sys mutex has to be reserved by the caller! */
   [[nodiscard]] CondVar *suspend_thread(SrvSlot *slot) noexcept;
 
   /** Server thread table */
   std::vector<SrvSlot> m_threads;
-
-  /** Table for client threads where they will be suspended to wait for locks */
-  std::vector<SrvSlot> m_client_table;
 
   /** Number of threads by type, protected by the trx_sys mutex. */
   std::array<ulint, SRV_MASTER + 1> m_n_threads{};

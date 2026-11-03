@@ -367,10 +367,12 @@ static DbErr open_system_tablespace(System &sys, const std::string &path, lsn_t 
  * signaled state. Then the threads will exit themselves.
  *
  * @param[in] sys               The instance.
+ * @param[in] n_io_threads      The i/o handler threads among the background
+ *                              threads: they exit after Aio is shut down.
  *
  * @return	true if all threads exited.
  */
-static bool threads_shutdown(System &sys) noexcept {
+static bool threads_shutdown(System &sys, size_t n_io_threads) noexcept {
   sys.m_srv->set_shutdown_state(SRV_SHUTDOWN_EXIT_THREADS);
 
   /* Wait until every thread has exited: the sub-systems they use are
@@ -385,7 +387,14 @@ static bool threads_shutdown(System &sys) noexcept {
     thread so that it exits */
     sys.m_srv->wake_master_thread();
 
-    sys.m_aio->shutdown();
+    /* The i/o handler threads exit only after Aio is shut down, the others
+    (master, rollback of recovered transactions) may still submit i/o until
+    they exit: shut Aio down only when the i/o handlers are all that is left.
+    Shutting it down first made a write of the master thread in a no-flush
+    shutdown assert in Handler::Queue::submit(). */
+    if (sys.m_srv->n_background_threads() <= int(n_io_threads)) {
+      sys.m_aio->shutdown();
+    }
 
     if (sys.m_srv->n_background_threads() == 0) {
       /* All the threads have exited or are just exiting: thread_exited() is
@@ -433,7 +442,7 @@ static void prepare_for_shutdown(System &sys, ShutdownMode shutdown) noexcept {
     shutdown. In case of very fast shutdown, however, we can proceed without
     waiting for monitor threads. */
 
-    if (srv.m_error_monitor_active || srv.m_lock_timeout_active || srv.m_monitor_active) {
+    if (srv.m_error_monitor_active || srv.m_monitor_active) {
 
       mutex_exit(&trx_sys.m_mutex);
       continue;
@@ -558,7 +567,7 @@ void System::startup_abort(DbErr err) noexcept {
     m_fil->close_all_files();
   }
 
-  threads_shutdown(*this);
+  threads_shutdown(*this, m_io_handlers.size());
 
   m_log->shutdown();
 
@@ -818,14 +827,17 @@ DbErr System::shutdown(ShutdownMode shutdown) noexcept {
   die; all which counts is that we flushed the log; a 'very fast' shutdown is
   essentially a crash. */
 
-  threads_shutdown(*this);
+  threads_shutdown(*this, m_io_handlers.size());
 
   m_log->shutdown();
 
   if (shutdown == IB_SHUTDOWN_NO_BUFPOOL_FLUSH) {
     /* A 'crash': the buffer pool is not flushed and the data files are not
     stamped, the next startup recovers from the log. The files are closed
-    here, prepare_for_shutdown() skipped it. */
+    here, prepare_for_shutdown() skipped it. The writes already done (pages,
+    extensions, which are not synced when done) are synced first: a closed
+    file must have no unflushed changes. */
+    m_fil->flush_file_spaces();
     m_fil->close_all_files();
   }
 

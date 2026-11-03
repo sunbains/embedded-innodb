@@ -145,6 +145,12 @@ enum MlogType : byte {
   /** Log record about an .ibd file deletion */
   MLOG_FILE_DELETE = 35,
 
+  /** A tablespace was extended: the page number field is 0, the body is
+  the new size in pages (4 bytes). Recovery extends the file when it parses
+  it, before any page of the new part is read: the extension is not synced
+  when it is done, the checkpoint flush makes it durable. */
+  MLOG_FILE_EXTEND = 36,
+
   /** Biggest value (used in assertions) */
   MLOG_BIGGEST_TYPE = 47,
 
@@ -253,6 +259,8 @@ inline const char *mlog_type_str(MlogType type) noexcept {
       return "MLOG_FILE_RENAME";
     case MLOG_FILE_DELETE:
       return "MLOG_FILE_DELETE";
+    case MLOG_FILE_EXTEND:
+      return "MLOG_FILE_EXTEND";
     default:
       log_fatal("Unknown MlogType: ", (ulint)type);
       return "UNKNOWN";

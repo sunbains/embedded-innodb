@@ -20,13 +20,180 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 The transaction lock system
 
 Created 5/7/1996 Heikki Tuuri
-*******************************************************/
+
+LATCHING
+
+There is no global mutex on the common paths of the lock system. Its state
+is split, each piece owned by one latch:
+
+  Latch                      Level (sync0sync.h)   Owns
+  -------------------------  --------------------  --------------------------
+  global rw-latch, sharded   SYNC_LOCK_SYS_GLOBAL  S: the right to take the
+  (N_GLOBAL_SLOTS slots, a   330                   shard latches below; X
+  thread S-latches one, X                          (all slots): all of the
+  takes all)                                       lock system at once
+  page shard latch           SYNC_LOCK_SYS_PAGE    the record lock queues of
+  (N_PAGE_SHARDS, by page)   320                   the pages of the shard, the
+                                                   bitmaps of their locks
+  table shard latch          SYNC_LOCK_SYS_TABLE   Table::m_locks of the tables
+  (N_TABLE_SHARDS, by table) 318                   of the shard
+  trx sys mutex              SYNC_TRX_SYS 300      the trx lists, read views,
+                                                   trx ids; not lock state
+  active id shard mutex      SYNC_TRX_SYS_SHARD    TrxSys::m_ids (the active
+  (TrxSys::m_ids)            299                   transactions by id)
+  trx mutex (Trx::m_mutex)   SYNC_TRX 297          the lock list and lock heap
+                                                   of the trx, its lock wait
+                                                   state: m_wait_lock,
+                                                   m_que_state,
+                                                   m_was_chosen_as_deadlock_victim,
+                                                   m_wait_thrs and the state of
+                                                   the query threads in it
+
+A thread acquires a latch only if its level is lower than that of every latch
+it holds. So: the global latch first, then at most two page shard latches (in
+the order of their shard numbers: the page operations that move locks between
+two pages), or one table shard latch, possibly after a page shard latch; then
+one trx mutex. The trx sys mutex may be taken with lock system latches held
+(it is not, in practice); a lock system latch is never taken with the trx sys
+mutex held: the callers that used to call the lock system with it held now
+release it first (Trx::commit_off_kernel(), the lock monitor). A trx mutex is
+taken last. The debug builds check this order (LockSys::Held, TrxMutex::n_held()
+and mutex_own() of the trx sys mutex), and every internal function of the lock
+system asserts the latch of the queue it reads (owns_page(), owns_table()).
+
+The global latch in X replaces all the shard latches: the full deadlock
+search, the cancel of a deadlock victim, validation, the lock monitor, DROP
+and TRUNCATE (remove_all_on_table()) take it; they are rare.
+
+LOCK WAIT STATE
+
+A lock wait is entered by the requester with the latch of the queue and its
+trx mutex held (enter_lock_wait()): its waiting lock is in the queue, its
+edge of the waits-for graph published (Trx::m_blocking_trx), m_que_state is
+TRX_QUE_LOCK_WAIT and its query thread in QUE_THR_LOCK_WAIT. It ends with the
+latch of the queue and the trx mutex held: by a grant (grant()), by the cancel
+of a deadlock victim (choose_victim()), or by a timeout or an interrupt
+(cancel_wait()). Exactly one of them ends a wait: each first checks that the
+waiting lock is still the trx's m_wait_lock, with the trx mutex, and a
+cancelled request can't be granted. The query code (que0que.cc) and
+Srv::suspend_user_thread() read and change the query thread state with the
+trx mutex too.
+
+The waiting thread waits for the event of its transaction (Trx::m_wait_event,
+set in O(1) when the wait ends) until a steady clock deadline: the lock wait
+timeout. There is no lock timeout thread.
+
+GRANTS
+
+A release removes a lock from its queue and then grants, in one pass over
+the queue in queue order (rec_grant_pass(), table_grant_pass()), every
+waiting lock that no lock ahead of it, of another transaction, blocks: O(W)
+for W waiters, not O(W^2).
+
+A commit releases its locks shard by shard (release()): the latch of one
+shard at a time, for at most LOCK_RELEASE_BATCH locks of it in a row, with no
+other latch held; others lock in other shards meanwhile.
+
+DEADLOCKS
+
+The fast path is latch free (the walk of the one edge graph, the edges are
+atomics); the full search runs with the global latch in X, after the
+requester released its shard latch (deadlock_resolve()). See lock0deadlock.h.
+
+IMPLICIT LOCKS AND THE LIFE OF A TRANSACTION
+
+A record carries an implicit X lock of the transaction whose id is in it (or,
+for a secondary index record, that the clustered record says modified it), as
+long as that transaction is active. Before a conflicting request is queued, the
+implicit lock is made explicit, for its owner (impl_to_expl()). That needs:
+the owner found by its id; known to be active; and the explicit lock created
+in its lock list before its commit releases its locks, never after (a lock
+left for a committed transaction), and never skipped while it is active (a
+missed conflict). Without the trx sys mutex, as follows.
+
+TrxSys::m_ids holds the active (and prepared) read-write transactions by id,
+sharded, each shard with its own mutex. A transaction enters it when it gets
+its id, and leaves it at C2 of its commit. Trx::m_n_ref counts pins.
+
+The commit of T (Trx::commit_off_kernel()):
+  C1  the commit in the file based world (undo log states, the mini-
+      transaction): it can't be undone from here. [no latch held at its end
+      but the trx sys mutex]
+  C2  T leaves the active ids. [trx sys mutex, then the id shard mutex]
+  C3  wait until T has no pins (TrxSys::drain_pins(): yield, then sleep).
+      [no latch at all: a converter holding a pin may wait for a page latch
+      and a lock system latch]
+  C4  T's state becomes TRX_COMMITTED_IN_MEMORY. [trx sys mutex, then T's
+      trx mutex]
+  C6  T leaves the trx list (the read views). [trx sys mutex]
+  C5  T's locks are released, shard by shard. [the shard latches, one at a
+      time]
+C6 comes before C5: a waiter granted by C5 that then opens a read view sees
+T's changes.
+
+A conversion for the record R of the page P with the trx id I in it:
+  V1  pin the transaction with id I, if it is in the active ids
+      (TrxSys::pin_active(), with the id shard mutex). [no lock latch]
+  V2  latch the shard of P (global S, page shard).
+  V3  T is still in the active ids (TrxSys::in_ids(), with the id shard
+      mutex), and no other transaction holds a granted lock on R that
+      conflicts with X: create T's explicit lock on R unless it has one; the
+      request of the converter follows, under the same shard latch. Else
+      create nothing: the lookup of V1 is stale.
+  V4  unpin T, once the shard latch is released.
+
+No lock is left for a committed transaction: a lock is created for T by a
+conversion only between V1 and V4, while T is pinned. C2 makes new pins
+impossible (the pin is taken with the id shard mutex, which C2 takes), C3
+waits for the existing ones, and C4 comes after C3. So every lock a
+conversion creates for T is in T's lock list before C4, hence before C5
+walks the list and releases it. (T's own requests come from T's own thread,
+before its commit; the locks a page operation creates for T, by inheritance
+or a move, come from locks of T that C5 has not released yet, under the same
+shard latches, and C5 runs until T's list is empty.)
+
+No conflict is missed, and no conflict is made: a reader whose V3 comes
+before C2 creates T's explicit lock under the page shard latch before its
+own request, which therefore waits until C5 releases it. A reader whose V1
+or V3 comes after C2 does not create one: C1 is done, T's changes are
+committed (and a rollback undoes all its changes before its C2), so there is
+no conflict to see; the reader's read view, opened after C6, sees T's
+changes. The two kinds never hold conflicting granted locks on R: if A's V3
+precedes C2 and B's V1 follows it, B latches the shard of P after A released
+it (B's V1 < B's V2, and C2 < B's V1), so B's request sees T's lock and
+waits. A V1 before C2 alone is not enough: B could find T gone and be
+granted before A's V2, then A would create T's lock past B's (the reason V3
+reads the active ids, not T's state, which stays active until C4). A Trx
+object is never reused while pinned (the pool in TrxSys; destroy_trx()
+asserts no pins).
+
+A stale lookup by a rollback: T stays in the active ids through a rollback
+(total, as a deadlock victim, or partial, to a savepoint or of a statement),
+and a lookup made before an undo may convert after it. The undo reverts the
+secondary index records before the clustered one (row0undo.cc), each with
+its page X latched, and the converter holds the page latch of R from its
+lookup to V3: so R itself does not change under the conversion. But a
+lookup through RowVers reads other pages, and a converter A may still
+convert for a change that a later reader B saw undone; B is then granted a
+lock on R. V3 does not create T's lock past a granted conflicting lock of
+another transaction: such a lock can't exist while T's implicit lock on R is
+effective (T would have waited for it before changing R, and a converter
+that found T would have created T's lock before its own request). If B's
+lock is gone by V3, T gets an extra explicit X lock on R: harmless, A waits
+for it, and C5 (or the end of the rollback) releases it.
+
+The secondary index: the page max trx id against TrxSys::m_min_active_id, an
+atomic lower bound of the smallest active id (stale means smaller: more
+checks, never fewer), then the clustered record (RowVers), which ends in
+TrxSys::pin_active(): the same V1..V4. */
+/*******************************************************/
 
 #pragma once
 
 #include "srv0sys.h"
 
 #include "btr0cur.h"
+#include "lock0deadlock.h"
 #include "lock0types.h"
 #include "que0que.h"
 #include "read0read.h"
@@ -34,8 +201,13 @@ Created 5/7/1996 Heikki Tuuri
 #include "row0vers.h"
 #include "srv0srv.h"
 
+#include <array>
+#include <atomic>
 #include <map>
+#include <mutex>
+#include <shared_mutex>
 #include <unordered_map>
+#include <vector>
 
 struct TrxSys;
 struct BufBlock;
@@ -51,6 +223,10 @@ extern bool lock_print_waits;
 extern FILE *lock_latest_err_stream;
 
 struct LockSys {
+  /** The decisions of a grant pass: each waiting lock, and whether the pass
+  grants it. */
+  using GrantPlan = std::vector<std::pair<const Lock *, bool>>;
+
   /** The instance this sub-system belongs to. */
   System &m_sys;
 
@@ -499,7 +675,27 @@ struct LockSys {
    *
    * @param[in] trx The transaction whose locks are to be released.
    */
-  void release_off_trx_sys_mutex(Trx *trx) noexcept;
+  void release(Trx *trx) noexcept;
+
+  /**
+   * @brief Ends the lock wait of trx with a cancel of its waiting request,
+   * unless a grant (or another cancel) ended it first: for a lock wait
+   * timeout or an interrupt. Takes the latch of the queue of the waiting
+   * lock, then the trx mutex.
+   *
+   * @param[in] trx A transaction of the calling thread.
+   *
+   * @return true if this call cancelled the wait.
+   */
+  [[nodiscard]] bool cancel_wait(Trx *trx) noexcept;
+
+  /**
+   * @brief Locks a table for trx, waiting if needed: lock_table() with or
+   * without a query thread (the tests). See enter_lock_wait().
+   *
+   * @return DB_SUCCESS, DB_LOCK_WAIT or DB_DEADLOCK.
+   */
+  [[nodiscard]] DbErr table_lock_for(Trx *trx, Table *table, LockMode mode, QueThr *thr) noexcept;
 
   /**
    * @brief Cancels a waiting lock request and releases possible other transactions waiting behind it.
@@ -623,24 +819,20 @@ struct LockSys {
    *
    * @return A pointer to the transaction that holds the implicit x-lock, or NULL if no such transaction exists
    *
-   * @note This function assumes that the trx system mutex is held by the caller.
+   * @note No lock system latch is held: the transaction is returned pinned
+   *  (TrxSys::pin_active()), the caller unpins it (TrxSys::unpin()).
    * @note The index must be a clustered index.
    * @note The record must be a user record (not a supremum/infinimum record).
    */
-  [[nodiscard]] inline const Trx *clust_rec_some_has_impl(const Rec rec, const Index *index, const ulint *offsets) noexcept {
-    ut_ad(mutex_own(&m_sys.m_trx_sys->m_mutex));
+  [[nodiscard]] inline Trx *clust_rec_some_has_impl(const Rec rec, const Index *index, const ulint *offsets) noexcept {
+    /* V1 of a conversion (see LATCHING): no lock system latch held. */
     ut_ad(index->is_clustered());
     ut_ad(page_rec_is_user_rec(rec));
 
     const auto trx_id = row_get_rec_trx_id(rec, index, offsets);
 
-    if (m_sys.m_trx_sys->is_active(trx_id)) {
-      /* The modifying or inserting transaction is active */
-
-      return m_sys.m_trx_sys->get_on_id(trx_id);
-    } else {
-      return nullptr;
-    }
+    /* The active transaction with that id, pinned; the caller unpins it. */
+    return m_sys.m_trx_sys->pin_active(trx_id);
   }
 
   /**
@@ -697,9 +889,9 @@ struct LockSys {
    * This function sets the print InnoDB lock monitor flag to true, indicating that
    * the InnoDB lock monitor should print information about lock requests and waits.
    */
-  void set_print_lock_monitor() noexcept { m_print_lock_monitor = true; }
+  void set_print_lock_monitor() noexcept { m_print_lock_monitor.store(true, std::memory_order_relaxed); }
 
-  void unset_print_lock_monitor() noexcept { m_print_lock_monitor = false; }
+  void unset_print_lock_monitor() noexcept { m_print_lock_monitor.store(false, std::memory_order_relaxed); }
 
   /**
    * @brief Checks if the print InnoDB lock monitor flag is set.
@@ -709,7 +901,7 @@ struct LockSys {
    *
    * @return true if the print InnoDB lock monitor flag is set, false otherwise.
    */
-  [[nodiscard]] bool is_print_lock_monitor_set() const noexcept { return m_print_lock_monitor; }
+  [[nodiscard]] bool is_print_lock_monitor_set() const noexcept { return m_print_lock_monitor.load(std::memory_order_relaxed); }
 
   /**
    * @brief Creates a new instance of the LockSys class.
@@ -825,27 +1017,167 @@ struct LockSys {
   [[nodiscard]] bool deadlock_occurs(Lock *lock, Trx *trx) noexcept;
 
   /**
-   * @brief Looks recursively for a deadlock.
+   * @brief Walks the waits-for graph from a transaction, one edge
+   * (Trx::m_blocking_trx) per waiting transaction, see lock0deadlock.h.
    *
-   * This function performs a recursive search to detect deadlocks in the lock system.
-   * It checks if the transaction `trx` waiting for the lock `wait_lock` causes a deadlock
-   * starting from the transaction `start`.
+   * O(length of the path): no queue is read, no mark is set.
    *
-   * @param[in] start The recursion starting point.
-   * @param[in] trx A transaction waiting for a lock.
-   * @param[in] wait_lock The lock that is waiting to be granted.
-   * @param[in,out] cost The number of calculation steps thus far. If this exceeds
-   *                     LOCK_MAX_N_STEPS_..., the function returns LOCK_EXCEED_MAX_DEPTH.
-   * @param[in] depth The recursion depth. If this exceeds LOCK_MAX_DEPTH_IN_DEADLOCK_CHECK,
-   *                  the function returns LOCK_EXCEED_MAX_DEPTH.
+   * @param[in] start The transaction to start from.
+   * @param[in] depth The depth of start: 0, or more to test the limit.
+   * @param[out] pred On a cycle, the transaction of the cycle that waits for start.
    *
-   * @return 0 if no deadlock is found.
-   * @return LOCK_VICTIM_IS_START if a deadlock is found and 'start' is chosen as the victim.
-   * @return LOCK_VICTIM_IS_OTHER if a deadlock is found and another transaction is chosen as the victim.
-   *         In this case, the search must be repeated as there may be another deadlock.
-   * @return LOCK_EXCEED_MAX_DEPTH if the lock search exceeds the maximum steps or depth.
+   * @return CYCLE if the path comes back to start, TOO_DEEP if it is longer
+   *  than LOCK_MAX_DEPTH_IN_DEADLOCK_CHECK, NONE if it ends at a transaction
+   *  that does not wait.
    */
-  [[nodiscard]] ulint deadlock_recursive(Trx *start, Trx *trx, Lock *wait_lock, ulint *cost, ulint depth) noexcept;
+  [[nodiscard]] DeadlockWalk deadlock_search(const Trx *start, ulint depth, Trx **pred, bool *single = nullptr) const noexcept;
+
+  /**
+   * @brief The hybrid deadlock check of a waiting transaction: the one edge
+   * walk, then, if the walk found no cycle and some transaction on its path
+   * has more than one blocker, the full search (deadlock_dfs()).
+   *
+   * @param[in] start A transaction with a waiting lock.
+   * @param[out] pred On a cycle, the transaction of the cycle that waits for start.
+   *
+   * @return CYCLE, TOO_DEEP or NONE.
+   */
+  [[nodiscard]] DeadlockWalk deadlock_find(Trx *start, Trx **pred) noexcept;
+
+  /**
+   * @brief The full deadlock search: depth first over the blocker sets (the
+   * owners of the locks ahead that a waiting lock has to wait for), visiting
+   * only waiting transactions, each once per search (epoch marks).
+   *
+   * @param[in] start The transaction the search started from.
+   * @param[in] trx A waiting transaction reached by the search.
+   * @param[in] wait_lock Its waiting lock.
+   * @param[in] depth Its depth.
+   * @param[out] pred On a cycle, the transaction of the cycle that waits for start.
+   *
+   * @return CYCLE, TOO_DEEP or NONE.
+   */
+  [[nodiscard]] DeadlockWalk deadlock_dfs(const Trx *start, Trx *trx, const Lock *wait_lock, ulint depth, Trx **pred) noexcept;
+
+  /**
+   * @brief Chooses the victim of a cycle, and logs the cycle.
+   *
+   * @param[in] start The transaction whose edge closed the cycle.
+   * @param[in] pred The transaction of the cycle that waits for start.
+   *
+   * @return start if pred does not weigh less than start, else pred.
+   */
+  [[nodiscard]] Trx *deadlock_victim(Trx *start, Trx *pred) noexcept;
+
+  /**
+   * @return the queue of a page, nullptr if it has no record locks.
+   * @param[in] page_id The page.
+   */
+  [[nodiscard]] Rec_locks *rec_queue(PageId page_id) const noexcept {
+    ut_ad(owns_page(page_id));
+
+    auto &locks = const_cast<LockSys *>(this)->m_page_shards[page_shard_no(page_id)].m_locks;
+    auto it = locks.find(page_id);
+
+    return it == locks.end() ? nullptr : &it->second;
+  }
+
+  /** @return the queue of a page, created if it has none. */
+  [[nodiscard]] Rec_locks &rec_queue_add(PageId page_id) noexcept {
+    ut_ad(owns_page(page_id));
+
+    return m_page_shards[page_shard_no(page_id)].m_locks[page_id];
+  }
+
+  /** Erase the (empty) queue of a page. */
+  void rec_queue_erase(PageId page_id) noexcept {
+    ut_ad(owns_page(page_id));
+
+    (void)m_page_shards[page_shard_no(page_id)].m_locks.erase(page_id);
+  }
+
+  /**
+   * @brief The deadlock check of the transactions whose waiting lock the
+   * page operation of the calling thread moved (moved()): one victim per
+   * cycle found. Called with no latch held, after the page operation.
+   */
+  void deadlock_check_moved() noexcept;
+
+  /**
+   * @brief The latch free part of the deadlock check of a waiting
+   * transaction: the walk of the one edge graph.
+   *
+   * @return true if the walk found a cycle, or a path too deep, or it can't
+   *  rule a cycle out (a transaction with several blockers on the path): the
+   *  full check must run (deadlock_resolve()).
+   */
+  [[nodiscard]] bool deadlock_suspect(const Trx *trx) const noexcept;
+
+  /**
+   * @brief The full deadlock check of a request, with the global latch in X:
+   * cancels the request if the requester is the victim.
+   *
+   * @param[in] trx The requester, in its lock wait.
+   *
+   * @return DB_DEADLOCK if trx is the victim, else DB_LOCK_WAIT.
+   */
+  [[nodiscard]] DbErr deadlock_resolve(Trx *trx) noexcept;
+
+  /**
+   * @brief After a request released its shard latch: if it waits and its
+   * latch free deadlock walk was suspect, the full check.
+   *
+   * @param[in] err The result of the request.
+   *
+   * @return err, or DB_DEADLOCK.
+   */
+  [[nodiscard]] DbErr deadlock_after_wait(DbErr err) noexcept;
+
+  /**
+   * @brief Marks a transaction as a deadlock victim and cancels its waiting
+   * request; with the global latch in X.
+   */
+  void choose_victim(Trx *victim) noexcept;
+
+  /** @return the waiting lock of trx if it is in the lock wait state, else
+  nullptr; with the global latch in X. */
+  [[nodiscard]] Lock *waiting_lock(Trx *trx) noexcept;
+
+  /**
+   * @brief Puts trx in the lock wait state, its waiting lock created: with
+   * the latch of its queue held. The latch free deadlock walk runs here;
+   * if suspect, the caller runs deadlock_after_wait() once it released the
+   * latch.
+   *
+   * @param[in] trx The requester.
+   * @param[in] thr Its query thread, or nullptr (the tests).
+   *
+   * @return DB_LOCK_WAIT.
+   */
+  [[nodiscard]] DbErr enter_lock_wait(Trx *trx, QueThr *thr) noexcept;
+
+  /** Reset the wait flag of a lock and the wait lock of its trx, with the trx mutex. */
+  void reset_wait(Lock *lock) noexcept;
+
+  /**
+   * @brief Moves the edge of a waiting transaction to a new blocker.
+   *
+   * @param[in] trx A transaction that keeps waiting.
+   * @param[in] blocker A transaction with a lock ahead that blocks its wait.
+   */
+  void wait_edge(Trx *trx, const Trx *blocker, bool multi) noexcept;
+
+  /**
+   * @brief Finds a transaction with a lock ahead of a waiting record lock
+   * that it has to wait for.
+   *
+   * @param[in] rec_locks The queue of the page.
+   * @param[in] wait_lock The waiting lock.
+   * @param[in] heap_no Its record.
+   *
+   * @return The owner of the first such lock, or nullptr.
+   */
+  [[nodiscard]] const Trx *rec_find_blocker(const Rec_locks &rec_locks, const Lock *wait_lock, ulint heap_no, bool *multi) const noexcept;
 
   /**
    * @brief Gets the wait flag of a lock.
@@ -886,7 +1218,7 @@ struct LockSys {
    *
    * @return A pointer to the lock if found, or nullptr if no such lock exists.
    */
-  [[nodiscard]] inline Lock *table_has(Trx *trx, Table *table, LockMode mode) noexcept;
+  [[nodiscard]] Lock *table_has(Trx *trx, Table *table, LockMode mode) noexcept;
 
   /**
    * @brief Checks if a transaction has a GRANTED explicit lock on a record that is stronger or equal to the specified mode.
@@ -902,7 +1234,7 @@ struct LockSys {
    *
    * @return A pointer to the lock if found, or nullptr if no such lock exists.
    */
-  [[nodiscard]] inline const Lock *rec_has_expl(PageId page_id, ulint precise_mode, ulint heap_no, const Trx *trx) const noexcept;
+  [[nodiscard]] const Lock *rec_has_expl(PageId page_id, ulint precise_mode, ulint heap_no, const Trx *trx) const noexcept;
 
   /**
    * @brief Checks if some other transaction has a conflicting explicit lock request in the queue.
@@ -933,7 +1265,7 @@ struct LockSys {
    *
    * @return A pointer to the similar lock if found, or nullptr if no such lock exists.
    */
-  [[nodiscard]] inline Lock *rec_find_similar_on_page(LockMode type_mode, ulint heap_no, Lock *lock, const Trx *trx) noexcept;
+  [[nodiscard]] Lock *rec_find_similar_on_page(LockMode type_mode, ulint heap_no, Lock *lock, const Trx *trx) noexcept;
 
   /**
    * @brief Checks if some transaction has an implicit x-lock on a record in a secondary index.
@@ -989,7 +1321,7 @@ struct LockSys {
    * @return DB_SUCCESS if there was a deadlock but another transaction was chosen as a victim, and the lock was granted immediately.
    */
   [[nodiscard]] DbErr rec_enqueue_waiting(
-    LockMode type_mode, const BufBlock *block, ulint heap_no, const Index *index, QueThr *thr
+    LockMode type_mode, const BufBlock *block, ulint heap_no, const Index *index, Trx *trx, QueThr *thr
   ) noexcept;
 
   /**
@@ -1031,8 +1363,8 @@ struct LockSys {
    *
    * @return true if locking succeeded.
    */
-  [[nodiscard]] inline bool rec_lock_fast(
-    bool impl, LockMode mode, const BufBlock *block, ulint heap_no, const Index *index, QueThr *thr
+  [[nodiscard]] bool rec_lock_fast(
+    bool impl, LockMode mode, const BufBlock *block, ulint heap_no, const Index *index, Trx *trx
   ) noexcept;
 
   /**
@@ -1054,7 +1386,7 @@ struct LockSys {
    * @return DB_SUCCESS, DB_LOCK_WAIT, or an error code.
    */
   [[nodiscard]] DbErr rec_lock_slow(
-    bool impl, LockMode mode, const BufBlock *block, ulint heap_no, const Index *index, QueThr *thr
+    bool impl, LockMode mode, const BufBlock *block, ulint heap_no, const Index *index, Trx *trx, QueThr *thr
   ) noexcept;
 
   /**
@@ -1077,7 +1409,19 @@ struct LockSys {
    * @return DB_SUCCESS, DB_LOCK_WAIT, or an error code.
    */
   [[nodiscard]] DbErr rec_lock(
-    bool impl, LockMode mode, const BufBlock *block, ulint heap_no, const Index *index, QueThr *thr
+    bool impl, LockMode mode, const BufBlock *block, ulint heap_no, const Index *index, Trx *trx, QueThr *thr
+  ) noexcept;
+
+  /**
+   * @brief Locks a record for trx, waiting if needed: what the check and
+   * lock functions do, with or without a query thread (the tests), no
+   * implicit locks. An insert intention lock is set only if it waits, as
+   * rec_insert_check_and_lock() does.
+   *
+   * @return DB_SUCCESS, DB_LOCK_WAIT or DB_DEADLOCK.
+   */
+  [[nodiscard]] DbErr rec_lock_for(
+    Trx *trx, LockMode mode, const BufBlock *block, ulint heap_no, const Index *index, QueThr *thr = nullptr
   ) noexcept;
 
   /**
@@ -1130,6 +1474,31 @@ struct LockSys {
    *                    granted if they are now qualified.
    */
   void rec_dequeue_from_page(Lock *in_lock) noexcept;
+
+  /**
+   * @brief Grants the waiting locks of a page queue that no lock ahead blocks.
+   *
+   * One pass in queue order: O(locks + bits of the granted locks that
+   * cover a record some lock waits for), not O(W^2) for W waiters.
+   *
+   * @param[in,out] rec_locks The queue of a page.
+   */
+  void rec_grant_pass(Rec_locks &rec_locks, GrantPlan *plan = nullptr) noexcept;
+
+  /**
+   * @brief rec_grant_pass() for the locks on one record.
+   *
+   * @param[in,out] rec_locks The queue of a page.
+   * @param[in] heap_no The record.
+   */
+  void rec_grant_pass_on(Rec_locks &rec_locks, ulint heap_no, GrantPlan *plan = nullptr) noexcept;
+
+  /**
+   * @brief The decision of a grant pass for one waiting lock: grant it
+   * (blocker == nullptr) or point its edge at the blocker. With a plan, only
+   * notes the decision (the tests compare it with rec_has_to_wait_in_queue()).
+   */
+  void grant_or_edge(Lock *lock, const Trx *blocker, bool multi, GrantPlan *plan) noexcept;
 
   /**
    * @brief Removes a record lock request, waiting or granted, from the queue.
@@ -1223,7 +1592,7 @@ struct LockSys {
    * @param[in] trx Transaction.
    * @return Lock* New lock object.
    */
-  [[nodiscard]] inline Lock *table_create(Table *table, LockMode type_mode, Trx *trx) noexcept;
+  [[nodiscard]] Lock *table_create(Table *table, LockMode type_mode, Trx *trx) noexcept;
 
   /**
    * @brief Removes a table lock request from the queue and the trx list of locks.
@@ -1233,7 +1602,7 @@ struct LockSys {
    *
    * @param[in] lock The lock object to be removed.
    */
-  inline void table_remove_low(Lock *lock) noexcept;
+  void table_remove_low(Lock *lock) noexcept;
 
   /**
    * @brief Enqueues a waiting request for a table lock which cannot be granted immediately. Checks for deadlocks.
@@ -1248,7 +1617,7 @@ struct LockSys {
    *         DB_QUE_THR_SUSPENDED if the query thread should be stopped,
    *         DB_SUCCESS if there was a deadlock but another transaction was chosen as a victim and the lock was granted immediately.
    */
-  [[nodiscard]] DbErr table_enqueue_waiting(LockMode mode, Table *table, QueThr *thr) noexcept;
+  [[nodiscard]] DbErr table_enqueue_waiting(LockMode mode, Table *table, Trx *trx, QueThr *thr) noexcept;
 
   /**
    * Checks if other transactions have an incompatible mode lock request in the lock queue.
@@ -1259,7 +1628,7 @@ struct LockSys {
    * @param[in] mode  Lock mode.
    * @return          Lock or nullptr.
    */
-  [[nodiscard]] inline Lock *table_other_has_incompatible(Trx *trx, ulint wait, Table *table, LockMode mode) noexcept;
+  [[nodiscard]] Lock *table_other_has_incompatible(Trx *trx, ulint wait, Table *table, LockMode mode) noexcept;
 
   /**
    * @brief Checks if a waiting table lock request still has to wait in a queue.
@@ -1286,6 +1655,14 @@ struct LockSys {
    *                    get their lock requests granted if they are now qualified.
    */
   void table_dequeue(Lock *in_lock) noexcept;
+
+  /**
+   * @brief Grants the waiting locks of a table queue that no lock ahead
+   * blocks, in one pass in queue order.
+   *
+   * @param[in,out] table The table.
+   */
+  void table_grant_pass(Table *table, GrantPlan *plan = nullptr) noexcept;
 
   /**
    * @brief Removes locks of a transaction on a table to be dropped.
@@ -1355,18 +1732,16 @@ struct LockSys {
 #endif /* UNIV_DEBUG */
 
   /**
-   * @brief Converts an implicit x-lock to an explicit x-lock on a record.
+   * @brief Converts an implicit x-lock to an explicit x-lock on a record:
+   * V3 of a conversion (see LATCHING). Sets an explicit X lock on the
+   * record for impl_trx unless it has one.
    *
-   * If a transaction has an implicit x-lock on a record but no explicit x-lock
-   * set on the record, this function sets one for it. Note that in the case of
-   * a secondary index, the trx system mutex may get temporarily released.
-   *
-   * @param[in] block   The buffer block of the record.
-   * @param[in] rec     The user record on the page.
-   * @param[in] index   The index of the record.
-   * @param[in] offsets Column offsets obtained from PhyRec::get_col_offsets(rec, index).
+   * @param[in] impl_trx The owner of the implicit lock, pinned.
+   * @param[in] block    The buffer block of the record, its shard latched.
+   * @param[in] heap_no  The record.
+   * @param[in] index    The index of the record.
    */
-  void rec_convert_impl_to_expl(const BufBlock *block, const Rec rec, const Index *index, const ulint *offsets) noexcept;
+  void impl_to_expl(Trx *impl_trx, const BufBlock *block, ulint heap_no, const Index *index) noexcept;
 
   /**
    * @brief Checks if a transaction has no waiters.
@@ -1385,13 +1760,158 @@ struct LockSys {
  private:
 #endif /* !UNIT_TESTING */
 
-  /**
-   * @brief The lock table.
-   *
-   * This unordered map holds the locks for each page in the buffer pool.
-   * The key is the page ID, and the value is the list of locks on that page.
-   */
-  Page_id_hash<Rec_locks> m_rec_locks{};
+  /** The number of slots of the global latch. ThreadSanitizer tracks at
+  most 64 mutexes held by one thread (sanitizer_deadlock_detector.h): X holds
+  every slot and may then take shard and trx latches, so fewer slots there. */
+#if defined(__SANITIZE_THREAD__)
+  static constexpr size_t N_GLOBAL_SLOTS = 16;
+#elif defined(__has_feature)
+#if __has_feature(thread_sanitizer)
+  static constexpr size_t N_GLOBAL_SLOTS = 16;
+#else
+  static constexpr size_t N_GLOBAL_SLOTS = 64;
+#endif
+#else
+  static constexpr size_t N_GLOBAL_SLOTS = 64;
+#endif
+
+  /** The number of page shards: the record lock queues, by page. */
+  static constexpr size_t N_PAGE_SHARDS = 512;
+
+  /** The number of table shards: the table lock queues, by table id. */
+  static constexpr size_t N_TABLE_SHARDS = 512;
+
+  /** A slot of the global latch, on a cache line of its own. */
+  struct alignas(64) GlobalSlot {
+    std::shared_mutex m_latch;
+  };
+
+  /** A page shard: its latch and the record lock queues of its pages. */
+  struct alignas(64) PageShard {
+    std::mutex m_mutex;
+    Page_id_hash<Rec_locks> m_locks;
+  };
+
+  /** A table shard: its latch (the queues are in Table::m_locks). */
+  struct alignas(64) TableShard {
+    std::mutex m_mutex;
+  };
+
+  /** @return the page shard of a page. */
+  [[nodiscard]] static uint32_t page_shard_no(PageId page_id) noexcept {
+    const auto h = (uint64_t(page_id.m_space_id) << 32 | page_id.m_page_no) * 0x9E3779B97F4A7C15ULL;
+    return uint32_t(h >> 55) % N_PAGE_SHARDS;
+  }
+
+  /** @return the table shard of a table. */
+  [[nodiscard]] static uint32_t table_shard_no(const Table *table) noexcept;
+
+  /** What the calling thread holds of the latches of a lock system: for the
+  checks of the latching order and the ownership asserts, and for the
+  reentrancy of X (a thread with X needs no other latch). Thread local. */
+  struct Held {
+    const LockSys *m_owner{};
+    uint32_t m_x{};
+    int32_t m_s{-1};
+    std::array<int32_t, 2> m_pages{-1, -1};
+    int32_t m_table{-1};
+  };
+
+  /** @return the latches of this lock system the calling thread holds. */
+  [[nodiscard]] Held &held() const noexcept;
+
+  /** @return true if the calling thread holds the global latch in X. */
+  [[nodiscard]] bool x_own() const noexcept { return held().m_x > 0; }
+
+  /** @return true if the calling thread holds the global latch, S or X. */
+  [[nodiscard]] bool latched() const noexcept { return x_own() || held().m_s >= 0; }
+
+  /** @return true if the calling thread holds no latch of the lock system. */
+  [[nodiscard]] bool nothing_latched() const noexcept { return !latched(); }
+
+  /** @return true if the calling thread may read and change the queue of page_id. */
+  [[nodiscard]] bool owns_page(PageId page_id) const noexcept {
+    const auto &h = held();
+    const auto shard = int32_t(page_shard_no(page_id));
+    return h.m_x > 0 || (h.m_s >= 0 && (h.m_pages[0] == shard || h.m_pages[1] == shard));
+  }
+
+  /** @return true if the calling thread may read and change the queue of table. */
+  [[nodiscard]] bool owns_table(const Table *table) const noexcept {
+    const auto &h = held();
+    return h.m_x > 0 || (h.m_s >= 0 && h.m_table == int32_t(table_shard_no(table)));
+  }
+
+  /** The global latch in X (all its slots), reentrant. No other latch of
+  the lock system, nor the trx sys mutex, nor a trx mutex may be held. */
+  void x_lock() noexcept;
+  void x_unlock() noexcept;
+
+  /** The global latch in S, one slot. */
+  void s_lock() noexcept;
+  void s_unlock() noexcept;
+
+  /** The global latch in X for a scope (a no-op if the thread has it). */
+  class Exclusive {
+   public:
+    explicit Exclusive(LockSys &lock_sys) noexcept : m_lock_sys(lock_sys) { m_lock_sys.x_lock(); }
+    ~Exclusive() noexcept { m_lock_sys.x_unlock(); }
+
+    Exclusive(const Exclusive &) = delete;
+    Exclusive &operator=(const Exclusive &) = delete;
+
+   private:
+    LockSys &m_lock_sys;
+  };
+
+  /** The global latch in S and one or two page shard latches for a scope (a
+  no-op if the thread holds X). */
+  class PageLatch {
+   public:
+    PageLatch(LockSys &lock_sys, PageId page_id) noexcept;
+    PageLatch(LockSys &lock_sys, PageId a, PageId b) noexcept;
+    ~PageLatch() noexcept;
+
+    PageLatch(const PageLatch &) = delete;
+    PageLatch &operator=(const PageLatch &) = delete;
+
+   private:
+    LockSys &m_lock_sys;
+    bool m_noop{};
+  };
+
+  /** The global latch in S and a table shard latch for a scope (a no-op if
+  the thread holds X). A page shard latch may be held. */
+  class TableLatch {
+   public:
+    TableLatch(LockSys &lock_sys, const Table *table) noexcept;
+    ~TableLatch() noexcept;
+
+    TableLatch(const TableLatch &) = delete;
+    TableLatch &operator=(const TableLatch &) = delete;
+
+   private:
+    LockSys &m_lock_sys;
+    bool m_noop{};
+    bool m_s_taken{};
+  };
+
+  /** The waiting transactions whose waiting lock a page operation of the
+  calling thread moved, for deadlock_check_moved(). Thread local. */
+  [[nodiscard]] static std::vector<Trx *> &moved() noexcept;
+
+  /** The requester of the calling thread whose latch free deadlock walk was
+  suspect, for deadlock_after_wait(). Thread local. */
+  [[nodiscard]] static Trx *&suspect() noexcept;
+
+  /** The slots of the global latch. */
+  std::array<GlobalSlot, N_GLOBAL_SLOTS> m_global{};
+
+  /** The page shards. */
+  std::array<PageShard, N_PAGE_SHARDS> m_page_shards{};
+
+  /** The table shards. */
+  std::array<TableShard, N_TABLE_SHARDS> m_table_shards{};
 
   /**
    * @brief The buffer pool.
@@ -1416,7 +1936,9 @@ struct LockSys {
    * This flag indicates whether the InnoDB lock monitor should print information
    * about lock requests and waits.
    */
-  bool m_print_lock_monitor{false};
+  /** Set by DDL (the lock monitor table) and tests, read by the monitor
+  thread without a latch: a relaxed atomic (a flag, it orders nothing). */
+  std::atomic<bool> m_print_lock_monitor{false};
 
   /**
    * @brief Whether a deadlock was found during the latest deadlock detection.
@@ -1425,6 +1947,15 @@ struct LockSys {
    * deadlock detection cycle. It is used for logging and monitoring purposes.
    */
   bool m_deadlock_found{false};
+
+  /** The most locks of one shard a release frees in a row while it holds
+  the shard latch (release()): a bound on how long it makes others wait. */
+  static constexpr ulint LOCK_RELEASE_BATCH = 64;
+
+  /** The epoch of the latest full deadlock search: Trx::m_deadlock_mark
+  equal to it marks a transaction whose subtree that search visited.
+  Starts at 1, transactions at 0. With the global latch in X. */
+  uint64_t m_deadlock_epoch{1};
 
   /**
    * @brief Sets the deadlock found flag.

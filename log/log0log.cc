@@ -150,12 +150,24 @@ bool Log::write_checkpoint(lsn_t lsn) noexcept {
 }
 
 bool Log::read_checkpoint(lsn_t &lsn, uint64_t &no) noexcept {
+  /* Under the same latches as write_checkpoint(): this used to update both
+  fields with none, racing with a checkpoint by the master thread when
+  called on a running system (a lost ++m_next_checkpoint_no would reuse a
+  checkpoint number). m_checkpoint_mutex orders it against checkpoint(),
+  m_mutex protects m_last_checkpoint_lsn for its other readers. */
+  std::lock_guard<std::mutex> guard(m_checkpoint_mutex);
+
   if (!LogWalBackend::read_checkpoint(wal_config(), no, lsn)) {
     return false;
   }
 
   m_next_checkpoint_no = no + 1;
+
+  acquire();
+
   m_last_checkpoint_lsn = lsn;
+
+  release();
 
   return true;
 }
@@ -207,11 +219,12 @@ void Log::init_wal_backend(const LogWalBackend::Config &config) noexcept {
   log before here is no longer needed. */
   ut_a(m_sys.m_buf_pool->get_oldest_modification() == 0);
 
+  std::lock_guard<std::mutex> guard(m_checkpoint_mutex);
+
+  /* Under m_checkpoint_mutex, which protects it (see read_checkpoint()). */
   if (m_next_checkpoint_no == 0) {
     m_next_checkpoint_no = 1;
   }
-
-  std::lock_guard<std::mutex> guard(m_checkpoint_mutex);
 
   if (!write_checkpoint(m_lsn.load())) {
     log_fatal("Cannot write the first checkpoint of the WAL");

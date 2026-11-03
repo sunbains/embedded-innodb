@@ -53,6 +53,7 @@ void sym_tab_free_private(SymTab *sym_tab) {
 
     if (sym->prefetch_buf) {
       RowSel::free_prefetch_buf(sym->prefetch_buf);
+      sym->prefetch_buf = nullptr;
     }
 
     if (sym->cursor_def) {

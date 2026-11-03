@@ -671,12 +671,12 @@ TEST_F(PreadTest, SecRanges) {
 /** BUG: a range of a secondary index on a prefix of its key, [lo, hi) of a:
 the rows with a == lo before the last child page whose first entry has a ==
 lo are skipped. ScanCtx::create_ranges() and ScanCtx::search()
-(row/row0pread.cc:977, :831) position on the non-leaf pages with
+(row/row0pread.cc:1064, :940) position on the non-leaf pages with
 PAGE_CUR_LE: for a key prefix that equals several node pointers, LE picks
 the last of them, not the child holding the first entry >= the key
 (BtreeCursor::search_to_nth_level() uses PAGE_CUR_L above the leaves for a
 PAGE_CUR_GE search). Full keys of a unique index are not affected. */
-TEST_F(PreadTest, DISABLED_SecRangesPrefix) {
+TEST_F(PreadTest, SecRangesPrefix) {
   const auto rows = make_rows(0, 20000, 30);
 
   load(rows);
@@ -879,7 +879,7 @@ has all the fields of the index (row/row0row.cc:229); a node pointer has
 the n_unique_in_tree key fields and the child page number. The boundary
 compare uses only the key: Index::build_data_tuple(rec, n_unique_in_tree)
 is enough. */
-TEST_F(PreadTest, DISABLED_ReadLevel) {
+TEST_F(PreadTest, ReadLevel) {
   load(make_rows(0, 40000, 100));
 
   auto trx = begin();
@@ -929,10 +929,106 @@ TEST_F(PreadTest, Interrupted) {
   commit(trx);
 }
 
-/** Parallel scans under snapshots while writers change other rows (page
-splits and merges, so the index tree latch has waiters and the scans save
-and restore their position on the block boundaries) and purge runs: each
-snapshot reads its rows exactly once, the same every time. */
+/** Parallel scans of the clustered index under snapshots while writers
+change other rows (page splits and merges, so the index tree latch has
+waiters and the scans save and restore their position on the block
+boundaries) and purge runs: each snapshot reads its rows exactly once, the
+same every time. See ConcurrentWriters for the secondary index. */
+TEST_F(PreadTest, ConcurrentWritersClust) {
+  const auto rows = make_rows(0, 20000, 100);
+
+  load(rows);
+
+  std::atomic<bool> stop{};
+  std::atomic<size_t> n_scans{};
+
+  with_timeout("ConcurrentWritersClust", 170s, [&] {
+    std::vector<std::thread> threads;
+
+    for (uint32_t w = 0; w < 3; ++w) {
+      threads.emplace_back([&, w] {
+        uint32_t round{};
+
+        while (!stop.load()) {
+          auto trx = begin();
+          const uint32_t base = 100000 + w * 100000;
+
+          for (uint32_t i = 0; i < 300; ++i) {
+            const auto k = base + i;
+
+            if (round % 2 == 0) {
+              EXPECT_EQ(insert(trx, ut::Row{k, i % 50, ut::blob(k, 300)}), DB_SUCCESS);
+            } else {
+              EXPECT_EQ(remove(trx, k), DB_SUCCESS);
+            }
+          }
+
+          /* Move the secondary keys of some of the snapshot's rows. */
+          for (uint32_t k = w; k < 20000; k += 997) {
+            EXPECT_EQ(update(trx, k, ut::Row{k, (round + k) % 50, rows.at(k).m_b}), DB_SUCCESS);
+          }
+
+          commit(trx);
+          ++round;
+        }
+      });
+    }
+
+    threads.emplace_back([&] {
+      while (!stop.load()) {
+        purge();
+        std::this_thread::sleep_for(1ms);
+      }
+    });
+
+    for (int i = 0; i < 6; ++i) {
+      auto trx = begin();
+
+      ASSERT_NE(trx->assign_read_view(*m_sys), nullptr);
+
+      auto first = pscan(trx, clust(), 4);
+
+      EXPECT_EQ(first.m_err, DB_SUCCESS);
+
+      for (size_t n : {1, 8, 16}) {
+        auto c = pscan(trx, clust(), n);
+
+        EXPECT_EQ(c.m_err, DB_SUCCESS);
+
+        auto ck = c.keys();
+
+        EXPECT_TRUE(std::ranges::adjacent_find(ck) == ck.end()) << "a row twice";
+        EXPECT_EQ(c.pairs(), first.pairs()) << "the snapshot is stable";
+      }
+
+      commit(trx);
+      ++n_scans;
+    }
+
+    stop = true;
+
+    for (auto &t : threads) {
+      t.join();
+    }
+  });
+
+  EXPECT_EQ(n_scans.load(), 6UL);
+}
+
+/** BUG (a hang): parallel scans of the secondary index under snapshots while
+writers insert and update. ScanCtx::sec_rec_visible() (row/row0pread.cc:467)
+looks the row up in the clustered index in the scan's mtr: pcur.close()
+releases nothing, the clustered leaf stays S latched until the scan leaves
+the secondary page (in fact until the mtr commits). A later lookup of the
+same clustered page S latches it again; if a writer is waiting for its X
+latch meanwhile, the second S request waits behind the writer, which waits
+for the first: the scan threads, the writers (and the page flusher, waiting
+for the secondary page the scan holds) hang. Seen here within seconds: two
+scan threads in rw_lock_s_lock_spin() from sec_rec_visible() on a
+clustered leaf, a writer in rw_lock_x_lock_wait() on it from
+RowInsert::index_entry_low(), two writers and BufFlush::page() waiting for
+the secondary leaf. The lookup needs a mini-transaction of its own,
+committed before the next record. */
 TEST_F(PreadTest, ConcurrentWriters) {
   const auto rows = make_rows(0, 20000, 100);
 
@@ -1021,12 +1117,12 @@ TEST_F(PreadTest, ConcurrentWriters) {
 
 /** BUG: a parallel scan of a clustered index whose rows have externally
 stored columns asserts in a debug build: ScanCtx::check_visibility()
-(row/row0pread.cc:463) has ut_ad(... || !rec_offs_any_extern(offsets)),
+(row/row0pread.cc:451) has ut_ad(... || !rec_offs_any_extern(offsets)),
 where MySQL (the origin of this code) asserts
 !rec_offs_any_null_extern(): a null BLOB pointer (a blob being written),
 not any externally stored column. Any table with a blob of more than ~8 KB
 stops the scan. */
-TEST_F(PreadTest, DISABLED_ExternFields) {
+TEST_F(PreadTest, ExternFields) {
   auto rows = make_rows(0, 200, 30);
 
   for (uint32_t k = 0; k < 200; k += 10) {
@@ -1050,7 +1146,7 @@ never got. The counter of the instance's parallel read threads is left
 short, the next release_threads() asserts ut_a(active >= n_threads) (or,
 with none available, run(0) releases all of them at once). MySQL asks
 available_threads() first and builds the reader with the answer. */
-TEST_F(PreadTest, DISABLED_ThreadAccounting) {
+TEST_F(PreadTest, ThreadAccounting) {
   load(make_rows(0, 1000, 10));
 
   auto &active = m_sys->m_srv->m_n_parallel_read_threads;

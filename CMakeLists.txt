@@ -222,7 +222,7 @@ ELSE(NOT DISABLE_XA)
 ENDIF(NOT DISABLE_XA)
 
 SET(INNODB_SOURCES
-      api/api0api.cc
+      api/api0api.cc api/api0cursor.cc api/api0misc.cc
       btr/btr0blob.cc btr/btr0btr.cc btr/btr0cur.cc btr/btr0pcur.cc
       buf/buf0buf.cc buf/buf0dblwr.cc
       buf/buf0flu.cc buf/buf0lru.cc buf/buf0rea.cc
@@ -235,7 +235,7 @@ SET(INNODB_SOURCES
       fut/fut0lst.cc
       pars/lexyy.cc pars/pars0grm.cc pars/pars0opt.cc
       pars/pars0pars.cc pars/pars0sym.cc
-      lock/lock0lock.cc lock/lock0iter.cc lock/lock0deadlock.cc lock/lock0validator.cc
+      lock/lock0lock.cc lock/lock0rec.cc lock/lock0table.cc lock/lock0wait.cc lock/lock0iter.cc lock/lock0deadlock.cc
       log/log0log.cc log/log0recv.cc log/log0wal.cc
       mach/mach0data.cc
       mem/mem0mem.cc

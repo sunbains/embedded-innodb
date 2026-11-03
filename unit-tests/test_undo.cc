@@ -778,14 +778,16 @@ TEST_F(UndoTest, PurgeFreesHistory) {
   auto trx_sys = m_sys->m_trx_sys.get();
   const auto before = trx_sys->m_rseg_history_len;
 
-  EXPECT_GE(before, 100UL);
-
   /* Run purge until it has nothing left to do, as the master thread does. */
   for (int i = 0; i < 1000 && m_sys->m_trx_sys->m_purge->run() > 0; ++i) {
   }
 
-  /* Purge truncates the history in batches: a short tail may remain. */
-  EXPECT_LT(trx_sys->m_rseg_history_len, before / 4) << "history before purge " << before;
+  /* The 300 commits added about 300 logs to the history. Don't compare with
+  'before': the master thread purges too, and when the updates are slow (a
+  sanitizer build) it has already shortened the history by the time we look.
+  Purge truncates in batches: a short tail may remain. With the bug nothing
+  was ever freed. */
+  EXPECT_LT(trx_sys->m_rseg_history_len, 300UL / 4) << "history before purge " << before;
   EXPECT_TRUE(m_sys->m_fsp->validate(SYS_TABLESPACE));
 
   expect_rows(rows);

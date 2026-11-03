@@ -93,13 +93,15 @@ struct RowVers {
   /**
    * @brief Finds out if an active transaction has inserted or modified a secondary index record.
    *
-   * NOTE: the trx system mutex is temporarily released in this function!
+   * Called without the trx sys mutex, which it takes; with no lock system
+   * latch held (see the LATCHING comment of lock0lock.h).
    *
    * @param[in] rec Record in a secondary index.
    * @param[in] index The secondary index.
    * @param[in] offsets PhyRec::get_col_offsets(rec, index).
    *
-   * @return nullptr if committed, else the active transaction.
+   * @return nullptr if committed, else the active transaction, pinned
+   *  (TrxSys::pin_active()): the caller unpins it.
    */
   [[nodiscard]] Trx *impl_x_locked_off_trx_sys_mutex(const Rec rec, const Index *index, const ulint *offsets) noexcept;
 

@@ -33,12 +33,14 @@ Created 2/6/1997 Heikki Tuuri
 
 
 Trx *RowVers::impl_x_locked_off_trx_sys_mutex(const Rec rec, const Index *index, const ulint *offsets) noexcept {
-  ut_ad(mutex_own(&m_sys.m_trx_sys->m_mutex));
-
-
-  mutex_exit(&m_sys.m_trx_sys->m_mutex);
+  /* Called with no latch of the lock system, nor the trx sys mutex: the
+  owner is found and pinned (TrxSys::pin_active()), see the LATCHING comment
+  of lock0lock.h. */
+  ut_ad(!mutex_own(&m_sys.m_trx_sys->m_mutex));
 
   auto func_exit = [this](Mtr &mtr, MemHeap *heap, Trx *trx) -> auto {
+    mutex_exit(&m_sys.m_trx_sys->m_mutex);
+
     mtr.commit(m_sys);
     mem_heap_free(heap);
 
@@ -64,8 +66,6 @@ Trx *RowVers::impl_x_locked_off_trx_sys_mutex(const Rec rec, const Index *index,
     case there cannot be any implicit lock on the secondary index record, because an active transaction which
     has modified the secondary index record has also modified the clustered index record. And in a rollback
     we always undo the modifications to secondary index records before the clustered index record. */
-
-    mutex_enter(&m_sys.m_trx_sys->m_mutex);
 
     mtr.commit(m_sys);
 
@@ -152,7 +152,7 @@ Trx *RowVers::impl_x_locked_off_trx_sys_mutex(const Rec rec, const Index *index,
 
       /* It was a freshly inserted version: there is an implicit x-lock on rec */
 
-      trx = m_sys.m_trx_sys->get_on_id(trx_id);
+      trx = m_sys.m_trx_sys->pin_active(trx_id);
 
       break;
     }
@@ -209,7 +209,7 @@ Trx *RowVers::impl_x_locked_off_trx_sys_mutex(const Rec rec, const Index *index,
       required by prev_version */
 
       if (rec_del != vers_del) {
-        trx = m_sys.m_trx_sys->get_on_id(trx_id);
+        trx = m_sys.m_trx_sys->pin_active(trx_id);
 
         break;
       }
@@ -222,7 +222,7 @@ Trx *RowVers::impl_x_locked_off_trx_sys_mutex(const Rec rec, const Index *index,
 
       if (cmp_dtuple_rec(index->m_cmp_ctx, entry, rec, offsets) != 0) {
 
-        trx = m_sys.m_trx_sys->get_on_id(trx_id);
+        trx = m_sys.m_trx_sys->pin_active(trx_id);
 
         break;
       }
@@ -231,7 +231,7 @@ Trx *RowVers::impl_x_locked_off_trx_sys_mutex(const Rec rec, const Index *index,
 
       /* The delete mark should be set in rec for it to be in the state required by prev_version */
 
-      trx = m_sys.m_trx_sys->get_on_id(trx_id);
+      trx = m_sys.m_trx_sys->pin_active(trx_id);
 
       break;
     }
@@ -498,12 +498,15 @@ DbErr RowVers::build_for_semi_consistent_read(Row &row) noexcept {
 
     mutex_enter(&m_sys.m_trx_sys->m_mutex);
 
-    auto version_trx = m_sys.m_trx_sys->get_on_id(version_trx_id);
+    /* Decided under the mutex: after mutex_exit() the trx may commit and be
+    freed (reading its state there was a race and a use after free). */
+    const auto version_trx = m_sys.m_trx_sys->get_on_id(version_trx_id);
+    const bool committed = version_trx == nullptr || version_trx->m_conc_state == TRX_NOT_STARTED ||
+                           version_trx->m_conc_state == TRX_COMMITTED_IN_MEMORY;
 
     mutex_exit(&m_sys.m_trx_sys->m_mutex);
 
-    if (version_trx == nullptr || version_trx->m_conc_state == TRX_NOT_STARTED ||
-        version_trx->m_conc_state == TRX_COMMITTED_IN_MEMORY) {
+    if (committed) {
 
       /* We found a version that belongs to a committed transaction: return it. */
 

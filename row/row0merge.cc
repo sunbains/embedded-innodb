@@ -1129,6 +1129,20 @@ static DbErr row_merge_read_clustered_index(System &sys,
     }                                                                                                     \
   } while (0)
 
+/** @return true if one of the unique fields of a merge record is NULL: such
+a record is not a duplicate of an equal one (NULLs are not equal). */
+static bool row_merge_rec_has_null(const ulint *offsets, const Index *index) noexcept {
+  const RecOffs offs(offsets);
+
+  for (ulint i{}; i < index->get_n_unique(); ++i) {
+    if (offs.nth_sql_null(i)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 /** Merge two blocks of records on disk and write a bigger block.
 @return	DB_SUCCESS or error code */
 static DbErr row_merge_blocks(
@@ -1185,7 +1199,7 @@ static DbErr row_merge_blocks(
   while (mrec0 != nullptr && mrec1 != nullptr) {
     switch (row_merge_cmp(mrec0, mrec1, offsets0, offsets1, index)) {
       case 0:
-        if (unlikely(index->is_unique())) {
+        if (unlikely(index->is_unique()) && !row_merge_rec_has_null(offsets0, index)) {
           mem_heap_free(heap);
           return (DB_DUPLICATE_KEY);
         }

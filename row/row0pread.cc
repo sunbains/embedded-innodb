@@ -448,7 +448,7 @@ bool ParallelReader::ScanCtx::check_visibility(System &sys, Rec &rec, RecOffs &o
     return false;
   }
 
-  ut_ad(m_trx == nullptr || m_trx->m_isolation_level == TRX_ISO_READ_UNCOMMITTED || !rec_offs_any_extern(offsets));
+  ut_ad(m_trx == nullptr || m_trx->m_isolation_level == TRX_ISO_READ_UNCOMMITTED || rec.offs_any_null_extern(offsets) == nullptr);
 
   return true;
 }
@@ -464,7 +464,15 @@ bool ParallelReader::ScanCtx::sec_rec_visible(System &sys, const Rec rec, MemHea
 
   BtreePcursor pcur{};
 
-  pcur.open(sys, clust_index, ref, PAGE_CUR_LE, BTR_SEARCH_LEAF, mtr, Current_location());
+  /* The clustered index page is latched in a mini-transaction of its own,
+  released before the next record: kept in mtr until the scan leaves the
+  page, a later lookup of the same page would S latch it again, and wait
+  for (and deadlock with) a writer waiting for its X latch. */
+  Mtr clust_mtr;
+
+  clust_mtr.start();
+
+  pcur.open(sys, clust_index, ref, PAGE_CUR_LE, BTR_SEARCH_LEAF, &clust_mtr, Current_location());
 
   Rec clust_rec = pcur.get_rec();
 
@@ -472,6 +480,7 @@ bool ParallelReader::ScanCtx::sec_rec_visible(System &sys, const Rec rec, MemHea
     /* The row is gone (a rolled back insert, purge is removing rec): it
     did not exist in the view. */
     pcur.close();
+    clust_mtr.commit(sys);
     return false;
   }
 
@@ -489,7 +498,7 @@ bool ParallelReader::ScanCtx::sec_rec_visible(System &sys, const Rec rec, MemHea
 
     RowVers::Row row{
       .m_cluster_rec = clust_rec,
-      .m_mtr = mtr,
+      .m_mtr = &clust_mtr,
       .m_cluster_index = clust_index,
       .m_cluster_offsets = clust_offsets,
       .m_consistent_read_view = view,
@@ -511,6 +520,7 @@ bool ParallelReader::ScanCtx::sec_rec_visible(System &sys, const Rec rec, MemHea
     !clust_rec.is_null() && !clust_rec.get_deleted_flag() && sys.m_row_sel->sec_rec_is_for_clust_rec(rec, sec_index, clust_rec, clust_index);
 
   pcur.close();
+  clust_mtr.commit(sys);
 
   return visible;
 }
@@ -532,9 +542,19 @@ void ParallelReader::ScanCtx::copy_row(const Rec rec, Iter *iter) const {
 
   iter->m_rec = copy_rec;
 
-  ulint n_ext{};
+  /* A node pointer has the key and the child page number only: build the
+  key, the compares use no more. */
+  const auto n_key = m_config.m_index->get_n_unique_in_tree();
+  auto tuple = dtuple_create(iter->m_heap, n_key);
 
-  auto tuple = row_rec_to_index_entry_low(iter->m_rec, m_config.m_index, iter->m_offsets, &n_ext, iter->m_heap);
+  for (ulint i{}; i < n_key; ++i) {
+    ulint len;
+    const auto data = iter->m_rec.get_nth_field(iter->m_offsets, i, &len);
+
+    dfield_set_data(dtuple_get_nth_field(tuple, i), data.get(), len);
+  }
+
+  m_config.m_index->copy_types(tuple, n_key);
 
   ut_ad(dtuple_validate(tuple));
 
@@ -937,7 +957,7 @@ page_no_t ParallelReader::ScanCtx::search(System &sys, const BufBlock *block, co
   const auto index = m_config.m_index;
 
   if (key != nullptr) {
-    page_cursor.search(sys, block, index, key, PAGE_CUR_LE);
+    page_cursor.search(sys, block, index, key, PAGE_CUR_L);
   } else {
     page_cursor.set_before_first(block);
   }
@@ -1061,7 +1081,11 @@ DbErr ParallelReader::ScanCtx::create_ranges(System &sys,
   auto start = scan_range.m_start;
 
   if (start != nullptr) {
-    page_cursor.search(sys, block, index, start, PAGE_CUR_LE);
+    /* Above the leaves, the child of the first entry >= start: the node
+    pointer before the first one >= start (several can equal a prefix). */
+    const auto level = sys.m_btree->page_get_level(block->get_frame(), mtr);
+
+    page_cursor.search(sys, block, index, start, level > m_config.m_read_level ? PAGE_CUR_L : PAGE_CUR_LE);
 
     if (page_cursor.is_after_last()) {
       return DB_SUCCESS;

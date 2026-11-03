@@ -421,7 +421,7 @@ bool RowPurge::parse_undo_rec(System &sys, bool *updated_extern, QueThr *thr) {
   sys.m_dict->mutex_acquire();
 
   // FIXME: srv_force_recovery should be passed in as an arg
-  m_table = sys.m_dict->table_get_on_id(pars.m_table_id);
+  m_table = sys.m_dict->table_get_on_id(IbRecovery(sys.m_config.m_recv.m_force_recovery), pars.m_table_id);
 
   sys.m_dict->mutex_release();
 

@@ -23,256 +23,320 @@ Deadlock detection and resolution
 
 #include "lock0deadlock.h"
 
-#include "lock0lock.h"
-#include "srv0srv.h"
+#include "lock0priv.h"
 #include "trx0sys.h"
 #include "trx0trx.h"
-#include "ut0dbg.h"
 #include "ut0logger.h"
 
-DeadlockDetector::DeadlockDetector(System &sys) noexcept : m_sys(sys) {}
+/* The waits-for graph and the search: see include/lock0deadlock.h. */
 
-bool DeadlockDetector::check_deadlock(System &sys, Lock *lock, Trx *trx) noexcept {
-  ulint ret;
-  ulint cost{};
+bool LockSys::deadlock_occurs(Lock *lock, Trx *trx) noexcept {
+  /* The full search reads queues of any shard, and the cancel of a victim
+  changes them: the lock system latched X. */
+  ut_ad(x_own());
+  ut_ad(trx->m_wait_lock == lock);
 
-  ut_ad(mutex_own(&sys.m_trx_sys->m_mutex));
+  bool victim{};
 
-retry:
-  /* We check that adding this trx to the waits-for graph
-  does not produce a cycle. First mark all active transactions
-  with 0: */
+  for (;;) {
+    Trx *pred{};
 
-  for (auto mark_trx : sys.m_trx_sys->m_trx_list) {
-    mark_trx->m_deadlock_mark = 0;
-  }
+    if (trx->m_wait_lock == nullptr) {
+      /* The cancel of another victim granted the request. */
+      break;
+    }
 
-  ret = search_iterative(sys, trx, trx, lock, &cost, 0);
+    const auto walk = deadlock_find(trx, &pred);
 
-  switch (ret) {
-    case LOCK_VICTIM_IS_OTHER:
-      /* We chose some other trx as a victim: retry if there still
-    is a deadlock */
-      goto retry;
+    if (walk == DeadlockWalk::NONE) {
+      break;
 
-    case LOCK_EXCEED_MAX_DEPTH:
+    } else if (walk == DeadlockWalk::TOO_DEEP) {
       log_info("TOO DEEP OR LONG SEARCH IN THE LOCK TABLE WAITS-FOR GRAPH, WE WILL ROLL BACK FOLLOWING TRANSACTION");
       log_info("\n*** TRANSACTION:\n");
-
       log_info(trx->to_string(3000));
-      log_info("*** TRANSACTION ENDS\n");
+      log_info("*** WAITING FOR THIS LOCK TO BE GRANTED:");
+      log_info(lock->to_string(m_sys));
 
+      set_deadlock_found();
+      victim = true;
       break;
+    }
 
-    case LOCK_VICTIM_IS_START:
+    ut_ad(walk == DeadlockWalk::CYCLE);
+
+    set_deadlock_found();
+
+    if (deadlock_victim(trx, pred) == trx) {
       log_info("*** WE ROLL BACK TRANSACTION (2)");
+      victim = true;
       break;
+    }
 
-    default:
-      /* No deadlock detected*/
-      return false;
+    /* Let us choose the transaction waiting for the requester as a victim
+    to try to avoid deadlocking the requester; repeat, there may be
+    another cycle. Note that we may end up rolling back the requester too! */
+
+    log_info("*** WE ROLL BACK TRANSACTION (1)");
+
+    choose_victim(pred);
   }
 
-  m_sys.m_lock_sys->set_deadlock_found();
-
-  return true;
+  return victim;
 }
 
-ulint DeadlockDetector::search_iterative(System &sys, Trx *start, Trx *trx, Lock *wait_lock, ulint *cost, ulint depth) noexcept {
-  ut_ad(mutex_own(&sys.m_trx_sys->m_mutex));
+void LockSys::choose_victim(Trx *victim) noexcept {
+  ut_ad(x_own());
 
-  // Clear the stack before starting
-  while (!m_search_stack.empty()) {
-    m_search_stack.pop();
+  /* The wait state of the victim: its mutex. Its thread learns it when its
+  wait ends (Srv::suspend_user_thread()): DB_DEADLOCK. */
+  trx_mutex_enter(victim);
+  victim->m_was_chosen_as_deadlock_victim = true;
+  auto lock = victim->m_wait_lock;
+  trx_mutex_exit(victim);
+
+  ut_a(lock != nullptr);
+
+  cancel_waiting_and_release(lock);
+}
+
+Lock *LockSys::waiting_lock(Trx *trx) noexcept {
+  ut_ad(x_own());
+
+  /* With X, m_wait_lock can't change (it changes with the latch of its
+  queue); m_que_state also changes with the trx mutex only (the owner's
+  query code): read both with it. */
+  trx_mutex_enter(trx);
+  auto lock = trx->m_que_state == TRX_QUE_LOCK_WAIT ? trx->m_wait_lock : nullptr;
+  trx_mutex_exit(trx);
+
+  return lock;
+}
+
+bool LockSys::deadlock_suspect(const Trx *trx) const noexcept {
+  Trx *pred{};
+  bool single{};
+
+  /* Latch free: the edges are atomics, a Trx is type stable (TrxSys pool). */
+  const auto walk = deadlock_search(trx, 0, &pred, &single);
+
+  return walk != DeadlockWalk::NONE || !single;
+}
+
+DbErr LockSys::deadlock_resolve(Trx *trx) noexcept {
+  ut_ad(x_own() || nothing_latched());
+
+  Exclusive x(*this);
+
+  trx_mutex_enter(trx);
+  auto lock = trx->m_wait_lock;
+  trx_mutex_exit(trx);
+
+  if (lock == nullptr) {
+    /* The wait ended meanwhile (granted, or cancelled as the victim of
+    another check): the caller's lock wait sees it. */
+    return DB_LOCK_WAIT;
   }
 
-  // Initialize the first frame
-  ulint heap_no{ULINT_UNDEFINED};
-  Lock *found_lock{};
+  if (deadlock_occurs(lock, trx)) {
+    /* The requester is the victim: cancel its request; the wait ends
+    (the query thread runs again) and the request returns DB_DEADLOCK. */
+    trx_mutex_enter(trx);
+    lock = trx->m_wait_lock;
+    trx_mutex_exit(trx);
+
+    if (lock != nullptr) {
+      cancel_waiting_and_release(lock);
+    }
+
+    return DB_DEADLOCK;
+  }
+
+  return DB_LOCK_WAIT;
+}
+
+DbErr LockSys::deadlock_after_wait(DbErr err) noexcept {
+  auto &s = suspect();
+  auto trx = s;
+
+  s = nullptr;
+
+  if (err == DB_LOCK_WAIT && trx != nullptr) {
+    return deadlock_resolve(trx);
+  }
+
+  return err;
+}
+
+DeadlockWalk LockSys::deadlock_search(const Trx *start, ulint depth, Trx **pred, bool *single) const noexcept {
+  /* Latch free: only the edges, atomics, are read; a Trx is type stable
+  (the TrxSys pool), a stale edge is caught by the full check under X. */
+
+  auto trx = start;
+
+  if (single != nullptr) {
+    *single = true;
+  }
+
+  for (;; ++depth) {
+    /* trx waits for blocker: an edge of the graph. */
+    auto blocker = trx->m_blocking_trx.load(std::memory_order_seq_cst);
+
+    if (single != nullptr && trx->m_blocking_multi.load(std::memory_order_relaxed)) {
+      /* trx has other blockers: the one edge path is not the whole graph. */
+      *single = false;
+    }
+
+    if (blocker == nullptr) {
+      return DeadlockWalk::NONE;
+
+    } else if (blocker == start) {
+      /* Back at the start: a cycle, closed by the edge trx -> start. */
+      *pred = const_cast<Trx *>(trx);
+      return DeadlockWalk::CYCLE;
+
+    } else if (depth > LOCK_MAX_DEPTH_IN_DEADLOCK_CHECK) {
+      return DeadlockWalk::TOO_DEEP;
+    }
+
+    /* If the blocker does not wait (it runs, it will release its locks),
+    its edge is nullptr: the next step ends the walk. */
+    trx = blocker;
+  }
+}
+
+DeadlockWalk LockSys::deadlock_find(Trx *start, Trx **pred) noexcept {
+  ut_ad(x_own());
+  ut_ad(start->m_wait_lock != nullptr);
+
+  bool single{};
+
+  /* The fast path: the one edge walk. */
+  const auto walk = deadlock_search(start, 0, pred, &single);
+
+  if (walk == DeadlockWalk::CYCLE || single) {
+    /* A cycle; or a path along which every transaction has one blocker:
+    that path is all of the waits-for graph reachable from start. */
+    return walk;
+  }
+
+  /* The slow path: some transaction on the path has other blockers. The
+  full search over the blocker sets, read from the queues. */
+  ++m_deadlock_epoch;
+
+  return deadlock_dfs(start, start, start->m_wait_lock, 0, pred);
+}
+
+DeadlockWalk LockSys::deadlock_dfs(const Trx *start, Trx *trx, const Lock *wait_lock, ulint depth, Trx **pred) noexcept {
+  ut_ad(x_own());
+
+  if (trx->m_deadlock_mark == m_deadlock_epoch) {
+    /* Its subtree was searched by this search: no cycle back to start. */
+    return DeadlockWalk::NONE;
+  }
+
+  /* trx waits for wait_lock, which waits for every lock ahead of it in its
+  queue that it has to wait for: their owners are the blockers of trx. */
+  auto edge = [&](Trx *blocker) -> DeadlockWalk {
+    if (blocker == start) {
+      *pred = trx;
+      return DeadlockWalk::CYCLE;
+    } else if (depth > LOCK_MAX_DEPTH_IN_DEADLOCK_CHECK) {
+      return DeadlockWalk::TOO_DEEP;
+    } else if (auto wait_lock = waiting_lock(blocker); wait_lock != nullptr) {
+      return deadlock_dfs(start, blocker, wait_lock, depth + 1, pred);
+    } else {
+      return DeadlockWalk::NONE;
+    }
+  };
 
   if (wait_lock->type() == LOCK_REC) {
-    heap_no = wait_lock->rec_find_set_bit();
+    const auto heap_no = wait_lock->rec_find_set_bit();
+    const auto queue = rec_queue(wait_lock->page_id());
+
     ut_a(heap_no != ULINT_UNDEFINED);
+    ut_a(queue != nullptr);
 
-    auto page_id = wait_lock->page_id();
-
-    if (auto it = m_sys.m_lock_sys->m_rec_locks.find(page_id); it != m_sys.m_lock_sys->m_rec_locks.end()) {
-      found_lock = UT_LIST_GET_LAST(it->second);
+    for (auto lock : *queue) {
+      if (lock == wait_lock) {
+        break;
+      } else if (lock->rec_is_nth_bit_set(heap_no) && wait_lock->has_to_wait_for(lock, heap_no)) {
+        if (const auto r = edge(lock->m_trx); r != DeadlockWalk::NONE) {
+          return r;
+        }
+      }
     }
   } else {
-    ut_ad(wait_lock->type() == LOCK_TABLE);
-    found_lock = UT_LIST_GET_LAST(wait_lock->m_table.m_table->m_locks);
+    for (auto lock : wait_lock->m_table.m_table->m_locks) {
+      if (lock == wait_lock) {
+        break;
+      } else if (wait_lock->has_to_wait_for(lock, ULINT_UNDEFINED)) {
+        if (const auto r = edge(lock->m_trx); r != DeadlockWalk::NONE) {
+          return r;
+        }
+      }
+    }
   }
 
-  // Push the initial frame
-  m_search_stack.emplace(trx, wait_lock, depth, heap_no, found_lock);
+  trx->m_deadlock_mark = m_deadlock_epoch;
 
-  while (!m_search_stack.empty()) {
-    auto &frame = m_search_stack.top();
+  return DeadlockWalk::NONE;
+}
 
-    // Check if we've already searched this transaction
-    if (frame.trx->m_deadlock_mark == 1) {
-      m_search_stack.pop();
+Trx *LockSys::deadlock_victim(Trx *start, Trx *pred) noexcept {
+  ut_ad(x_own());
+
+  log_info("\n*** (1) TRANSACTION:");
+  log_info(pred->to_string(3000));
+  log_info("*** (1) WAITING FOR THIS LOCK TO BE GRANTED:");
+  log_info(pred->m_wait_lock->to_string(m_sys));
+  log_info("*** (2) TRANSACTION:");
+  log_info(start->to_string(3000));
+  log_info("*** (2) WAITING FOR THIS LOCK TO BE GRANTED:");
+  log_info(start->m_wait_lock->to_string(m_sys));
+
+  /* start closed the cycle; pred waits for it. If pred does not weigh less,
+  start is the victim. */
+  return Trx::weight_cmp(pred, start) >= 0 ? start : pred;
+}
+
+void LockSys::deadlock_check_moved() noexcept {
+  ut_ad(x_own() || nothing_latched());
+
+  auto &m = moved();
+
+  if (m.empty()) {
+    return;
+  }
+
+  std::vector<Trx *> todo;
+
+  todo.swap(m);
+
+  for (auto trx : todo) {
+    /* The waiting lock of trx was moved by a page operation: new edges, is
+    there a cycle through them now? The latch free walk first. A path too
+    deep here is not a deadlock: only a requester is rolled back for that. */
+    if (!deadlock_suspect(trx)) {
       continue;
     }
 
-    // Increment cost
-    ++*cost;
+    Exclusive x(*this);
 
-    if (*cost > LOCK_MAX_N_STEPS_IN_DEADLOCK_CHECK) {
-      return LOCK_EXCEED_MAX_DEPTH;
-    }
+    while (waiting_lock(trx) != nullptr) {
+      Trx *pred{};
 
-    if (frame.depth > LOCK_MAX_DEPTH_IN_DEADLOCK_CHECK) {
-      return LOCK_EXCEED_MAX_DEPTH;
-    }
-
-    // If this is the first iteration for this frame, initialize found_lock
-    if (frame.is_first_iteration) {
-      frame.is_first_iteration = false;
-
-      if (frame.wait_lock->type() == LOCK_REC) {
-        frame.heap_no = frame.wait_lock->rec_find_set_bit();
-        ut_a(frame.heap_no != ULINT_UNDEFINED);
-
-        auto page_id = frame.wait_lock->page_id();
-
-        if (auto it = m_sys.m_lock_sys->m_rec_locks.find(page_id); it != m_sys.m_lock_sys->m_rec_locks.end()) {
-          frame.found_lock = UT_LIST_GET_LAST(it->second);
-        }
-      } else {
-        ut_ad(frame.wait_lock->type() == LOCK_TABLE);
-        frame.found_lock = UT_LIST_GET_LAST(frame.wait_lock->m_table.m_table->m_locks);
-      }
-    }
-
-    // Look for a conflicting lock which is ahead of wait_lock in the queue
-    while (frame.found_lock != nullptr) {
-      if (frame.found_lock == frame.wait_lock) {
-        frame.found_lock = nullptr;
-      } else if (frame.wait_lock->type() == LOCK_REC) {
-        frame.found_lock = frame.found_lock->prev();
-      } else {
-        ut_ad(frame.wait_lock->type() == LOCK_TABLE);
-        frame.found_lock = UT_LIST_GET_PREV(m_table.m_locks, frame.found_lock);
-      }
-
-      if (frame.found_lock == nullptr) {
-        // We can mark this subtree as searched
-        frame.trx->m_deadlock_mark = 1;
-        m_search_stack.pop();
+      if (deadlock_find(trx, &pred) != DeadlockWalk::CYCLE) {
         break;
       }
 
-      if (frame.wait_lock->has_to_wait_for(frame.found_lock, frame.heap_no)) {
-        auto lock_trx = frame.found_lock->m_trx;
+      set_deadlock_found();
 
-        if (lock_trx == start) {
-          // We came back to the search starting point: a deadlock detected
+      auto victim = deadlock_victim(trx, pred);
 
-          log_info("\n*** (1) TRANSACTION:");
-          log_info(frame.wait_lock->m_trx->to_string(3000));
+      log_info("*** WE ROLL BACK TRANSACTION ", victim == trx ? "(2)" : "(1)");
 
-          log_info("*** (1) HOLDS THE LOCK(S):");
-          log_info(m_sys.m_lock_sys->lock_to_string(frame.wait_lock));
-
-          /* It is possible that the transaction has also locks on tables and records */
-
-          log_info("\n*** (2) TRANSACTION:");
-          log_info(lock_trx->to_string(3000));
-
-          log_info("*** (2) HOLDS THE LOCK(S):");
-          log_info(m_sys.m_lock_sys->lock_to_string(frame.found_lock));
-
-          log_info("*** (2) WAITING FOR THIS LOCK TO BE GRANTED:");
-          log_info(m_sys.m_lock_sys->lock_to_string(frame.wait_lock));
-
-          if (*cost > LOCK_MAX_N_STEPS_IN_DEADLOCK_CHECK) {
-            /* If the search was too long, we choose 'start' as the victim and roll back it */
-            return LOCK_VICTIM_IS_START;
-          }
-
-          m_sys.m_lock_sys->set_deadlock_found();
-
-          /* Let us choose the transaction of wait_lock as a victim to try
-          to avoid deadlocking our search starting point transaction */
-
-          log_info("*** WE ROLL BACK TRANSACTION (1)");
-
-          frame.wait_lock->m_trx->m_was_chosen_as_deadlock_victim = true;
-
-          m_sys.m_lock_sys->cancel_waiting_and_release(frame.wait_lock);
-
-          /* Since trx and wait_lock are no longer in the waits-for graph, we can return false;
-          note that our selective algorithm can choose several transactions as victims, but still
-          we may end up rolling back also the search starting point transaction! */
-
-          return LOCK_VICTIM_IS_OTHER;
-        }
-
-        if (sys.m_trx_sys->in_trx_list(lock_trx)) {
-          /* If lock_trx is not committed, then check if it is waiting for some lock */
-
-          if (lock_trx->m_que_state == TRX_QUE_LOCK_WAIT) {
-            /* Another trx ahead has requested lock in an incompatible mode, and is itself waiting for a lock */
-
-            // Push a new frame for the recursive call
-            ulint new_heap_no{ULINT_UNDEFINED};
-            Lock *new_found_lock{};
-
-            if (lock_trx->m_wait_lock->type() == LOCK_REC) {
-              new_heap_no = lock_trx->m_wait_lock->rec_find_set_bit();
-              ut_a(new_heap_no != ULINT_UNDEFINED);
-
-              auto page_id = lock_trx->m_wait_lock->page_id();
-
-              if (auto it = m_sys.m_lock_sys->m_rec_locks.find(page_id); it != m_sys.m_lock_sys->m_rec_locks.end()) {
-                new_found_lock = UT_LIST_GET_LAST(it->second);
-              }
-            } else {
-              ut_ad(lock_trx->m_wait_lock->type() == LOCK_TABLE);
-              new_found_lock = UT_LIST_GET_LAST(lock_trx->m_wait_lock->m_table.m_table->m_locks);
-            }
-
-            m_search_stack.emplace(lock_trx, lock_trx->m_wait_lock, frame.depth + 1, new_heap_no, new_found_lock);
-            break;  // Continue with the new frame
-          }
-        }
-      }
+      choose_victim(victim);
     }
   }
-
-  return 0;
-}
-
-Trx *DeadlockDetector::choose_victim(Trx *trx1, Trx *trx2) noexcept {
-  /* Choose the transaction with fewer locks as victim to minimize the amount of work needed for rollback */
-
-  ulint trx1_locks = 0;
-  ulint trx2_locks = 0;
-
-  for (auto lock [[maybe_unused]] : trx1->m_trx_locks) {
-    trx1_locks++;
-  }
-
-  for (auto lock [[maybe_unused]] : trx2->m_trx_locks) {
-    trx2_locks++;
-  }
-
-  if (trx1_locks < trx2_locks) {
-    return trx1;
-  } else if (trx2_locks < trx1_locks) {
-    return trx2;
-  } else {
-    /* If equal number of locks, choose the newer transaction */
-    return (trx1->m_id > trx2->m_id) ? trx1 : trx2;
-  }
-}
-
-void DeadlockDetector::report_deadlock(Trx *victim, Lock *wait_lock) noexcept {
-  log_info("*** DEADLOCK DETECTED ***");
-  log_info("\nVictim transaction:");
-  log_info(victim->to_string(3000));
-  log_info("\nWaiting for lock:");
-  log_info(m_sys.m_lock_sys->lock_to_string(wait_lock));
 }

@@ -25,6 +25,8 @@ Created 3/26/1996 Heikki Tuuri
 #pragma once
 
 #include <atomic>
+#include <mutex>
+#include <thread>
 
 class System;
 
@@ -38,6 +40,28 @@ class System;
 
 struct Lock;
 struct ReadView;
+
+/** The mutex of a transaction, Trx::m_mutex: its lock list and lock heap,
+and its lock wait state (see the LATCHING comment of lock0lock.h). Its
+level is SYNC_TRX, below the trx sys mutex and the lock system latches: a
+thread may take it while it holds those, and takes none of them while it
+holds it. A thread holds at most one trx mutex at a time. */
+struct TrxMutex {
+  void lock() noexcept;
+  void unlock() noexcept;
+
+#ifdef UNIV_DEBUG
+  /** @return true if the calling thread holds it. */
+  [[nodiscard]] bool own() const noexcept { return m_owner.load(std::memory_order_relaxed) == std::this_thread::get_id(); }
+
+  /** @return the number of trx mutexes the calling thread holds, 0 or 1. */
+  [[nodiscard]] static ulint n_held() noexcept;
+
+  std::atomic<std::thread::id> m_owner{};
+#endif /* UNIV_DEBUG */
+
+  std::mutex m_mutex;
+};
 
 /*
  * The transaction handle; every session has a trx object which is freed only
@@ -370,13 +394,14 @@ struct Trx {
   [[nodiscard]] bool is_interrupted() const noexcept { return m_interrupted.load(std::memory_order_acquire); }
 
   /**
-   * Interrupts the transaction: a lock wait in progress ends within the lock
-   * timeout thread's interval with DB_INTERRUPTED, and so does a later one.
+   * Interrupts the transaction: a lock wait in progress ends at once with
+   * DB_INTERRUPTED (the event of the transaction wakes the waiting thread),
+   * and so does a later one.
    * The flag is cleared when the transaction starts.
    *
    * Can be called from any thread.
    */
-  void interrupt() noexcept { m_interrupted.store(true, std::memory_order_release); }
+  void interrupt() noexcept;
 
   /**
    * Compares the "weight" (or size) of two transactions. Transactions that
@@ -514,8 +539,24 @@ struct Trx {
   /** TRX_DUP_IGNORE | TRX_DUP_REPLACE */
   ulint m_duplicates{};
 
-  /* A mark field used in deadlock checking algorithm.  */
-  bool m_deadlock_mark{};
+  /** While the transaction waits for a lock: a transaction that blocks it,
+  its edge of the waits-for graph (one per waiting transaction, see
+  lock0deadlock.h); nullptr when it does not wait. Written by the lock
+  system (with the trx sys mutex held); an atomic, so that the deadlock
+  search can follow the edges without the queue latches. */
+  std::atomic<Trx *> m_blocking_trx{};
+
+  /** While the transaction waits: true if more than one transaction blocks
+  it (m_blocking_trx names one of them). The fast deadlock walk over the one
+  edge graph is complete only along transactions with one blocker; past one
+  with several, the full search runs (lock0deadlock.h). */
+  std::atomic<bool> m_blocking_multi{};
+
+  /** The full deadlock search that visited this transaction: equal to
+  LockSys::m_deadlock_epoch if the current search has searched its subtree
+  (no O(active transactions) clearing). Written under the latch the search
+  runs under. */
+  uint64_t m_deadlock_mark{};
 
   /** @see trx_dict_op */
   TrxDictOp m_dict_operation{TRX_DICT_OP_NONE};
@@ -531,8 +572,13 @@ struct Trx {
   /** 0, RW_S_LATCH, or RW_X_LATCH: the latch mode trx currently holds on dict_operation_lock */
   ulint m_dict_operation_lock_mode{};
 
-  /* All the next fields are protected by the kernel mutex, except the
-  undo logs which are protected by undo_mutex */
+  /* All the next fields are protected by the trx sys mutex, except the
+  undo logs which are protected by undo_mutex, and the lock wait state and
+  the locks, protected by m_mutex (see the LATCHING comment of lock0lock.h):
+  m_que_state, m_wait_lock, m_was_chosen_as_deadlock_victim, m_wait_started,
+  m_wait_thrs and the state of the query threads in it, m_lock_heap and
+  m_trx_locks. The owner thread also writes m_que_state with the trx sys
+  mutex held (and m_mutex, its level is lower). */
 
   /** false=user transaction, true=purge */
   bool m_is_purge{};
@@ -632,6 +678,12 @@ struct Trx {
   /** Lock wait started at this time */
   time_t m_wait_started{};
 
+  /** The thread running a query thread of this transaction waits for this
+  event while the transaction waits for a lock (Srv::suspend_user_thread()):
+  a grant or a cancel sets it, in O(1), and so does interrupt(). Created and
+  freed with the transaction. */
+  CondVar *m_wait_event{};
+
   /** Query threads belonging to this trx that are in the QUE_THR_LOCK_WAIT state */
   UT_LIST_BASE_NODE_T_EXTERN(QueThr, trx_thrs) m_wait_thrs;
 
@@ -691,7 +743,32 @@ struct Trx {
   /** Detailed error message for last error, or empty. */
   std::array<char, 256> m_detailed_error{};
 
+  /** The mutex of the transaction, see TrxMutex. */
+  mutable TrxMutex m_mutex{};
+
+  /** Pins: the number of threads that found this transaction active by its
+  id (TrxSys::pin_active()) and may create an explicit lock for it (an
+  implicit to explicit lock conversion). Its commit waits until there are
+  none before it makes it committed in memory (TrxSys::drain_pins()). */
+  std::atomic<ulint> m_n_ref{};
 };
+
+/** Take the mutex of trx. */
+inline void trx_mutex_enter(const Trx *trx) noexcept {
+  trx->m_mutex.lock();
+}
+
+/** Release the mutex of trx. */
+inline void trx_mutex_exit(const Trx *trx) noexcept {
+  trx->m_mutex.unlock();
+}
+
+#ifdef UNIV_DEBUG
+/** @return true if the calling thread holds the mutex of trx. */
+inline bool trx_mutex_own(const Trx *trx) noexcept {
+  return trx->m_mutex.own();
+}
+#endif /* UNIV_DEBUG */
 
 UT_LIST_NODE_GETTER_DEFINITION(Trx, m_trx_list);
 UT_LIST_NODE_GETTER_DEFINITION(Trx, m_client_trx_list);

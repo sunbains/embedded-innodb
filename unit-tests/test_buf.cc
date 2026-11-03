@@ -597,7 +597,9 @@ TEST_F(BufPoolTest, Flush) {
   EXPECT_GE(bpage->m_newest_modification, bpage->m_oldest_modification);
   EXPECT_NE(pool().get_oldest_modification(), 0UL);
   EXPECT_LE(pool().get_oldest_modification(), bpage->m_oldest_modification);
-  EXPECT_GT(pool().get_modified_ratio_pct(), 0UL);
+  /* Not get_modified_ratio_pct() > 0: an integer percentage, one dirty page
+  in a pool of more than 100 rounds to 0 (it passed only when background
+  work had dirtied other pages). */
 
   const auto oldest = bpage->m_oldest_modification;
 

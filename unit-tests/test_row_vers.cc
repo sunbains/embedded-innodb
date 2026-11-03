@@ -508,9 +508,10 @@ TEST_F(RowVersTest, ImplicitLockSec) {
   const auto end = std::chrono::steady_clock::now() + 10s;
 
   while (!waited && std::chrono::steady_clock::now() < end) {
-    mutex_enter(&m_sys->m_trx_sys->m_mutex);
+    /* The lock wait state: the trx mutex's. */
+    trx_mutex_enter(reader);
     waited = reader->m_que_state == TRX_QUE_LOCK_WAIT;
-    mutex_exit(&m_sys->m_trx_sys->m_mutex);
+    trx_mutex_exit(reader);
 
     std::this_thread::sleep_for(1ms);
   }

@@ -60,6 +60,13 @@ DbErr Ddl::drop_table_in_background(const char *name) noexcept {
 ulint Ddl::drop_tables_in_background() noexcept {
   ulint n_tables_dropped{};
 
+  /* One caller at a time: the entry at the head is used without the kernel
+  mutex below, then removed and freed. Concurrent callers (the master thread
+  and an API/test caller) used to race on it: use after free of
+  drop->m_table_name and a double remove/free of drop. Upstream had a
+  single caller, the master thread. */
+  std::lock_guard bg_drop_guard(m_bg_drop_mutex);
+
   for (;;) {
     mutex_enter(&m_sys.m_trx_sys->m_mutex);
 
@@ -501,6 +508,12 @@ DbErr Ddl::create_table(Table *table, Trx *trx) noexcept {
     trx->m_error_state = DB_SUCCESS;
   }
 
+  /* On success the cache owns the definition. On failure it was added to
+  the cache only if the step got that far (then it is dropped below);
+  otherwise it is still ours to free (upstream leaked it: "TO DO: free
+  table?"). The dict mutex is held. */
+  const bool cached = m_sys.m_dict->table_check_if_in_cache(table->m_name) == table;
+
   switch (err) {
     case DB_OUT_OF_FILE_SPACE:
       log_warn("Cannot create table ", table->m_name);
@@ -531,6 +544,10 @@ DbErr Ddl::create_table(Table *table, Trx *trx) noexcept {
   }
 
   que_graph_free(static_cast<QueFork *>(que_node_get_parent(thr)));
+
+  if (err != DB_SUCCESS && !cached) {
+    Table::destroy(table, Current_location());
+  }
 
   trx->m_op_info = "";
 

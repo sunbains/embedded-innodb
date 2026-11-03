@@ -281,8 +281,31 @@ constexpr ulint SYNC_FSP_PAGE = 395;
 
 /*-------------------------------*/
 
+/* The lock system latches and the transaction latches (see the LATCHING
+comment of lock0lock.h). A thread acquires a latch only if its level is
+lower than that of every latch it holds (two page shard latches: in the
+order of their shard numbers). So the trx sys mutex can be taken with lock
+system latches held, never the reverse; a trx mutex can be taken with any of
+them held, and no other of these while it is held. */
+
+/** The global rw-latch of the lock system (S for operations on shards, X for
+operations on all of it). */
+constexpr ulint SYNC_LOCK_SYS_GLOBAL = 330;
+
+/** A page shard latch of the lock system (record lock queues). */
+constexpr ulint SYNC_LOCK_SYS_PAGE = 320;
+
+/** A table shard latch of the lock system (table lock queues). */
+constexpr ulint SYNC_LOCK_SYS_TABLE = 318;
+
 constexpr ulint SYNC_TRX_SYS = 300;
+
+/** A shard mutex of the active transaction ids (TrxSys::m_ids). */
+constexpr ulint SYNC_TRX_SYS_SHARD = 299;
+
 constexpr ulint SYNC_LOCK = 298;
+
+/** The mutex of a transaction (Trx::m_mutex). */
 constexpr ulint SYNC_TRX = 297;
 constexpr ulint SYNC_REC_LOCK = 296;
 constexpr ulint SYNC_TRX_LOCK_HEAP = 295;

@@ -22,6 +22,7 @@ The tablespace memory cache
 Created 10/25/1995 Heikki Tuuri
 *******************************************************/
 
+#include <fcntl.h>
 #include <algorithm>
 #include <filesystem>
 
@@ -570,6 +571,7 @@ try_again:
 
   space->m_stop_ios = false;
   space->m_is_being_deleted = false;
+  space->m_is_being_extended = false;
   space->m_size_in_pages = 0;
   space->m_flags = flags;
 
@@ -963,6 +965,41 @@ void Fil::op_write_log(
     mlog_close(mtr, log_ptr);
 
     mlog_catenate_string(mtr, (byte *)new_name, len);
+  }
+}
+
+void Fil::extend_write_log(space_id_t space_id, page_no_t size, Mtr *mtr) noexcept {
+  auto log_ptr = mlog_open(mtr, 11 + 4);
+
+  if (log_ptr == nullptr) {
+    /* Logging is off in recovery. */
+    return;
+  }
+
+  log_ptr = mlog_write_initial_log_record_for_file_op(MLOG_FILE_EXTEND, space_id, 0, log_ptr, mtr);
+
+  mach_write_to_4(log_ptr, size);
+  log_ptr += 4;
+
+  mlog_close(mtr, log_ptr);
+}
+
+void Fil::extend_replay(space_id_t space_id, page_no_t size) noexcept {
+  mutex_enter(&m_mutex);
+
+  const auto space = space_get_by_id(space_id);
+  const bool known = space != nullptr && !space->m_is_being_deleted;
+
+  mutex_exit(&m_mutex);
+
+  if (!known) {
+    return;
+  }
+
+  page_no_t actual{};
+
+  if (!extend_space_to_desired_size(&actual, space_id, size)) {
+    log_fatal(std::format("Cannot extend tablespace {} to {} pages in recovery", space_id, size));
   }
 }
 
@@ -1996,6 +2033,15 @@ bool Fil::extend_space_to_desired_size(page_no_t *actual_size, space_id_t space_
 
   auto space = space_get_by_id(space_id);
 
+  /* One extension of a space at a time; the I/O below is done without
+  m_mutex, so wait for one in progress (it may make ours unnecessary). The
+  fsp callers hold the space latch, this matters for the others. */
+  {
+    Mutex_lock lock{&m_mutex};
+
+    m_io_cv.wait(lock, [&] { return !space->m_is_being_extended; });
+  }
+
   if (space->m_size_in_pages >= size_after_extend) {
     *actual_size = space->m_size_in_pages;
 
@@ -2004,59 +2050,95 @@ bool Fil::extend_space_to_desired_size(page_no_t *actual_size, space_id_t space_
     return true;
   }
 
-  auto page_size = UNIV_PAGE_SIZE;
+  const auto page_size = UNIV_PAGE_SIZE;
 
   auto node = UT_LIST_GET_LAST(space->m_chain);
 
+  /* Keeps the file open: node->m_n_pending > 0 until node_complete_io(). */
   node_prepare_for_io(node, space);
 
-  auto start_page_no = space->m_size_in_pages;
-  /* Extend at most 64 pages at a time */
-  auto buf_size = std::min<ulint>(64, size_after_extend - start_page_no) * page_size;
-  auto buf2 = static_cast<byte *>(mem_alloc(buf_size + page_size));
-  auto buf = static_cast<byte *>(ut_align(buf2, page_size));
+  const page_no_t start_page_no = space->m_size_in_pages;
+  const page_no_t node_start = space->m_size_in_pages - node->m_size_in_pages;
+  const auto fh = node->m_fh;
 
-  memset(buf, 0, buf_size);
+  space->m_is_being_extended = true;
 
+  /* The I/O (and the allocation of the blocks by the file system) used to be
+  done holding m_mutex, which serialized all tablespace I/O submission and
+  every other extension behind it. Only this thread changes the sizes of the
+  space until m_is_being_extended is cleared, and reads and writes of other
+  threads are below start_page_no. */
+  mutex_exit(&m_mutex);
+
+  const off_t off = off_t(start_page_no - node_start) * page_size;
+  const off_t len = off_t(size_after_extend - start_page_no) * page_size;
+  page_no_t n_added{};
   bool success{true};
-  auto io_request = IoRequest::Sync_write;
 
-  while (start_page_no < size_after_extend) {
-    const ulint n_pages = std::min<ulint>(buf_size / page_size, size_after_extend - start_page_no);
-    const off_t off = off_t(start_page_no) * page_size;
+  /* Allocate the blocks: the new part reads as zeros, without writing it. */
+  if (::fallocate(fh, 0, off, len) == 0) {
+    n_added = size_after_extend - start_page_no;
+  } else {
+    /* The file system can't (EOPNOTSUPP), or out of space: write zeros,
+    the part that fits. */
+    const auto chunk = std::min<ulint>(64, size_after_extend - start_page_no) * page_size;
+    auto buf2 = static_cast<byte *>(mem_alloc(chunk + page_size));
+    auto buf = static_cast<byte *>(ut_align(buf2, page_size));
 
-    IoCtx io_ctx = {.m_batch = false, .m_fil_node = node, .m_msg = nullptr, .m_io_request = io_request};
+    memset(buf, 0, chunk);
 
-    /* DbErr: DB_SUCCESS is not 0, the result is not a bool. */
-    success = m_sys.m_aio->submit(std::move(io_ctx), buf, page_size * n_pages, off) == DB_SUCCESS;
+    auto page_no = start_page_no;
 
-    if (success) {
-      node->m_size_in_pages += n_pages;
-      space->m_size_in_pages += n_pages;
-    } else {
-      /* Let us measure the size of the file to determine how much we were able
-       * to extend it */
+    while (page_no < size_after_extend) {
+      const ulint n_pages = std::min<ulint>(chunk / page_size, size_after_extend - page_no);
+      const off_t woff = off_t(page_no - node_start) * page_size;
 
-      auto n_pages = ((ulint)(os_file_get_size_as_iblonglong(node->m_fh) / page_size)) - node->m_size_in_pages;
+      IoCtx io_ctx = {.m_batch = false, .m_fil_node = node, .m_msg = nullptr, .m_io_request = IoRequest::Sync_write};
 
-      node->m_size_in_pages += n_pages;
-      space->m_size_in_pages += n_pages;
+      /* DbErr: DB_SUCCESS is not 0, the result is not a bool. */
+      if (m_sys.m_aio->submit(std::move(io_ctx), buf, page_size * n_pages, woff) != DB_SUCCESS) {
+        success = false;
+        break;
+      }
 
-      break;
+      page_no += n_pages;
     }
 
-    start_page_no += n_pages;
+    mem_free(buf2);
+
+    if (success) {
+      n_added = size_after_extend - start_page_no;
+    } else {
+      /* Measure the file to find how much of it we could extend. */
+      const auto file_pages = page_no_t(os_file_get_size_as_iblonglong(fh) / page_size);
+      const auto node_pages = start_page_no - node_start;
+
+      n_added = file_pages > node_pages ? file_pages - node_pages : 0;
+    }
   }
 
-  mem_free(buf2);
+  /* No sync here (upstream flushed the space after every extension). The
+  extension is redo logged (MLOG_FILE_EXTEND, written by Fsp in the mtr that
+  changes FSP_SIZE) and recovery redoes it: no page of the new part reaches
+  the disk before that record is durable (write ahead logging), and the file
+  is marked modified below, so the checkpoint that moves past the record
+  flushes the new size first. */
+  mutex_enter(&m_mutex);
 
-  node_complete_io(node, io_request);
+  node->m_size_in_pages += n_added;
+  space->m_size_in_pages += n_added;
+
+  space->m_is_being_extended = false;
+
+  /* A write: the space is flushed (and its new size made durable) by the
+  next flush of the unflushed spaces, at the latest by the checkpoint. */
+  node_complete_io(node, n_added > 0 ? IoRequest::Sync_write : IoRequest::None);
 
   *actual_size = space->m_size_in_pages;
 
-  mutex_exit(&m_mutex);
+  m_io_cv.notify_all();
 
-  flush(space_id);
+  mutex_exit(&m_mutex);
 
   return success;
 }
@@ -2239,6 +2321,11 @@ DbErr Fil::data_io(
     report_invalid_page_access(page_id, space->m_name, byte_offset, len, io_request);
   }
 
+  /* Read the node size while we hold the mutex: extend_space_to_desired_size()
+  grows it under the mutex, reading it after mutex_exit() was a data race.
+  The size only grows, so the check below stays valid. */
+  const auto node_size = fil_node->m_size_in_pages;
+
   /* Now we have made the changes in the data structures of Fil::system */
   mutex_exit(&m_mutex);
 
@@ -2246,7 +2333,7 @@ DbErr Fil::data_io(
 
   const off_t off = (off_t(page_id.page_no()) * off_t(UNIV_PAGE_SIZE)) + byte_offset;
 
-  ut_a(fil_node->m_size_in_pages - page_id.page_no() >= ((byte_offset + len + (UNIV_PAGE_SIZE - 1)) / UNIV_PAGE_SIZE));
+  ut_a(node_size - page_id.page_no() >= ((byte_offset + len + (UNIV_PAGE_SIZE - 1)) / UNIV_PAGE_SIZE));
 
   /* Do aio */
 
@@ -2338,16 +2425,14 @@ void Fil::flush(space_id_t space_id) {
       ++m_n_flushes;
     retry:
       if (node->m_n_pending_flushes > 0) {
-        /* We want to avoid calling os_file_flush() on
-        the file twice at the same time, because we do
-        not know what bugs OS's may contain in file
-        i/o; sleep for a while */
+        /* We want to avoid calling os_file_flush() on the file twice at
+        the same time: wait for the flush in progress (it may cover our
+        changes too), instead of sleeping 20 ms. */
+        {
+          Mutex_lock lock{&m_mutex};
 
-        mutex_exit(&m_mutex);
-
-        os_thread_sleep(20000);
-
-        mutex_enter(&m_mutex);
+          m_io_cv.wait(lock, [&] { return node->m_n_pending_flushes == 0; });
+        }
 
         if (node->m_flush_counter >= old_mod_counter) {
 
@@ -2363,11 +2448,17 @@ void Fil::flush(space_id_t space_id) {
 
       mutex_exit(&m_mutex);
 
-      os_file_flush(file);
+      /* nosync: the writes are not made durable (tests, benchmarks), as for
+      the log. */
+      if (m_sys.m_config.m_fil.m_flush_method != SRV_UNIX_NOSYNC) {
+        os_file_flush(file);
+      }
 
       mutex_enter(&m_mutex);
 
       node->m_n_pending_flushes--;
+
+      m_io_cv.notify_all();
 
     skip_flush:
       if (node->m_flush_counter < old_mod_counter) {

@@ -728,7 +728,8 @@ struct SelNode {
 
   /** variables whose values we have to copy when an explicit cursor is opened, so that they do not
    * change between fetches */
-  UT_LIST_BASE_NODE_T(SymNode, sym_list) m_copy_variables {};
+  /* Linked through col_var_list: sym_list links the symbol table. */
+  UT_LIST_BASE_NODE_T(SymNode, col_var_list) m_copy_variables {};
 };
 
 /** Fetch statement node */

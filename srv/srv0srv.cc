@@ -361,17 +361,12 @@ ulint Srv::release_threads(SrvThreadType type, ulint n) noexcept {
 
 Srv::Srv(System &sys) noexcept
     : m_sys(sys),
-      m_threads(sys.m_config.m_srv.m_max_n_threads),
-      m_client_table(sys.m_config.m_srv.m_max_n_threads) {
+      m_threads(sys.m_config.m_srv.m_max_n_threads) {
 
   mutex_create(&m_innodb_monitor_mutex, IF_DEBUG("monitor_mutex", )  Current_location());
   mutex_create(&m_monitor_file_mutex, IF_DEBUG("monitor_file_mutex", )  Current_location());
 
   for (auto &slot : m_threads) {
-    slot.m_event = os_event_create(nullptr);
-  }
-
-  for (auto &slot : m_client_table) {
     slot.m_event = os_event_create(nullptr);
   }
 
@@ -385,89 +380,28 @@ Srv::~Srv() noexcept {
     os_event_free(slot.m_event);
   }
 
-  for (auto &slot : m_client_table) {
-    os_event_free(slot.m_event);
-  }
-
   os_event_free(m_lock_timeout_thread_event);
 
   mutex_free(&m_monitor_file_mutex);
   mutex_free(&m_innodb_monitor_mutex);
 }
 
-/**
- * Reserves a slot in the thread table for the current user OS thread.
- * NOTE! The kernel mutex has to be reserved by the caller!
- *
- * @return	reserved slot
- */
-SrvSlot *Srv::table_reserve_slot_for_user_thread() noexcept {
-  ut_ad(mutex_own(&m_sys.m_trx_sys->m_mutex));
-
-  ulint i{};
-  auto slot = &m_client_table[i];
-
-  while (slot->m_in_use) {
-    i++;
-
-    if (i >= m_sys.m_config.m_srv.m_max_n_threads) {
-
-      log_err(std::format(
-        "There appear to be {} user threads currently waiting"
-        " inside InnoDB, which is the upper limit. Cannot continue"
-        " operation. We intentionally generate a seg fault to print"
-        " a stack trace on Linux. But first we print a list of waiting"
-        " threads.",
-        (ulong)i
-      ));
-
-      for (i = 0; i < m_sys.m_config.m_srv.m_max_n_threads; i++) {
-
-        slot = &m_client_table[i];
-
-        log_err(std::format(
-          "Slot {}: thread id {}, type {}, in use {}, susp {}, time {}",
-          i,
-          os_thread_pf(slot->m_id),
-          (ulong)slot->m_type,
-          slot->m_in_use,
-          slot->m_suspended,
-          difftime(ut_time(), slot->m_suspend_time)
-        ));
-      }
-
-      ut_error;
-    }
-
-    slot = &m_client_table[i];
-  }
-
-  ut_a(slot->m_in_use == false);
-
-  slot->m_in_use = true;
-  slot->m_id = os_thread_get_curr_id();
-  slot->m_handle = os_thread_get_curr();
-
-  return slot;
-}
-
 void Srv::suspend_user_thread(QueThr *thr) noexcept {
-  double wait_time;
-  ulint had_dict_lock;
-  int64_t start_time = 0;
-  int64_t finish_time;
-  ulint diff_time;
-  ulint sec;
-  ulint ms;
-  ulong lock_wait_timeout;
+  using Clock = std::chrono::steady_clock;
 
   ut_ad(!mutex_own(&m_sys.m_trx_sys->m_mutex));
 
   auto trx = thr_get_trx(thr);
+  auto event = trx->m_wait_event;
 
-  os_event_set(m_lock_timeout_thread_event);
-
+  /* The lock wait timeout: the tests change it with the trx sys mutex. */
   mutex_enter(&m_sys.m_trx_sys->m_mutex);
+  const auto timeout = m_sys.m_config.m_lock.m_wait_timeout;
+  mutex_exit(&m_sys.m_trx_sys->m_mutex);
+
+  /* The lock wait state of trx and the state of thr: the trx mutex's (see
+  the LATCHING comment of lock0lock.h). */
+  trx_mutex_enter(trx);
 
   trx->m_error_state = DB_SUCCESS;
 
@@ -484,39 +418,37 @@ void Srv::suspend_user_thread(QueThr *thr) noexcept {
       trx->m_was_chosen_as_deadlock_victim = false;
     }
 
-    mutex_exit(&m_sys.m_trx_sys->m_mutex);
+    trx_mutex_exit(trx);
 
     return;
   }
 
   ut_ad(thr->is_active == false);
 
-  auto slot = table_reserve_slot_for_user_thread();
-  auto event = slot->m_event;
+  /* The wait ends when the state of thr changes from QUE_THR_LOCK_WAIT, by
+  a grant or a cancel, which the lock system does with the trx mutex held
+  and then sets the event of the transaction (O(1), through
+  release_user_thread_if_suspended()); or at the deadline; or when
+  Trx::interrupt() sets the event. The event is reset here, with the mutex,
+  before this thread looks at the state: a later set wakes the wait below. */
+  auto sig_count = os_event_reset(event);
 
-  slot->m_thr = thr;
+  /* The wait times out by itself at a steady clock deadline (no lock
+  timeout thread, no 1 s resolution): a timeout of 100000000 s or more is
+  no timeout, 0 s is an immediate timeout. */
+  const auto start = Clock::now();
+  const bool no_timeout = timeout.count() >= 100000000;
+  const auto deadline = no_timeout ? Clock::time_point::max() : start + timeout;
+  const bool row_lock = thr->lock_state == QUE_THR_LOCK_ROW;
 
-  os_event_reset(event);
+  trx_mutex_exit(trx);
 
-  slot->m_suspend_time = ut_time();
-
-  if (thr->lock_state == QUE_THR_LOCK_ROW) {
+  if (row_lock) {
     m_stats.m_n_lock_wait_count++;
     m_stats.m_n_lock_wait_current_count++;
-
-    if (ut_usectime(&sec, &ms) == -1) {
-      start_time = -1;
-    } else {
-      start_time = (int64_t)sec * 1000000 + ms;
-    }
   }
-  /* Wake the lock timeout monitor thread, if it is suspended */
 
-  os_event_set(m_lock_timeout_thread_event);
-
-  mutex_exit(&m_sys.m_trx_sys->m_mutex);
-
-  had_dict_lock = trx->m_dict_operation_lock_mode;
+  const auto had_dict_lock = trx->m_dict_operation_lock_mode;
 
   switch (had_dict_lock) {
     case RW_S_LATCH:
@@ -531,9 +463,72 @@ void Srv::suspend_user_thread(QueThr *thr) noexcept {
 
   ut_a(trx->m_dict_operation_lock_mode == 0);
 
-  /* Suspend this thread and wait for the event. */
+  /* Suspend this thread until the wait ends. Exactly one of a grant (or a
+  deadlock cancel) and a timeout (or an interrupt) ends it: the lock system
+  decides with the latch of the queue and the trx mutex held, by whoever
+  first finds thr still in QUE_THR_LOCK_WAIT (LockSys::cancel_wait()); a
+  cancelled request can't be granted. */
+  DbErr end_err{DB_SUCCESS};
 
-  os_event_wait(event);
+  for (;;) {
+    if (!trx->is_interrupted() && Clock::now() < deadline) {
+      if (no_timeout) {
+        os_event_wait_low(event, sig_count);
+      } else {
+        (void)event->wait_time(std::chrono::duration_cast<std::chrono::microseconds>(deadline - Clock::now()), sig_count);
+      }
+    }
+
+    trx_mutex_enter(trx);
+
+    if (thr->state != QUE_THR_LOCK_WAIT) {
+      /* Granted, or cancelled as a deadlock victim. */
+      break;
+    }
+
+    const bool interrupted = trx->is_interrupted();
+
+    if (interrupted || Clock::now() >= deadline) {
+      trx_mutex_exit(trx);
+
+      /* Cancel the request and release the waiters behind it, unless a grant
+      came first. */
+      const bool cancelled = m_sys.m_lock_sys->cancel_wait(trx);
+
+      trx_mutex_enter(trx);
+
+      if (cancelled) {
+        end_err = interrupted ? DB_INTERRUPTED : DB_LOCK_WAIT_TIMEOUT;
+      }
+
+      ut_ad(thr->state != QUE_THR_LOCK_WAIT);
+      break;
+    }
+
+    /* A spurious wake up, or an event set for an earlier wait. */
+    sig_count = os_event_reset(event);
+
+    trx_mutex_exit(trx);
+  }
+
+  if (trx->m_was_chosen_as_deadlock_victim) {
+
+    end_err = DB_DEADLOCK;
+    trx->m_was_chosen_as_deadlock_victim = false;
+  }
+
+  trx_mutex_exit(trx);
+
+  if (row_lock) {
+    const auto diff_time = ulint(std::chrono::duration_cast<std::chrono::microseconds>(Clock::now() - start).count());
+
+    m_stats.m_n_lock_wait_current_count--;
+    m_stats.m_n_lock_wait_time = m_stats.m_n_lock_wait_time + diff_time;
+
+    if (diff_time > m_stats.m_n_lock_max_wait_time) {
+      m_stats.m_n_lock_max_wait_time = diff_time;
+    }
+  }
 
   /* After resuming, reacquire the data dictionary latch if
   necessary. */
@@ -547,72 +542,17 @@ void Srv::suspend_user_thread(QueThr *thr) noexcept {
       break;
   }
 
-  mutex_enter(&m_sys.m_trx_sys->m_mutex);
-
-  /* Release the slot for others to use */
-
-  slot->m_in_use = false;
-
-  wait_time = ut_difftime(ut_time(), slot->m_suspend_time);
-
-  if (thr->lock_state == QUE_THR_LOCK_ROW) {
-    if (ut_usectime(&sec, &ms) == -1) {
-      finish_time = -1;
-    } else {
-      finish_time = (int64_t)sec * 1000000 + ms;
-    }
-
-    diff_time = (ulint)(finish_time - start_time);
-
-    m_stats.m_n_lock_wait_current_count--;
-    m_stats.m_n_lock_wait_time = m_stats.m_n_lock_wait_time + diff_time;
-
-    if (diff_time > m_stats.m_n_lock_max_wait_time &&
-        /* only update the variable if we successfully
-        retrieved the start and finish times. See Bug#36819. */
-        start_time != -1 && finish_time != -1) {
-      m_stats.m_n_lock_max_wait_time = diff_time;
-    }
-  }
-
-  if (trx->m_was_chosen_as_deadlock_victim) {
-
-    trx->m_error_state = DB_DEADLOCK;
-    trx->m_was_chosen_as_deadlock_victim = false;
-  }
-
-  mutex_exit(&m_sys.m_trx_sys->m_mutex);
-
-  /* InnoDB system transactions (such as the purge, and
-  incomplete transactions that are being rolled back after crash
-  recovery) will use the global value of
-  innodb_lock_wait_timeout, because trx->m_client_ctx == nullptr. */
-  lock_wait_timeout = ulong(m_sys.m_config.m_lock.m_wait_timeout.count());
-
-  if (trx->is_interrupted()) {
-
-    trx->m_error_state = DB_INTERRUPTED;
-
-  } else if (lock_wait_timeout < 100000000 && wait_time > (double)lock_wait_timeout) {
-
-    trx->m_error_state = DB_LOCK_WAIT_TIMEOUT;
+  if (end_err != DB_SUCCESS) {
+    trx->m_error_state = end_err;
   }
 }
 
 void Srv::release_user_thread_if_suspended(QueThr *thr) noexcept {
-  ut_ad(mutex_own(&m_sys.m_trx_sys->m_mutex));
+  /* With the trx mutex, at the end of a lock wait (lock0lock.h). */
+  ut_ad(trx_mutex_own(thr_get_trx(thr)));
 
-  for (ulint i{}; i < m_sys.m_config.m_srv.m_max_n_threads; ++i) {
-
-    auto slot = &m_client_table[i];
-
-    if (slot->m_in_use && slot->m_thr == thr) {
-
-      os_event_set(slot->m_event);
-
-      return;
-    }
-  }
+  /* The waiting thread waits for the event of its transaction: O(1). */
+  os_event_set(thr_get_trx(thr)->m_wait_event);
 }
 
 /**
@@ -982,64 +922,6 @@ exit_func:
 
 
   return;
-}
-
-void Srv::lock_timeout_thread() noexcept {
-  for (;;) {
-    /* When someone is waiting for a lock, we wake up every second
-    and check if a timeout has passed for a lock wait */
-
-    sleep_unless_shutdown(std::chrono::seconds(1));
-
-    m_lock_timeout_active = true;
-
-    mutex_enter(&m_sys.m_trx_sys->m_mutex);
-
-    auto some_waits = false;
-
-    /* Check of all slots if a thread is waiting there, and if it
-    has exceeded the time limit */
-
-    for (ulint i = 0; i < m_sys.m_config.m_srv.m_max_n_threads; i++) {
-
-      auto slot = &m_client_table[i];
-
-      if (slot->m_in_use) {
-        some_waits = true;
-        auto wait_time = ut_difftime(ut_time(), slot->m_suspend_time);
-        auto trx = thr_get_trx(slot->m_thr);
-        auto lock_wait_timeout = ulong(m_sys.m_config.m_lock.m_wait_timeout.count());
-
-        if (trx->is_interrupted() || (lock_wait_timeout < 100000000 && (wait_time > (double)lock_wait_timeout || wait_time < 0))) {
-
-          /* Timeout exceeded or a wrap-around in system time counter:
-          cancel the lock request queued by the transaction and release possible
-          other transactions waiting behind; it is possible that the lock has
-          already been granted: in that case do nothing */
-
-          if (trx->m_wait_lock) {
-            m_sys.m_lock_sys->cancel_waiting_and_release(trx->m_wait_lock);
-          }
-        }
-      }
-    }
-
-    os_event_reset(m_lock_timeout_thread_event);
-
-    mutex_exit(&m_sys.m_trx_sys->m_mutex);
-
-    if (m_shutdown_state >= SRV_SHUTDOWN_CLEANUP) {
-      m_lock_timeout_active = false;
-
-
-
-      return;
-    }
-
-    if (!some_waits) {
-      m_lock_timeout_active = false;
-    }
-  }
 }
 
 void Srv::error_monitor_thread() noexcept {
@@ -1558,9 +1440,6 @@ void Srv::create_thread(void *(*f)(void *), void *arg) noexcept {
 }
 
 void Srv::start_threads() noexcept {
-  /* Watches the timeouts for lock waits */
-  create_thread(&thread_main<&Srv::lock_timeout_thread>, this);
-
   /* Warns of long semaphore waits */
   create_thread(&thread_main<&Srv::error_monitor_thread>, this);
 

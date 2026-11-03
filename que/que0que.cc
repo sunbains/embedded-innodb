@@ -214,7 +214,8 @@ void que_thr_end_wait_no_next_thr(System &sys, QueThr *thr) {
   bool was_active;
 
   ut_a(thr->state == QUE_THR_LOCK_WAIT);
-  ut_ad(mutex_own(&sys.m_trx_sys->m_mutex));
+  /* The end of a lock wait: with the trx mutex (lock0lock.h). */
+  ut_ad(trx_mutex_own(thr_get_trx(thr)));
   ut_ad(thr);
   ut_ad((thr->state == QUE_THR_LOCK_WAIT) || (thr->state == QUE_THR_PROCEDURE_WAIT) || (thr->state == QUE_THR_SIG_REPLY_WAIT));
 
@@ -576,10 +577,16 @@ static QueThr *que_thr_node_step(System &sys, QueThr *thr) {
     return thr;
   }
 
+  auto trx = thr_get_trx(thr);
+
   mutex_enter(&sys.m_trx_sys->m_mutex);
+
+  /* The state of thr and of the lock wait of trx: the trx mutex's. */
+  trx_mutex_enter(trx);
 
   if (que_thr_peek_stop(thr)) {
 
+    trx_mutex_exit(trx);
     mutex_exit(&sys.m_trx_sys->m_mutex);
 
     return thr;
@@ -589,6 +596,7 @@ static QueThr *que_thr_node_step(System &sys, QueThr *thr) {
 
   thr->state = QUE_THR_COMPLETED;
 
+  trx_mutex_exit(trx);
   mutex_exit(&sys.m_trx_sys->m_mutex);
 
   return nullptr;
@@ -633,6 +641,11 @@ static void que_thr_dec_refer_count(System &sys, QueThr *thr, QueThr **next_thr)
 
   mutex_enter(&sys.m_trx_sys->m_mutex);
 
+  /* The state of thr, the active counts and the lock wait state of trx:
+  the trx mutex's (a grant changes them with it, lock0lock.h). Released
+  before the signal handling below: a commit takes the lock system latches. */
+  trx_mutex_enter(trx);
+
   ut_a(thr->is_active);
 
   if (thr->state == QUE_THR_RUNNING) {
@@ -654,6 +667,7 @@ static void que_thr_dec_refer_count(System &sys, QueThr *thr, QueThr **next_thr)
         ut_error;
       }
 
+      trx_mutex_exit(trx);
       mutex_exit(&sys.m_trx_sys->m_mutex);
 
       return;
@@ -668,7 +682,11 @@ static void que_thr_dec_refer_count(System &sys, QueThr *thr, QueThr **next_thr)
 
   thr->is_active = false;
 
-  if (trx->m_n_active_thrs > 0) {
+  const auto n_active_thrs = trx->m_n_active_thrs;
+
+  trx_mutex_exit(trx);
+
+  if (n_active_thrs > 0) {
 
     mutex_exit(&sys.m_trx_sys->m_mutex);
 
@@ -724,6 +742,7 @@ bool que_thr_stop(System &sys, QueThr *thr) {
   bool ret = true;
 
   ut_ad(mutex_own(&sys.m_trx_sys->m_mutex));
+  ut_ad(trx_mutex_own(thr->graph->trx));
 
   auto graph = thr->graph;
   auto trx = graph->trx;
@@ -794,6 +813,9 @@ void que_thr_stop_client(System &sys, QueThr *thr) {
 
   mutex_enter(&sys.m_trx_sys->m_mutex);
 
+  /* The state of thr: the trx mutex's (lock0lock.h). */
+  trx_mutex_enter(trx);
+
   if (thr->state == QUE_THR_RUNNING) {
 
     if (trx->m_error_state != DB_SUCCESS && trx->m_error_state != DB_LOCK_WAIT) {
@@ -803,6 +825,7 @@ void que_thr_stop_client(System &sys, QueThr *thr) {
       /* It must have been a lock wait but the lock was already released, or this
       transaction was chosen as a victim in selective deadlock resolution */
 
+      trx_mutex_exit(trx);
       mutex_exit(&sys.m_trx_sys->m_mutex);
 
       return;
@@ -817,6 +840,7 @@ void que_thr_stop_client(System &sys, QueThr *thr) {
   --thr->graph->n_active_thrs;
   --trx->m_n_active_thrs;
 
+  trx_mutex_exit(trx);
   mutex_exit(&sys.m_trx_sys->m_mutex);
 }
 
@@ -1044,7 +1068,14 @@ loop:
 
   mutex_enter(&sys.m_trx_sys->m_mutex);
 
-  switch (thr->state) {
+  /* The state of thr: the trx mutex's (a grant changes it, lock0lock.h). */
+  trx_mutex_enter(thr_get_trx(thr));
+
+  const auto state = thr->state;
+
+  trx_mutex_exit(thr_get_trx(thr));
+
+  switch (state) {
 
     case QUE_THR_RUNNING:
       /* There probably was a lock wait, but it already ended

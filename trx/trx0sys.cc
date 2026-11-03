@@ -24,6 +24,9 @@ Created 3/26/1996 Heikki Tuuri
 
 #include "trx0sys.h"
 #include "buf0dblwr.h"
+
+#include <chrono>
+#include <thread>
 #include "fsp0fsp.h"
 #include "log0log.h"
 #include "mtr0log.h"
@@ -95,6 +98,75 @@ TrxSys::~TrxSys() noexcept {
   mutex_exit(&m_mutex);
 
   mutex_free(&m_mutex);
+
+  for (auto mem : m_trx_pool) {
+    mem_free(mem);
+  }
+}
+
+void TrxSys::ids_insert(Trx *trx) noexcept {
+  ut_ad(trx->m_id != 0);
+
+  auto &shard = id_shard(trx->m_id);
+  std::lock_guard<std::mutex> guard(shard.m_mutex);
+
+  shard.m_trxs[trx->m_id] = trx;
+}
+
+void TrxSys::ids_erase(Trx *trx) noexcept {
+  if (trx->m_id == 0) {
+    return;
+  }
+
+  auto &shard = id_shard(trx->m_id);
+  std::lock_guard<std::mutex> guard(shard.m_mutex);
+
+  if (auto it = shard.m_trxs.find(trx->m_id); it != shard.m_trxs.end() && it->second == trx) {
+    shard.m_trxs.erase(it);
+  }
+}
+
+Trx *TrxSys::pin_active(trx_id_t id) noexcept {
+  auto &shard = id_shard(id);
+  std::lock_guard<std::mutex> guard(shard.m_mutex);
+
+  if (auto it = shard.m_trxs.find(id); it != shard.m_trxs.end()) {
+    /* In the map: active or prepared (it leaves the map before it is
+    committed in memory). The pin is taken with the shard mutex, which the
+    erase at C2 takes too: after C2, no new pin. */
+    it->second->m_n_ref.fetch_add(1, std::memory_order_acquire);
+
+    return it->second;
+  }
+
+  return nullptr;
+}
+
+bool TrxSys::in_ids(trx_id_t id) noexcept {
+  auto &shard = id_shard(id);
+  std::lock_guard<std::mutex> guard(shard.m_mutex);
+
+  return shard.m_trxs.contains(id);
+}
+
+void TrxSys::drain_pins(Trx *trx) noexcept {
+  ut_ad(!mutex_own(&m_mutex));
+  ut_ad(TrxMutex::n_held() == 0);
+
+  for (ulint i{}; trx->m_n_ref.load(std::memory_order_acquire) > 0; ++i) {
+    /* A conversion holds it for a lock request: a short wait. */
+    if (i < 64) {
+      std::this_thread::yield();
+    } else {
+      std::this_thread::sleep_for(std::chrono::microseconds(i < 1024 ? 10 : 100));
+    }
+
+#ifdef UNIV_DEBUG
+    if (i == 100000) {
+      log_warn(std::format("trx {} waited long for the pins of lock conversions: {}", trx->m_id, trx->m_n_ref.load()));
+    }
+#endif /* UNIV_DEBUG */
+  }
 }
 
 DbErr TrxSys::start(IbRecovery recovery) noexcept {
@@ -276,7 +348,22 @@ DbErr TrxSys::create_system_tablespace() noexcept {
 Trx *TrxSys::create_trx(void *arg) noexcept {
   /* There is a circular reference between the session and the transaction. */
   auto session = Session::create(nullptr);
-  auto trx = Trx::create(session, arg);
+  void *mem{};
+
+  {
+    std::lock_guard<std::mutex> guard(m_trx_pool_mutex);
+
+    if (!m_trx_pool.empty()) {
+      mem = m_trx_pool.back();
+      m_trx_pool.pop_back();
+    }
+  }
+
+  if (mem == nullptr) {
+    mem = mem_alloc(sizeof(Trx));
+  }
+
+  auto trx = new (mem) Trx(session, arg);
 
   session->m_trx = trx;
 
@@ -292,7 +379,16 @@ void TrxSys::destroy_trx(Trx *&trx) noexcept {
 
   trx->m_sess = nullptr;
 
-  Trx::destroy(trx);
+  ut_a(trx->m_n_ref.load() == 0);
+
+  call_destructor(trx);
+
+  /* The memory goes back to the pool, not to the allocator (type stable). */
+  {
+    std::lock_guard<std::mutex> guard(m_trx_pool_mutex);
+
+    m_trx_pool.push_back(trx);
+  }
 
   trx = nullptr;
 }
@@ -372,6 +468,13 @@ void TrxSys::trx_list_insert_ordered(Trx *in_trx) noexcept {
   } else {
     m_trx_list.push_back(in_trx);
   }
+
+  /* An active or prepared recovered transaction owns implicit locks. */
+  if (in_trx->m_conc_state == TRX_ACTIVE || in_trx->m_conc_state == TRX_PREPARED) {
+    ids_insert(in_trx);
+  }
+
+  update_min_active_id();
 }
 
 ulint TrxSys::trx_assign_rseg() noexcept {

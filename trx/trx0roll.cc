@@ -682,7 +682,10 @@ void TrxRollback::rollback(System &sys, Trx *trx, TrxSig *sig, QueThr **next_thr
   auto roll_graph = trx_roll_graph_build(sys, trx);
 
   trx->m_graph = roll_graph;
+
+  trx_mutex_enter(trx);
   trx->m_que_state = TRX_QUE_ROLLING_BACK;
+  trx_mutex_exit(trx);
 
   auto thr = que_fork_start_command(roll_graph);
 
@@ -760,7 +763,9 @@ void TrxRollback::finish_partial_rollback_off_kernel(System &sys, Trx *trx, QueT
   Trx::sig_reply(sys, sig, *next_thr);
   trx->sig_remove(sys, sig);
 
+  trx_mutex_enter(trx);
   trx->m_que_state = TRX_QUE_RUNNING;
+  trx_mutex_exit(trx);
 }
 
 void TrxRollback::finish_rollback_off_kernel(System &sys, QueFork *graph, Trx *trx, QueThr **next_thr) {
@@ -790,7 +795,9 @@ void TrxRollback::finish_rollback_off_kernel(System &sys, QueFork *graph, Trx *t
   /* Remove all TRX_SIG_TOTAL_ROLLBACK signals from the signal queue and
   send reply messages to them */
 
+  trx_mutex_enter(trx);
   trx->m_que_state = TRX_QUE_RUNNING;
+  trx_mutex_exit(trx);
 
   while (sig != nullptr) {
     auto next_sig = UT_LIST_GET_NEXT(signals, sig);

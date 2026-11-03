@@ -800,10 +800,10 @@ TEST_F(MergeTest, UniqueDuplicateAcrossRuns) {
 /** BUG: a unique index on a column with NULLs in different runs fails with
 DB_DUPLICATE_KEY: NULLs are not equal for uniqueness and the sort of a
 buffer knows it (row_merge_tuple_cmp() skips them), but the merge of two
-runs, row_merge_blocks() (row/row0merge.cc:1145), returns DB_DUPLICATE_KEY
+runs, row_merge_blocks() (row/row0merge.cc:1187), returns DB_DUPLICATE_KEY
 on any comparison of 0, NULLs included. The same upstream (7c21eac0); MySQL
 fixed it later (cmp_rec_rec_simple() reports the NULL equality). */
-TEST_F(MergeTest, DISABLED_UniqueNullsAcrossRuns) {
+TEST_F(MergeTest, UniqueNullsAcrossRuns) {
   ASSERT_EQ(create(name()), DB_SUCCESS);
 
   std::vector<MRow> rows;

@@ -24,6 +24,7 @@ Created 10/25/1995 Heikki Tuuri
 
 #pragma once
 
+#include <condition_variable>
 #include "srv0sys.h"
 
 #include "innodb0types.h"
@@ -466,7 +467,28 @@ struct Fil {
   /** @return The number of fsyncs done to the tablespaces */
   ulint get_flushes() const { return m_n_flushes; }
 
+  /**
+   * Writes the redo record of an extension of a tablespace (MLOG_FILE_EXTEND).
+   * Nothing is written when logging is off (in recovery).
+   *
+   * @param[in] space_id        The tablespace.
+   * @param[in] size            Its size in pages after the extension.
+   * @param[in,out] mtr         The mini-transaction that changes FSP_SIZE.
+   */
+  void extend_write_log(space_id_t space_id, page_no_t size, Mtr *mtr) noexcept;
+
+  /**
+   * Replays MLOG_FILE_EXTEND in recovery: extends the file to at least size
+   * pages. Nothing if the space is unknown (dropped later) or big enough.
+   *
+   * @param[in] space_id        The tablespace.
+   * @param[in] size            The size in pages it was extended to.
+   */
+  void extend_replay(space_id_t space_id, page_no_t size) noexcept;
+
+#ifndef UNIT_TESTING
  private:
+#endif /* !UNIT_TESTING */
   /**
    * @brief Frees a space object from the tablespace memory cache. Closes the files in
    * the chain but does not delete them. There must not be any pending i/o's or
@@ -685,12 +707,17 @@ struct Fil {
     const PageId &page_id, const char *space_name, ulint byte_offset, ulint len, IoRequest io_request
   );
 
+#ifndef UNIT_TESTING
  private:
+#endif /* !UNIT_TESTING */
+  /* Both counters are written under m_mutex and read without it by
+  get_flushes()/get_pending_flushes() (status export): ut::Relaxed. */
+
   /** The number of fsyncs done to the tablespaces */
-  ulint m_n_flushes{};
+  ut::Relaxed<ulint> m_n_flushes{};
 
   /** Number of pending tablespace flushes */
-  ulint m_n_pending_flushes{};
+  ut::Relaxed<ulint> m_n_pending_flushes{};
 
   /** When program is run, the default directory "." is the current datadir,
   but in ibbackup we must set it explicitly; the path must NOT contain the
@@ -699,6 +726,19 @@ struct Fil {
 
   /** The mutex protecting the cache */
   mutable Mutex m_mutex{};
+
+  /** m_mutex as a BasicLockable, to wait on m_io_cv. */
+  struct Mutex_lock {
+    Mutex *m_mutex;
+
+    void lock() noexcept { mutex_enter(m_mutex); }
+    void unlock() noexcept { mutex_exit(m_mutex); }
+  };
+
+  /** Notified, with m_mutex held, when a file flush or a space extension
+  ends: waiters re-check their condition under m_mutex. Replaces a 20 ms
+  sleep and retry. */
+  std::condition_variable_any m_io_cv{};
 
   /** Map from space id to tablespace instance. */
   std::unordered_map<space_id_t, FilSpace *> m_space_by_id{};

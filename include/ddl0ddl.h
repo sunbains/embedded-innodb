@@ -13,6 +13,8 @@ Created 12 Oct 2008
 #include "dict0types.h"
 #include "srv0srv.h"
 
+#include <mutex>
+
 struct Log;
 struct Trx;
 struct Dict;
@@ -236,6 +238,13 @@ struct Ddl {
 
   /** List of tables we should drop in background. */
   UT_LIST_BASE_NODE_T(DropList, m_node) m_drop_list;
+
+  /** Serializes drop_tables_in_background(): it works on the head of
+  m_drop_list outside the kernel mutex, so two callers (the master thread
+  and a direct call) would both use, then both remove and free, the same
+  entry. Taken before the kernel and dictionary latches and by nothing
+  else, so it can't take part in a deadlock. */
+  std::mutex m_bg_drop_mutex;
 };
 
 [[nodiscard]] inline DdlIndexStatus Index::get_online_ddl_status() const noexcept {

@@ -43,6 +43,11 @@ Created 3/26/1996 Heikki Tuuri
 #include "trx0trx.h"
 #include "trx0types.h"
 #include "ut0byte.h"
+
+#include <array>
+#include <mutex>
+#include <unordered_map>
+#include <vector>
 #include "ut0lst.h"
 
 /* The typedef for rseg slot in the file copy */
@@ -607,6 +612,49 @@ struct TrxSys {
    */
   void init_at_db_start(IbRecovery recovery) noexcept;
 
+  struct IdShard;
+
+  /** @return the shard of the active ids of an id. */
+  [[nodiscard]] IdShard &id_shard(trx_id_t id) noexcept { return m_ids[(id * 0x9E3779B97F4A7C15ULL) >> 56]; }
+
+  /** Insert trx in the active ids. */
+  void ids_insert(Trx *trx) noexcept;
+
+  /** Erase trx from the active ids, if it is there (C2 of its commit). */
+  void ids_erase(Trx *trx) noexcept;
+
+  /**
+   * Finds an active transaction by its id and pins it: it can't reach step
+   * C4 of its commit (committed in memory) until unpin(), nor can the Trx
+   * object be reused.
+   *
+   * @param[in] id A transaction id.
+   *
+   * @return the pinned transaction, or nullptr if no active one has the id.
+   */
+  [[nodiscard]] Trx *pin_active(trx_id_t id) noexcept;
+
+  /** Unpin a transaction pinned by pin_active(). */
+  static void unpin(Trx *trx) noexcept { trx->m_n_ref.fetch_sub(1, std::memory_order_release); }
+
+  /**
+   * @return true if a transaction with the id is in the active ids (not past
+   * C2 of its commit), read with the id shard mutex. V3 of a conversion.
+   */
+  [[nodiscard]] bool in_ids(trx_id_t id) noexcept;
+
+  /**
+   * Waits until no thread pins trx (step C3 of its commit). The calling
+   * thread holds no latch: a pinning thread may wait for a page latch or a
+   * lock system latch while it holds the pin.
+   *
+   * @param[in] trx A transaction erased from the active ids.
+   */
+  void drain_pins(Trx *trx) noexcept;
+
+  /** Set m_min_active_id from the list of transactions; the trx sys mutex is held. */
+  void update_min_active_id() noexcept { m_min_active_id.store(get_min_trx_id(), std::memory_order_release); }
+
   /**
    * Creates a transaction instance.
    *
@@ -645,6 +693,40 @@ struct TrxSys {
 
   /** List of rollback segment objects */
   UT_LIST_BASE_NODE_T_EXTERN(TrxRseg, m_rseg_list) m_rseg_list {};
+
+  /* Active transactions by id, for the implicit locks (the lock system
+  finds the owner of a record's trx id without the trx sys mutex; see the
+  LATCHING comment of lock0lock.h). A transaction is in it from the
+  assignment of its id (start, or recovery for an active or prepared one)
+  to step C2 of its commit. A shard mutex is below the trx sys mutex
+  (SYNC_TRX_SYS_SHARD) and above the trx mutex. */
+
+  /** Number of shards of the active ids. */
+  static constexpr size_t N_ID_SHARDS = 256;
+
+  /** A shard of the active ids. */
+  struct alignas(64) IdShard {
+    std::mutex m_mutex;
+    std::unordered_map<trx_id_t, Trx *> m_trxs;
+  };
+
+  /** The shards. */
+  std::array<IdShard, N_ID_SHARDS> m_ids{};
+
+  /** A lower bound of the smallest id of an active transaction (or
+  m_max_trx_id if none): updated with the trx sys mutex when the list of
+  transactions changes, read without it. A stale value is smaller, which
+  only makes a reader look for implicit locks it needn't. */
+  std::atomic<trx_id_t> m_min_active_id{};
+
+  /** The memory of destroyed Trx objects, reused by create_trx() and freed
+  with the TrxSys: a Trx is type stable while the System lives, the deadlock
+  walk can read the edge of a transaction that committed under it (see
+  lock0deadlock.h). */
+  std::vector<void *> m_trx_pool{};
+
+  /** Protects m_trx_pool. */
+  std::mutex m_trx_pool_mutex{};
 
   /** Latest rollback segment in the round-robin assignment
   of rollback segments to transactions */

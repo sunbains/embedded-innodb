@@ -1042,6 +1042,10 @@ down monotonically. */
 TEST_F(PurgeTest, Batches) {
   load(make_rows(0, 500));
 
+  /* The history of the earlier tests first: else the master thread may purge
+  some of it while the deletes run, and h0 is stale. */
+  (void)purge();
+
   const auto h0 = hist_len();
   auto blocker = snapshot();
 
@@ -1053,6 +1057,18 @@ TEST_F(PurgeTest, Batches) {
   }
 
   EXPECT_EQ(hist_len(), h0 + 500);
+
+  /* The master thread purges too (every 10 s, and when idle), in batches of
+  its own: count the pages handled by all the runs, not the runs of the test
+  (a slow host, the sanitizers, makes the master take more of them). */
+  auto purge = m_sys->m_trx_sys->m_purge;
+  auto handled = [purge] {
+    mutex_enter(&purge->m_mutex);
+    const auto n = purge->m_n_pages_handled;
+    mutex_exit(&purge->m_mutex);
+    return n;
+  };
+  const auto handled0 = handled();
 
   commit(blocker);
 
@@ -1077,7 +1093,8 @@ TEST_F(PurgeTest, Batches) {
 
   (void)m_sys->m_trx_sys->m_purge->run();
 
-  EXPECT_GE(n_batches, 500UL / 21);
+  EXPECT_GT(n_batches, 0UL);
+  EXPECT_GE(handled() - handled0, 500UL) << "the 500 undo logs, in batches of at most 21 pages";
   expect_purged({});
   expect_history_purged();
 }
@@ -1566,12 +1583,12 @@ TEST_F(PurgeRestartTest, CachedTableAfterCrash) {
 /** BUG: after a restart, purge skips the undo records of every table that is
 not in the dictionary cache yet, as if the table were dropped, and frees the
 undo logs: the delete marked records, their secondary index entries and the
-old blobs stay forever. RowPurge::parse_undo_rec() (row/row0purge.cc:409)
+old blobs stay forever. RowPurge::parse_undo_rec() (row/row0purge.cc:424)
 looks the table up with Dict::table_get_on_id(table_id), the cache only
 lookup; upstream (7c21eac0 row0purge.c) used dict_table_get_on_id_low(
 srv_force_recovery, table_id), which loads the table from SYS_TABLES. Here
 nothing opens test/t before purge runs (the master thread or the test). */
-TEST_F(PurgeRestartTest, DISABLED_UncachedTable) {
+TEST_F(PurgeRestartTest, UncachedTable) {
   const auto rows = make_rows(0, 100, 50);
   ut::Rows expected;
 
@@ -1674,9 +1691,11 @@ TEST_F(PurgePerf, ManyLogs) {
   expect_history_purged();
 }
 
-/** Purge of deleted rows with blobs: blob pages freed per second. */
+/** Purge of deleted rows with blobs: blob pages freed per second. The blobs
+fit in the buffer pool (32 MB): freeing a blob reads each of its pages for
+the next page number, from the disk if it was evicted. */
 TEST_F(PurgePerf, BlobPages) {
-  constexpr uint32_t N = 1000;
+  constexpr uint32_t N = 300;
 
   const auto base = leaf_pages();
 

@@ -2966,12 +2966,27 @@ TEST_F(ApiDb, LockWaitTimeout) {
   commit(trx);
 }
 
+/** Set the lock wait timeout. The 1 s timeout of the suite, now exact (the
+waiter times out by itself at its deadline, no lock timeout thread rounding
+it up to 2 or 3 s), is too short for a commit or a rollback that ends a wait
+on a loaded host (the sanitizer suites): the tests that expect a grant use
+10 s, so that a lost grant still fails them.
+@return the old timeout. */
+static std::chrono::seconds set_wait_timeout(System &sys, std::chrono::seconds t) {
+  mutex_enter(&sys.m_trx_sys->m_mutex);
+  const auto old = sys.m_config.m_lock.m_wait_timeout;
+  sys.m_config.m_lock.m_wait_timeout = t;
+  mutex_exit(&sys.m_trx_sys->m_mutex);
+  return old;
+}
+
 /** A lock wait ends when the holder commits: the waiter goes on. */
 TEST_F(ApiDb, LockWaitGranted) {
   ASSERT_EQ(create_kv(m_sys, table()), DB_SUCCESS);
   load_kv(m_sys, table(), 0, 1, [](uint32_t) { return 0; });
 
-  /* The default 1 s timeout is too short to see a wait end otherwise: retry. */
+  const auto old_timeout = set_wait_timeout(m_sys, 10s);
+
   auto holder = begin();
 
   ASSERT_EQ(update_kv(m_sys, holder, table(), 0, 1), DB_SUCCESS);
@@ -2983,6 +2998,8 @@ TEST_F(ApiDb, LockWaitGranted) {
   commit(holder);
 
   const auto err = result.get();
+
+  (void)set_wait_timeout(m_sys, old_timeout);
 
   /* The commit came before the timeout. */
   EXPECT_EQ(err, DB_SUCCESS);
@@ -3003,6 +3020,9 @@ TEST_F(ApiDb, Deadlock) {
   ASSERT_EQ(create_kv(m_sys, table()), DB_SUCCESS);
   load_kv(m_sys, table(), 0, 2, [](uint32_t) { return 0; });
 
+  /* The winner waits for the rollback of the victim. */
+  const auto old_timeout = set_wait_timeout(m_sys, 10s);
+
   auto t1 = begin();
   auto t2 = begin();
 
@@ -3015,6 +3035,8 @@ TEST_F(ApiDb, Deadlock) {
 
   const auto e2 = update_kv(m_sys, t2, table(), 0, 2);
   const auto e1 = r1.get();
+
+  (void)set_wait_timeout(m_sys, old_timeout);
 
   /* One got the deadlock, the other the row: no timeouts. */
   EXPECT_TRUE((e1 == DB_DEADLOCK) != (e2 == DB_DEADLOCK)) << e1 << " " << e2;
