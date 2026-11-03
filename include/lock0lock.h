@@ -653,7 +653,8 @@ struct LockSys {
   [[nodiscard]] inline ulint get_min_heap_no(const BufBlock *block) noexcept {
     const auto page = block->m_frame;
 
-    return Rec(page + PAGE_INFIMUM).get_heap_no();
+    /* The successor of the infimum: the supremum if the page is empty. */
+    return page_rec_get_next(Rec(page + PAGE_INFIMUM)).get_heap_no();
   }
 
   /**

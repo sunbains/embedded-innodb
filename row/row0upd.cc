@@ -638,7 +638,7 @@ void RowUpdate::index_replace_new_col_vals(DTuple *entry, Index *index, const Up
   for (ulint i{}; i < index->get_n_fields(); ++i) {
     auto field = index->get_nth_field(i);
     auto col = field->get_col();
-    auto uf = update->get_nth_field(clust_index->get_clustered_field_pos(col));
+    auto uf = update->get_field(clust_index->get_clustered_field_pos(col));
 
     if (uf != nullptr) {
       index_replace_new_col_val(dtuple_get_nth_field(entry, i), field, col, uf, heap);
@@ -995,18 +995,19 @@ DbErr RowUpdate::clust_rec_by_insert(
 
   index_entry_sys_field(entry, index, DATA_TRX_ID, trx->m_id);
 
-  if (upd_node->m_upd_ext) {
-    /* If we return from a lock wait, for example, we may have
-    extern fields marked as not-owned in entry (marked in the
-    if-branch above). We must unmark them. */
+  /* Whether or not an index has a prefix of an externally stored column
+(m_upd_ext), the entry points to the old record's externally stored
+fields that the update doesn't replace. */
 
-    blob.unmark_dtuple_extern_fields(entry);
+  /* If we return from a lock wait, for example, we may have extern fields
+  marked as not-owned in entry (marked in the if-branch above). We must
+  unmark them. */
+  blob.unmark_dtuple_extern_fields(entry);
 
-    /* We must mark non-updated extern fields in entry as
-    inherited, so that a possible rollback will not free them. */
-
-    blob.mark_dtuple_inherited_extern(entry, upd_node->m_update);
-  }
+  /* We must mark non-updated extern fields in entry as inherited, so that
+  a rollback of the insert does not free them: the delete marked record
+  that the rollback restores still points to them. */
+  blob.mark_dtuple_inherited_extern(entry, upd_node->m_update);
 
   err = m_sys.m_row_ins->index_entry(index, entry, upd_node->m_upd_ext ? upd_node->m_upd_ext->n_ext : 0, true, thr);
 
@@ -1078,6 +1079,9 @@ DbErr RowUpdate::clust_rec(UpdNode *upd_node, const Index *index, QueThr *thr, M
 
     ulint *offsets{};
     std::array<ulint, REC_OFFS_NORMAL_SIZE> rec_offsets;
+
+    /* The size of the array: get_col_offsets() reads it (it was garbage). */
+    rec_offs_init(rec_offsets);
 
     {
       PhyRec record{index, rec};

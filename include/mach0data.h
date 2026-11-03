@@ -421,8 +421,10 @@ inline uint32_t mach_uint32_read_compressed(const byte *&b) {
   uint64_t high{};
 
   if (*b == byte(0xFF)) {
-    high = uint64_t(mach_read_compressed(b + 1)) << 32;
-    size = 1 + mach_get_compressed_size(high);
+    const auto hi = mach_read_compressed(b + 1);
+
+    high = uint64_t(hi) << 32;
+    size = 1 + mach_get_compressed_size(hi);
   }
 
   return high | mach_read_compressed(b + size);
@@ -608,35 +610,42 @@ inline void mach_swap_byte_order(void *dest, const byte *from, ulint len) {
   }
 }
 
+/* The integer columns are stored big-endian with the sign bit of a signed
+value flipped: memcmp() of the stored bytes then orders the values, negative
+values first. An unsigned value is stored as it is. */
+
 /** Convert integral type from storage byte order (big-endian) to
 host byte order.
 @param[in,out] dst              Pointer where you want to write.
 @param[in,out] src              Pointer where to yout to read from.
 @param[in] len                  Length of the source pointer (b)
-@param[in] usign                Signed or unsigned flag.
+@param[in] usign                true if the type is unsigned.
 @return	value in host byte order */
 inline void mach_read_int_type(void *dst, const byte *src, ulint len, bool usign) {
 #ifdef WORDS_BIGENDIAN
 
   memcpy(dst, src, len);
 
+  if (!usign) {
+    *reinterpret_cast<byte *>(dst) ^= 0x80;
+  }
+
 #else  /* WORDS_BIGENDIAN */
 
   mach_swap_byte_order(dst, src, len);
 
-  if (usign) {
-
+  if (!usign) {
     *(reinterpret_cast<byte *>(dst) + len - 1) ^= 0x80;
   }
 #endif /* WORDS_BIGENDIAN */
 }
 
-/** Convert integral type from host byte order (big-endian) storage
-byte order.
+/** Convert integral type from host byte order to storage byte order
+(big-endian).
 @param[in,out] dst              Pointer where you want to write.
 @param[in,out] src              Pointer where to yout to read from.
 @param[in] len                  Length of the source pointer (b)
-@param[in] usign                Signed or unsigned flag. */
+@param[in] usign                true if the type is unsigned. */
 inline void mach_write_int_type(byte *dest, const byte *src, ulint len, bool usign) {
 #ifdef WORDS_BIGENDIAN
 
@@ -646,11 +655,11 @@ inline void mach_write_int_type(byte *dest, const byte *src, ulint len, bool usi
 
   mach_swap_byte_order(dest, src, len);
 
-  if (usign) {
+#endif /* WORDS_BIGENDIAN */
 
+  if (!usign) {
     *dest ^= 0x80;
   }
-#endif /* WORDS_BIGENDIAN */
 }
 
 /** Convert a 64 bit big endian unsigned integral type to the host

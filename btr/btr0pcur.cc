@@ -149,6 +149,8 @@ bool BtreePcursor::restore_position(System &sys, ulint latch_mode, Mtr *mtr, Sou
       nullptr, m_rel_pos == BtreeCursorPos::BEFORE_FIRST_IN_TREE, index, latch_mode, m_read_level, mtr, loc
     );
 
+    m_latch_mode = latch_mode;
+    m_pos_state = BtrPcurPositioned::IS_POSITIONED;
     m_block_when_stored = get_block();
 
     return false;
@@ -172,6 +174,7 @@ bool BtreePcursor::restore_position(System &sys, ulint latch_mode, Mtr *mtr, Sou
 
     if (likely(sys.m_buf_pool->try_get(req))) {
       m_pos_state = BtrPcurPositioned::IS_POSITIONED;
+      m_latch_mode = latch_mode;
 
       buf_block_dbg_add_level();
 
@@ -297,7 +300,7 @@ void BtreePcursor::move_to_next_page(System &sys, Mtr *mtr) noexcept {
   ut_a(sys.m_btree->page_get_prev(next_page, mtr) == get_block()->get_page_no());
 #endif /* UNIV_BTR_DEBUG */
 
-  next_block->m_check_index_page_at_flush = true;
+  next_block->set_check_index_page_at_flush();
 
   sys.m_btree->leaf_page_release(get_block(), m_latch_mode, mtr);
 

@@ -24,6 +24,8 @@ Created 3/26/1996 Heikki Tuuri
 
 #pragma once
 
+#include <mutex>
+
 #include "srv0sys.h"
 
 #include "fil0fil.h"
@@ -256,6 +258,9 @@ struct PurgeSys {
 
   /** Mutex protecting the fields below */
   mutable Mutex m_mutex{};
+
+  /** Serializes run(): the master thread and any other caller. */
+  std::mutex m_run_mutex;
 
   /** Approximate number of undo log pages processed in purge */
   ulint m_n_pages_handled{};

@@ -28,6 +28,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 #include <unistd.h>
 
 #include <array>
+#include <condition_variable>
 #include <filesystem>
 #include <iostream>
 #include <mutex>
@@ -71,6 +72,12 @@ struct LogWalBackend::Impl {
 
   /** Serializes flush(), which writes all buffered log and moves the flushed and synced LSNs. */
   std::mutex m_flush_mutex;
+
+  /** Signalled when a flush ends: the waiters it covered return. */
+  std::condition_variable m_flush_cv;
+
+  /** A thread is writing and syncing, protected by m_flush_mutex. */
+  bool m_flushing{};
 
   /** Serializes appends with the write of the active buffer. Order: m_flush_mutex, then this. */
   std::mutex m_append_mutex;
@@ -124,6 +131,22 @@ bool LogWalBackend::open() noexcept {
     return false;
   }
 
+  /* The log continues at m_lsn, a block boundary. What the file holds from
+  there on is log of an earlier run that recovery did not use: an incomplete
+  record group, or blocks after a torn one. Drop it, or a later recovery
+  would read it as the continuation of this run's log. */
+  if (m_config.m_max_file_size == 0) {
+    const wal::Buffer::Config buffer_config(m_config.m_n_blocks, m_config.m_block_size);
+    const auto off = off_t(m_lsn.load() / buffer_config.get_data_size_in_block() * m_config.m_block_size);
+    struct stat st {};
+
+    if (::fstat(m_impl->m_file->m_fd, &st) == 0 && st.st_size > off &&
+        (::ftruncate(m_impl->m_file->m_fd, off) != 0 || ::fsync(m_impl->m_file->m_fd) != 0)) {
+      log_err(std::format("Cannot truncate the WAL file {} at {}: {}", path.string(), off, strerror(errno)));
+      return false;
+    }
+  }
+
   return true;
 }
 
@@ -173,11 +196,31 @@ bool LogWalBackend::flush(lsn_t lsn, bool sync_to_disk) noexcept {
     return false;
   }
 
-  std::lock_guard<std::mutex> guard(m_impl->m_flush_mutex);
+  auto done = [&] { return (sync_to_disk ? m_synced_lsn.load() : m_flushed_lsn.load()) >= std::min(lsn, m_lsn.load()); };
 
-  if ((sync_to_disk ? m_synced_lsn.load() : m_flushed_lsn.load()) >= std::min(lsn, m_lsn.load())) {
+  std::unique_lock<std::mutex> guard(m_impl->m_flush_mutex);
+
+  /* Wait for the flush in progress: it may cover this one (group commit). */
+  m_impl->m_flush_cv.wait(guard, [&] { return done() || !m_impl->m_flushing; });
+
+  if (done()) {
     return true;
   }
+
+  m_impl->m_flushing = true;
+  guard.unlock();
+
+  /* Let the next flusher in, and the waiters this flush covered out. */
+  struct End {
+    Impl &m_impl;
+    ~End() {
+      {
+        std::lock_guard<std::mutex> lock(m_impl.m_flush_mutex);
+        m_impl.m_flushing = false;
+      }
+      m_impl.m_flush_cv.notify_all();
+    }
+  } end{*m_impl};
 
   auto write_cb = [this](std::span<struct iovec> iovecs) -> wal::Result<lsn_t> {
     return m_impl->write(iovecs);
@@ -249,7 +292,9 @@ lsn_t LogWalBackend::read(const Config &config, lsn_t start_lsn, const Consumer 
 
   /* On disk a block is its header, its data area and the CRC32C of the data
   area. Block n is at n * block_size, modulo the file size if the log wraps.
-  The header is in host byte order. */
+  The header is in network byte order: block number (with the flush bit),
+  checkpoint number, first record group, data length. The CRC is in host
+  byte order. */
   const wal::Buffer::Config buffer_config(config.m_n_blocks, config.m_block_size);
   const auto data_size = lsn_t(buffer_config.get_data_size_in_block());
   const auto header_size = sizeof(wal::Block_header::Data);
@@ -272,16 +317,14 @@ lsn_t LogWalBackend::read(const Config &config, lsn_t start_lsn, const Consumer 
       break;
     }
 
-    wal::Block_header::Data header;
-
-    memcpy(&header, block.data(), header_size);
+    const auto header_block_no = wal::block_no_t(mach_read_from_4(block.data()));
 
     /* A block of an earlier lap through the file, or one never written. */
-    if ((header.m_block_no & BLOCK_NO_MASK) != (wal::block_no_t(block_no) & BLOCK_NO_MASK)) {
+    if ((header_block_no & BLOCK_NO_MASK) != (wal::block_no_t(block_no) & BLOCK_NO_MASK)) {
       break;
     }
 
-    const auto len = lsn_t(header.m_len);
+    const auto len = lsn_t(mach_read_from_2(block.data() + offsetof(wal::Block_header::Data, m_len)));
 
     if (len > data_size || len < offset) {
       break;

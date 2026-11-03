@@ -1146,7 +1146,7 @@ inline ulint RecOffs::nth_size(ulint n) const noexcept {
   if (n == 0) {
     return rec_offs_base(m_offs)[n + 1] & REC_OFFS_MASK;
   } else {
-    return rec_offs_base(m_offs)[n + 1] - (rec_offs_base(m_offs)[n] & REC_OFFS_MASK);
+    return (rec_offs_base(m_offs)[n + 1] & REC_OFFS_MASK) - (rec_offs_base(m_offs)[n] & REC_OFFS_MASK);
   }
 }
 

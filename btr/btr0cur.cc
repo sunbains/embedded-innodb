@@ -85,7 +85,7 @@ void BtreeCursor::latch_leaves(System &sys, page_t *page, space_id_t space, page
     case BTR_MODIFY_LEAF:
       mode = latch_mode == BTR_SEARCH_LEAF ? RW_S_LATCH : RW_X_LATCH;
       block = sys.m_btree->block_get(space, page_no, mode, mtr);
-      block->m_check_index_page_at_flush = true;
+      block->set_check_index_page_at_flush();
       return;
 
     case BTR_MODIFY_TREE:
@@ -97,11 +97,11 @@ void BtreeCursor::latch_leaves(System &sys, page_t *page, space_id_t space, page
 #ifdef UNIV_BTR_DEBUG
         ut_a(Btree::page_get_next(block->get_frame(), mtr) == page_get_page_no(page));
 #endif /* UNIV_BTR_DEBUG */
-        block->m_check_index_page_at_flush = true;
+        block->set_check_index_page_at_flush();
       }
 
       block = sys.m_btree->block_get(space, page_no, RW_X_LATCH, mtr);
-      block->m_check_index_page_at_flush = true;
+      block->set_check_index_page_at_flush();
 
       right_page_no = Btree::page_get_next(page, mtr);
 
@@ -110,7 +110,7 @@ void BtreeCursor::latch_leaves(System &sys, page_t *page, space_id_t space, page
 #ifdef UNIV_BTR_DEBUG
         ut_a(Btree::page_get_prev(block->get_frame(), mtr) == page_get_page_no(page));
 #endif /* UNIV_BTR_DEBUG */
-        block->m_check_index_page_at_flush = true;
+        block->set_check_index_page_at_flush();
       }
 
       return;
@@ -127,11 +127,11 @@ void BtreeCursor::latch_leaves(System &sys, page_t *page, space_id_t space, page
 #ifdef UNIV_BTR_DEBUG
         ut_a(Btree::page_get_next(m_left_block->get_frame(), mtr) == page_get_page_no(page));
 #endif /* UNIV_BTR_DEBUG */
-        m_left_block->m_check_index_page_at_flush = true;
+        m_left_block->set_check_index_page_at_flush();
       }
 
       block = sys.m_btree->block_get(space, page_no, mode, mtr);
-      block->m_check_index_page_at_flush = true;
+      block->set_check_index_page_at_flush();
       return;
   }
 
@@ -267,7 +267,7 @@ void BtreeCursor::search_to_nth_level(System &sys,
 
     page = block->get_frame();
 
-    block->m_check_index_page_at_flush = true;
+    block->set_check_index_page_at_flush();
 
     if (rw_latch != RW_NO_LATCH) {
 
@@ -403,7 +403,7 @@ void BtreeCursor::open_at_index_side(System &sys,
 
     ut_ad(index->m_id == sys.m_btree->page_get_index_id(page));
 
-    block->m_check_index_page_at_flush = true;
+    block->set_check_index_page_at_flush();
 
     if (height == ULINT_UNDEFINED) {
       /* We are in the root node */
@@ -1400,6 +1400,11 @@ DbErr BtreeCursor::pessimistic_update(System &sys,
       blob.unmark_extern_fields(rec, index, offsets, mtr);
     }
 
+    /* The record was deleted and inserted again: the page may be too empty now. */
+    if (compress_recommendation(mtr)) {
+      (void)sys.m_btree->compress(this, mtr);
+    }
+
     err = DB_SUCCESS;
     goto return_after_reservations;
   } else {
@@ -1743,7 +1748,7 @@ DbErr BtreeCursor::pessimistic_delete(System &sys, bool has_reserved_extents, Tr
     auto success = sys.m_fsp->reserve_free_extents(&n_reserved, index->get_space_id(), n_extents, FSP_CLEANING, mtr);
 
     if (!success) {
-      err = DB_OUT_OF_FILE_SPACE;
+      return DB_OUT_OF_FILE_SPACE;
     }
   }
 
@@ -1810,6 +1815,11 @@ DbErr BtreeCursor::pessimistic_delete(System &sys, bool has_reserved_extents, Tr
     ut_ad(sys.m_btree->check_node_ptr(index, block, mtr));
 
     err = DB_SUCCESS;
+
+    /* Merge the page with a neighbour if it became too empty. */
+    if (compress_recommendation(mtr)) {
+      (void)sys.m_btree->compress(this, mtr);
+    }
   }
 
   mem_heap_free(heap);

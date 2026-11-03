@@ -6,6 +6,7 @@ Copyright (c) 2024 Sunny Bains. All rights reserved.
 Created 12 Oct 2008.
 *******************************************************/
 
+#include <vector>
 #include "ddl0ddl.h"
 #include "row0misc.h"
 #include "btr0pcur.h"
@@ -975,8 +976,6 @@ DbErr Ddl::rename_table(const char *old_name, const char *new_name, Trx *trx) no
       "        END IF;\n"
       "        UPDATE SYS_FOREIGN SET ID = new_foreign_id WHERE ID = foreign_id;\n"
       "        UPDATE SYS_FOREIGN_COLS SET ID = new_foreign_id WHERE ID = foreign_id;\n"
-      "          SET ID = new_foreign_id\n"
-      "          WHERE ID = foreign_id;\n"
       "      END IF;\n"
       "    END IF;\n"
       "  END LOOP;\n"
@@ -1180,10 +1179,11 @@ DbErr Ddl::drop_database(const char *name, Trx *trx) noexcept {
 
   DbErr err{DB_SUCCESS};
 
-  char *table_name;
-
-  do {
+  for (;;) {
     m_sys.m_dict->lock_data_dictionary(trx);
+
+    char *table_name{};
+    bool retry{};
 
     while ((table_name = m_sys.m_dict->m_loader.get_first_table_name_in_db(name)) != nullptr) {
       ut_a(memcmp(table_name, name, namelen) == 0);
@@ -1191,45 +1191,47 @@ DbErr Ddl::drop_database(const char *name, Trx *trx) noexcept {
       auto table = m_sys.m_dict->table_get(table_name);
 
       /* Wait until the user does not have any queries running on the table */
-
       if (table->m_n_handles_opened > 0) {
         m_sys.m_dict->unlock_data_dictionary(trx);
 
         log_warn("The client is trying to drop database ", name, " though there are still open handles to table ", table_name);
 
-        os_thread_sleep(1000000);
-
         mem_free(table_name);
 
+        os_thread_sleep(1000000);
+
+        retry = true;
         break;
-
-      } else {
-
-        auto err = drop_table(table_name, trx, true);
-
-        if (err != DB_SUCCESS) {
-          log_err("DROP DATABASE ", name, " failed with error ", err, " for table ", table_name);
-          mem_free(table_name);
-          table_name = nullptr;
-        } else {
-          mem_free(table_name);
-          table_name = nullptr;
-
-          /* After dropping all tables try to drop all leftover foreign keys in case orphaned ones exist */
-          err = drop_all_foreign_keys_in_db(name, trx);
-
-          if (err != DB_SUCCESS) {
-            log_err("DROP DATABASE ", name, " failed with error ", err, " while dropping all foreign keys");
-          }
-        }
       }
 
-      break;
+      err = drop_table(table_name, trx, true);
+
+      if (err != DB_SUCCESS) {
+        log_err("DROP DATABASE ", name, " failed with error ", err, " for table ", table_name);
+        mem_free(table_name);
+        break;
+      }
+
+      mem_free(table_name);
     }
 
-  } while (table_name != nullptr);
+    if (retry) {
+      continue;
+    }
 
-  m_sys.m_dict->unlock_data_dictionary(trx);
+    if (err == DB_SUCCESS) {
+      /* After dropping all tables try to drop all leftover foreign keys in case orphaned ones exist */
+      err = drop_all_foreign_keys_in_db(name, trx);
+
+      if (err != DB_SUCCESS) {
+        log_err("DROP DATABASE ", name, " failed with error ", err, " while dropping all foreign keys");
+      }
+    }
+
+    m_sys.m_dict->unlock_data_dictionary(trx);
+
+    break;
+  }
 
   trx->m_op_info = "";
   return err;
@@ -1252,7 +1254,8 @@ void Ddl::drop_all_temp_indexes(IbRecovery recovery) noexcept {
 
   mtr.start();
 
-  auto sys_clustered_index = m_sys.m_dict->m_sys_tables->get_clustered_index();
+  /* The records of SYS_INDEXES: (TABLE_ID, ID, ..., NAME, ...). */
+  auto sys_clustered_index = m_sys.m_dict->m_sys_indexes->get_clustered_index();
 
   pcur.open_at_index_side(m_sys, true, sys_clustered_index, BTR_SEARCH_LEAF, true, 0, &mtr);
 
@@ -1270,7 +1273,7 @@ void Ddl::drop_all_temp_indexes(IbRecovery recovery) noexcept {
     {
       const auto field = rec.get_nth_field(offsets, DICT_SYS_INDEXES_NAME_FIELD, &len);
 
-      if (len == UNIV_SQL_NULL || len == 0 || mach_read_from_1(field) != (ulint)TEMP_INDEX_PREFIX) {
+      if (len == UNIV_SQL_NULL || len == 0 || mach_read_from_1(field) != byte(TEMP_INDEX_PREFIX)) {
         continue;
       }
     }
@@ -1297,15 +1300,21 @@ void Ddl::drop_all_temp_indexes(IbRecovery recovery) noexcept {
     auto table = m_sys.m_dict->m_loader.load_table_on_id(recovery, table_id);
 
     if (table != nullptr) {
+      std::vector<Index *> temp_indexes;
 
       for (auto index : table->m_indexes) {
         if (*index->m_name == TEMP_INDEX_PREFIX) {
-          if (auto err = drop_index(table, index, trx); err != DB_SUCCESS) {
-            log_warn("DROP DATABASE failed with error ", err, " while dropping temporaryindex ", index->m_name);
-          }
-          auto err_commit = trx->commit(m_sys);
-          ut_a(err_commit == DB_SUCCESS);
+          temp_indexes.push_back(index);
         }
+      }
+
+      for (auto index : temp_indexes) {
+        if (auto err = drop_index(table, index, trx); err != DB_SUCCESS) {
+          log_warn("Dropping the temporary index ", index->m_name, " failed with error ", err);
+        }
+
+        auto err_commit = trx->commit(m_sys);
+        ut_a(err_commit == DB_SUCCESS);
       }
     }
 
@@ -1317,6 +1326,8 @@ void Ddl::drop_all_temp_indexes(IbRecovery recovery) noexcept {
   pcur.close();
 
   mtr.commit(m_sys);
+
+  mem_heap_free(heap);
 
   m_sys.m_dict->unlock_data_dictionary(trx);
 

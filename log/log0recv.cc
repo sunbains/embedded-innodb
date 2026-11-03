@@ -169,8 +169,8 @@ void RecvSys::reset() noexcept {
 
 void RecvSys::close() noexcept {
   mutex_enter(&m_mutex);
-  cleanup_resources();
   clear_log_records();
+  cleanup_resources();
   mutex_exit(&m_mutex);
 }
 
@@ -250,6 +250,7 @@ byte *recv_parse_or_apply_log_rec_body(System &sys, MlogType type, byte *ptr, by
       if ((ptr = mlog_parse_index(ptr, end_ptr, index)) != nullptr) {
         ptr = BtreeCursor::parse_del_mark_set_clust_rec(sys, ptr, end_ptr, page, index);
       }
+      break;
     case MLOG_REC_SEC_DELETE_MARK:
       ut_ad(page == nullptr || page_type == FIL_PAGE_TYPE_INDEX);
       ptr = BtreeCursor::parse_del_mark_set_sec_rec(ptr, end_ptr, page);
@@ -834,17 +835,22 @@ static void recv_report_corrupt_log(System &sys, byte *ptr, byte type, space_id_
     sys.m_recv->m_previous_parsed_rec_offset
   ));
 
-  if (ulint(ptr - sys.m_recv->m_buf + 100) > sys.m_recv->m_previous_parsed_rec_offset &&
-      ulint(ptr - sys.m_recv->m_buf + 100 - sys.m_recv->m_previous_parsed_rec_offset) < 200000) {
+  const ulint at = ptr - sys.m_recv->m_buf;
+  const ulint prev = sys.m_recv->m_previous_parsed_rec_offset;
+
+  if (at >= prev && at - prev < 200000) {
+    /* From 100 bytes before the previous record to 100 bytes after this one,
+    inside the parsing buffer. */
+    const ulint from = prev > 100 ? prev - 100 : 0;
+    const ulint to = std::min<ulint>(at + 100, sys.m_recv->m_len);
+
     log_err(
       "Hex dump of corrupt log starting 100 bytes before the start"
       " of the previous log rec, and ending 100 bytes after the start"
       " of the corrupt rec:"
     );
 
-    log_warn_buf(
-      sys.m_recv->m_buf + sys.m_recv->m_previous_parsed_rec_offset - 100, ptr - sys.m_recv->m_buf + 200 - sys.m_recv->m_previous_parsed_rec_offset
-    );
+    log_warn_buf(sys.m_recv->m_buf + from, to - from);
   }
 
   if (!sys.m_config.m_recv.m_force_recovery) {
@@ -917,6 +923,10 @@ bool recv_parse_log_recs(System &sys, bool store_to_hash) noexcept {
       }
 
 
+      sys.m_recv->m_previous_parsed_rec_type = type;
+      sys.m_recv->m_previous_parsed_rec_offset = sys.m_recv->m_recovered_offset;
+      sys.m_recv->m_previous_parsed_rec_is_multi = 0;
+
       sys.m_recv->m_recovered_offset += len;
       sys.m_recv->m_recovered_lsn = new_recovered_lsn;
 
@@ -951,6 +961,10 @@ bool recv_parse_log_recs(System &sys, bool store_to_hash) noexcept {
           return false;
         }
 
+
+        sys.m_recv->m_previous_parsed_rec_type = type;
+        sys.m_recv->m_previous_parsed_rec_offset = sys.m_recv->m_recovered_offset + total_len;
+        sys.m_recv->m_previous_parsed_rec_is_multi = 1;
 
         total_len += len;
 

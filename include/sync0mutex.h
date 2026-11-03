@@ -47,23 +47,23 @@ struct Mutex {
   uint32_t cline{};
 
   /** count of os_wait */
-  ulong count_os_wait{};
+  std::atomic<ulong> count_os_wait{};
 
 #ifdef UNIV_DEBUG
   /** The thread id of the thread which locked the mutex. */
-  os_thread_id_t thread_id{};
+  std::atomic<os_thread_id_t> thread_id{};
 
   /** count of times mutex used */
-  ulong count_using{};
+  std::atomic<ulong> count_using{};
 
   /** count of spin loops */
-  ulong count_spin_loop{};
+  std::atomic<ulong> count_spin_loop{};
 
   /** count of spin rounds */
-  ulong count_spin_rounds{};
+  std::atomic<ulong> count_spin_rounds{};
 
   /** count of os_wait */
-  ulong count_os_yield{};
+  std::atomic<ulong> count_os_yield{};
 
   /** mutex os_wait timer msec */
   uint64_t lspent_time{};

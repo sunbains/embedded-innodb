@@ -157,8 +157,6 @@ Trx *RowVers::impl_x_locked_off_trx_sys_mutex(const Rec rec, const Index *index,
       break;
     }
 
-    ulint *clust_offsets;
-
     {
       PhyRec record{clust_index, prev_version};
 
@@ -518,7 +516,7 @@ DbErr RowVers::build_for_semi_consistent_read(Row &row) noexcept {
       /* We assume that a rolled-back transaction stays in TRX_ACTIVE state until all the changes have been
       rolled back and the transaction is removed from the global list of transactions. */
 
-      if (row_get_rec_trx_id(version, row.m_cluster_index, row.m_cluster_offsets) == version_trx_id) {
+      if (row_get_rec_trx_id(row.m_cluster_rec, row.m_cluster_index, row.m_cluster_offsets) == version_trx_id) {
         /* The transaction was committed while we searched for earlier versions.  Return the current version
         as a semi-consistent read. */
 

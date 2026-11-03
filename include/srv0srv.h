@@ -39,6 +39,12 @@ Created 10/10/1995 Heikki Tuuri
 
 #pragma once
 
+#include <chrono>
+
+#include <mutex>
+
+#include <condition_variable>
+
 #include "innodb0types.h"
 #include "srv0sys.h"
 
@@ -47,6 +53,7 @@ Created 10/10/1995 Heikki Tuuri
 #include "que0types.h"
 #include "sync0sync.h"
 #include "trx0types.h"
+#include "ut0stat.h"
 
 #include <array>
 #include <vector>
@@ -283,38 +290,41 @@ struct SrvSlot {
   QueThr *m_thr{};
 };
 
-/** Counters, exported as status variables. */
+/** Counters, exported as status variables. Bumped by user and background
+threads without a common latch and read by the monitor threads: every field
+is a ut::Relaxed (relaxed atomic loads and stores; a lost count under
+contention is acceptable, as it was with the plain ++). */
 struct SrvStats {
   /** Amount of data read in total (in bytes) */
-  ulint m_data_read{};
+  ut::Relaxed<ulint> m_data_read{};
 
   /** Amount of data written in total (in bytes) */
-  ulint m_data_written{};
+  ut::Relaxed<ulint> m_data_written{};
 
   /** Times the doublewrite buffer was flushed */
-  ulint m_dblwr_writes{};
+  ut::Relaxed<ulint> m_dblwr_writes{};
 
   /** Number of pages that have been flushed to the doublewrite buffer */
-  ulint m_dblwr_pages_written{};
+  ut::Relaxed<ulint> m_dblwr_pages_written{};
 
   /** Times we had to wait for a free page in the buffer pool */
-  ulint m_buf_pool_wait_free{};
+  ut::Relaxed<ulint> m_buf_pool_wait_free{};
 
   /** Number of pages written from the buffer pool to disk */
-  ulint m_buf_pool_flushed{};
+  ut::Relaxed<ulint> m_buf_pool_flushed{};
 
   /** Number of buffer pool reads that led to the reading of a disk page */
-  ulint m_buf_pool_reads{};
+  ut::Relaxed<ulint> m_buf_pool_reads{};
 
-  ulint m_n_rows_inserted{};
-  ulint m_n_rows_updated{};
-  ulint m_n_rows_deleted{};
-  ulint m_n_rows_read{};
+  ut::Relaxed<ulint> m_n_rows_inserted{};
+  ut::Relaxed<ulint> m_n_rows_updated{};
+  ut::Relaxed<ulint> m_n_rows_deleted{};
+  ut::Relaxed<ulint> m_n_rows_read{};
 
-  ulint m_n_lock_wait_count{};
-  ulint m_n_lock_wait_current_count{};
-  int64_t m_n_lock_wait_time{};
-  ulint m_n_lock_max_wait_time{};
+  ut::Relaxed<ulint> m_n_lock_wait_count{};
+  ut::Relaxed<ulint> m_n_lock_wait_current_count{};
+  ut::Relaxed<int64_t> m_n_lock_wait_time{};
+  ut::Relaxed<ulint> m_n_lock_max_wait_time{};
 };
 
 /** The server: background threads (master, lock timeout, monitors), the
@@ -428,11 +438,48 @@ struct Srv {
   }
 
   /** At a shutdown this value climbs from SRV_SHUTDOWN_NONE to
-  SRV_SHUTDOWN_CLEANUP and then to SRV_SHUTDOWN_LAST_PHASE, and so on */
-  SrvShutdownState m_shutdown_state{SRV_SHUTDOWN_NONE};
+  SRV_SHUTDOWN_CLEANUP and then to SRV_SHUTDOWN_LAST_PHASE, and so on.
+  Polled by the background threads without any latch, so it must be an
+  atomic: as a plain field the compiler may hoist the load out of a polling
+  loop and the thread never sees the shutdown. Written with release (see
+  set_shutdown_state()) so that m_fast_shutdown, set before it, is visible
+  to a thread that sees the new state (seq_cst loads, rare). */
+  std::atomic<SrvShutdownState> m_shutdown_state{SRV_SHUTDOWN_NONE};
 
-  /** How much work System::shutdown() asked to do before stopping. */
-  ShutdownMode m_fast_shutdown{IB_SHUTDOWN_NORMAL};
+  /**
+   * Sleep for at most timeout; return early when shutdown starts.
+   *
+   * @param[in] timeout       The longest sleep.
+   */
+  void sleep_unless_shutdown(std::chrono::microseconds timeout) noexcept {
+    std::unique_lock lock(m_sleep_mutex);
+
+    (void)m_sleep_cv.wait_for(lock, timeout, [this] { return m_shutdown_state != SRV_SHUTDOWN_NONE; });
+  }
+
+  /**
+   * Set the shutdown state and wake the threads sleeping in sleep_unless_shutdown().
+   *
+   * @param[in] state         The new state.
+   */
+  void set_shutdown_state(SrvShutdownState state) noexcept {
+    {
+      std::lock_guard lock(m_sleep_mutex);
+      m_shutdown_state.store(state, std::memory_order_release);
+    }
+
+    m_sleep_cv.notify_all();
+  }
+
+  /** Protects the wait for a shutdown in sleep_unless_shutdown(). */
+  std::mutex m_sleep_mutex;
+
+  /** Notified when the shutdown state changes. */
+  std::condition_variable m_sleep_cv;
+
+  /** How much work System::shutdown() asked to do before stopping. Set by
+  System::shutdown() while the master thread runs and reads it: atomic. */
+  std::atomic<ShutdownMode> m_fast_shutdown{IB_SHUTDOWN_NORMAL};
 
   /** true if the server is being started */
   bool m_is_being_started{};
@@ -450,34 +497,43 @@ struct Srv {
   /** Log sequence number at shutdown */
   lsn_t m_shutdown_lsn{};
 
-  /** Incremented whenever there is some user activity in the server */
-  ulint m_activity_count{};
+  /** Incremented whenever there is some user activity in the server; the
+  master thread only compares it with an older value. Bumped by user threads
+  without a latch: relaxed (a lost increment can't hide activity, the other
+  increments still change it). */
+  ut::Relaxed<ulint> m_activity_count{};
 
-  /** Number of API row operations, the master thread is woken every few. */
-  ulint m_n_api_ops{};
-
+  /** Number of API row operations, the master thread is woken every few.
+  Relaxed, a lost increment only shifts the next wake up. */
+  ut::Relaxed<ulint> m_n_api_ops{};
 
   /** How much data manipulation language (DML) statements need to be
   delayed, in microseconds, in order to reduce the lagging of the purge
-  thread. */
-  ulint m_dml_needed_delay{};
+  thread. Written by the purge thread, read by user threads without a
+  latch: relaxed, published with a single store (see PurgeSys::run()). */
+  ut::Relaxed<ulint> m_dml_needed_delay{};
 
-  bool m_lock_timeout_active{};
-  bool m_monitor_active{};
-  bool m_error_monitor_active{};
+  /* Set by each monitor thread at start and exit, polled by
+  prepare_for_shutdown(): atomics (release on clear, so that the thread's
+  last writes are visible once the flag is seen clear). */
+  std::atomic<bool> m_lock_timeout_active{};
+  std::atomic<bool> m_monitor_active{};
+  std::atomic<bool> m_error_monitor_active{};
 
   bool m_print_innodb_monitor{};
   bool m_print_innodb_tablespace_monitor{};
   bool m_print_innodb_table_monitor{};
 
-  /** What the master thread is doing, for the monitor output. */
-  const char *m_main_thread_op_info{""};
+  /** What the master thread is doing, for the monitor output (read by the
+  monitor threads without a latch: relaxed, points to string literals). */
+  ut::Relaxed<const char *> m_main_thread_op_info{""};
 
   /** When this event is set the lock timeout and monitor threads run. */
   CondVar *m_lock_timeout_thread_event{};
 
-  /** Number of active threads by type, protected by the trx_sys mutex. */
-  std::array<ulint, SRV_MASTER + 1> m_n_threads_active{};
+  /** Number of active threads by type, written under the trx_sys mutex.
+  active_wake_master_thread() peeks at it without the mutex: relaxed. */
+  std::array<ut::Relaxed<ulint>, SRV_MASTER + 1> m_n_threads_active{};
 
   /** Threads used by parallel reads, across all ParallelReader instances. */
   std::atomic_size_t m_n_parallel_read_threads{};
@@ -553,7 +609,9 @@ struct Srv {
   Mutex m_innodb_monitor_mutex{};
   Mutex m_monitor_file_mutex{};
 
-  time_t m_last_monitor_time{};
+  /** Written by the monitor thread and refresh_innodb_monitor_stats(), read
+  by the error monitor thread: relaxed. */
+  ut::Relaxed<time_t> m_last_monitor_time{};
 
   /** Time of the last log flush by the master thread. */
   time_t m_last_log_flush_time{};
@@ -561,13 +619,14 @@ struct Srv {
   ulint m_main_thread_process_no{};
   ulint m_main_thread_id{};
 
-  /* The following count work done by the master thread. */
-  ulint m_main_1_second_loops{};
-  ulint m_main_sleeps{};
-  ulint m_main_10_second_loops{};
-  ulint m_main_background_loops{};
-  ulint m_main_flush_loops{};
-  ulint m_log_writes_and_flush{};
+  /* The following count work done by the master thread; the monitor
+  output reads them without a latch: relaxed. */
+  ut::Relaxed<ulint> m_main_1_second_loops{};
+  ut::Relaxed<ulint> m_main_sleeps{};
+  ut::Relaxed<ulint> m_main_10_second_loops{};
+  ut::Relaxed<ulint> m_main_background_loops{};
+  ut::Relaxed<ulint> m_main_flush_loops{};
+  ut::Relaxed<ulint> m_log_writes_and_flush{};
 
   /* Values at the last monitor output, for the per second averages. */
   ulint m_n_rows_inserted_old{};

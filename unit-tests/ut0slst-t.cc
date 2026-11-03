@@ -135,3 +135,149 @@ TEST_F(SingleListTest, Iterator) {
   }
   EXPECT_EQ(expected, 4);  // Verify we iterated over all elements
 }
+
+#include "ut0perf.h"
+
+#include <vector>
+
+namespace {
+
+/** @return the values of list, in order. */
+std::vector<int> values(SingleListTest::List &list) {
+  std::vector<int> v;
+
+  for (auto node : list) {
+    v.push_back(node->value);
+  }
+
+  return v;
+}
+
+}  // namespace
+
+/** Iterating an empty list visits nothing. */
+TEST_F(SingleListTest, IterateEmpty) {
+  EXPECT_EQ(list.begin(), list.end());
+  EXPECT_TRUE(values(list).empty());
+}
+
+/** One element is both the head and the tail, and its next is null. */
+TEST_F(SingleListTest, Single) {
+  nodes[0].m_node.m_next = &nodes[2];
+
+  list.push_back(&nodes[0]);
+
+  EXPECT_EQ(list.front(), list.back());
+  /* push_back() clears a stale next pointer. */
+  EXPECT_EQ(nodes[0].m_node.m_next, nullptr);
+  EXPECT_EQ(values(list), std::vector<int>{1});
+}
+
+/** push_front() and push_back() mixed keep the order and the tail. */
+TEST_F(SingleListTest, Mixed) {
+  list.push_back(&nodes[0]);
+  list.push_front(&nodes[1]);
+  list.push_back(&nodes[2]);
+
+  EXPECT_EQ(values(list), (std::vector<int>{2, 1, 3}));
+  EXPECT_EQ(list.back(), &nodes[2]);
+  EXPECT_EQ(nodes[2].m_node.m_next, nullptr);
+  EXPECT_EQ(list.size(), 3UL);
+}
+
+/** push_front() into an empty list sets the tail too: a push_back() after
+it links behind it. */
+TEST_F(SingleListTest, FrontThenBack) {
+  list.push_front(&nodes[0]);
+  list.push_back(&nodes[1]);
+
+  EXPECT_EQ(values(list), (std::vector<int>{1, 2}));
+}
+
+/** After clear() the nodes can go into the list again. */
+TEST_F(SingleListTest, ClearReuse) {
+  for (int round = 0; round < 3; ++round) {
+    for (auto &node : nodes) {
+      list.push_back(&node);
+    }
+
+    EXPECT_EQ(values(list), (std::vector<int>{1, 2, 3}));
+
+    list.clear();
+    EXPECT_TRUE(list.empty());
+    EXPECT_EQ(list.begin(), list.end());
+  }
+}
+
+/** A long list counts and orders all its elements. */
+TEST(SingleListLong, Order) {
+  std::vector<TestNode> v(10000);
+  SingleListTest::List list;
+
+  for (size_t i = 0; i < v.size(); ++i) {
+    v[i].value = int(i);
+
+    if (i % 2 == 0) {
+      list.push_back(&v[i]);
+    } else {
+      list.push_front(&v[i]);
+    }
+  }
+
+  EXPECT_EQ(list.size(), v.size());
+
+  /* Odd values descending, then even values ascending. */
+  std::vector<int> expected;
+
+  for (int i = int(v.size()) - 1; i >= 0; --i) {
+    if (i % 2 == 1) {
+      expected.push_back(i);
+    }
+  }
+
+  for (int i = 0; i < int(v.size()); i += 2) {
+    expected.push_back(i);
+  }
+
+  std::vector<int> got;
+
+  for (auto node : list) {
+    got.push_back(node->value);
+  }
+
+  EXPECT_EQ(got, expected);
+  EXPECT_EQ(list.back()->value, int(v.size()) - 2);
+}
+
+/** The const accessors. */
+TEST_F(SingleListTest, Const) {
+  list.push_back(&nodes[0]);
+  list.push_back(&nodes[1]);
+
+  const auto &c = list;
+
+  EXPECT_EQ(c.front()->value, 1);
+  EXPECT_EQ(c.back()->value, 2);
+  EXPECT_EQ(c.size(), 2UL);
+  EXPECT_FALSE(c.empty());
+}
+
+namespace {
+
+/** push_back and a full clear: the cost of building the dyn array block list. */
+TEST(SingleListPerf, PushBack) {
+  std::vector<TestNode> v(1024);
+  SingleListTest::List list;
+
+  auto r = ut::bench("push_back", 20000000, [&](uint64_t i) {
+    list.push_back(&v[i & 1023]);
+
+    if ((i & 1023) == 1023) {
+      list.clear();
+    }
+  });
+
+  EXPECT_LT(r.ns_per_op(), 500.0);
+}
+
+}  // namespace

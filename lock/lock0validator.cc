@@ -36,9 +36,6 @@ struct TableLockGetNode {
   static const UtListNode<Lock> &get_node(const Lock &lock) { return lock.m_table.m_locks; }
 };
 
-struct RecLockGetNode {
-  static const UtListNode<Lock> &get_node(const Lock &lock) { return lock.m_rec.m_rec_locks; }
-};
 
 /**
  * @brief Validate the transaction state.

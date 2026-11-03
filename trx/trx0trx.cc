@@ -164,7 +164,10 @@ bool Trx::start_low(System &sys, ulint rseg_id) noexcept {
 }
 
 void Trx::set_detailed_error(const char *msg) noexcept {
-  memcpy(m_detailed_error.data(), msg, m_detailed_error.size() - 1);
+  const auto len = std::min(strlen(msg), m_detailed_error.size() - 1);
+
+  memcpy(m_detailed_error.data(), msg, len);
+  m_detailed_error[len] = '\0';
 }
 
 bool Trx::start(System &sys, ulint rseg_id) noexcept {
@@ -773,6 +776,7 @@ DbErr Trx::commit(System &sys) noexcept {
   /* Because we do not do the commit by sending an Innobase
   sig to the transaction, we must here make sure that trx has been
   started. */
+  (void)start_if_not_started(sys);
 
   m_op_info = "committing";
 
@@ -889,7 +893,10 @@ ulint Trx::number_of_rows_locked() const noexcept {
 
 int Trx::weight_cmp(const Trx *lhs, const Trx *rhs) noexcept {
   /* We compare the number of altered/locked rows. */
-  return lhs->weight() - rhs->weight();
+  const auto l = lhs->weight();
+  const auto r = rhs->weight();
+
+  return l < r ? -1 : (l > r ? 1 : 0);
 }
 
 void Trx::prepare_for_commit(System &sys) noexcept {

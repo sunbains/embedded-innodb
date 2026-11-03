@@ -194,7 +194,7 @@ struct BufFlush {
    */
   void note_modification(BufBlock *block, Mtr *mtr) {
     ut_ad(block->get_state() == BUF_BLOCK_FILE_PAGE);
-    ut_ad(block->m_page.m_buf_fix_count > 0);
+    ut_ad(block->m_page.get_fix_count() > 0);
     ut_ad(mutex_own(&m_sys.m_buf_pool->m_mutex));
 
     ut_ad(mtr->m_start_lsn != 0);
@@ -226,7 +226,7 @@ struct BufFlush {
   void recv_note_modification(BufBlock *block, uint64_t start_lsn, uint64_t end_lsn) {
     ut_ad(block);
     ut_ad(block->get_state() == BUF_BLOCK_FILE_PAGE);
-    ut_ad(block->m_page.m_buf_fix_count > 0);
+    ut_ad(block->m_page.get_fix_count() > 0);
 
 
     m_sys.m_buf_pool->mutex_acquire();
@@ -272,11 +272,15 @@ struct BufFlush {
   dirty pages we have in the buffer pool but it is also a fucntion of
   how much redo the workload is generating and at what rate. */
   struct Stat {
+    /* Written by stat_update() (error monitor thread) and read by
+    get_desired_flush_rate() (master thread) with no common latch. A
+    heuristic, so relaxed accesses (ut::Relaxed) are enough. */
+
     /** Amount of redo generated. */
-    uint64_t m_redo{};
+    ut::Relaxed<uint64_t> m_redo{};
 
     /** Number of pages flushed. */
-    ulint m_n_flushed{};
+    ut::Relaxed<ulint> m_n_flushed{};
   };
 
  private:
@@ -403,8 +407,10 @@ struct BufFlush {
   Updated by buf_pool->m_flusher->stat_update(). Not protected by any mutex. */
   Stat m_stat_sum;
 
-  /** Number of pages flushed through non m_flush_list flushes. */
-  ulint m_LRU_flush_page_count{};
+  /** Number of pages flushed through non m_flush_list flushes. Bumped by
+  whichever thread ran the LRU batch, read by stat_update() and
+  get_desired_flush_rate(): relaxed (a statistic). */
+  ut::Relaxed<ulint> m_LRU_flush_page_count{};
 
   /* @} */
 };

@@ -196,7 +196,7 @@ ulint mutex_enter_nowait_func(Mutex *mutex ) {
 
   if (!mutex_test_and_set(mutex)) {
 
-    ut_d(mutex->thread_id = os_thread_get_curr_id());
+    ut_d(mutex->thread_id.store(os_thread_get_curr_id(), std::memory_order_relaxed));
     
 
     /* Succeeded! */
@@ -216,7 +216,7 @@ bool mutex_validate(const Mutex *mutex) {
 bool mutex_own(const Mutex *mutex) {
   ut_ad(mutex_validate(mutex));
 
-  return mutex_get_lock_word(mutex) == 1 && os_thread_eq(mutex->thread_id, os_thread_get_curr_id());
+  return mutex_get_lock_word(mutex) == 1 && os_thread_eq(mutex->thread_id.load(std::memory_order_relaxed), os_thread_get_curr_id());
 }
 #endif /* UNIV_DEBUG */
 
@@ -239,7 +239,7 @@ mutex_loop:
   a memory word. */
 
 spin_loop:
-  ut_d(mutex->count_spin_loop++);
+  ut_d(mutex->count_spin_loop.fetch_add(1, std::memory_order_relaxed));
 
   while (mutex_get_lock_word(mutex) != 0 && i < SYNC_SPIN_ROUNDS) {
     ut_delay(ut_rnd_interval(0, SYNC_SPIN_WAIT_DELAY));
@@ -248,16 +248,16 @@ spin_loop:
   }
 
   if (i == SYNC_SPIN_ROUNDS) {
-    ut_d(mutex->count_os_yield++);
+    ut_d(mutex->count_os_yield.fetch_add(1, std::memory_order_relaxed));
     os_thread_yield();
   }
 
-  ut_d(mutex->count_spin_rounds += i);
+  ut_d(mutex->count_spin_rounds.fetch_add(i, std::memory_order_relaxed));
 
   if (mutex_test_and_set(mutex) == 0) {
     /* Succeeded! */
 
-    ut_d(mutex->thread_id = os_thread_get_curr_id());
+    ut_d(mutex->thread_id.store(os_thread_get_curr_id(), std::memory_order_relaxed));
     ;
 
     goto finish_timing;
@@ -291,7 +291,7 @@ spin_loop:
     if (mutex_test_and_set(mutex) == 0) {
       /* Succeeded! Free the reserved wait cell */
 
-      ut_d(mutex->thread_id = os_thread_get_curr_id());
+      ut_d(mutex->thread_id.store(os_thread_get_curr_id(), std::memory_order_relaxed));
 
       
 
@@ -307,7 +307,7 @@ spin_loop:
   after the change in the wait array and the m_waiters field was made.
   Now there is no risk of infinite wait on the event. */
 
-  mutex->count_os_wait++;
+  mutex->count_os_wait.fetch_add(1, std::memory_order_relaxed);
 
   os_event_wait_low(mutex->event, sig_count);
   goto mutex_loop;

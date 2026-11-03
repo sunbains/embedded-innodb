@@ -170,6 +170,10 @@ inline ulint ut_rnd_interval(
 
   rnd = ut_rnd_gen_ulint();
 
+  if (high - low == ~ulint(0)) {
+    return rnd;
+  }
+
   return (low + (rnd % (high - low + 1)));
 }
 

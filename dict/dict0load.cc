@@ -248,6 +248,8 @@ DbErr DictLoad::open(bool in_crash_recovery) noexcept {
 
       m_sys.m_dict->mutex_release();
 
+      mem_heap_free(heap);
+
       return DB_SUCCESS;
 
     } else if (!rec.get_deleted_flag()) {
@@ -982,9 +984,7 @@ DbErr DictLoad::load_foreign(const char *id, bool check_charsets) noexcept {
   }
 
   /* Read the table names and the number of columns associated
-  with the constraint */
-
-  mem_heap_free(heap2);
+  with the constraint (offsets is in heap2: free it after). */
 
   auto foreign = Foreign::create();
   auto n_fields_and_type = mach_read_from_4(rec.get_nth_field(offsets, 5, &len).get());
@@ -1007,6 +1007,8 @@ DbErr DictLoad::load_foreign(const char *id, bool check_charsets) noexcept {
   pcur.close();
 
   mtr.commit(m_sys);
+
+  mem_heap_free(heap2);
 
   auto err = load_foreign_cols(id, foreign);
 
@@ -1046,9 +1048,15 @@ DbErr DictLoad::load_foreigns(const char *table_name, bool check_charsets) noexc
 
   Mtr mtr;
 
-  /* Get the secondary index based on FOR_NAME from table SYS_FOREIGN */
+  /* The secondary indexes of SYS_FOREIGN, on FOR_NAME and on REF_NAME: the
+  constraints of the table and the ones that reference it. (The clustered
+  index is on ID.) */
 
   for (auto sec_index : sys_foreign->m_indexes) {
+    if (sec_index->is_clustered()) {
+      continue;
+    }
+
     auto heap = mem_heap_create(256);
     auto tuple = dtuple_create(heap, 1);
     auto dfield = dtuple_get_nth_field(tuple, 0);
@@ -1061,10 +1069,9 @@ DbErr DictLoad::load_foreigns(const char *table_name, bool check_charsets) noexc
 
     pcur.open_on_user_rec(m_sys, sec_index, tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF, &mtr, Current_location());
 
-    for (auto rec = pcur.get_rec();; !pcur.is_on_user_rec(), (void)pcur.move_to_next_user_rec(m_sys, &mtr)) {
-
-      /* Now we have the record in the secondary index containing a table
-      name and a foreign constraint ID */
+    while (pcur.is_on_user_rec()) {
+      /* A record of the secondary index: a table name and a constraint ID. */
+      const auto rec = pcur.get_rec();
 
       PhyRec record(sec_index, rec);
       auto offsets = record.get_col_offsets(nullptr, sec_index->get_n_fields(), &heap, Current_location());
@@ -1080,6 +1087,7 @@ DbErr DictLoad::load_foreigns(const char *table_name, bool check_charsets) noexc
       does the comparison in the latin1_swedish_ci charset-collation, in a case-insensitive way. */
 
       if (cmp_data_data(nullptr, mtype, prtype, data, data_len, field, len) != 0) {
+        /* Past the table's records. */
         break;
       }
 
@@ -1089,7 +1097,8 @@ DbErr DictLoad::load_foreigns(const char *table_name, bool check_charsets) noexc
 
       /* FIXME: On Unix, allow table names that only differ in character case. */
 
-      if (memcmp(field.get(), table_name, len) != 0 || rec.get_deleted_flag()) {
+      if (len != data_len || memcmp(field.get(), table_name, len) != 0 || rec.get_deleted_flag()) {
+        (void)pcur.move_to_next_user_rec(m_sys, &mtr);
         continue;
       }
 
@@ -1116,6 +1125,7 @@ DbErr DictLoad::load_foreigns(const char *table_name, bool check_charsets) noexc
       mtr.start();
 
       (void)pcur.restore_position(m_sys, BTR_SEARCH_LEAF, &mtr, Current_location());
+      (void)pcur.move_to_next_user_rec(m_sys, &mtr);
     }
 
     mem_heap_free(heap);

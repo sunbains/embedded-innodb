@@ -15,12 +15,34 @@ limitations under the License.
 
 ***********************************************************************/
 
+#include <mutex>
 #include <errno.h>
 
 #include <array>
 #include <vector>
 
 #include <liburing.h>
+
+/* The slot of a request goes from the submitter to the reaper through the
+io_uring rings, written by the kernel: ThreadSanitizer can't see that
+synchronization, tell it. */
+#if defined(__SANITIZE_THREAD__)
+#define IB_TSAN 1
+#elif defined(__has_feature)
+#if __has_feature(thread_sanitizer)
+#define IB_TSAN 1
+#endif
+#endif
+
+#ifdef IB_TSAN
+extern "C" void __tsan_acquire(void *addr);
+extern "C" void __tsan_release(void *addr);
+#define tsan_acquire(p) __tsan_acquire(p)
+#define tsan_release(p) __tsan_release(p)
+#else
+#define tsan_acquire(p) ((void)(p))
+#define tsan_release(p) ((void)(p))
+#endif
 
 #include "fil0types.h"
 #include "os0aio.h"
@@ -277,6 +299,8 @@ struct Handler::Queue {
 
     m_shutdown.store(true);
 
+    std::lock_guard guard(m_submit_mutex);
+
     io_uring_sqe *sqe = io_uring_get_sqe(&m_iouring);
     ut_a(sqe != nullptr);
 
@@ -285,10 +309,12 @@ struct Handler::Queue {
     for (;;) {
       const auto ret = io_uring_submit(&m_iouring);
 
+      if (ret >= 1) {
+        m_stats.m_n_sqes.fetch_add(1, std::memory_order_relaxed);
+        return;
+      }
+
       switch (ret) {
-        case 1:
-          m_stats.m_n_sqes.fetch_add(1, std::memory_order_relaxed);
-          return;
         case -EINTR:
         case -EAGAIN:
           m_stats.m_sqe_eintrs.fetch_add(1, std::memory_order_relaxed);
@@ -310,6 +336,9 @@ struct Handler::Queue {
 
   /** Number of pending Aio slots. */
   std::atomic<ulint> m_pending_slots{};
+
+  /** Serializes the producers of the submission ring. */
+  std::mutex m_submit_mutex{};
 
   /** Parent handler. */
   Handler *m_handler{};
@@ -457,6 +486,10 @@ Handler::~Handler() noexcept {
   }
   m_queues.clear();
 
+  call_destructor(m_free_pool);
+  ut_delete(m_free_pool);
+  m_free_pool = nullptr;
+
   CondVar::destroy(m_not_full);
   CondVar::destroy(m_is_empty);
 }
@@ -533,25 +566,30 @@ void Handler::mark_as_free(Slot *slot) noexcept {
   auto success = m_free_pool->enqueue(slot);
   ut_a(success);
 
-  m_n_reserved.fetch_sub(1, std::memory_order_relaxed);
+  /* The waiters reset the events and check again before they wait (see
+  reserve_slot() and wait_for_pending_ops()): set them after the change. */
+  const auto n_reserved = m_n_reserved.fetch_sub(1, std::memory_order_acq_rel) - 1;
 
-  if (m_n_reserved.load() == m_slots.capacity() - 1) {
+  if (n_reserved == m_slots.capacity() - 1) {
     m_not_full->set();
   }
 
-  if (m_n_reserved.load() == 0) {
+  if (n_reserved == 0) {
     m_is_empty->set();
   }
 }
 
 Slot *Handler::Queue::reserve_slot(const IoCtx &io_ctx, void *ptr, uint32_t len, off_t off) noexcept {
   for (;;) {
-    if (m_handler->m_n_reserved.load(std::memory_order_relaxed) == m_handler->m_slots.capacity()) {
+    if (m_handler->m_n_reserved.load(std::memory_order_acquire) == m_handler->m_slots.capacity()) {
 
-      /* If the handler queues are suspended, wake them
-      so that we get more slots */
+      /* All slots are in use: wait for a free one. Reset, check again,
+      then wait for a set after the reset. */
+      const auto sig_count = m_handler->m_not_full->reset();
 
-      m_handler->m_not_full->wait(0);
+      if (m_handler->m_n_reserved.load(std::memory_order_acquire) == m_handler->m_slots.capacity()) {
+        m_handler->m_not_full->wait(sig_count);
+      }
 
     } else {
       Slot *slot = nullptr;
@@ -564,15 +602,7 @@ Slot *Handler::Queue::reserve_slot(const IoCtx &io_ctx, void *ptr, uint32_t len,
 
       auto io_ctx_copy = io_ctx;
 
-      m_handler->m_n_reserved.fetch_add(1, std::memory_order_relaxed);
-
-      if (m_handler->m_n_reserved.load() == 1) {
-        m_handler->m_is_empty->reset();
-      }
-
-      if (m_handler->m_n_reserved.load() == m_handler->m_slots.capacity()) {
-        m_handler->m_not_full->reset();
-      }
+      m_handler->m_n_reserved.fetch_add(1, std::memory_order_acq_rel);
 
       slot->m_len = 0;
       slot->m_off = off;
@@ -592,6 +622,8 @@ DbErr Handler::Queue::submit(Slot *slot) noexcept {
   ut_a(!m_shutdown.load(std::memory_order_acquire));
   ut_ad(m_handler->m_n_reserved.load(std::memory_order_acquire) > 0);
 
+  std::lock_guard guard(m_submit_mutex);
+
   auto sqe = io_uring_get_sqe(&m_iouring);
 
   if (sqe == nullptr) {
@@ -610,6 +642,9 @@ DbErr Handler::Queue::submit(Slot *slot) noexcept {
 
   io_uring_sqe_set_data64(sqe, uintptr_t(slot));
 
+  /* Pairs with the tsan_acquire() in reap(). */
+  tsan_release(slot);
+
   m_pending_slots.fetch_add(1, std::memory_order_relaxed);
 
   m_stats.m_n_sqes.fetch_add(1, std::memory_order_relaxed);
@@ -617,9 +652,11 @@ DbErr Handler::Queue::submit(Slot *slot) noexcept {
   for (;;) {
     const auto ret = io_uring_submit(&m_iouring);
 
+    if (ret >= 1) {
+      return DB_SUCCESS;
+    }
+
     switch (ret) {
-      case 1:
-        return DB_SUCCESS;
       case -EINTR:
       case -EAGAIN:
         m_stats.m_sqe_eintrs.fetch_add(1);
@@ -660,30 +697,54 @@ DbErr Handler::Queue::reap(IoCtx &io_ctx) noexcept {
     }
 
     auto slot = reinterpret_cast<Slot *>(io_uring_cqe_get_data64(cqe));
+    const auto res = cqe->res;
 
-    ut_a(cqe->res != -1);
+    tsan_acquire(slot);
+
+    /* Consumed: a resubmit below must not see this completion again. */
+    io_uring_cqe_seen(&m_iouring, cqe);
+
     ut_ad(slot->m_reserved);
-    ut_a(decltype(cqe->res)(slot->m_request.m_len) >= cqe->res);
 
-    slot->m_off += cqe->res;
-    slot->m_len += cqe->res;
-    slot->m_request.m_len -= cqe->res;
-    slot->m_request.m_ptr += cqe->res;
+    if (res < 0 || (res == 0 && slot->m_request.m_len > 0)) {
+      /* An error (-errno), or the end of the file before all of it was
+      transferred: complete with the error or what was done. */
+      slot->m_io_ctx.m_ret = res < 0 ? res : decltype(slot->m_io_ctx.m_ret)(slot->m_len);
 
-    m_stats.m_total.fetch_add(cqe->res, std::memory_order_relaxed);
+      ut_a(m_pending_slots.fetch_sub(1, std::memory_order_relaxed) > 0);
+
+      io_ctx = slot->m_io_ctx;
+
+      m_handler->mark_as_free(slot);
+
+      return DB_SUCCESS;
+    }
+
+    ut_a(decltype(res)(slot->m_request.m_len) >= res);
+
+    slot->m_off += res;
+    slot->m_len += res;
+    slot->m_request.m_len -= res;
+    slot->m_request.m_ptr += res;
+
+    m_stats.m_total.fetch_add(res, std::memory_order_relaxed);
 
     if (slot->m_request.m_len > 0) {
       m_stats.m_partial_ops.fetch_add(1, std::memory_order_relaxed);
       m_stats.m_partial_data.fetch_add(slot->m_request.m_len, std::memory_order_relaxed);
-      /* It was a partial read/write, try and read the remaining bytes. */
-      submit(slot);
+
+      /* It was a partial read/write: submit the rest, which counts it as
+      pending again. */
+      ut_a(m_pending_slots.fetch_sub(1, std::memory_order_relaxed) > 0);
+
+      if (submit(slot) != DB_SUCCESS) {
+        log_fatal("Cannot resubmit a partial i/o");
+      }
     } else {
-      slot->m_io_ctx.m_ret = cqe->res;
+      /* All of it: the total transferred. */
+      slot->m_io_ctx.m_ret = decltype(slot->m_io_ctx.m_ret)(slot->m_len);
 
-      auto n = m_pending_slots.fetch_sub(1, std::memory_order_relaxed);
-      ut_a(n > 0);
-
-      io_uring_cqe_seen(&m_iouring, cqe);
+      ut_a(m_pending_slots.fetch_sub(1, std::memory_order_relaxed) > 0);
 
       io_ctx = slot->m_io_ctx;
 
@@ -782,7 +843,16 @@ DbErr Impl::reap(ulint handler_id, IoCtx &io_ctx) noexcept {
 }
 
 void Impl::wait_for_pending_ops(ulint handler_id) noexcept {
-  m_handlers[handler_id]->m_is_empty->wait(0);
+  auto handler = m_handlers[handler_id];
+
+  /* Reset, check, then wait for a set after the reset: the last free sets it. */
+  while (handler->m_n_reserved.load(std::memory_order_acquire) > 0) {
+    const auto sig_count = handler->m_is_empty->reset();
+
+    if (handler->m_n_reserved.load(std::memory_order_acquire) > 0) {
+      handler->m_is_empty->wait(sig_count);
+    }
+  }
 }
 
 void Impl::shutdown() noexcept {

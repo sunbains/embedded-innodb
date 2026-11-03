@@ -903,7 +903,7 @@ ulint page_rec_get_n_recs_before(const Rec rec) {
 
     n += slot_rec.get_n_owned();
 
-    if (rec == slot_rec) {
+    if (current_rec == slot_rec) {
 
       break;
     }

@@ -37,6 +37,9 @@ Created 2018-01-27 by Sunny Bains */
 #include "row0pread.h"
 #include "row0row.h"
 #include "row0vers.h"
+#include "srv0sys.h"
+#include "row0sel.h"
+#include "lock0lock.h"
 #include "ut0logger.h"
 
 
@@ -432,9 +435,10 @@ bool ParallelReader::ScanCtx::check_visibility(System &sys, Rec &rec, RecOffs &o
           return false;
         }
       }
-    } else {
-      /* Secondary index scan not supported yet. */
-      ut_error;
+    } else if (m_trx->m_isolation_level > TRX_ISO_READ_UNCOMMITTED && !sys.m_lock_sys->sec_rec_cons_read_sees(rec, view)) {
+      /* A transaction the view doesn't see changed the page: the snapshot
+      decides through the clustered index, whatever the delete mark of rec. */
+      return sec_rec_visible(sys, rec, heap, mtr);
     }
   }
 
@@ -447,6 +451,68 @@ bool ParallelReader::ScanCtx::check_visibility(System &sys, Rec &rec, RecOffs &o
   ut_ad(m_trx == nullptr || m_trx->m_isolation_level == TRX_ISO_READ_UNCOMMITTED || !rec_offs_any_extern(offsets));
 
   return true;
+}
+
+bool ParallelReader::ScanCtx::sec_rec_visible(System &sys, const Rec rec, MemHeap *&heap, Mtr *mtr) {
+  auto sec_index = m_config.m_index;
+  auto clust_index = sec_index->m_table->get_clustered_index();
+  auto view = m_trx->m_read_view;
+
+  /* The row of rec in the clustered index: its primary key is in rec, whose
+  page stays latched in mtr while the reference is used. */
+  auto ref = row_build_row_ref(ROW_COPY_POINTERS, sec_index, rec, heap);
+
+  BtreePcursor pcur{};
+
+  pcur.open(sys, clust_index, ref, PAGE_CUR_LE, BTR_SEARCH_LEAF, mtr, Current_location());
+
+  Rec clust_rec = pcur.get_rec();
+
+  if (!page_rec_is_user_rec(clust_rec) || pcur.get_low_match() < clust_index->get_n_unique()) {
+    /* The row is gone (a rolled back insert, purge is removing rec): it
+    did not exist in the view. */
+    pcur.close();
+    return false;
+  }
+
+  RecOffs clust_offsets{};
+
+  {
+    PhyRec record{clust_index, clust_rec};
+
+    clust_offsets = record.get_all_col_offsets(nullptr, &heap, Current_location());
+  }
+
+  /* The version of the row in the snapshot. */
+  if (!sys.m_lock_sys->clust_rec_cons_read_sees(clust_rec, clust_index, clust_offsets, view)) {
+    Rec old_vers;
+
+    RowVers::Row row{
+      .m_cluster_rec = clust_rec,
+      .m_mtr = mtr,
+      .m_cluster_index = clust_index,
+      .m_cluster_offsets = clust_offsets,
+      .m_consistent_read_view = view,
+      .m_cluster_offset_heap = heap,
+      .m_old_row_heap = heap,
+      .m_old_rec = old_vers
+    };
+
+    const auto err = sys.m_row_vers->build_for_consistent_read(row);
+    ut_a(err == DB_SUCCESS);
+
+    clust_rec = old_vers;
+  }
+
+  /* rec is visible if the row existed in the snapshot, was not deleted there,
+  and its secondary index entry was rec: rec may be the entry of another
+  version of the row, before or after an update of the indexed columns. */
+  const auto visible =
+    !clust_rec.is_null() && !clust_rec.get_deleted_flag() && sys.m_row_sel->sec_rec_is_for_clust_rec(rec, sec_index, clust_rec, clust_index);
+
+  pcur.close();
+
+  return visible;
 }
 
 void ParallelReader::ScanCtx::copy_row(const Rec rec, Iter *iter) const {

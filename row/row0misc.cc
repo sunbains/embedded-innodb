@@ -17,6 +17,11 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 
 ************************************************************************/
+#include <sys/stat.h>
+#include <string>
+#include <format>
+#include <cstdlib>
+#include <fcntl.h>
 #include "ib0config.h"
 
 #include <errno.h>
@@ -35,13 +40,25 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include "trx0roll.h"
 
 
-int row_create_tempfile(const char *) {
-  int fh = -1;
-  auto file = tmpfile();
+int row_create_tempfile(const char *prefix) {
+  const char *dir = getenv("TMPDIR");
 
-  if (file != nullptr) {
-    fh = dup(fileno(file));
-    fclose(file);
+  if (dir == nullptr || *dir == '\0') {
+    dir = "/tmp";
+  }
+
+  /* An unnamed file, gone when closed. */
+  auto fh = open(dir, O_TMPFILE | O_RDWR | O_CLOEXEC, S_IRUSR | S_IWUSR);
+
+  if (fh == -1) {
+    /* The file system can't do O_TMPFILE: a named file, unlinked at once. */
+    auto path = std::format("{}/{}XXXXXX", dir, prefix != nullptr ? prefix : "ib");
+
+    fh = mkostemp(path.data(), O_CLOEXEC);
+
+    if (fh != -1) {
+      unlink(path.c_str());
+    }
   }
 
   return fh;

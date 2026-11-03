@@ -500,7 +500,7 @@ try_again:
     ulint namesake_id;
 
     log_warn(std::format(
-      "Trying to init to the tablespace memory cache a tablespace {} of name {}",
+      "Trying to init to the tablespace memory cache a tablespace {} of name {}"
       " but a tablespace {} of the same name already exists in the"
       " tablespace memory cache!",
       name,
@@ -2027,7 +2027,8 @@ bool Fil::extend_space_to_desired_size(page_no_t *actual_size, space_id_t space_
 
     IoCtx io_ctx = {.m_batch = false, .m_fil_node = node, .m_msg = nullptr, .m_io_request = io_request};
 
-    success = m_sys.m_aio->submit(std::move(io_ctx), buf, page_size * n_pages, off);
+    /* DbErr: DB_SUCCESS is not 0, the result is not a bool. */
+    success = m_sys.m_aio->submit(std::move(io_ctx), buf, page_size * n_pages, off) == DB_SUCCESS;
 
     if (success) {
       node->m_size_in_pages += n_pages;

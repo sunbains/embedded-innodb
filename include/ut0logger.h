@@ -29,7 +29,9 @@ extern int level;
 inline std::string now() noexcept {
   auto now = std::chrono::system_clock::now();
   auto time_t = std::chrono::system_clock::to_time_t(now);
-  std::tm local_time = *std::localtime(&time_t);
+  std::tm local_time{};
+
+  localtime_r(&time_t, &local_time);
 
   char buffer[64];
   std::strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", &local_time);
@@ -47,9 +49,7 @@ inline std::string func_name(const char *filename, int line) noexcept {
     --ptr;
   }
 
-  assert(ptr != filename && *ptr == '/');
-
-  std::string location{ptr + 1};
+  std::string location{*ptr == '/' ? ptr + 1 : ptr};
   location.push_back(':');
   location.append(std::format("{}", line));
 
@@ -162,7 +162,7 @@ std::ostream &write(std::string &&now, std::string &&func, const char *level, bo
 #define log_err(args...)                                                        \
   do {                                                                          \
     if (logger::level <= (int)logger::Error) {                                  \
-      logger::write(std::move(NOW), std::move(FUNC), "err", false, true, args); \
+      logger::write(std::move(NOW), std::move(FUNC), "err", true, true, args); \
     }                                                                           \
   } while (false)
 

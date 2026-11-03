@@ -86,19 +86,8 @@ void Blob::mark_extern_inherited_fields(Rec rec, Index *index, const RecOffs &of
   auto n = offsets.n_fields();
 
   for (ulint i = 0; i < n; i++) {
-    if (rec_offs_nth_extern(offsets, i)) {
-
-      /* Check it is not in updated fields */
-
-      if (update) {
-        for (ulint j = 0; j < RowUpdate::upd_get_n_fields(update); j++) {
-          if (update->get_nth_field(j)->m_field_no == i) {
-
-            continue;
-          }
-        }
-      }
-
+    /* A field the update replaces is not inherited: the record keeps it. */
+    if (rec_offs_nth_extern(offsets, i) && (update == nullptr || update->get_field(i) == nullptr)) {
       set_ownership_of_extern_field(rec, index, offsets, i, false, mtr);
     }
   }
@@ -108,17 +97,9 @@ void Blob::mark_dtuple_inherited_extern(DTuple *entry, const Upd *update) noexce
   for (ulint i = 0; i < dtuple_get_n_fields(entry); i++) {
     auto dfield = dtuple_get_nth_field(entry, i);
 
-    if (!dfield_is_ext(dfield)) {
+    /* A field the update replaces is not inherited. */
+    if (!dfield_is_ext(dfield) || update->get_field(i) != nullptr) {
       continue;
-    }
-
-    /* Check if it is in updated fields */
-
-    for (ulint j = 0; j < RowUpdate::upd_get_n_fields(update); j++) {
-      if (update->get_nth_field(j)->m_field_no == i) {
-
-        continue;
-      }
     }
 
     auto len = dfield_get_len(dfield);

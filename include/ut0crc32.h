@@ -27,12 +27,14 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
 #pragma once
 
-#if defined(__SSE4_2__)
+#if defined(__x86_64__)
 #include <nmmintrin.h>
 #include <wmmintrin.h>
 #endif
 
 #include <stdint.h>
+
+#include <array>
 
 #include "innodb0types.h"
 
@@ -65,7 +67,7 @@ constexpr uint32_t CRC32C_POLYNOMIAL = 0x1EDC6F41;
 using Checksum = std::function<uint32_t(const byte *, size_t)>;
 
 
-#if defined(__SSE4_2__)
+#if defined(__x86_64__)
 /** Executes cpuid assembly instruction and returns the ecx register's value.
  * 
  * @return ecx value produced by cpuid
@@ -456,7 +458,7 @@ static inline uint32_t calculate_with(uint32_t crc, const byte *data, size_t len
   /* For performance, the main loop will operate on uint64_t[].
   On some  platforms unaligned reads are not allowed, on others they are
   slower, so we start by consuming the unaligned prefix of the data. */
-  const size_t prefix_len = (8 - reinterpret_cast<uintptr_t>(data)) & 7;
+  const size_t prefix_len = std::min<size_t>((8 - reinterpret_cast<uintptr_t>(data)) & 7, len);
 
   /* data address may be unaligned, so we read just one byte if it's odd */
   consume_pow2<byte, algo_to_use>(crc, data, prefix_len);
@@ -530,8 +532,36 @@ __attribute__((target("sse4.2"), flatten)) static inline uint32_t unrolled_loop_
 
 #endif
 
+/** CRC-32C (polynomial 0x11EDC6F41) without CPU support, table driven.
+It gives the same values as the hardware implementations. */
+inline uint32_t software(const byte *data, size_t len) noexcept {
+  static constexpr auto table = [] {
+    std::array<uint32_t, 256> t{};
+
+    for (uint32_t i = 0; i < 256; ++i) {
+      uint32_t c = i;
+
+      for (int k = 0; k < 8; ++k) {
+        c = (c & 1) ? (c >> 1) ^ 0x82F63B78u : c >> 1;
+      }
+
+      t[i] = c;
+    }
+
+    return t;
+  }();
+
+  uint32_t crc = ~uint32_t{0};
+
+  for (size_t i = 0; i < len; ++i) {
+    crc = table[(crc ^ data[i]) & 0xFF] ^ (crc >> 8);
+  }
+
+  return ~crc;
+}
+
 static inline Checksum init() noexcept {  // Provide complete type for Checksum
-#if defined(__SSE4_2__)
+#if defined(__x86_64__)
   const auto cpu_enabled = can_use_crc32();
   const auto mul_cpu_enabled = can_use_poly_mul();
 
@@ -544,9 +574,7 @@ static inline Checksum init() noexcept {  // Provide complete type for Checksum
   }
 #endif
 
-  return [](const byte *, size_t) {
-    return NO_CHECKSUM;
-  };
+  return software;
 }
 
 /** The CRC32 implementation for this CPU, chosen once. */

@@ -277,7 +277,10 @@ inline void buf_block_set_file_page(BufBlock *block, const PageId &page_id) {
  * @return The io_fix state of the block.
  */
 inline auto buf_page_get_io_fix(const BufPage *bpage) {
-  const auto io_fix = static_cast<BufIoFix>(bpage->m_io_fix);
+  /* Relaxed load: mostly read under the block mutex, but some asserts
+  (BufBlock::get_frame()) and io_complete() read it without it. Writers
+  hold the block mutex and store relaxed (buf_page_set_io_fix()). */
+  const auto io_fix = static_cast<BufIoFix>(ut::stat_load(bpage->m_io_fix));
 
 #ifdef UNIV_DEBUG
   switch (io_fix) {
@@ -312,7 +315,7 @@ inline void buf_page_set_io_fix(BufPage *bpage, BufIoFix io_fix) {
   // ut_ad(mutex_own(&m_mutex));
   ut_ad(mutex_own(buf_page_get_mutex(bpage)));
 
-  bpage->m_io_fix = io_fix;
+  ut::stat_store(bpage->m_io_fix, io_fix);
   ut_ad(buf_page_get_io_fix(bpage) == io_fix);
 }
 
@@ -339,7 +342,7 @@ inline bool buf_page_can_relocate(const BufPage *bpage) {
   ut_ad(bpage->in_file());
   ut_ad(bpage->m_in_LRU_list);
 
-  return buf_page_get_io_fix(bpage) == BUF_IO_NONE && bpage->m_buf_fix_count == 0;
+  return buf_page_get_io_fix(bpage) == BUF_IO_NONE && bpage->get_fix_count() == 0;
 }
 
 /**
@@ -350,9 +353,10 @@ inline bool buf_page_can_relocate(const BufPage *bpage) {
  */
 inline bool buf_page_is_old(const BufPage *bpage) {
   ut_ad(bpage->in_file());
-  // ut_ad(mutex_own(&m_mutex));
 
-  return bpage->m_old;
+  /* Read without the buf_pool mutex by the LRU heuristics
+  (BufPool::peek_if_too_old()): relaxed. */
+  return ut::stat_load(bpage->m_old);
 }
 
 /**
@@ -366,7 +370,7 @@ inline void buf_page_set(BufPage *bpage, bool old) {
   // ut_ad(mutex_own(&m_mutex));
   ut_ad(bpage->m_in_LRU_list);
 
-  bpage->m_old = old;
+  ut::stat_store(bpage->m_old, old);
 }
 
 /**
@@ -378,7 +382,8 @@ inline void buf_page_set(BufPage *bpage, bool old) {
 inline unsigned buf_page_is_accessed(const BufPage *bpage) {
   ut_ad(bpage->in_file());
 
-  return bpage->m_access_time;
+  /* A dirty read on purpose (see BufPool::try_get_known_nowait()): relaxed. */
+  return ut::stat_load(bpage->m_access_time);
 }
 
 /**
@@ -391,9 +396,9 @@ inline void buf_page_set_accessed(BufPage *bpage, ulint time_ms) {
   ut_a(bpage->in_file());
   // ut_ad(mutex_own(&m_mutex));
 
-  if (!bpage->m_access_time) {
+  if (ut::stat_load(bpage->m_access_time) == 0) {
     /* Make this the time of the first access. */
-    bpage->m_access_time = time_ms;
+    ut::stat_store(bpage->m_access_time, uint32_t(time_ms));
   }
 }
 
@@ -518,15 +523,19 @@ inline void buf_block_buf_fix_inc_func( BufBlock *block) {
 
   ut_ad(mutex_own(&block->m_mutex));
 
-  ++block->m_page.m_buf_fix_count;
+  /* Serialized by the block mutex; relaxed load + store (no lock prefix)
+  because asserts read the count without the mutex. */
+  ut::stat_add_serial(block->m_page.m_buf_fix_count, 1U);
 }
 
 #define buf_block_buf_fix_inc(b, f, l) buf_block_buf_fix_inc_func( b)
 
 inline void BufBlock::fix_dec() {
   ut_ad(mutex_own(&m_mutex));
+  ut_ad(m_page.m_buf_fix_count > 0);
 
-  --m_page.m_buf_fix_count;
+  /* See buf_block_buf_fix_inc_func(). */
+  ut::stat_add_serial(m_page.m_buf_fix_count, uint32_t(-1));
 
   ;
 }
@@ -585,7 +594,8 @@ inline buf_frame_t *BufBlock::get_frame() const {
       ut_error;
       break;
     case BUF_BLOCK_FILE_PAGE:
-      ut_a(m_page.m_buf_fix_count > 0 || buf_block_get_io_fix(this) == BUF_IO_READ);
+      /* Unlatched: the caller's own buffer fix keeps this true. */
+      ut_a(m_page.get_fix_count() > 0 || buf_block_get_io_fix(this) == BUF_IO_READ);
       /* fall through */
     case BUF_BLOCK_MEMORY:
     case BUF_BLOCK_REMOVE_HASH:
@@ -622,5 +632,8 @@ inline void buf_page_release_latch(BufBlock *block, ulint rw_latch) {
 }
 
 inline uint32_t buf_page_data_calc_checksum(const byte *page) {
-  return crc32::checksum(page + FIL_PAGE_OFFSET, UNIV_PAGE_SIZE - FIL_PAGE_DATA);
+  const auto header = crc32::checksum(page + FIL_PAGE_OFFSET, FIL_PAGE_FILE_FLUSH_LSN - FIL_PAGE_OFFSET);
+  const auto body = crc32::checksum(page + FIL_PAGE_DATA, UNIV_PAGE_SIZE - FIL_PAGE_DATA - FIL_PAGE_END_LSN_CHKSUM);
+
+  return header ^ body;
 }

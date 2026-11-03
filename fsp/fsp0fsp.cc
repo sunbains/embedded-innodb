@@ -424,7 +424,7 @@ inline ulint xdes_get_offset(Fsp::xdes_t *descr) noexcept {
 static void fsp_init_file_page_low(BufBlock *block) noexcept {
   auto page = block->get_frame();
 
-  block->m_check_index_page_at_flush = false;
+  block->clear_check_index_page_at_flush();
 
   UNIV_MEM_INVALID(page, UNIV_PAGE_SIZE);
 
@@ -1298,8 +1298,8 @@ void Fsp::fill_free_list(bool init_space, space_id_t space, fsp_header_t *header
 
     if (unlikely(init_xdes)) {
 
-      /* The first page in the extent is a descriptor page
-      mark them used. */
+      /* The first page in the extent is a descriptor page: mark it used.
+      There is no insert buffer bitmap page after it any more. */
 
       xdes_set_bit(descr, XDES_FREE_BIT, 0, false, mtr);
       xdes_set_state(descr, XDES_FREE_FRAG, mtr);
@@ -1307,7 +1307,7 @@ void Fsp::fill_free_list(bool init_space, space_id_t space, fsp_header_t *header
       flst_add_last(m_sys, header + FSP_FREE_FRAG, descr + XDES_FLST_NODE, mtr);
 
       const auto frag_n_used = mtr->read_ulint(header + FSP_FRAG_N_USED, MLOG_4BYTES);
-      mlog_write_ulint(header + FSP_FRAG_N_USED, frag_n_used + 2, MLOG_4BYTES, mtr);
+      mlog_write_ulint(header + FSP_FRAG_N_USED, frag_n_used + 1, MLOG_4BYTES, mtr);
     } else {
       flst_add_last(m_sys, header + FSP_FREE, descr + XDES_FLST_NODE, mtr);
       count++;
@@ -1549,7 +1549,7 @@ bool Fsp::alloc_seg_inode_page(fsp_header_t *space_header, Mtr *mtr) noexcept {
 
   buf_block_dbg_add_level();
 
-  block->m_check_index_page_at_flush = false;
+  block->clear_check_index_page_at_flush();
 
   auto page = block->get_frame();
 
@@ -2625,7 +2625,7 @@ bool Fsp::validate(space_id_t space) noexcept {
 
   ut_a(
     n_used + n_full_frag_pages ==
-    n_used2 + 2 * ((free_limit + (UNIV_PAGE_SIZE - 1)) / UNIV_PAGE_SIZE) + seg_inode_len_full + seg_inode_len_free
+    n_used2 + (free_limit + (UNIV_PAGE_SIZE - 1)) / UNIV_PAGE_SIZE + seg_inode_len_full + seg_inode_len_free
   );
 
   ut_a(frag_n_used == n_used);

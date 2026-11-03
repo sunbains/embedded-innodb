@@ -46,12 +46,14 @@ os_thread_t os_thread_create(void *(*f)(void *), void *arg, os_thread_id_t *thre
   os_thread_t pthread;
   pthread_attr_t attr;
 
-  memset(&attr, 0x0, sizeof(attr));
+  pthread_attr_init(&attr);
 
   auto ret = pthread_create(&pthread, &attr, f, arg);
 
+  pthread_attr_destroy(&attr);
+
   if (ret != 0) {
-    log_fatal("pthread_create returned %d", ret, " : ", strerror(ret));
+    log_fatal("pthread_create returned ", ret, " : ", strerror(ret));
   }
 
   if (thread_id != nullptr) {

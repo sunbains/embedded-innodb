@@ -367,7 +367,7 @@ void BufFlush::buffered_writes() {
       );
     }
 
-    if (block->m_check_index_page_at_flush && unlikely(!page_simple_validate(block->m_frame))) {
+    if (block->get_check_index_page_at_flush() && unlikely(!page_simple_validate(block->m_frame))) {
       buf_page_print(block->m_frame, 0);
 
       log_fatal(std::format(

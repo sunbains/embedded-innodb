@@ -371,9 +371,13 @@ static DbErr open_system_tablespace(System &sys, const std::string &path, lsn_t 
  * @return	true if all threads exited.
  */
 static bool threads_shutdown(System &sys) noexcept {
-  sys.m_srv->m_shutdown_state = SRV_SHUTDOWN_EXIT_THREADS;
+  sys.m_srv->set_shutdown_state(SRV_SHUTDOWN_EXIT_THREADS);
 
-  for (ulint i{}; i < 1000; ++i) {
+  /* Wait until every thread has exited: the sub-systems they use are
+  destroyed next. The loop gave up after 1000 spins without sleeping (upstream
+  slept 100 ms each), and the i/o handler threads could still be waiting in
+  their io_uring when the Aio was freed. */
+  for (ulint i{};; ++i) {
     /* Let the lock timeout thread exit */
     os_event_set(sys.m_srv->m_lock_timeout_thread_event);
 
@@ -384,15 +388,17 @@ static bool threads_shutdown(System &sys) noexcept {
     sys.m_aio->shutdown();
 
     if (sys.m_srv->n_background_threads() == 0) {
-      /* All the threads have exited or are just exiting; NOTE that the
-      threads may not have completed their exit yet. */
+      /* All the threads have exited or are just exiting: thread_exited() is
+      the last thing they do. */
       return true;
     }
+
+    if (i > 0 && i % 1000 == 0) {
+      log_warn(std::format("Waiting for {} threads to exit at shutdown", sys.m_srv->n_background_threads()));
+    }
+
+    os_thread_sleep(10000);
   }
-
-  log_warn(std::format("{} threads created by InnoDB had not exited at shutdown!", sys.m_srv->n_background_threads()));
-
-  return false;
 }
 
 /**
@@ -414,7 +420,7 @@ static void prepare_for_shutdown(System &sys, ShutdownMode shutdown) noexcept {
   /* Wait until the master thread and all other operations are idle: our
   algorithm only works if the server is idle at shutdown */
 
-  srv.m_shutdown_state = SRV_SHUTDOWN_CLEANUP;
+  srv.set_shutdown_state(SRV_SHUTDOWN_CLEANUP);
 
   lsn_t lsn;
 
@@ -427,7 +433,7 @@ static void prepare_for_shutdown(System &sys, ShutdownMode shutdown) noexcept {
     shutdown. In case of very fast shutdown, however, we can proceed without
     waiting for monitor threads. */
 
-    if (shutdown != IB_SHUTDOWN_NO_BUFPOOL_FLUSH && (srv.m_error_monitor_active || srv.m_lock_timeout_active || srv.m_monitor_active)) {
+    if (srv.m_error_monitor_active || srv.m_lock_timeout_active || srv.m_monitor_active) {
 
       mutex_exit(&trx_sys.m_mutex);
       continue;
@@ -514,7 +520,7 @@ static void prepare_for_shutdown(System &sys, ShutdownMode shutdown) noexcept {
     }
   }
 
-  srv.m_shutdown_state = SRV_SHUTDOWN_LAST_PHASE;
+  srv.set_shutdown_state(SRV_SHUTDOWN_LAST_PHASE);
 
   /* Make some checks that the server really is quiet */
   ut_a(lsn == log.m_lsn);
@@ -580,6 +586,18 @@ DbErr System::startup() noexcept {
   read and write segments. */
   const auto n_file_io_threads = 1 + m_config.m_aio.m_n_read_threads + m_config.m_aio.m_n_write_threads;
 
+  {
+    namespace fs = std::filesystem;
+
+    const fs::path home(m_config.m_fil.m_data_home);
+
+    /* Before any thread is started: a failed startup leaves none running. */
+    if (!fs::exists(home) || fs::status(home).type() != fs::file_type::directory) {
+      log_err("Data home directory does not exist or is not a directory");
+      return DB_ERROR;
+    }
+  }
+
   m_io_handlers.resize(n_file_io_threads);
 
   for (ulint i{}; i < n_file_io_threads; ++i) {
@@ -596,11 +614,6 @@ DbErr System::startup() noexcept {
     namespace fs = std::filesystem;
 
     fs::path home(m_config.m_fil.m_data_home);
-
-    if (!fs::exists(home) || fs::status(home).type() != fs::file_type::directory) {
-      log_err("Data home directory does not exist or is not a directory");
-      return DB_ERROR;
-    }
 
     auto filename{home / "system.ibd"};
 
@@ -805,13 +818,16 @@ DbErr System::shutdown(ShutdownMode shutdown) noexcept {
   die; all which counts is that we flushed the log; a 'very fast' shutdown is
   essentially a crash. */
 
-  if (shutdown == IB_SHUTDOWN_NO_BUFPOOL_FLUSH) {
-    return DB_SUCCESS;
-  }
-
   threads_shutdown(*this);
 
   m_log->shutdown();
+
+  if (shutdown == IB_SHUTDOWN_NO_BUFPOOL_FLUSH) {
+    /* A 'crash': the buffer pool is not flushed and the data files are not
+    stamped, the next startup recovers from the log. The files are closed
+    here, prepare_for_shutdown() skipped it. */
+    m_fil->close_all_files();
+  }
 
   destroy();
 

@@ -49,7 +49,7 @@ Created 5/11/1994 Heikki Tuuri
 #include <sys/time.h>
 
 ulint ut_get_high32(ulint a) noexcept {
-  auto i = (int64_t)a;
+  auto i = a;
 
   i = i >> 32;
 
@@ -186,7 +186,7 @@ std::ostream &buf_to_hex_string(std::ostream &o, const void *buf, ulint len) noe
   auto data = reinterpret_cast<const byte *>(buf);
 
   for (uint i = 0; i < len; i++, ++data) {
-    o << std::format("{:#x}", *data);
+    o << std::format("{}{:#04x}", i == 0 ? "" : " ", *data);
   }
 
   o << " },\nasc = { ";
@@ -194,7 +194,7 @@ std::ostream &buf_to_hex_string(std::ostream &o, const void *buf, ulint len) noe
   data = reinterpret_cast<const byte *>(buf);
 
   for (ulint i = 0; i < len; i++, ++data) {
-    o << std::format("{}", *data);
+    o << (isprint(*data) ? char(*data) : '.');
   }
 
   o << "} }";
@@ -214,6 +214,7 @@ ulint ut_2_power_up(ulint n) noexcept {
   ulint res = 1;
 
   ut_ad(n > 0);
+  ut_a(n <= (ulint(1) << 63));
 
   while (res < n) {
     res = res * 2;
@@ -292,6 +293,10 @@ int ut_strncmp(const char *str1, const char *str2, size_t n) noexcept {
 }
 
 char *ut_strncpy(char *dst, const char *src, size_t n) noexcept {
+  if (n == 0) {
+    return dst;
+  }
+
   strncpy(dst, src, n);
   dst[n - 1] = '\0';  // Ensure null termination
   return dst;

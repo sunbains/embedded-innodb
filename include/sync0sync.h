@@ -415,7 +415,7 @@ inline ulint mutex_get_waiters(const Mutex *mutex) {
  */
 inline void mutex_exit(Mutex *mutex) {
   ut_ad(mutex_own(mutex));
-  ut_d(mutex->thread_id = (os_thread_id_t)ULINT_UNDEFINED);
+  ut_d(mutex->thread_id.store((os_thread_id_t)ULINT_UNDEFINED, std::memory_order_relaxed));
 
   
 
@@ -455,10 +455,10 @@ inline void mutex_enter_func(Mutex *mutex, const char *file_name, ulint line) {
   /* Note that we do not peek at the value of lock_word before trying
   the atomic test_and_set; we could peek, and possibly save time. */
 
-  ut_d(mutex->count_using++);
+  ut_d(mutex->count_using.fetch_add(1, std::memory_order_relaxed));
 
   if (!mutex_test_and_set(mutex)) {
-    ut_d(mutex->thread_id = os_thread_get_curr_id());
+    ut_d(mutex->thread_id.store(os_thread_get_curr_id(), std::memory_order_relaxed));
     
 
     /* Succeeded! */

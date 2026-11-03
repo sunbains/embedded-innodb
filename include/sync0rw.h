@@ -237,17 +237,17 @@ struct RwLock {
 
 
   /** Count of os_waits. May not be accurate */
-  ulint m_count_os_wait;
+  std::atomic<ulint> m_count_os_wait;
 
   /** File name where lock created */
   const char *m_cfile_name;
 
-  /* last s-lock file/line is not guaranteed to be correct */
+  /* The last S-lock file/line used to be recorded here too. Removed: every
+  S-locker wrote it while other S holders did the same, a data race on
+  plain fields (and a store to the hot lock cache line per S-lock), and
+  nothing ever read it. */
 
-  /** File name where last s-locked */
-  const char *m_last_s_file_name;
-
-  /** File name where last x-locked */
+  /** File name where last x-locked, written only by the X holder. */
   const char *m_last_x_file_name;
 
   /** This is true if the writer field is
@@ -259,13 +259,11 @@ struct RwLock {
   bool m_writer_is_wait_ex;
 
   /** Line where created */
-  unsigned m_cline : 14;
+  uint32_t m_cline;
 
-  /** Line number where last time s-locked */
-  unsigned m_last_s_line : 14;
-
-  /** Line number where last time x-locked */
-  unsigned m_last_x_line : 14;
+  /** Line number where last time x-locked. A full word rather than a
+  bit-field so the X holder's write can't clobber m_cline. */
+  uint32_t m_last_x_line;
 
   /** RW_LOCK_MAGIC_N */
   ulint m_magic_n;
@@ -422,11 +420,9 @@ inline bool rw_lock_s_lock_low(RwLock *lock, ulint pass, const char *file_name, 
     /* Locking did not succeed */
     return false;
   } else {
-
-    /* These debugging values are not set safely: they may be incorrect
-    or even refer to a line that is invalid for the file name. */
-    lock->m_last_s_line = line;
-    lock->m_last_s_file_name = file_name;
+    /* No last-S-locker bookkeeping: see RwLock::m_last_x_file_name. */
+    (void)file_name;
+    (void)line;
 
     return true;
   }
@@ -483,12 +479,9 @@ inline bool rw_lock_x_lock_func_nowait(RwLock *lock, const char *file_name, ulin
     threads can modify (lock, unlock, or reserve) m_lock_word while
     there is an exclusive writer and this is the writer thread. */
 
-    if (lock->m_lock_word == 0) {
-      /* There is another X-LOCK. */
+    if (lock->m_lock_word == 0 || lock->m_lock_word <= -X_LOCK_DECR) {
+      /* One more X-LOCK. */
       lock->m_lock_word -= X_LOCK_DECR;
-    } else if (lock->m_lock_word <= -X_LOCK_DECR) {
-      /* THere is more than one X-LOCK. */
-      --lock->m_lock_word;
     } else {
       return false;
     }

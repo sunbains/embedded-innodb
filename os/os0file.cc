@@ -628,6 +628,11 @@ bool os_file_read(os_file_t file, void *p, ulint n, off_t off) {
       }
     }
 
+    if (n_bytes == 0 && n > 0) {
+      log_err(std::format("Read of {} bytes at offset {} is past the end of the file", n, off));
+      return false;
+    }
+
     n -= n_bytes;
     ptr += n_bytes;
     off += n_bytes;
@@ -655,6 +660,11 @@ bool os_file_read_no_error_handling(os_file_t file, void *p, ulint n, off_t off)
           }
       }
     }
+    if (n_bytes == 0 && n > 0) {
+      log_err(std::format("Read of {} bytes at offset {} is past the end of the file", n, off));
+      return false;
+    }
+
     n -= n_bytes;
     ptr += n_bytes;
     off += n_bytes;

@@ -88,6 +88,11 @@ Prebuilt::~Prebuilt() noexcept {
   m_magic_n = ROW_PREBUILT_FREED;
   m_magic_n2 = ROW_PREBUILT_FREED;
 
+  /* Placement new'ed: run the destructors, which free the buffer of the
+  stored position, before giving back the memory. */
+  m_pcur->~BtreePcursor();
+  m_clust_pcur->~BtreePcursor();
+
   ut_delete(m_pcur);
   ut_delete(m_clust_pcur);
 

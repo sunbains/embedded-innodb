@@ -77,8 +77,10 @@ static bool btr_cursor_is_positioned(const BtreePcursor *pcur) noexcept {
 
 /** Delays an INSERT, DELETE or UPDATE operation if the purge is lagging. */
 static void delay_dml_if_needed(System &sys) {
-  if (sys.m_srv->m_dml_needed_delay) {
-    os_thread_sleep(sys.m_srv->m_dml_needed_delay);
+  /* Read once (relaxed, the purge thread updates it): checking one value
+  and sleeping on another could sleep on a value that just went up. */
+  if (const ulint delay = sys.m_srv->m_dml_needed_delay; delay > 0) {
+    os_thread_sleep(delay);
   }
 }
 
@@ -679,6 +681,10 @@ void TableSchema::destroy(System &sys, TableSchema *table_def) noexcept {
 
   if (table_def->m_table != nullptr) {
     sys.m_dict->table_decrement_handle_count(table_def->m_table, false);
+  }
+
+  for (auto index_def : *table_def->m_indexes) {
+    delete index_def->m_cols;
   }
 
   delete table_def->m_cols;
@@ -1758,8 +1764,8 @@ static DbErr create_secondary_index(System &sys, IndexSchema *index_def, uint64_
     /* Since this is part of ALTER TABLE set the create flag to false. */
     err = build_secondary_index(sys, usr_trx, table, index_def, false, &index);
 
-    err = schema_lock_exclusive(sys, usr_trx);
-    ut_a(err == DB_SUCCESS);
+    const auto lock_err = schema_lock_exclusive(sys, usr_trx);
+    ut_a(lock_err == DB_SUCCESS);
 
     if (index != nullptr && err != DB_SUCCESS) {
       row_merge_drop_indexes(sys, usr_trx, table, &index, 1);
@@ -1870,7 +1876,9 @@ DbErr index_drop(System &sys, Trx *trx, uint64_t index_id) noexcept {
     err = DB_TABLE_NOT_FOUND;
   }
 
-  sys.m_dict->table_decrement_handle_count(table, false);
+  sys.m_dict->table_decrement_handle_count(table, true);
+
+  /* (The caller holds the dictionary mutex, through the schema lock.) */
 
   return err;
 }
@@ -2594,6 +2602,8 @@ static DbErr delete_row_low(System &sys, Cursor *cursor, BtreePcursor *pcur, con
 
   auto err = execute_update_query_graph(sys, cursor, pcur);
 
+  Tuple::destroy(tpl);
+
   return err;
 }
 
@@ -2639,6 +2649,11 @@ DbErr Cursor::delete_row(System &sys) noexcept {
 
     if (rec.is_valid() && !rec.get_deleted_flag()) {
       err = delete_row_low(sys, cursor, pcur, Rec(rec));
+
+      if (err == DB_SUCCESS) {
+        /* The cached copy of the row was taken before the delete. */
+        prebuilt->m_row_cache.clear();
+      }
     } else {
       err = DB_RECORD_NOT_FOUND;
     }
@@ -2929,10 +2944,11 @@ DbErr Tuple::set_value(ulint col_no, const void *s, ulint len) noexcept {
 
       ut_a(pad_char != ULINT_UNDEFINED);
 
+      memcpy(dst, src, len);
       memset((byte *)dst + len, pad_char, dtype_get_len(dtype) - len);
 
       len = dtype_get_len(dtype);
-      /* Fall through */
+      break;
     }
     case DATA_BLOB:
     case DATA_BINARY:
@@ -3518,8 +3534,8 @@ DbErr index_get_id(System &sys, const char *table_name, const char *index_name, 
     if (index != nullptr) {
       /* We only support 32 bit table and index ids. Because
       we need to pack the table id into the index id. */
-      ut_a(table->m_id == 0);
-      ut_a(index->m_id == 0);
+      ut_a((table->m_id >> 32) == 0);
+      ut_a((index->m_id >> 32) == 0);
 
       *index_id = table->m_id;
       *index_id <<= 32;
@@ -3789,25 +3805,19 @@ DbErr savepoint_rollback(System &sys, Trx *trx, const void *name, ulint name_len
     return DB_ERROR;
   }
 
-  TrxNamedSavept *savep;
+  /* Without a name, the first savepoint; else the one with that name. */
+  auto it = std::find_if(trx->m_trx_savepoints.begin(), trx->m_trx_savepoints.end(), [&](const TrxNamedSavept *savep) {
+    return name == nullptr || name_len == 0 || (savep->name_len == name_len && memcmp(savep->name, name, name_len) == 0);
+  });
 
-  if (name == nullptr || name_len == 0) {
-    auto it = std::find_if(trx->m_trx_savepoints.begin(), trx->m_trx_savepoints.end(), [](const auto &savep) { return true; });
-
-    if (it == trx->m_trx_savepoints.end()) {
-      return DB_NO_SAVEPOINT;
-    }
-
-    savep = *it;
-
-  } else {
-    savep = trx->m_trx_savepoints.front();
+  if (it == trx->m_trx_savepoints.end()) {
+    return DB_NO_SAVEPOINT;
   }
 
-  trx->m_trx_savepoints.remove(savep);
-  mem_free(savep);
+  auto savep = *it;
 
-  /* We can now free all savepoints strictly later than this one */
+  /* We can now free all savepoints strictly later than this one; it stays,
+  a later rollback can return to it again. */
   trx_roll_savepoints_free(trx, savep);
 
   trx->m_op_info = "rollback to a savepoint";
@@ -3962,7 +3972,7 @@ DbErr table_schema_visit(System &sys, Trx *trx, const char *name, const SchemaVi
 
     /* Ignore system generated indexes. */
     if (n_index_cols > 0) {
-      user_err = visitor->index(arg, index->m_name, index->is_unique(), index->is_clustered(), n_index_cols);
+      user_err = visitor->index(arg, index->m_name, index->is_clustered(), index->is_unique(), n_index_cols);
       if (user_err > 0) {
         goto func_exit;
       }
@@ -4158,9 +4168,14 @@ DbErr Cursor::get_table_statistics(System &sys, TableStats *table_stats) noexcep
   auto cursor = this;
   auto table = cursor->m_prebuilt->m_table;
 
+  /* The cursor may hold no table lock, serialize with TRUNCATE. */
+  sys.m_dict->mutex_acquire();
+
   if (!table->m_stats.m_initialized) {
     sys.m_dict->update_statistics(table);
   }
+
+  sys.m_dict->mutex_release();
 
   table_stats->m_stat_n_rows = table->m_stats.m_n_rows;
   table_stats->m_stat_clustered_index_size = table->m_stats.m_clustered_index_size * UNIV_PAGE_SIZE;
@@ -4174,9 +4189,14 @@ DbErr Cursor::get_index_stat_n_diff_key_vals(System &sys, const char *index_name
   auto cursor = this;
   auto table = cursor->m_prebuilt->m_table;
 
+  /* The cursor may hold no table lock, serialize with TRUNCATE. */
+  sys.m_dict->mutex_acquire();
+
   if (!table->m_stats.m_initialized) {
     sys.m_dict->update_statistics(table);
   }
+
+  sys.m_dict->mutex_release();
 
   auto index = table->get_index_on_name(index_name);
 
@@ -4190,7 +4210,8 @@ DbErr Cursor::get_index_stat_n_diff_key_vals(System &sys, const char *index_name
 
   sys.m_dict->index_stat_mutex_enter(index);
 
-  memcpy(*n_diff, index->m_stats.m_n_diff_key_vals, sizeof(int64_t) * index->m_n_uniq);
+  /* Indexed 1 .. n_uniq: [i] is the number of distinct prefixes of i fields. */
+  memcpy(*n_diff, index->m_stats.m_n_diff_key_vals + 1, sizeof(int64_t) * index->m_n_uniq);
 
   sys.m_dict->index_stat_mutex_exit(index);
 
@@ -4201,7 +4222,12 @@ DbErr Cursor::update_table_statistics(System &sys) noexcept {
   auto cursor = this;
   auto table = cursor->m_prebuilt->m_table;
 
+  /* The cursor may hold no table lock, serialize with TRUNCATE. */
+  sys.m_dict->mutex_acquire();
+
   sys.m_dict->update_statistics(table);
+
+  sys.m_dict->mutex_release();
 
   return DB_SUCCESS;
 }
@@ -4421,7 +4447,7 @@ DbErr check_table(System &sys, Trx *trx, Cursor *crsr, size_t n_threads) noexcep
   auto prebuilt = cursor->m_prebuilt;
   auto index = prebuilt->m_index;
 
-  ut_a(prebuilt->m_trx->m_conc_state == TRX_NOT_STARTED);
+  ut_a(trx != nullptr);
 
   if (index->is_clustered()) {
     /* The clustered index of a table is always available. During online ALTER TABLE
@@ -4434,14 +4460,12 @@ DbErr check_table(System &sys, Trx *trx, Cursor *crsr, size_t n_threads) noexcep
     return DB_DDL_IN_PROGRESS;
   }
 
-  if (trx->m_isolation_level > TRX_ISO_READ_UNCOMMITTED && prebuilt->m_select_lock_type == LOCK_NONE && index->is_clustered() &&
+  if (trx->m_isolation_level > TRX_ISO_READ_UNCOMMITTED && prebuilt->m_select_lock_type == LOCK_NONE &&
       trx->m_client_n_tables_locked == 0) {
     n_threads = ParallelReader::available_threads(sys, n_threads, false);
 
     auto rv = trx->assign_read_view(sys);
     ut_a(rv != nullptr);
-
-    auto trx = prebuilt->m_trx;
 
     ut_a(prebuilt->m_table == index->m_table);
 

@@ -683,9 +683,18 @@ struct LockOp {
 /**
  * List of locks that different transactions have acquired on a record. This
  * list has a list node that is embedded in a nested union/structure. We have to
- * generate a specific template for it. See lock0lock.cc for the implementation.
+ * generate a specific template for it.
  */
-struct RecLockGetNode;
+struct RecLockGetNode {
+  /**
+   * @brief Functor for accessing the embedded node within a record lock.
+   *
+   * @param[in] lock The lock to get the node from.
+   *
+   * @return The embedded node within the lock.
+   */
+  static const UtListNode<Lock> &get_node(const Lock &lock) { return lock.m_rec.m_rec_locks; }
+};
 
 /**
  * @brief List of locks that different transactions have acquired on a record.

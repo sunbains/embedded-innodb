@@ -35,6 +35,7 @@ class System;
 #include "mem0types.h"
 #include "que0types.h"
 #include "sync0rw.h"
+#include "ut0stat.h"
 
 #include <string>
 
@@ -871,11 +872,15 @@ struct Index {
 
   /** Data structure for index statistics */
   struct Stats {
+    /* Written by Dict::update_statistics() (possibly by two threads at
+    once) and read by the row code without a latch: scalars are
+    ut::Relaxed. m_n_diff_key_vals[] is protected by the index stats mutex. */
+
     /** Approximate index size in database pages */
-    page_no_t m_index_size{};
+    ut::Relaxed<page_no_t> m_index_size{};
 
     /** Approximate number of leaf pages in the index tree */
-    page_no_t m_n_leaf_pages{};
+    ut::Relaxed<page_no_t> m_n_leaf_pages{};
 
     /** Approximate number of different key values for this index, for
     each n-column prefix where n <= get_n_unique(); we
@@ -1573,15 +1578,20 @@ struct Table {
    * @brief Data structure for table statistics.
    */
   struct Stats {
+    /* Heuristics, bumped by every DML on the table and rewritten by
+    Dict::update_statistics(), with no latch: each field is a ut::Relaxed
+    (relaxed atomic accesses; a lost update is fine, as it was with the
+    plain fields). */
+
     /** Approximate number of rows in the table; we periodically calculate
     new estimates */
-    int64_t m_n_rows{};
+    ut::Relaxed<int64_t> m_n_rows{};
 
     /** Approximate clustered index size in database pages */
-    page_no_t m_clustered_index_size{};
+    ut::Relaxed<page_no_t> m_clustered_index_size{};
 
     /** Other indexes in database pages */
-    page_no_t m_sum_of_secondary_index_sizes{};
+    ut::Relaxed<page_no_t> m_sum_of_secondary_index_sizes{};
 
     /** When a row is inserted, updated, or deleted, we add 1 to this
     number; we calculate new estimates for the stat_...  values for
@@ -1590,11 +1600,11 @@ struct Table {
     for; the counter is reset to zero at statistics calculation; this
     counter is not protected by any latch, because this is only used
     for heuristics */
-    ulint m_modified_counter{};
+    ut::Relaxed<ulint> m_modified_counter{};
 
     /** true if statistics have been calculated the first time after database
     startup or table creation */
-    bool m_initialized{};
+    ut::Relaxed<bool> m_initialized{};
   };
 
   /** DICT_TF_COMPACT, ... */
@@ -1687,9 +1697,10 @@ struct Table {
 };
 
 inline void Foreign::drop_constraint() noexcept {
-  ut_ad(m_referenced_table != nullptr);
-
-  UT_LIST_REMOVE(m_referenced_table->m_referenced_list, this);
+  /* Either table may not be in the cache (not loaded yet, or removed). */
+  if (m_referenced_table != nullptr) {
+    UT_LIST_REMOVE(m_referenced_table->m_referenced_list, this);
+  }
 
   if (m_foreign_table != nullptr) {
     UT_LIST_REMOVE(m_foreign_table->m_foreign_list, this);

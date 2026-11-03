@@ -81,7 +81,9 @@ struct BufLru {
   from buf_pool->LRU. */
   struct Stat {
     /** Counter of buffer pool I/O operations. */
-    ulint m_io{};
+    /** Bumped without a latch by the I/O paths, reset by stat_update():
+    relaxed, an occasional lost count is fine for this heuristic. */
+    ut::Relaxed<ulint> m_io{};
   };
 
   /** Constructor

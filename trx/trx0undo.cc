@@ -1254,37 +1254,41 @@ void Undo::truncate_end(Trx *trx, TrxUndo *undo, undo_no_t limit) noexcept {
   ut_ad(mutex_own(&trx->m_undo_mutex));
   ut_ad(mutex_own(&trx->m_rseg->m_mutex));
 
-  trx_undo_rec_t trunc_here;
-
-  do {
+  /* Remove the records with undo number >= limit, from the end of the
+  log backwards. A page emptied that way is freed, unless it is the
+  header page, and the scan continues on the previous page. */
+  for (;;) {
     Mtr mtr;
-
-    trunc_here = nullptr;
 
     mtr.start();
 
     const auto last_page_no = undo->m_last_page_no;
     const auto undo_page = page_get(undo->m_space, last_page_no, &mtr);
     auto rec = trx_undo_page_get_last_rec(undo_page, undo->m_hdr_page_no, undo->m_hdr_offset);
+    trx_undo_rec_t trunc_here{};
 
-    while (rec != nullptr && TrxUndoRecord::get_undo_no(rec) < limit) {
+    while (rec != nullptr && TrxUndoRecord::get_undo_no(rec) >= limit) {
       trunc_here = rec;
-      rec = trx_undo_page_get_prev_rec(trunc_here, undo->m_hdr_page_no, undo->m_hdr_offset);
+      rec = trx_undo_page_get_prev_rec(rec, undo->m_hdr_page_no, undo->m_hdr_offset);
     }
 
     if (rec == nullptr && last_page_no != undo->m_hdr_page_no) {
+      /* Every record on the page is truncated. */
       free_page_in_rollback(trx, undo, last_page_no, &mtr);
+
+      mtr.commit(m_sys);
+
+      continue;
     }
 
     if (trunc_here != nullptr) {
-      /* Do the actual truncate. */
       mlog_write_ulint(undo_page + TRX_UNDO_PAGE_HDR + TRX_UNDO_PAGE_FREE, trunc_here - undo_page, MLOG_2BYTES, &mtr);
-      trunc_here = nullptr;
     }
 
     mtr.commit(m_sys);
 
-  } while (trunc_here != nullptr);
+    return;
+  }
 }
 
 void Undo::truncate_start(TrxRseg *rseg, space_id_t space, page_no_t hdr_page_no, ulint hdr_offset, undo_no_t limit) noexcept {

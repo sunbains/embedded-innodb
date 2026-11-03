@@ -50,6 +50,11 @@ struct Mtr {
    * @return mtr buffer which also acts as the mtr handle.
    */
   inline Mtr *start() noexcept {
+    /* An Mtr can be started again after a commit: drop the log and the
+    memo of the previous run, or they are written to the redo log again. */
+    m_memo.clear();
+    m_log.clear();
+
     m_log_mode = MTR_LOG_ALL;
     m_modifications = false;
     m_n_log_recs = 0;

@@ -636,6 +636,7 @@ void DictStore::drop_index_tree(Rec rec, Mtr *mtr) noexcept {
 
   if (root_page_no == FIL_NULL) {
     /* The tree has already been freed */
+    mem_heap_free(heap);
     return;
   }
 
@@ -644,6 +645,8 @@ void DictStore::drop_index_tree(Rec rec, Mtr *mtr) noexcept {
   ut_ad(len == 4);
 
   auto space_id = static_cast<space_id_t>(mtr->read_ulint(field.get(), MLOG_4BYTES));
+
+  mem_heap_free(heap);
 
   if (m_sys.m_fil->space_get_flags(space_id) == ULINT_UNDEFINED) {
     /* It is a single table tablespace and the .ibd file is
@@ -708,6 +711,8 @@ page_no_t DictStore::truncate_index_tree(Table *table, space_id_t space_id, Btre
 
     log_err(std::format("Trying to TRUNCATE a missing .ibd file of table {}!", table->m_name));
 
+    mem_heap_free(heap);
+
     return FIL_NULL;
   }
 
@@ -719,6 +724,8 @@ page_no_t DictStore::truncate_index_tree(Table *table, space_id_t space_id, Btre
   field = rec.get_nth_field(offsets, 1, &len);
   ut_ad(len == 8);
   auto index_id = mach_read_from_8(field.get());
+
+  mem_heap_free(heap);
 
   if (drop) {
     /* We free all the pages but the root page first; this operation

@@ -688,8 +688,6 @@ bool Srv::printf_innodb_monitor(FILE *stream, bool nowait, ulint *trx_start, uli
   mutex_exit(&dict_foreign_err_mutex);
 #endif /* WITH_FOREIGN_KEY */
 
-  m_sys.m_lock_sys->print_info_all_transactions();
-
   log_warn(
     "--------\n"
     "I/O\n"
@@ -874,9 +872,9 @@ loop:
   m_monitor_active = true;
 
   /* Wake up every 5 seconds to see if we need to print
-  monitor information. */
+  monitor information, or at once at shutdown. */
 
-  os_thread_sleep(5000000);
+  sleep_unless_shutdown(std::chrono::seconds(5));
 
   current_time = time(nullptr);
 
@@ -991,7 +989,7 @@ void Srv::lock_timeout_thread() noexcept {
     /* When someone is waiting for a lock, we wake up every second
     and check if a timeout has passed for a lock wait */
 
-    os_thread_sleep(1000000);
+    sleep_unless_shutdown(std::chrono::seconds(1));
 
     m_lock_timeout_active = true;
 
@@ -1079,7 +1077,7 @@ loop:
   /* Update the statistics collected for flush rate policy. */
   m_sys.m_buf_pool->m_flusher->stat_update();
 
-  os_thread_sleep(1000000);
+  sleep_unless_shutdown(std::chrono::seconds(1));
 
   if (m_shutdown_state < SRV_SHUTDOWN_CLEANUP) {
 
@@ -1094,8 +1092,13 @@ loop:
 }
 
 void Srv::active_wake_master_thread() noexcept {
-  ++m_activity_count;
+  /* Exact RMW: many user threads call this at once. Not a hot path (once
+  every INNOBASE_WAKE_INTERVAL row operations). */
+  m_activity_count.fetch_add(1);
 
+  /* Unlatched peek (relaxed, the counts are written under the trx_sys
+  mutex): if the master looks busy we don't wake it; a wrong guess only
+  delays it until its next 1 s tick, as in upstream. */
   if (m_n_threads_active[SRV_MASTER] == 0) {
 
     mutex_enter(&m_sys.m_trx_sys->m_mutex);
@@ -1107,7 +1110,7 @@ void Srv::active_wake_master_thread() noexcept {
 }
 
 void Srv::wake_master_thread() noexcept {
-  ++m_activity_count;
+  m_activity_count.fetch_add(1);
 
   mutex_enter(&m_sys.m_trx_sys->m_mutex);
 
@@ -1550,7 +1553,8 @@ void Srv::create_thread(void *(*f)(void *), void *arg) noexcept {
 
   os_thread_id_t id;
 
-  os_thread_create(f, arg, &id);
+  /* Nothing joins it: Srv counts the background threads. */
+  pthread_detach(os_thread_create(f, arg, &id));
 }
 
 void Srv::start_threads() noexcept {

@@ -702,7 +702,7 @@ SearchStatus Plan::try_search_shortcut(System &sys, SelNode *sel_node, Mtr *mtr)
   RecOffs(rec_offsets.data()).set_n_alloc(rec_offsets.size());
 
   ut_ad(m_unique_search);
-  ut_ad(m_must_get_clust);
+  ut_ad(!m_must_get_clust);
   ut_ad(sel_node->m_read_view != nullptr);
 
   auto func_exit = [&heap](SearchStatus status) -> auto {
@@ -1441,7 +1441,7 @@ QueThr *RowSel::step(QueThr *thr) noexcept {
     /* It may be that the current session has not yet started
     its transaction, or it has been committed: */
 
-    ut_a(thr_get_trx(thr)->m_conc_state != TRX_NOT_STARTED);
+    (void)thr_get_trx(thr)->start_if_not_started(m_sys);
 
     sel_node->get_nth_plan(0)->reset_cursor();
 
@@ -2205,6 +2205,9 @@ DbErr RowSel::mvcc_fetch(
     if (mode == IB_CUR_GE || mode == IB_CUR_G) {
       moves_up = true;
     }
+
+    /* Rows cached by the search are popped by the next fetches. */
+    prebuilt->m_row_cache.m_direction = moves_up ? ROW_SEL_NEXT : ROW_SEL_PREV;
   } else if (direction == ROW_SEL_NEXT) {
     moves_up = true;
   }
@@ -2300,7 +2303,7 @@ rec_loop:
 
   if (page_rec_is_supremum(rec)) {
 
-    if (set_also_gap_locks && trx->m_isolation_level == TRX_ISO_READ_COMMITTED && prebuilt->m_select_lock_type != LOCK_NONE) {
+    if (set_also_gap_locks && trx->m_isolation_level != TRX_ISO_READ_COMMITTED && prebuilt->m_select_lock_type != LOCK_NONE) {
 
       /* Try to place a lock on the index record */
 
@@ -2344,7 +2347,7 @@ rec_loop:
 
       buf_page_print(rec.page_align(), 0);
       log_err(
-        std::format("\nrec address {}, buf block with fix count {}", (void *)rec, (int)pcur->get_block()->m_page.m_buf_fix_count)
+        std::format("\nrec address {}, buf block with fix count {}", (void *)rec, (int)pcur->get_block()->m_page.get_fix_count())
       );
       log_err(std::format(
         "Index corruption: rec offs {} next offs {}, page no {},", page_offset(rec), next_offs, page_get_page_no(rec.page_align())
@@ -2642,9 +2645,9 @@ rec_loop:
       goto next_rec;
     }
 
-    if (prebuilt->m_row_cache.is_cache_empty()) {
-      prebuilt->m_result = cmp_dtuple_rec(cmp_ctx, search_tuple, clust_rec, offsets);
-    }
+    /* prebuilt->m_result was set from the secondary index record above:
+    the search tuple is in the secondary index order, comparing it with
+    the clustered index record is meaningless. */
 
     if (prebuilt->m_need_to_access_clustered) {
 

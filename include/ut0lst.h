@@ -633,7 +633,7 @@ template <typename List>
 void ut_list_reverse(List &list) {
   ut_ad(UT_LIST_IS_INITIALISED(list));
   // NOTE: we use List::prev to iterate forward as .reverse() swaps arrows
-  for (auto elem = list.first_element; elem != nullptr; elem = List::prev(*elem)) {
+  for (auto elem = list.m_first_element; elem != nullptr; elem = List::prev(*elem)) {
     List::get_node(*elem).reverse();
   }
 
@@ -683,7 +683,7 @@ template <typename List>
 void ut_list_move_to_front(List &list, typename List::elem_type *elem) {
   ut_ad(ut_list_exists(list, elem));
 
-  if (list.first_element != elem) {
+  if (list.m_first_element != elem) {
     ut_list_remove(list, elem);
     ut_list_prepend(list, elem);
   }

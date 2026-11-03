@@ -225,7 +225,7 @@ void Btree::page_create(BufBlock *block, Index *index, ulint level, Mtr *mtr) no
   /* Set the level of the new index page */
   page_set_level(page, level, mtr);
 
-  block->m_check_index_page_at_flush = true;
+  block->set_check_index_page_at_flush();
 
   page_set_index_id(page, index->m_id, mtr);
 }
@@ -465,7 +465,7 @@ page_no_t Btree::create(ulint type, space_id_t space, uint64_t index_id, Index *
   /* Set the level of the new index page */
   page_set_level(page, 0, mtr);
 
-  block->m_check_index_page_at_flush = true;
+  block->set_check_index_page_at_flush();
 
   /* Set the index id of the page */
   page_set_index_id(page, index_id, mtr);
@@ -552,7 +552,7 @@ bool Btree::page_reorganize_low(bool recovery, BufBlock *block, const Index *ind
   /* Copy the old page to temporary space */
   buf_frame_copy(temp_page, page);
 
-  block->m_check_index_page_at_flush = true;
+  block->set_check_index_page_at_flush();
 
   /* Recreate the page: note that global data on page (possible
   segment headers, next page-field, etc.) is preserved intact */
@@ -633,7 +633,7 @@ void Btree::page_empty(BufBlock *block, Index *index, ulint level, Mtr *mtr) noe
 
   page_set_level(page, level, mtr);
 
-  block->m_check_index_page_at_flush = true;
+  block->set_check_index_page_at_flush();
 }
 
 Rec Btree::root_raise_and_insert(BtreeCursor *btr_cur, const DTuple *tuple, ulint n_ext, Mtr *mtr) noexcept {
@@ -1424,6 +1424,11 @@ void Btree::lift_page_up(Index *index, BufBlock *block, Mtr *mtr) noexcept {
   /* Make the father empty */
   page_empty(father_block, index, page_level, mtr);
 
+  /* Copy the records to the father page one by one (this also moves their
+  locks). The copy was lost with the compressed page code: every lift
+  emptied the father, and the level's records were gone. */
+  (void)page_copy_rec_list_end(m_sys, father_block, block, page_get_infimum_rec(page), index, mtr);
+
   m_sys.m_lock_sys->update_copy_and_discard(father_block, block);
 
   /* Go upward to root page, decrementing levels by one. */
@@ -1443,11 +1448,13 @@ void Btree::lift_page_up(Index *index, BufBlock *block, Mtr *mtr) noexcept {
 
 bool Btree::compress(BtreeCursor *cursor, Mtr *mtr) noexcept {
   page_t *merge_page;
-  BtreeCursor btr_cur{};
 
-  auto block = btr_cur.get_block();
-  auto page = btr_cur.get_page_no();
-  auto index = btr_cur.get_index();
+  /* Positioned on the node pointer to the page, in the father. */
+  BtreeCursor father_cursor{};
+
+  auto block = cursor->get_block();
+  auto page = cursor->get_page_no();
+  auto index = cursor->get_index();
 
   ut_ad(mtr->memo_contains(index->get_lock(), MTR_MEMO_X_LOCK));
   ut_ad(mtr->memo_contains(block, MTR_MEMO_PAGE_X_FIX));
@@ -1457,7 +1464,7 @@ bool Btree::compress(BtreeCursor *cursor, Mtr *mtr) noexcept {
   const auto right_page_no = page_get_next(page, mtr);
 
   auto heap = mem_heap_create(100);
-  auto offsets = page_get_father_block(nullptr, heap, index, block, mtr, &btr_cur);
+  auto offsets = page_get_father_block(nullptr, heap, index, block, mtr, &father_cursor);
 
   /* Decide the page to which we try to merge and which will inherit the locks */
 
@@ -1550,7 +1557,7 @@ bool Btree::compress(BtreeCursor *cursor, Mtr *mtr) noexcept {
   } else {
     auto orig_succ = page_copy_rec_list_end(m_sys, merge_block, block, page_get_infimum_rec(page), cursor->m_index, mtr);
 
-    ut_a(orig_succ.is_null());
+    ut_a(!orig_succ.is_null());
 
     /* Remove the page from the level list */
     level_list_remove(space, page, mtr);
@@ -1558,7 +1565,7 @@ bool Btree::compress(BtreeCursor *cursor, Mtr *mtr) noexcept {
     /* Replace the address of the old child node (= page) with the
     address of the merge page to the right */
 
-    node_ptr_set_child_page_no(btr_cur.get_rec(), offsets, right_page_no, mtr);
+    node_ptr_set_child_page_no(father_cursor.get_rec(), offsets, right_page_no, mtr);
     node_ptr_delete(index, merge_block, mtr);
 
     m_sys.m_lock_sys->update_merge_right(merge_block, orig_succ, block);
@@ -2027,8 +2034,8 @@ bool Btree::validate_level(Index *index, Trx *trx, ulint level) noexcept {
     if (right_page_no != FIL_NULL) {
       Rec right_rec;
 
-      const auto right_block = block_get(space, right_page_no, RW_X_LATCH, &mtr);
-      const auto right_page = right_block->get_frame();
+      right_block = block_get(space, right_page_no, RW_X_LATCH, &mtr);
+      right_page = right_block->get_frame();
 
       if (unlikely(page_get_prev(right_page, &mtr) != page_get_page_no(page))) {
         validate_report2(index, level, block, right_block);
@@ -2112,7 +2119,7 @@ bool Btree::validate_level(Index *index, Trx *trx, ulint level) noexcept {
         log_err(rec.to_string());
         ret = false;
 
-        if (node_ptr_fails(mtr, {space, right_page_no}, right_block, right_page)) {
+        if (node_ptr_fails(mtr, {space, right_page_no}, block, page)) {
           break;
         } else {
           continue;
@@ -2138,7 +2145,7 @@ bool Btree::validate_level(Index *index, Trx *trx, ulint level) noexcept {
 
           ret = false;
 
-          if (node_ptr_fails(mtr, {space, right_page_no}, right_block, right_page)) {
+          if (node_ptr_fails(mtr, {space, right_page_no}, block, page)) {
             break;
           } else {
             continue;
@@ -2204,7 +2211,7 @@ bool Btree::validate_level(Index *index, Trx *trx, ulint level) noexcept {
         }
       }
     }
-  } while (!node_ptr_fails(mtr, {space, right_page_no}, right_block, right_page));
+  } while (!node_ptr_fails(mtr, {space, right_page_no}, block, page));
 
   mem_heap_free(heap);
 

@@ -243,12 +243,18 @@ const char *Dict::scan_to(const char *ptr, const char *string) noexcept {
       quote = *ptr;
     } else {
       /* Outside quotes: look for the keyword. */
+      bool match{true};
+
       for (ulint i{}; string[i]; ++i) {
         if (toupper((int)(unsigned char)(ptr[i])) != toupper((int)(unsigned char)(string[i]))) {
-          continue;
+          match = false;
+          break;
         }
       }
-      break;
+
+      if (match) {
+        break;
+      }
     }
   }
 
@@ -336,8 +342,8 @@ const char *Dict::scan_id(
     auto d = reinterpret_cast<char *>(mem_heap_alloc(heap, len + 1));
     str = d;
 
-    s = d;
-
+    /* s is the source: the identifier after the opening quote; a doubled
+    quote inside it stands for one. */
     while (len--) {
       if ((*d++ = *s++) == quote) {
         s++;
@@ -359,6 +365,7 @@ const char *Dict::scan_id(
     auto dst = reinterpret_cast<char *>(mem_heap_alloc(heap, len));
 
     ib_utf8_convert_from_id(cs, dst, str, len);
+    *id = dst;
 
   } else {
     /* Encode using filename-safe characters. */
@@ -368,7 +375,6 @@ const char *Dict::scan_id(
 
     ib_utf8_convert_from_table_id(cs, dst, str, len);
     *id = dst;
-    ib_utf8_convert_from_table_id(cs, dst, str, len);
   }
 
   return ptr;

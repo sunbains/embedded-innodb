@@ -675,7 +675,7 @@ DbErr UndoNode::delete_mark_or_remove_secondary_index_entry(System &sys, QueThr 
     mtr_vers.start();
 
     {
-      auto success = pcur.restore_position(sys, BTR_SEARCH_LEAF, &mtr_vers, Current_location());
+      auto success = m_pcur.restore_position(sys, BTR_SEARCH_LEAF, &mtr_vers, Current_location());
       ut_a(success);
     }
 
@@ -894,7 +894,7 @@ DbErr UndoNode::undo_update_of_secondary_indexes(System &sys, QueThr *thr) noexc
       in queries we always retrieve the clustered index record or an earlier version of it, if the
       secondary index record through which we do the search is delete-marked. */
 
-      auto err = delete_mark_or_remove_secondary_index_entry(sys, thr, index, entry);
+      err = delete_mark_or_remove_secondary_index_entry(sys, thr, index, entry);
 
       if (err != DB_SUCCESS) {
         break;
@@ -1044,6 +1044,7 @@ DbErr UndoNode::undo_update(System &sys, QueThr *thr) noexcept {
 }
 
 QueThr *RowUndo::step(QueThr *thr) noexcept {
+  /* Relaxed, lossy under contention: the master thread only checks that it changed. */
   ++m_sys.m_srv->m_activity_count;
 
   auto trx = thr_get_trx(thr);

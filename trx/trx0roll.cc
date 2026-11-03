@@ -275,6 +275,7 @@ loop:
         mutex_exit(&sys.m_trx_sys->m_mutex);
         log_info("Cleaning up trx with id ", TRX_ID_PREP_PRINTF(trx->m_id));
         trx->cleanup_at_db_startup(sys);
+        sys.m_trx_sys->destroy_trx(trx);
         goto loop;
 
       case TRX_ACTIVE:
@@ -282,6 +283,10 @@ loop:
           mutex_exit(&sys.m_trx_sys->m_mutex);
           // FIXME: Need to get rid of this global access
           TrxRollback::rollback_active(sys, sys.m_config.m_recv.m_force_recovery, trx);
+
+          /* The rollback committed it: it is off the trx list. */
+          trx->m_graph = nullptr;
+          sys.m_trx_sys->destroy_trx(trx);
           goto loop;
         }
     }

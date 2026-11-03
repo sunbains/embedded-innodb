@@ -157,10 +157,8 @@ void rw_lock_create_func(
   lock->m_cfile_name = cfile_name;
   lock->m_cline = (unsigned int)cline;
 
-  lock->m_count_os_wait = 0;
-  lock->m_last_s_file_name = "not yet reserved";
+  lock->m_count_os_wait.store(0, std::memory_order_relaxed);
   lock->m_last_x_file_name = "not yet reserved";
-  lock->m_last_s_line = 0;
   lock->m_last_x_line = 0;
   lock->m_event = os_event_create(nullptr);
   lock->m_wait_ex_event = os_event_create(nullptr);
@@ -232,7 +230,7 @@ lock_loop:
     }
 
     /* these stats may not be accurate */
-    lock->m_count_os_wait++;
+    lock->m_count_os_wait.fetch_add(1, std::memory_order_relaxed);
 
     os_event_wait_low(lock->m_event, sig_count);
 
@@ -280,7 +278,7 @@ inline void rw_lock_x_lock_wait(
     if (lock->m_lock_word < 0) {
 
       /* These stats may not be accurate */
-      ++lock->m_count_os_wait;
+      lock->m_count_os_wait.fetch_add(1, std::memory_order_relaxed);
 
       /* Add debug info as it is needed to detect possible
       deadlock. We must add info for WAIT_EX thread for
@@ -383,7 +381,7 @@ lock_loop:
   }
 
   /* these stats may not be accurate */
-  lock->m_count_os_wait++;
+  lock->m_count_os_wait.fetch_add(1, std::memory_order_relaxed);
 
   os_event_wait_low(lock->m_event, sig_count);
 

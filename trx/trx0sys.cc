@@ -361,12 +361,13 @@ void TrxSys::trx_list_insert_ordered(Trx *in_trx) noexcept {
   }
 
   if (prev_trx != nullptr) {
+    /* in_trx goes before prev_trx, the first with a smaller id. */
     auto trx = UT_LIST_GET_PREV(m_trx_list, prev_trx);
 
     if (trx == nullptr) {
       m_trx_list.push_front(in_trx);
     } else {
-      UT_LIST_INSERT_AFTER(m_trx_list, prev_trx, in_trx);
+      UT_LIST_INSERT_AFTER(m_trx_list, trx, in_trx);
     }
   } else {
     m_trx_list.push_back(in_trx);
@@ -467,7 +468,7 @@ void TrxSys::init_at_db_start(IbRecovery recovery) noexcept {
       auto trx = get_on_id(undo->m_trx_id);
 
       if (trx == nullptr) {
-        trx = Trx::create(nullptr, nullptr);
+        trx = create_trx(nullptr);
 
         trx->m_is_recovered = true;
         trx->m_id = undo->m_trx_id;
@@ -729,10 +730,11 @@ ReadView *TrxSys::oldest_copy_or_open_new(trx_id_t cr_trx_id, MemHeap *heap) {
 
   auto n = old_view->m_n_trx_ids;
 
-  if (old_view->m_creator_trx_id > 0) {
+  /* The creator of the oldest view, if any, is active for the copy. */
+  bool needs_insert{old_view->m_creator_trx_id > 0};
+
+  if (needs_insert) {
     ++n;
-  } else {
-    n = 0;
   }
 
   auto view_copy = create_read_view_low(n, heap);
@@ -741,7 +743,6 @@ ReadView *TrxSys::oldest_copy_or_open_new(trx_id_t cr_trx_id, MemHeap *heap) {
   array of ids, if needs_insert is true: */
 
   ulint insert_done{0};
-  bool needs_insert{true};
 
   for (ulint i{}; i < n; ++i) {
     if (needs_insert && (i >= old_view->m_n_trx_ids || old_view->m_creator_trx_id > old_view->get_nth_trx_id(i))) {

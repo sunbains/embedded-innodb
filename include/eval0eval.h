@@ -152,7 +152,7 @@ inline lint eval_node_get_int_val(que_node_t *node) /*!< in: expression node */
 
   ut_ad(dfield_get_len(dfield) == 4);
 
-  return ((lint)mach_read_from_4((byte *)dfield_get_data(dfield)));
+  return lint(int32_t(mach_read_from_4((byte *)dfield_get_data(dfield))));
 }
 
 /** Gets a boolean value from a query node.

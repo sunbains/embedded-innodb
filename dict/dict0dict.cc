@@ -285,14 +285,16 @@ Table *Dict::table_get(const char *table_name, bool ref_count) noexcept {
     table_increment_handle_count(table, true);
   }
 
-  mutex_release();
-
+  /* The caller holds no table lock, so a TRUNCATE can discard the
+  tablespace under us. TRUNCATE holds the dictionary mutex for its whole
+  duration, compute the statistics under it. If table->m_ibd_file_missing
+  == true, this will print an error message and return without doing
+  anything. */
   if (table != nullptr && !table->m_stats.m_initialized) {
-    /* If table->m_ibd_file_missing == true, this will
-    print an error message and return without doing
-    anything. */
     update_statistics(table);
   }
+
+  mutex_release();
 
   return table;
 }
@@ -564,8 +566,12 @@ void Dict::table_remove_from_cache(Table *table) noexcept {
   ut_ad(mutex_own(&m_mutex));
   ut_ad(table->m_magic_n == DICT_TABLE_MAGIC_N);
 
-  /* Remove the foreign constraints from the cache */
-  for (auto foreign : table->m_foreign_list) {
+  /* Remove the foreign constraints from the cache. Each removal unlinks and
+  frees the constraint: don't iterate over the list, take the last one until
+  it is empty (as upstream). */
+  while (!table->m_foreign_list.empty()) {
+    auto foreign = table->m_foreign_list.back();
+
     foreign_remove_from_cache(foreign);
   }
 
@@ -576,9 +582,10 @@ void Dict::table_remove_from_cache(Table *table) noexcept {
     foreign->m_referenced_index = nullptr;
   }
 
-  /* Remove the indexes from the cache */
-  for (auto index : table->m_indexes) {
-    index_remove_from_cache(table, index);
+  /* Remove the indexes from the cache, last first: each removal frees the
+  index, the iterator of a range-for over the list read the freed node. */
+  while (!table->m_indexes.empty()) {
+    index_remove_from_cache(table, table->m_indexes.back());
   }
 
   /* Remove table from the hash tables of tables */

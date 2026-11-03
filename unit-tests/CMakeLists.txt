@@ -1,4 +1,4 @@
-# Copyright (C) 2025 Sunny Bains
+# Copyright (C) 2026 Sunny Bains
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -13,81 +13,116 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
-# Inherit configuration from parent project - no need to redefine PROJECT()
+# Unit tests, one program per component, see ut0env.h, with correctness
+# tests and performance tests (suites named *Perf, see ut0perf.h).
+#
+#   cmake --build build --target unit       build and run the correctness tests
+#   cmake --build build --target perf       build and run the performance tests
+#   ctest --test-dir build -L unit          run the correctness tests
+#   ctest --test-dir build -R test_lock     run one component's tests
+#
+# The tests create their databases under UNIT_TEST_TMPDIR ($TMPDIR by default).
+# The performance results are appended to UNIT_TEST_PERF_OUT (a CSV file).
 
-# Add debug definitions
 add_definitions(-DUNIV_BTR_PRINT -DUNIT_TESTING)
 
-# Set up libraries - use parent project's innodb target
 SET(LIBS innodb pthread m)
 
-# Include directories are inherited from parent project
+SET(UNIT_TEST_TMPDIR "$ENV{TMPDIR}" CACHE PATH "Directory for the unit tests' databases")
 
-# The innodb library already includes liburing dependency
+IF(NOT UNIT_TEST_TMPDIR)
+  SET(UNIT_TEST_TMPDIR "/tmp")
+ENDIF()
 
-# Set up dyn0dyn-t test
-add_executable(dyn0dyn-t dyn0dyn-t.cc unit_test_logger.cc)
+# The scaffolding linked into every test program. An object library: the
+# logger symbols it defines are needed by libinnodb.a, after it on the link line.
+SET(UNIT_TEST_PERF_OUT "${CMAKE_BINARY_DIR}/perf.csv" CACHE FILEPATH "CSV file of the performance results")
 
-# Link against Google Test and InnoDB
-target_link_libraries(dyn0dyn-t PRIVATE
-    GTest::gtest_main
-    GTest::gtest
-    ${LIBS}
-)
+add_library(ut0env OBJECT ut0env.cc ut0perf.cc unit_test_logger.cc)
+target_link_libraries(ut0env PUBLIC GTest::gtest ${LIBS})
 
-# Add test to CTest
-add_test(NAME dyn0dyn-t COMMAND dyn0dyn-t)
+add_custom_target(unit-build)
 
-# Set up ut0slst-t test
-add_executable(ut0slst-t ut0slst-t.cc unit_test_logger.cc)
+# ib_unit_test(<name> [source...]): a gtest program, <name>.cc by default,
+# registered with ctest twice: <name> runs its correctness tests under the
+# "unit" label, <name>_perf its *Perf suites under the "perf" label, alone.
+function(ib_unit_test name)
+  SET(sources ${ARGN})
 
-# Link against Google Test and InnoDB
-target_link_libraries(ut0slst-t PRIVATE
-    GTest::gtest_main
-    GTest::gtest
-    ${LIBS}
-)
+  IF(NOT sources)
+    SET(sources ${name}.cc)
+  ENDIF()
 
-# Add test to CTest
-add_test(NAME ut0slst-t COMMAND ut0slst-t)
+  add_executable(${name} ${sources})
+  target_link_libraries(${name} PRIVATE ut0env GTest::gtest_main GTest::gtest ${LIBS})
 
-# Set up test_lock test
-add_executable(test_system test_system.cc unit_test_logger.cc)
-target_link_libraries(test_system PRIVATE
-    GTest::gtest_main
-    GTest::gtest
-    ${LIBS}
-)
-add_test(NAME test_system COMMAND test_system)
+  add_test(NAME ${name} COMMAND ${name} --gtest_filter=-*Perf.*)
+  set_tests_properties(${name} PROPERTIES
+    LABELS unit
+    TIMEOUT 1200
+    ENVIRONMENT "TMPDIR=${UNIT_TEST_TMPDIR}")
 
-add_executable(test_mach test_mach.cc unit_test_logger.cc)
-target_link_libraries(test_mach PRIVATE
-    GTest::gtest_main
-    GTest::gtest
-    ${LIBS}
-)
-add_test(NAME test_mach COMMAND test_mach)
+  add_test(NAME ${name}_perf COMMAND ${name} --gtest_filter=*Perf.*)
+  set_tests_properties(${name}_perf PROPERTIES
+    LABELS perf
+    TIMEOUT 3600
+    RUN_SERIAL TRUE
+    ENVIRONMENT "TMPDIR=${UNIT_TEST_TMPDIR};UT_PERF_OUT=${UNIT_TEST_PERF_OUT}")
 
-add_executable(test_api test_api.cc unit_test_logger.cc)
-target_link_libraries(test_api PRIVATE
-    GTest::gtest_main
-    GTest::gtest
-    ${LIBS}
-)
-add_test(NAME test_api COMMAND test_api)
+  add_dependencies(unit-build ${name})
+endfunction()
 
-add_executable(test_wal test_wal.cc unit_test_logger.cc)
-target_link_libraries(test_wal PRIVATE
-    GTest::gtest_main
-    GTest::gtest
-    ${LIBS}
-)
-add_test(NAME test_wal COMMAND test_wal)
+# Building blocks.
+ib_unit_test(dyn0dyn-t)
+ib_unit_test(ut0slst-t)
+ib_unit_test(test_mach)
+ib_unit_test(test_mtr)
+ib_unit_test(test_rem)
+ib_unit_test(test_page)
+ib_unit_test(test_sync)
+ib_unit_test(test_mem)
+ib_unit_test(test_ut)
+ib_unit_test(test_os)
+ib_unit_test(test_data)
+ib_unit_test(test_wal)
 
-add_executable(test_lock test_lock.cc unit-test.cc unit_test_logger.cc)
+# Components of System, in start-up order.
+ib_unit_test(test_aio)
+ib_unit_test(test_fil)
+ib_unit_test(test_buf)
+ib_unit_test(test_log)
+ib_unit_test(test_recv)
+ib_unit_test(test_fsp)
+ib_unit_test(test_trx)
+ib_unit_test(test_lock)
+ib_unit_test(test_lock_mt)
+ib_unit_test(test_btr)
+ib_unit_test(test_undo)
+ib_unit_test(test_dict)
+ib_unit_test(test_dblwr)
+ib_unit_test(test_row_upd)
+ib_unit_test(test_row_ins)
+ib_unit_test(test_row_sel)
+ib_unit_test(test_row_undo)
+ib_unit_test(test_row_vers)
+ib_unit_test(test_row_merge)
+ib_unit_test(test_purge)
+ib_unit_test(test_pread)
+ib_unit_test(test_pars)
+ib_unit_test(test_srv)
 
-# Link test_lock
-target_link_libraries(test_lock PRIVATE ${LIBS})
+# The whole: System's life cycle and the C++ API.
+ib_unit_test(test_system)
+ib_unit_test(test_api)
 
-# Add test_lock to CTest
-add_test(NAME test_lock COMMAND test_lock)
+add_custom_target(unit
+  COMMAND ${CMAKE_CTEST_COMMAND} -L unit --output-on-failure -j 8
+  DEPENDS unit-build
+  WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+  USES_TERMINAL)
+
+add_custom_target(perf
+  COMMAND ${CMAKE_CTEST_COMMAND} -L perf --output-on-failure -V
+  DEPENDS unit-build
+  WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+  USES_TERMINAL)

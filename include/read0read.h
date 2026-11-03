@@ -94,10 +94,10 @@ struct ReadView {
 
     for (ulint i = 0; i < n_ids; ++i) {
 
-      int cmp = trx_id - get_nth_trx_id(n_ids - i - 1);
+      const auto id = get_nth_trx_id(n_ids - i - 1);
 
-      if (cmp <= 0) {
-        return cmp < 0;
+      if (trx_id <= id) {
+        return trx_id < id;
       }
     }
 

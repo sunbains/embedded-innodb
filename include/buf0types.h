@@ -38,6 +38,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 #include "sync0mutex.h"
 #include "sync0rw.h"
 #include "ut0mem.h"
+#include "ut0stat.h"
 
 /** Transaction system. */
 struct TrxSys;
@@ -206,9 +207,16 @@ struct BufPage {
    * @return The freed_page_clock.
    */
   [[nodiscard]] ulint get_freed_page_clock() const {
-    /* This is sometimes read without holding buf_pool_mutex. */
-    return m_freed_page_clock;
+    /* This is sometimes read without holding buf_pool_mutex: a relaxed
+    load, the writers hold the buf_pool mutex. */
+    return ut::stat_load(m_freed_page_clock);
   }
+
+  /** @return the buffer fix count. Relaxed load: callers that don't hold
+  the block mutex (asserts, get_frame()) only need a value that was
+  current at some point. Decisions on it (eviction, relocation, flush)
+  are made under the block mutex. */
+  [[nodiscard]] uint32_t get_fix_count() const { return ut::stat_load(m_buf_fix_count); }
 
   /**
   * Gets the space id of a page.
@@ -290,29 +298,35 @@ struct BufPage {
   State transitions from BUF_BLOCK_READY_FOR_USE to BUF_BLOCK_MEMORY
   need not be protected by buf_page_get_mutex().
   @see enum BufPageState */
-  unsigned m_state : 3;
+  uint8_t m_state;
 
   /** if this block is currently being flushed to disk, this tells the
    * flush_type.  @see enum BufFlushType */
-  unsigned m_flush_type : 2;
+  uint8_t m_flush_type;
 
   /** type of pending I/O operation; also protected by buf_pool_mutex
   @see enum * BufIoFix */
-  unsigned m_io_fix : 2;
+  uint8_t m_io_fix;
 
-  /** count of how manyfold this block is currently bufferfixed */
-  unsigned m_buf_fix_count : 25;
+  /** count of how manyfold this block is currently bufferfixed. Written
+  only under the block mutex, with relaxed atomic stores (see
+  BufBlock::fix_inc()) because asserts read it without that mutex. */
+  uint32_t m_buf_fix_count;
   /* @} */
 
   bool m_old;
 
-  /** the value of BufPool::freed_page_clock when this block was the last time
-  put to the head of the LRU list; a thread is allowed to read this for
-  heuristic purposes without holding any mutex or latch */
-  unsigned m_freed_page_clock : 31;
+  /** the value of BufPool::freed_page_clock (its low 31 bits) when this
+  block was the last time put to the head of the LRU list; a thread is
+  allowed to read this for heuristic purposes without holding any mutex or
+  latch. Was a 31-bit bit-field: a plain word now so that the unlatched
+  reads can be relaxed atomic loads (ut::stat_load), the writers use
+  ut::stat_store under the buf_pool mutex. */
+  uint32_t m_freed_page_clock;
 
   /** time of first access, or 0 if the block was never accessed in the
-  buffer pool */
+  buffer pool. Written under the buf_pool mutex, read without it as a
+  heuristic (buf_page_is_accessed()): relaxed atomic accesses. */
   uint32_t m_access_time{};
 
   /** @name Page flushing fields
@@ -464,6 +478,23 @@ struct BufBlock {
   bool m_check_index_page_at_flush;
   /* @} */
 
+  /** Note that this is an index page, to be checked before it's flushed.
+  Callers hold only an S latch (or none), so several threads set it at
+  once and the flusher reads it: relaxed atomic accesses. Test first so
+  the common case (already set) doesn't dirty the block's cache line on
+  every B-tree descent. */
+  void set_check_index_page_at_flush() {
+    if (!ut::stat_load(m_check_index_page_at_flush)) {
+      ut::stat_store(m_check_index_page_at_flush, true);
+    }
+  }
+
+  /** Clear m_check_index_page_at_flush, see set_check_index_page_at_flush(). */
+  void clear_check_index_page_at_flush() { ut::stat_store(m_check_index_page_at_flush, false); }
+
+  /** @return m_check_index_page_at_flush (relaxed load: a hint). */
+  [[nodiscard]] bool get_check_index_page_at_flush() const { return ut::stat_load(m_check_index_page_at_flush); }
+
   /** @name Optimistic search field */
   /* @{ */
 
@@ -492,32 +523,37 @@ struct BufBlock {
 
 /** @brief The buffer pool statistics structure. */
 struct BufPoolStat {
+  /* All fields are ut::Relaxed: n_page_gets is bumped without any latch,
+  the others under the buf_pool mutex, and they are all read without it
+  (master thread I/O heuristics, monitor output, export_innodb_status).
+  Relaxed keeps those reads race free and the struct copyable. */
+
   /** number of page gets performed; this field is NOT protected
   by the buffer pool mutex */
-  ulint n_page_gets{};
+  ut::Relaxed<ulint> n_page_gets{};
 
   /** number read operations */
-  ulint n_pages_read{};
+  ut::Relaxed<ulint> n_pages_read{};
 
   /** number write operations */
-  ulint n_pages_written{};
+  ut::Relaxed<ulint> n_pages_written{};
 
   /** number of pages created in the pool with no read */
-  ulint n_pages_created{};
+  ut::Relaxed<ulint> n_pages_created{};
 
   /** number of pages read in as part of read ahead */
-  ulint n_ra_pages_read{};
+  ut::Relaxed<ulint> n_ra_pages_read{};
 
   /** number of read ahead pages that are evicted without
   being accessed */
-  ulint n_ra_pages_evicted{};
+  ut::Relaxed<ulint> n_ra_pages_evicted{};
 
   /** number of pages made young, in calls to m_LRU->make_block_young() */
-  ulint n_pages_made_young{};
+  ut::Relaxed<ulint> n_pages_made_young{};
 
   /** number of pages not made young because the first access
   was not long enough ago, in buf_page_peek_if_too_old() */
-  ulint n_pages_not_made_young{};
+  ut::Relaxed<ulint> n_pages_not_made_young{};
 };
 
 /** @brief The buffer pool structure.
@@ -926,8 +962,10 @@ struct BufPool {
   mutable Mutex m_mutex{};
 
 #if defined UNIV_DEBUG || defined UNIV_BUF_DEBUG
-  /** This is used to insert validation operations in excution in the debug version */
-  mutable ulint m_dbg_counter{};
+  /** This is used to insert validation operations in excution in the debug version.
+  Bumped by every page get without any latch: relaxed, a lost tick only moves
+  the next validate() a little. */
+  mutable ut::Relaxed<ulint> m_dbg_counter{};
 
   /** Flag to forbid the release of the buffer pool mutex.
   Protected by buf_pool_mutex. */
@@ -951,17 +989,19 @@ struct BufPool {
   BufPage::in_file() == true, indexed by (m_nspace_id, m_page_no) */
   page_hash_t *m_page_hash{};
 
-  /** Number of pending read operations */
-  ulint m_n_pend_reads{};
+  /** Number of pending read operations. Written under the buf_pool mutex,
+  read without it for heuristics and monitoring (get_n_pending_ios(),
+  recovery read throttling): relaxed. */
+  ut::Relaxed<ulint> m_n_pend_reads{};
 
   /** When buf_print_io was last time called */
-  time_t m_last_printout_time;
+  time_t m_last_printout_time{};
 
   /** current statistics */
-  BufPoolStat m_stat;
+  BufPoolStat m_stat{};
 
   /** old statistics */
-  BufPoolStat m_old_stat;
+  BufPoolStat m_old_stat{};
 
   /* @} */
 
@@ -973,14 +1013,16 @@ struct BufPool {
   UT_LIST_BASE_NODE_T(BufPage, m_list) m_flush_list;
 
   /** this is true when a flush of the given type is being initialized */
-  bool m_init_flush[BUF_FLUSH_N_TYPES];
+  bool m_init_flush[BUF_FLUSH_N_TYPES]{};
 
-  /** This is the number of pending writes in the given flush type */
-  ulint m_n_flush[BUF_FLUSH_N_TYPES];
+  /** This is the number of pending writes in the given flush type. Written
+  under the buf_pool mutex, read without it in get_n_pending_ios() and
+  is_io_pending() (heuristics): relaxed. */
+  ut::Relaxed<ulint> m_n_flush[BUF_FLUSH_N_TYPES]{};
 
   /** this is in the set state when there is no flush batch of the given type
    * running */
-  CondVar *m_no_flush[BUF_FLUSH_N_TYPES];
+  CondVar *m_no_flush[BUF_FLUSH_N_TYPES]{};
 
   /** A red-black tree is used exclusively during recovery to speed up
   insertions in the flush_list. This tree contains blocks in order of
@@ -992,8 +1034,8 @@ struct BufPool {
   /** a sequence number used to count the number of buffer blocks removed
   from the end of the LRU list; NOTE that this counter may wrap around
   at 4 billion! A thread is allowed to read this for heuristic purposes
-  without holding any mutex or latch */
-  ulint m_freed_page_clock{};
+  without holding any mutex or latch: relaxed. Written under the mutex. */
+  ut::Relaxed<ulint> m_freed_page_clock{};
 
   /** when an LRU flush ends for a page, this is incremented by one;
   this is set to zero when a buffer block is allocated */
@@ -1020,8 +1062,8 @@ struct BufPool {
   shrinks or grows! */
   ulint m_LRU_old_len{};
 
-  /** Number of write requests issued */
-  ulint m_write_requests{};
+  /** Number of write requests issued (a statistic) */
+  ut::Relaxed<ulint> m_write_requests{};
 
   /** LRU replacement algorithm */
   std::unique_ptr<BufLru> m_LRU{};

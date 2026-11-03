@@ -238,7 +238,10 @@ bool BufPool::peek_if_too_old(const BufPage *bpage) {
     /* If eviction has not started yet, do not update the statistics or move blocks
     in the LRU list.  This is either the warm-up phase or an in-memory workload. */
     return false;
-  } else if (m_LRU->get_old_threshold_ms() > 0 && bpage->m_old) {
+  } else if (m_LRU->get_old_threshold_ms() > 0 && ut::stat_load(bpage->m_old)) {
+    /* A heuristic without the buf_pool mutex: m_old, m_access_time and the
+    freed page clocks are read with relaxed loads (their writers hold the
+    mutex), any value read is acceptable. */
     auto access_time = buf_page_is_accessed(bpage);
 
     if (access_time > 0 && ((uint32_t)(ut_time_ms() - access_time)) >= m_LRU->get_old_threshold_ms()) {
@@ -250,9 +253,9 @@ bool BufPool::peek_if_too_old(const BufPage *bpage) {
     return false;
 
   } else {
-    /* FIXME: bpage->m_freed_page_clock is 31 bits */
+    /* bpage->m_freed_page_clock keeps the low 31 bits, see BufLru::add_block_low(). */
     return (m_freed_page_clock & ((1UL << 31) - 1)) >
-           ((ulint)bpage->m_freed_page_clock +
+           (bpage->get_freed_page_clock() +
             (m_curr_size * (BufLru::OLD_RATIO_DIV - m_LRU->get_old_ratio()) / (BufLru::OLD_RATIO_DIV * 4)));
   }
 }
@@ -282,7 +285,8 @@ void BufPool::block_free(BufBlock *block) {
 
 void BufPool::release(BufBlock *block, ulint rw_latch, Mtr *mtr) {
   ut_a(block->get_state() == BUF_BLOCK_FILE_PAGE);
-  ut_a(block->m_page.m_buf_fix_count > 0);
+  /* Unlatched read of our own fix: relaxed, see BufPage::get_fix_count(). */
+  ut_a(block->m_page.get_fix_count() > 0);
 
   if (rw_latch == RW_X_LATCH && mtr->m_modifications) {
     mutex_acquire();
@@ -294,9 +298,7 @@ void BufPool::release(BufBlock *block, ulint rw_latch, Mtr *mtr) {
 
   mutex_enter(&block->m_mutex);
 
-  
-
-  --block->m_page.m_buf_fix_count;
+  block->fix_dec();
 
   mutex_exit(&block->m_mutex);
 
@@ -340,7 +342,9 @@ bool BufPool::is_corrupted(const byte *read_buf) {
   if (likely(m_sys.m_config.m_buf_pool.m_use_checksums)) {
     auto checksum = mach_read_from_4(read_buf + FIL_PAGE_SPACE_OR_CHKSUM);
 
-    if (checksum != 0 && checksum != BUF_NO_CHECKSUM_MAGIC && checksum != buf_page_data_calc_checksum(read_buf)) {
+    /* crc32::NO_CHECKSUM: written when every page had a constant checksum. */
+    if (checksum != 0 && checksum != BUF_NO_CHECKSUM_MAGIC && checksum != crc32::NO_CHECKSUM &&
+        checksum != buf_page_data_calc_checksum(read_buf)) {
 
       return true;
     }
@@ -416,7 +420,7 @@ void BufPool::block_init(BufBlock *block, byte *frame) {
 
   ut_d(block->m_page.m_file_page_was_freed = false);
 
-  block->m_check_index_page_at_flush = false;
+  block->clear_check_index_page_at_flush();
 
   ut_d(block->m_page.m_in_page_hash = false);
   ut_d(block->m_page.m_in_flush_list = false);
@@ -564,7 +568,9 @@ bool BufPool::open(uint64_t pool_size) {
   }
 
   /* 3. Initialize LRU fields */
-  /* All fields are initialized by mem_zalloc(). */
+  /* (The members have initializers: the pool is not zero allocated any more.
+  m_n_flush and m_init_flush were garbage in a second instance of a process,
+  whose startup waited for a flush batch that never ran.) */
 
   /* Initialize red-black tree for fast insertions into the flush_list
   during recovery process.  As this initialization is done while holding
@@ -583,6 +589,10 @@ bool BufPool::open(uint64_t pool_size) {
 
 void BufPool::close() {
   delete m_page_hash;
+
+  if (m_recovery_flush_list != nullptr) {
+    flush_set_destroy(m_recovery_flush_list);
+  }
 
   for (ulint i = BUF_FLUSH_LRU; i < BUF_FLUSH_N_TYPES; i++) {
     os_event_free(m_no_flush[i]);
@@ -654,7 +664,7 @@ void BufPool::check_index_page_at_flush(const PageId &page_id) {
   auto block = hash_get_block(page_id);
 
   if (block != nullptr && block->get_state() == BUF_BLOCK_FILE_PAGE) {
-    block->m_check_index_page_at_flush = false;
+    block->clear_check_index_page_at_flush();
   }
 
   mutex_release();
@@ -850,7 +860,7 @@ BufBlock *BufPool::get(Request &req, BufBlock *guess) {
   ut_ad(!block->m_page.m_file_page_was_freed);
 
   ut_ad(++m_dbg_counter % 5771 || validate());
-  ut_ad(block->m_page.m_buf_fix_count > 0);
+  ut_ad(block->m_page.get_fix_count() > 0);
   ut_ad(block->get_state() == BUF_BLOCK_FILE_PAGE);
 
   switch (req.m_rw_latch) {
@@ -983,7 +993,7 @@ bool BufPool::try_get(Request &req) {
     req.m_mtr->memo_push(req.m_guess, fix_type);
 
     ut_ad(++m_dbg_counter % 5771 || validate());
-    ut_ad(req.m_guess->m_page.m_buf_fix_count > 0);
+    ut_ad(req.m_guess->m_page.get_fix_count() > 0);
     ut_ad(req.m_guess->get_state() == BUF_BLOCK_FILE_PAGE);
     ut_ad(!req.m_guess->m_page.m_file_page_was_freed);
 
@@ -1075,7 +1085,7 @@ bool BufPool::try_get_known_nowait(Request &req) {
     req.m_mtr->memo_push(req.m_guess, fix_type);
 
     ut_ad(++m_dbg_counter % 5771 || validate());
-    ut_ad(req.m_guess->m_page.m_buf_fix_count > 0);
+    ut_ad(req.m_guess->m_page.get_fix_count() > 0);
     ut_ad(req.m_guess->get_state() == BUF_BLOCK_FILE_PAGE);
     ut_ad(!req.m_guess->m_page.m_file_page_was_freed);
 
@@ -1140,7 +1150,7 @@ const BufBlock *BufPool::try_get_by_page_id(Request &req) {
   req.m_mtr->memo_push(block, fix_type);
 
   ut_ad(++m_dbg_counter % 5771 || validate());
-  ut_ad(block->m_page.m_buf_fix_count > 0);
+  ut_ad(block->m_page.get_fix_count() > 0);
   ut_ad(block->get_state() == BUF_BLOCK_FILE_PAGE);
   ut_ad(!block->m_page.m_file_page_was_freed);
 
@@ -1180,7 +1190,7 @@ void BufPool::page_init(const PageId &page_id, BufBlock *block) {
   }
 #endif /* UNIV_DEBUG_VALGRIND */
 
-  block->m_check_index_page_at_flush = false;
+  block->clear_check_index_page_at_flush();
 
   /* Insert into the hash table of file pages */
 

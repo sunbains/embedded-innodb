@@ -733,6 +733,13 @@ static void row_merge_write_rec_low(
 #define row_merge_write_rec_low(b, e, size, fd, foffs, mrec, offsets) row_merge_write_rec_low(b, e, mrec, offsets)
 #endif /* !UNIV_DEBUG */
 {
+#ifdef UNIV_DEBUG
+  /* The header (1 or 2 bytes) and the record end at b + size. */
+  const byte *const end = b + size;
+
+  ut_ad(e == offsets.extra_size() + 1);
+#endif /* UNIV_DEBUG */
+
   if (e < 0x80) {
     *b++ = (byte)e;
   } else {
@@ -741,7 +748,7 @@ static void row_merge_write_rec_low(
   }
 
   memcpy(b, mrec - offsets.extra_size(), offsets.size());
-  ut_ad(b + offsets.size() == b + size);
+  ut_ad(b + offsets.size() == end);
 }
 
 /** Write a merge record.
@@ -766,11 +773,9 @@ static byte *row_merge_write_rec(
   ut_ad(mrec < buf[0] || mrec > buf[1]);
 
   /* Normalize extra_size.  Value 0 signals "end of list". */
-  auto extra_size = offsets.extra_size();
+  const auto extra_size = offsets.extra_size() + 1;
 
-  auto size = extra_size + (extra_size >= 0x80) + offsets.data_size();
-
-  ++extra_size;
+  const auto size = extra_size + (extra_size >= 0x80) + offsets.data_size();
 
   if (unlikely(b + size >= block[1])) {
     /* The record spans two blocks.

@@ -831,6 +831,7 @@ void Rec::set_nth_field_null_bit(ulint i, bool val) noexcept {
 }
 
 void Rec::set_nth_field_sql_null(ulint n) noexcept {
+  data_write_sql_null(get() + get_field_start_offs(n), get_nth_field_size(n));
   set_nth_field_null_bit(n, true);
 }
 

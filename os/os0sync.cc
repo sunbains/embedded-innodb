@@ -23,6 +23,8 @@ synchronization primitives.
 Created 9/6/1995 Heikki Tuuri
 *******************************************************/
 
+#include <atomic>
+#include <thread>
 #include "os0sync.h"
 
 #include "srv0srv.h"
@@ -58,7 +60,11 @@ struct OsMutex {
   static void destroy(OsMutex *);
 
   void lock() {
+    ut_a(m_owner.load(std::memory_order_relaxed) != std::this_thread::get_id());
+
     static_cast<std::mutex *>(m_ptr)->lock();
+
+    m_owner.store(std::this_thread::get_id(), std::memory_order_relaxed);
 
     ++m_count;
 
@@ -69,6 +75,8 @@ struct OsMutex {
     ut_a(m_count == 1);
 
     --m_count;
+
+    m_owner.store(std::thread::id{}, std::memory_order_relaxed);
 
     static_cast<std::mutex *>(m_ptr)->unlock();
   }
@@ -83,6 +91,9 @@ struct OsMutex {
   does not recursively lock the mutex: we do not assume
   that the OS mutex supports recursive locking, though NT seems to do that */
   uint16_t m_count{};
+
+  /** The thread holding the mutex, to catch a recursive lock. */
+  std::atomic<std::thread::id> m_owner{};
 
 };
 
@@ -124,12 +135,14 @@ void CondVar::wait(int64_t reset_sig_count) {
 }
 
 ulint CondVar::wait_time(std::chrono::microseconds timeout, int64_t reset_sig_count) {
-  std::chrono::time_point<std::chrono::system_clock> timepoint;
+  using Clock = std::chrono::steady_clock;
 
-  if (timeout != std::chrono::microseconds::max()) {
-    timepoint = std::chrono::system_clock::now() + timeout;
-  } else {
-    timepoint = std::chrono::time_point<std::chrono::system_clock>::max();
+  const auto now = Clock::now();
+  const auto room = std::chrono::duration_cast<std::chrono::microseconds>(Clock::time_point::max() - now);
+  auto timepoint = Clock::time_point::max();
+
+  if (timeout.count() >= 0 && timeout < room) {
+    timepoint = now + timeout;
   }
 
   std::unique_lock<std::mutex> lk(m_mutex);

@@ -60,9 +60,7 @@ static void trx_purge_arr_get_biggest(TrxUndoArr *arr, trx_id_t *trx_no, undo_no
     if (cell->in_use) {
       ++n;
 
-      int trx_cmp = cell->trx_no - pair_trx_no;
-
-      if (trx_cmp > 0 || (trx_cmp == 0 && cell->undo_no >= pair_undo_no)) {
+      if (cell->trx_no > pair_trx_no || (cell->trx_no == pair_trx_no && cell->undo_no >= pair_undo_no)) {
 
         pair_trx_no = cell->trx_no;
         pair_undo_no = cell->undo_no;
@@ -186,12 +184,12 @@ void PurgeSys::free_segment(TrxRseg *rseg, FilAddr hdr_addr, ulint n_removed_log
 
   mutex_exit(&m_sys.m_trx_sys->m_mutex);
 
-  do {
-    /* Here we assume that a file segment with just the header
-    page can be freed in a few steps, so that the buffer pool
-    is not flooded with bufferfixed pages: see the note in
-    fsp0fsp.c. */
-  } while (m_sys.m_fsp->fseg_free_step(seg_hdr + TRX_UNDO_FSEG_HEADER, &mtr));
+  /* Here we assume that a file segment with just the header page can be
+  freed in a few steps, so that the buffer pool is not flooded with
+  bufferfixed pages: see the note in fsp0fsp.cc. fseg_free_step() returns
+  true once the segment is freed. */
+  while (!m_sys.m_fsp->fseg_free_step(seg_hdr + TRX_UNDO_FSEG_HEADER, &mtr)) {
+  }
 
   auto hist_size = mtr.read_ulint(rseg_hdr + TRX_RSEG_HISTORY_SIZE, MLOG_4BYTES);
   ut_ad(hist_size >= seg_size);
@@ -234,13 +232,13 @@ void PurgeSys::truncate_rseg_history(TrxRseg *rseg, trx_id_t limit_trx_no, undo_
 
     auto undo_page = m_sys.m_undo->page_get(rseg->m_space, hdr_addr.m_page_no, &mtr);
     auto log_hdr = undo_page + hdr_addr.m_boffset;
-    auto cmp = mach_read_from_8(log_hdr + TRX_UNDO_TRX_NO) - limit_trx_no;
+    const auto log_trx_no = mach_read_from_8(log_hdr + TRX_UNDO_TRX_NO);
 
-    if (cmp == 0) {
+    if (log_trx_no == limit_trx_no) {
       m_sys.m_undo->truncate_start(rseg, rseg->m_space, hdr_addr.m_page_no, hdr_addr.m_boffset, limit_undo_no);
     }
 
-    if (cmp >= 0) {
+    if (log_trx_no >= limit_trx_no) {
       mutex_enter(&m_sys.m_trx_sys->m_mutex);
 
       ut_a(m_sys.m_trx_sys->m_rseg_history_len >= n_removed_logs);
@@ -719,6 +717,8 @@ ulint PurgeSys::run() noexcept {
   QueThr *thr;
   ulint old_pages_handled;
 
+  std::lock_guard run_guard(m_run_mutex);
+
   mutex_enter(&m_mutex);
 
   if (m_trx->m_n_active_thrs > 0) {
@@ -744,25 +744,36 @@ ulint PurgeSys::run() noexcept {
 
   /* Determine how much data manipulation language (DML) statements
   need to be delayed in order to reduce the lagging of the purge
-  thread. */
-  m_sys.m_srv->m_dml_needed_delay = 0; /* in microseconds; default: no delay */
+  thread. In microseconds; default: no delay.
+
+  Computed in a local and published with one store: user threads read
+  m_dml_needed_delay without a latch (delay_dml_if_needed()), and the old
+  code stored 0 first, so they could see a transient 0. The cap was
+  ULINT_MAX, "4295 seconds" when ulint was 32 bits; with a 64-bit ulint
+  that is an endless sleep. Cap at UINT32_MAX microseconds (the 4295 s
+  that upstream meant). */
+  ulint delay{};
 
   /* If we cannot advance the 'purge view' because of an old
   'consistent read view', then the DML statements cannot be delayed.
   Also, m_sys.m_config.m_trx.m_max_purge_lag <= 0 means 'infinity'. */
   if (m_sys.m_config.m_trx.m_max_purge_lag > 0 && !UT_LIST_GET_LAST(m_sys.m_trx_sys->m_view_list)) {
-    float ratio = (float)m_sys.m_trx_sys->m_rseg_history_len / m_sys.m_config.m_trx.m_max_purge_lag;
-    if (ratio > (float)ULINT_MAX / 10000) {
+    const double ratio = double(m_sys.m_trx_sys->m_rseg_history_len) / double(m_sys.m_config.m_trx.m_max_purge_lag);
+    constexpr ulint max_delay = UINT32_MAX;
+
+    if (ratio > double(max_delay) / 10000) {
       /* Avoid overflow: maximum delay is 4295 seconds */
-      m_sys.m_srv->m_dml_needed_delay = ULINT_MAX;
+      delay = max_delay;
     } else if (ratio > 1) {
       /* If the history list length exceeds the
       innodb_max_purge_lag, the
       data manipulation statements are delayed
       by at least 5000 microseconds. */
-      m_sys.m_srv->m_dml_needed_delay = (ulint)((ratio - .5) * 10000);
+      delay = ulint((ratio - .5) * 10000);
     }
   }
+
+  m_sys.m_srv->m_dml_needed_delay = delay;
 
   m_view = m_sys.m_trx_sys->oldest_copy_or_open_new(0, m_heap);
 

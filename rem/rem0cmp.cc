@@ -92,7 +92,7 @@ bool cmp_cols_are_equal(const Column *col1, const Column *col2, bool check_chars
     and only if the charset-collation is the same */
 
     if (check_charsets) {
-      return dtype_get_charset_coll(col1->prtype == dtype_get_charset_coll(col2->prtype));
+      return dtype_get_charset_coll(col1->prtype) == dtype_get_charset_coll(col2->prtype);
     } else {
       return true;
     }
@@ -592,8 +592,6 @@ int cmp_rec_rec_simple(
 
   ut_ad(offsets1.n_fields() >= n_uniq);
   ut_ad(offsets2.n_fields() >= n_uniq);
-
-  ut_ad(rec_offs_base(offsets1) == rec_offs_base(offsets2));
 
   for (cur_field = 0; cur_field < n_uniq; cur_field++) {
 

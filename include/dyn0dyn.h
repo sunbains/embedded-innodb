@@ -295,6 +295,31 @@ struct DynamicArray {
     }
   }
 
+  /** Empties the array: frees the blocks added after the first one and
+  marks the first block unused, so the instance can be reused. */
+  void clear() noexcept {
+    ut_ad(m_block.m_magic_n == DYN_BLOCK_MAGIC_N);
+#ifdef UNIV_DEBUG
+    ut_ad(!m_is_open);
+#endif /* UNIV_DEBUG */
+
+    if (m_heap != nullptr) [[unlikely]] {
+      for (auto block : m_blocks) {
+        if (block != &m_block) {
+          call_destructor(block);
+        }
+      }
+
+      mem_heap_free(m_heap);
+      m_heap = nullptr;
+
+      m_blocks.clear();
+      m_blocks.push_back(&m_block);
+    }
+
+    m_block.m_used = 0;
+  }
+
   bool single_block() const noexcept { return m_heap == nullptr; }
 
 #ifdef UNIV_DEBUG

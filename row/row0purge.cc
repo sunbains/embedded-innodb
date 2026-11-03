@@ -313,9 +313,9 @@ void RowPurge::upd_exist_or_extern(System &sys) {
     }
   }
 
+skip_secondaries:
   mem_heap_free(heap);
 
-skip_secondaries:
   /* Free possible externally stored fields */
   for (ulint i = 0; i < RowUpdate::upd_get_n_fields(m_update); i++) {
 

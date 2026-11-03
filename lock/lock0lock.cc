@@ -359,16 +359,6 @@ struct TableLockGetNode {
   static const UtListNode<Lock> &get_node(const Lock &lock) { return lock.m_table.m_locks; }
 };
 
-struct RecLockGetNode {
-  /**
-   * @brief Functor for accessing the embedded node within a table lock.
-   *
-   * @param[in] lock The lock to get the node from.
-   *
-   * @return The embedded node within the lock.
-   */
-  static const UtListNode<Lock> &get_node(const Lock &lock) { return lock.m_rec.m_rec_locks; }
-};
 
 /* Flags for recursive deadlock search */
 constexpr ulint LOCK_VICTIM_IS_START = 1;
@@ -794,32 +784,33 @@ Table *LockSys::get_src_table(Trx *trx, Table *dest, LockMode *mode) noexcept {
 }
 
 bool LockSys::is_table_exclusive(Table *table, Trx *trx) noexcept {
+  bool ok{false};
+
   mutex_enter(&m_sys.m_trx_sys->m_mutex);
 
   for (auto lock : table->m_locks) {
     if (lock->m_trx != trx) {
-      /* A lock on the table is held by some other transaction.
-      Other table locks than LOCK_IX are not allowed. */
+      /* A lock on the table is held by some other transaction. */
+      ok = false;
       break;
 
     } else if (lock->type() != LOCK_TABLE) {
       /* We are interested in table locks only. */
+      continue;
+
+    } else if (lock->mode() == LOCK_IX) {
+      ok = true;
+
     } else {
-      switch (lock->mode()) {
-        case LOCK_IX:
-          mutex_exit(&m_sys.m_trx_sys->m_mutex);
-          return true;
-        default:
-          /* Other table locks than LOCK_IX are not allowed. */
-          mutex_exit(&m_sys.m_trx_sys->m_mutex);
-          return false;
-      }
+      /* Other table locks than LOCK_IX are not allowed. */
+      ok = false;
+      break;
     }
   }
 
   mutex_exit(&m_sys.m_trx_sys->m_mutex);
 
-  return false;
+  return ok;
 }
 
 #ifdef UNIV_DEBUG
@@ -1457,7 +1448,7 @@ void LockSys::rec_inherit_to_gap(const BufBlock *heir_block, const BufBlock *blo
   if (auto it = m_rec_locks.find(block->get_page_id()); it != m_rec_locks.end()) {
     for (auto lock : it->second) {
       if (lock->rec_is_nth_bit_set(heap_no) && !lock->rec_is_insert_intention() &&
-          lock->m_trx->m_isolation_level != TRX_ISO_READ_COMMITTED && lock->mode() == LOCK_X) {
+          !(lock->m_trx->m_isolation_level == TRX_ISO_READ_COMMITTED && lock->mode() == LOCK_X)) {
         (void)rec_add_to_queue(
           LockMode(LOCK_REC | LOCK_GAP | Lock_mode_type(lock->mode())), heir_block, heir_heap_no, lock->rec_index(), lock->m_trx
         );
@@ -1495,10 +1486,13 @@ void LockSys::rec_move(
   auto it = m_rec_locks.find(donator->get_page_id());
 
   if (it != m_rec_locks.end()) {
+    /* rec_add_to_queue() may add the receiver page to the map: a rehash
+    invalidates it, not the reference to the donator's list. */
+    auto &locks = it->second;
 
-    for (auto lock : it->second) {
+    for (auto lock : locks) {
       if (lock->rec_is_nth_bit_set(donator_heap_no)) {
-        const auto type_mode = lock->mode();
+        const auto type_mode = lock->m_type_mode;
 
         lock->rec_reset_nth_bit(donator_heap_no);
 
@@ -1513,7 +1507,7 @@ void LockSys::rec_move(
       }
     }
 
-    ut_ad(rec_exists(it->second, donator_heap_no) == nullptr);
+    ut_ad(rec_exists(locks, donator_heap_no) == nullptr);
   }
 }
 
@@ -2435,7 +2429,7 @@ void LockSys::remove_all_on_table_for_trx(Table *table, Trx *trx, bool remove_sx
   while (lock != nullptr) {
     auto prev_lock = UT_LIST_GET_PREV(m_trx_locks, lock);
 
-    if (lock->type() == LOCK_REC && lock->m_table.m_table == table) {
+    if (lock->type() == LOCK_REC && lock->rec_index()->m_table == table) {
       ut_a(!lock->is_waiting());
 
       rec_discard(lock);
@@ -2599,7 +2593,7 @@ void LockSys::print_info_all_transactions() noexcept {
           "------- TRX HAS BEEN WAITING {} SEC FOR THIS LOCK TO BE GRANTED:", difftime(time(nullptr), trx->m_wait_started)
         ));
 
-        log_info(lock->to_string(m_sys));
+        log_info(trx->m_wait_lock->to_string(m_sys));
 
         log_info("------------------");
       }
@@ -3233,11 +3227,20 @@ bool LockSys::trx_has_no_waiters(const Trx *trx) noexcept {
 
       auto page_id = lock->page_id();
 
+      /* A lock of another transaction waits for a record that trx has locked. */
       if (auto it = m_rec_locks.find(page_id); it != m_rec_locks.end()) {
-        for (auto lock : it->second) {
-          if (lock->is_waiting()) {
-            mutex_exit(&m_sys.m_trx_sys->m_mutex);
-            return true;
+        for (auto waiting : it->second) {
+          if (waiting == lock || waiting->m_trx == trx || !waiting->is_waiting()) {
+            continue;
+          }
+
+          const auto n_bits = std::min(lock->rec_get_n_bits(), waiting->rec_get_n_bits());
+
+          for (ulint heap_no{}; heap_no < n_bits; ++heap_no) {
+            if (lock->rec_is_nth_bit_set(heap_no) && waiting->rec_is_nth_bit_set(heap_no)) {
+              mutex_exit(&m_sys.m_trx_sys->m_mutex);
+              return false;
+            }
           }
         }
       }
@@ -3251,7 +3254,7 @@ bool LockSys::trx_has_no_waiters(const Trx *trx) noexcept {
 
         if (table_lock->is_waiting()) {
           mutex_exit(&m_sys.m_trx_sys->m_mutex);
-          return true;
+          return false;
         }
       }
     }
@@ -3259,6 +3262,6 @@ bool LockSys::trx_has_no_waiters(const Trx *trx) noexcept {
 
   mutex_exit(&m_sys.m_trx_sys->m_mutex);
 
-  return false;
+  return true;
 }
 

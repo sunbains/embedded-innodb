@@ -98,7 +98,6 @@ void BufLru::invalidate_tablespace(space_id_t id) {
           currently reading it in, or flushing the modifications to the file */
 
           all_freed = false;
-          break;
 
         } else {
 
@@ -453,8 +452,9 @@ void BufLru::old_init() {
     ut_ad(bpage->m_in_LRU_list);
     ut_ad(bpage->in_file());
     /* This loop temporarily violates the
-    assertions of buf_page_set(). */
-    bpage->m_old = true;
+    assertions of buf_page_set(). Relaxed store: peek_if_too_old() reads
+    m_old without the buf_pool mutex. */
+    ut::stat_store(bpage->m_old, true);
   }
 
   m_sys.m_buf_pool->m_LRU_old = UT_LIST_GET_FIRST(m_sys.m_buf_pool->m_LRU_list);
@@ -498,8 +498,9 @@ void BufLru::remove_block(BufPage *bpage) {
   if (UT_LIST_GET_LEN(m_sys.m_buf_pool->m_LRU_list) < OLD_MIN_LEN) {
 
     for (bpage = UT_LIST_GET_FIRST(m_sys.m_buf_pool->m_LRU_list); bpage != nullptr; bpage = UT_LIST_GET_NEXT(m_LRU_list, bpage)) {
-      /* This loop temporarily violates the assertions of buf_page_set(). */
-      bpage->m_old = false;
+      /* This loop temporarily violates the assertions of buf_page_set().
+      Relaxed store, see above. */
+      ut::stat_store(bpage->m_old, false);
     }
 
     m_sys.m_buf_pool->m_LRU_old = nullptr;
@@ -564,7 +565,9 @@ void BufLru::add_block_low(BufPage *bpage, bool old) {
 
     UT_LIST_ADD_FIRST(m_sys.m_buf_pool->m_LRU_list, bpage);
 
-    bpage->m_freed_page_clock = m_sys.m_buf_pool->m_freed_page_clock;
+    /* Keep the low 31 bits (it used to be a 31-bit bit-field), relaxed
+    store: peek_if_too_old() reads it without the buf_pool mutex. */
+    ut::stat_store(bpage->m_freed_page_clock, uint32_t(m_sys.m_buf_pool->m_freed_page_clock & ((1UL << 31) - 1)));
   } else {
     UT_LIST_INSERT_AFTER(m_sys.m_buf_pool->m_LRU_list, m_sys.m_buf_pool->m_LRU_old, bpage);
     m_sys.m_buf_pool->m_LRU_old_len++;

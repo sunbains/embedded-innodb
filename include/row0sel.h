@@ -486,6 +486,7 @@ struct Plan {
    * Closes cursor and free the old version heap.
    */
   void close() noexcept {
+    m_pcur.close();
     m_clust_pcur.close();
 
     if (likely(m_old_row_heap != nullptr)) {
@@ -556,7 +557,7 @@ struct Plan {
   UT_LIST_BASE_NODE_T_EXTERN(FuncNode, cond_list) m_end_conds {};
 
   /** the rest of search conditions we can test at this table in a join */
-  UT_LIST_BASE_NODE_T_EXTERN(FuncNode, func_node_list) m_other_conds {};
+  UT_LIST_BASE_NODE_T_EXTERN(FuncNode, cond_list) m_other_conds {};
 
   /** true if index is a non-clustered index and we must also fetch the clustered index record;
    * this is the case if the non-clustered record does not contain all the needed columns,

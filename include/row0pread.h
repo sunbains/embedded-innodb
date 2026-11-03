@@ -98,7 +98,9 @@ will scan from [Start, End) rows. We use std::shared_ptr to manage the
 reference counting, this allows us to dispose of the Ctx instances
 without worrying about dangling pointers.
 
-NOTE: Secondary index scans are not supported currently. */
+A secondary index is scanned with the visibility of each record decided by
+the read view: from the page's max trx id when it says enough, else by the
+version of the row in the clustered index. */
 class ParallelReader {
  public:
   /** Maximum value for innodb-parallel-read-threads. */
@@ -577,6 +579,20 @@ class ParallelReader::ScanCtx {
   @param[in,out]  mtr           Mini-transaction covering the read.
   @return true if row is visible to the transaction. */
   [[nodiscard]] bool check_visibility(System &sys, Rec &rec, RecOffs &offsets, MemHeap *&heap, Mtr *mtr);
+
+  /**
+   * Whether the secondary index record rec exists in the snapshot of the
+   * read view: the row is looked up in the clustered index, its version in
+   * the snapshot is built, and rec must be its entry.
+   *
+   * @param[in] sys     The instance.
+   * @param[in] rec     Secondary index record, its page latched in mtr.
+   * @param[in,out] heap Memory heap for the lookup.
+   * @param[in,out] mtr Mini-transaction of the scan.
+   *
+   * @return true if rec is visible
+   */
+  [[nodiscard]] bool sec_rec_visible(System &sys, const Rec rec, MemHeap *&heap, Mtr *mtr);
 
   /** Create an execution context for a range and add it to
   the ParallelReader's run queue.
