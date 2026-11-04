@@ -99,7 +99,8 @@ TrxSys::~TrxSys() noexcept {
 
   mutex_free(&m_mutex);
 
-  for (auto mem : m_trx_pool) {
+  for (auto &[mem, event] : m_trx_pool) {
+    os_event_free(event);
     mem_free(mem);
   }
 }
@@ -108,9 +109,9 @@ void TrxSys::ids_insert(Trx *trx) noexcept {
   ut_ad(trx->m_id != 0);
 
   auto &shard = id_shard(trx->m_id);
-  std::lock_guard<std::mutex> guard(shard.m_mutex);
+  std::lock_guard<ut::Latch> guard(shard.m_mutex);
 
-  shard.m_trxs[trx->m_id] = trx;
+  shard.m_trxs.insert(trx->m_id, trx);
 }
 
 void TrxSys::ids_erase(Trx *trx) noexcept {
@@ -119,24 +120,22 @@ void TrxSys::ids_erase(Trx *trx) noexcept {
   }
 
   auto &shard = id_shard(trx->m_id);
-  std::lock_guard<std::mutex> guard(shard.m_mutex);
+  std::lock_guard<ut::Latch> guard(shard.m_mutex);
 
-  if (auto it = shard.m_trxs.find(trx->m_id); it != shard.m_trxs.end() && it->second == trx) {
-    shard.m_trxs.erase(it);
-  }
+  shard.m_trxs.erase(trx->m_id, trx);
 }
 
 Trx *TrxSys::pin_active(trx_id_t id) noexcept {
   auto &shard = id_shard(id);
-  std::lock_guard<std::mutex> guard(shard.m_mutex);
+  std::lock_guard<ut::Latch> guard(shard.m_mutex);
 
-  if (auto it = shard.m_trxs.find(id); it != shard.m_trxs.end()) {
+  if (auto trx = shard.m_trxs.find(id); trx != nullptr) {
     /* In the map: active or prepared (it leaves the map before it is
     committed in memory). The pin is taken with the shard mutex, which the
     erase at C2 takes too: after C2, no new pin. */
-    it->second->m_n_ref.fetch_add(1, std::memory_order_acquire);
+    trx->m_n_ref.fetch_add(1, std::memory_order_acquire);
 
-    return it->second;
+    return trx;
   }
 
   return nullptr;
@@ -144,7 +143,7 @@ Trx *TrxSys::pin_active(trx_id_t id) noexcept {
 
 bool TrxSys::in_ids(trx_id_t id) noexcept {
   auto &shard = id_shard(id);
-  std::lock_guard<std::mutex> guard(shard.m_mutex);
+  std::lock_guard<ut::Latch> guard(shard.m_mutex);
 
   return shard.m_trxs.contains(id);
 }
@@ -349,12 +348,13 @@ Trx *TrxSys::create_trx(void *arg) noexcept {
   /* There is a circular reference between the session and the transaction. */
   auto session = Session::create(nullptr);
   void *mem{};
+  CondVar *event{};
 
   {
-    std::lock_guard<std::mutex> guard(m_trx_pool_mutex);
+    std::lock_guard<ut::Latch> guard(m_trx_pool_mutex);
 
     if (!m_trx_pool.empty()) {
-      mem = m_trx_pool.back();
+      std::tie(mem, event) = m_trx_pool.back();
       m_trx_pool.pop_back();
     }
   }
@@ -363,7 +363,7 @@ Trx *TrxSys::create_trx(void *arg) noexcept {
     mem = mem_alloc(sizeof(Trx));
   }
 
-  auto trx = new (mem) Trx(session, arg);
+  auto trx = new (mem) Trx(session, arg, event);
 
   session->m_trx = trx;
 
@@ -381,13 +381,18 @@ void TrxSys::destroy_trx(Trx *&trx) noexcept {
 
   ut_a(trx->m_n_ref.load() == 0);
 
+  /* Its event stays with the memory: creating one is not cheap. */
+  auto event = trx->m_wait_event;
+
+  trx->m_wait_event = nullptr;
+
   call_destructor(trx);
 
   /* The memory goes back to the pool, not to the allocator (type stable). */
   {
-    std::lock_guard<std::mutex> guard(m_trx_pool_mutex);
+    std::lock_guard<ut::Latch> guard(m_trx_pool_mutex);
 
-    m_trx_pool.push_back(trx);
+    m_trx_pool.emplace_back(trx, event);
   }
 
   trx = nullptr;
@@ -412,12 +417,14 @@ void TrxSys::destroy_user_trx(Trx *&trx) noexcept {
 
   m_client_trx_list.remove(trx);
 
-  destroy_trx(trx);
-
   ut_a(m_n_user_trx > 0);
   --m_n_user_trx;
 
   mutex_exit(&m_mutex);
+
+  /* Off the lists: nothing of it is the trx sys mutex's any more (the
+  memory goes to the pool, type stable). */
+  destroy_trx(trx);
 }
 
 Trx *TrxSys::create_background_trx(void *arg) noexcept {
@@ -435,12 +442,12 @@ Trx *TrxSys::create_background_trx(void *arg) noexcept {
 void TrxSys::destroy_background_trx(Trx *&trx) noexcept {
   mutex_enter(&m_mutex);
 
-  destroy_trx(trx);
-
   ut_a(m_n_background_trx > 0);
   --m_n_background_trx;
 
   mutex_exit(&m_mutex);
+
+  destroy_trx(trx);
 }
 
 void TrxSys::trx_list_insert_ordered(Trx *in_trx) noexcept {

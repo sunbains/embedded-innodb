@@ -43,11 +43,18 @@ THE CHECK (deadlock_find())
    cycle of E is a cycle of G.
 2. If the walk ends without a cycle and every transaction on the path has
    one blocker, the path is all of G reachable from the start: no cycle.
-3. Else the slow path: a depth first search of G from the start over the
+3. Else, for a request, the queue local check, deadlock_local(), with the
+   shard latch of the request: if every owner of a lock of the queue (of
+   the record, for a record lock) waits in that queue or does not wait,
+   the part of G reachable from the start is in the queue; a search of it
+   decides. (The common case: a pile up on one hot row, where every waiter
+   has the holder and the waiters ahead of it as blockers.)
+4. Else the slow path: a depth first search of G from the start over the
    blocker sets read from the queues, deadlock_dfs(), visiting only waiting
    transactions, each once per search (an epoch per search, no clearing of
-   marks on all transactions). It runs with the global latch of the lock
-   system in X (it reads queues of any shard); it is the rare path.
+   marks on all transactions). It runs with the lock system latched X, every
+   shard latch (it reads queues of any shard); it is the rare path. A cycle
+   found by step 3 is resolved here too (the victim rule needs X).
 
 It runs for every new waiting lock: on a request (enter_lock_wait() walks
 latch free with the shard latch of the request held; if the walk is suspect,
@@ -82,7 +89,29 @@ checked). So a new cycle contains a new edge, out of the transaction whose
 waiting lock was just created; the check from it searches all of G
 reachable from it (steps 2 and 3), and finds the cycle.
 
-Cost: the fast path O(path length); the slow path O(the waiting component
+The queue local check (step 3) decides as the full search would. Let Q be
+the queue of the start's waiting lock, latched (no lock is added to it,
+removed from it, granted or cancelled while the latch is held), and T the
+owners of its locks. The out edges of a transaction that waits for a lock of
+Q go to T (its blockers are owners of locks ahead in Q). The check reads, with
+each owner's trx mutex, that each owner of a granted lock of Q either waits
+for a lock of Q (one of Q's waiting locks: a transaction waits for one lock
+at a time) or does not wait. Then every transaction reachable from the start
+is in T, and each either waits in Q (out edges read from Q) or does not
+wait (no out edges): the search over Q is the search over G reachable from
+the start. An owner read as not waiting may start to wait after the read: its
+request comes after the start's, so a cycle it closes is its own check's to
+find, as for any later request (the start's waiting lock is in Q, the start's
+edge and its several blockers flag published before the read, so its walk
+reaches a member with several blockers and runs steps 3 or 4). A waiting
+owner's wait ends only with the latch of Q (a grant or a cancel of its
+lock in Q): it can't start another wait meanwhile. So the check sees G
+reachable from the start as it is at the latch, and a cycle through the
+start exists then if and only if the search finds one.
+
+Cost: the fast path O(path length); the queue local check O(n^2) in the n
+locks of the record's queue (the search) plus a trx mutex per granted lock,
+with the shard latch held, not X; the slow path O(the waiting component
 of G reachable from the start: its transactions and the queues ahead of
 their waiting locks), never O(active transactions).
 

@@ -263,7 +263,12 @@ bool BufPool::peek_if_too_old(const BufPage *bpage) {
 BufBlock *BufPool::block_alloc() {
   auto block = m_LRU->get_free_block();
 
+  /* With the block mutex: validate() reads the state of every block with it. */
+  mutex_enter(&block->m_mutex);
+
   buf_block_set_state(block, BUF_BLOCK_MEMORY);
+
+  mutex_exit(&block->m_mutex);
 
   return block;
 }

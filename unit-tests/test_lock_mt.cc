@@ -1681,6 +1681,111 @@ TEST_F(LockMt, TableStorm) {
   std::printf("TableStorm: %lu requests, %lu deadlock victims\n", (unsigned long)n_req.load(), (unsigned long)n_victims.load());
 }
 
+/** X against the shard latches: 4 threads add to a plain counter per shard
+under PageLatch (one page or two, in either order), TableLatch, and a page
+then a table latch; 2 threads take X (a reentrant X inside, too), add to all
+the counters and check they do not change while they hold it. No deadlock, no
+lost add (and TSan sees no race on the plain counters). 1 s. */
+TEST_F(LockMt, XMix) {
+  constexpr size_t N_PAGES = 64;
+
+  std::array<uint64_t, LockSys::N_PAGE_SHARDS> pages{};
+  std::array<uint64_t, LockSys::N_TABLE_SHARDS> tables{};
+  std::atomic<uint64_t> n_added{};
+  std::atomic<bool> stop{};
+  std::vector<std::thread> threads;
+
+  auto page_id = [](uint32_t i) { return PageId{FAKE_SPACE, page_no_t(i % N_PAGES)}; };
+
+  for (int t{}; t < 4; ++t) {
+    threads.emplace_back([&, t] {
+      std::mt19937 rng(t);
+
+      while (!stop.load(std::memory_order_relaxed)) {
+        const auto a = page_id(rng());
+        const auto b = page_id(rng());
+        const auto sa = LockSys::page_shard_no(a);
+        const auto sb = LockSys::page_shard_no(b);
+
+        switch (rng() % 3) {
+          case 0: {
+            LockSys::PageLatch latch(*m_lock_sys, a, b);
+
+            ++pages[sa];
+            ++n_added;
+
+            if (sb != sa) {
+              ++pages[sb];
+              ++n_added;
+            }
+            break;
+          }
+          case 1: {
+            LockSys::TableLatch latch(*m_lock_sys, m_table);
+
+            ++tables[LockSys::table_shard_no(m_table)];
+            ++n_added;
+            break;
+          }
+          default: {
+            LockSys::PageLatch p(*m_lock_sys, a);
+            LockSys::TableLatch l(*m_lock_sys, m_table);
+
+            ++pages[sa];
+            ++tables[LockSys::table_shard_no(m_table)];
+            n_added += 2;
+          }
+        }
+      }
+    });
+  }
+
+  std::atomic<uint64_t> n_x{};
+
+  for (int t{}; t < 2; ++t) {
+    threads.emplace_back([&] {
+      while (!stop.load(std::memory_order_relaxed)) {
+        x_enter();
+        x_enter();
+
+        const auto p0 = pages;
+        const auto t0 = tables;
+
+        std::this_thread::yield();
+
+        EXPECT_EQ(pages, p0) << "a page shard latch held under X";
+        EXPECT_EQ(tables, t0) << "a table shard latch held under X";
+
+        x_exit();
+        x_exit();
+
+        ++n_x;
+      }
+    });
+  }
+
+  std::this_thread::sleep_for(1s);
+
+  stop = true;
+
+  for (auto &t : threads) {
+    t.join();
+  }
+
+  uint64_t sum{};
+
+  for (auto v : pages) {
+    sum += v;
+  }
+
+  for (auto v : tables) {
+    sum += v;
+  }
+
+  EXPECT_EQ(sum, n_added.load()) << "an add lost";
+  EXPECT_GT(n_x.load(), 0u);
+}
+
 /** The in-memory lock queues under threads, timed. */
 class LockMtPerf : public LockMt {};
 
@@ -1925,7 +2030,7 @@ TEST_F(LockMtPerf, DeadlockCost) {
 }
 
 /** The hot S record load: the latency of a lock and its release (the page
-shard latch of the record shared by all, and the slots of the global latch),
+shard latch of the record shared by all),
 p50 and p99, by thread count; and the release of a transaction with 1,000
 locks on 1,000 pages: shard by shard, nothing global held (it was one hold
 of the trx sys mutex). */

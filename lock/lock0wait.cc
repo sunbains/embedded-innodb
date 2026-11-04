@@ -24,11 +24,11 @@ comment of include/lock0lock.h.
 #include "lock0priv.h"
 
 DbErr LockSys::enter_lock_wait(Trx *trx, QueThr *thr) noexcept {
-  /* The deadlock check, latch free first (the walk of the one edge graph):
-  the full check, with the lock system latched X, runs once the caller has
-  released its shard latch (deadlock_resolve()), if the walk can't rule a
-  deadlock out. */
-  if (deadlock_suspect(trx)) {
+  /* The deadlock check, latch free first (the walk of the one edge graph),
+  then in the queue of the request, with its shard latch: the full check,
+  with the lock system latched X, runs once the caller has released its
+  shard latch (deadlock_resolve()), if neither can rule a deadlock out. */
+  if (deadlock_suspect_req(trx)) {
     suspect() = trx;
   }
 
@@ -109,53 +109,95 @@ void LockSys::release(Trx *trx) noexcept {
   ut_ad(x_own() || nothing_latched());
   ut_ad(!mutex_own(&m_sys.m_trx_sys->m_mutex));
 
-  /* The last lock of trx, read with its mutex: another thread may add a
-  lock for trx meanwhile (an inheritance or a move by a page operation),
-  at the end of the list. */
-  auto back = [trx]() {
-    trx_mutex_enter(trx);
-    auto lock = trx->m_trx_locks.back();
-    trx_mutex_exit(trx);
-    return lock;
-  };
+  /* The locks of trx shard by shard, from the end of its list: the latch of
+  one shard at a time, for up to LOCK_RELEASE_BATCH locks in a row of that
+  shard (a bound on how long others wait for it), and no other latch. With
+  the shard latch, the batch is taken out of the list of trx with one hold
+  of its mutex (another thread may add a lock for trx meanwhile, at the end
+  of the list: an inheritance or a move by a page operation, of a lock of
+  trx in another shard), then out of the queues: those locks are only seen
+  through the queues of the shard, latched. */
+  std::array<Lock *, LOCK_RELEASE_BATCH> batch;
 
-  for (auto lock = back(); lock != nullptr; lock = back()) {
-    /* Release the locks of trx shard by shard: the latch of one shard at a
-    time, for up to LOCK_RELEASE_BATCH locks in a row of that shard (a
-    bound on how long others wait for it), and no other latch. */
-    if (lock->type() == LOCK_REC) {
-      const auto shard = page_shard_no(lock->page_id());
+  /* The shard to start with: where the last lock was created, a hint (no
+  lock there: the batch is empty, and the next shard is read with it). */
+  const auto hint = trx->m_lock_hint.load(std::memory_order_relaxed);
 
-      PageLatch latch(*this, lock->page_id());
+  bool rec = !(hint & Trx::LOCK_HINT_TABLE);
+  uint32_t shard = hint & ~Trx::LOCK_HINT_TABLE;
 
-      /* Read again with the latch: the lock read without it may have gone
-      (a page discard frees the empty locks of the page). */
-      lock = back();
+  /* The heap is emptied here only if it grew (its size as the monitor
+  shows it): else by the next lock creation for trx, which holds the trx
+  mutex anyway. */
+  bool big_heap{};
 
-      for (ulint n{}; n < LOCK_RELEASE_BATCH && lock != nullptr && lock->type() == LOCK_REC && page_shard_no(lock->page_id()) == shard; ++n) {
-        rec_dequeue_from_page(lock);
-        lock = back();
+  for (;;) {
+    Lock *next;
+
+    /* With the shard latch: the batch out of the list, then the next lock
+    to release (of another shard), with one hold of the trx mutex. Once
+    the list is empty, no lock can be created for trx (a page operation
+    creates one only from a lock of trx in a queue it latches, and those of
+    the batch are only in queues of this shard): the batch is the last. */
+    auto take = [&]() {
+      auto in_shard = [&](const Lock *l) {
+        return rec ? l->type() == LOCK_REC && page_shard_no(l->page_id()) == shard
+                   : l->type() == LOCK_TABLE && table_shard_no(l->m_table.m_table) == shard;
+      };
+
+      size_t n{};
+
+      trx_mutex_enter(trx);
+
+      auto l = trx->m_trx_locks.back();
+
+      for (; n < batch.size() && l != nullptr && in_shard(l); l = trx->m_trx_locks.back()) {
+        trx->m_trx_locks.remove(l);
+        batch[n++] = l;
       }
 
+      next = l;
+      big_heap = l == nullptr && mem_heap_get_size(trx->m_lock_heap) > 400;
+
+      trx_mutex_exit(trx);
+
+      return n;
+    };
+
+    if (rec) {
+      PageLatch latch(*this, ShardNo{shard});
+
+      const auto n = take();
+
+      for (size_t i{}; i < n; ++i) {
+        rec_dequeue_from_page(batch[i], false);
+      }
     } else {
-      ut_ad(lock->type() == LOCK_TABLE);
+      TableLatch latch(*this, ShardNo{shard});
 
-      const auto table = lock->m_table.m_table;
+      const auto n = take();
 
-      TableLatch latch(*this, table);
-
-      lock = back();
-
-      for (ulint n{}; n < LOCK_RELEASE_BATCH && lock != nullptr && lock->type() == LOCK_TABLE && table_shard_no(lock->m_table.m_table) == table_shard_no(table); ++n) {
-        table_dequeue(lock);
-        lock = back();
+      for (size_t i{}; i < n; ++i) {
+        table_dequeue(batch[i], false);
       }
     }
+
+    if (next == nullptr) {
+      break;
+    }
+
+    /* The lock, read without the shard latch, may go meanwhile (a page
+    discard frees the empty locks of the page; its memory stays, in the lock
+    heap of trx): the next batch is read again with the latch. */
+    rec = next->type() == LOCK_REC;
+    shard = rec ? page_shard_no(next->page_id()) : table_shard_no(next->m_table.m_table);
   }
 
-  trx_mutex_enter(trx);
-  mem_heap_empty(trx->m_lock_heap);
-  trx_mutex_exit(trx);
+  if (big_heap) {
+    trx_mutex_enter(trx);
+    mem_heap_empty(trx->m_lock_heap);
+    trx_mutex_exit(trx);
+  }
 }
 
 void LockSys::cancel_waiting_and_release(Lock *lock) noexcept {

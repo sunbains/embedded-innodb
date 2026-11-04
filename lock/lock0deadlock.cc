@@ -103,14 +103,10 @@ void LockSys::choose_victim(Trx *victim) noexcept {
 Lock *LockSys::waiting_lock(Trx *trx) noexcept {
   ut_ad(x_own());
 
-  /* With X, m_wait_lock can't change (it changes with the latch of its
-  queue); m_que_state also changes with the trx mutex only (the owner's
-  query code): read both with it. */
-  trx_mutex_enter(trx);
-  auto lock = trx->m_que_state == TRX_QUE_LOCK_WAIT ? trx->m_wait_lock : nullptr;
-  trx_mutex_exit(trx);
-
-  return lock;
+  /* With X, m_wait_lock can't change: it changes with the latch of its
+  queue, and with that latch the wait is entered and left with it
+  (enter_lock_wait(), Lock::reset()), so that it is the wait of trx. */
+  return trx->m_wait_lock;
 }
 
 bool LockSys::deadlock_suspect(const Trx *trx) const noexcept {
@@ -121,6 +117,136 @@ bool LockSys::deadlock_suspect(const Trx *trx) const noexcept {
   const auto walk = deadlock_search(trx, 0, &pred, &single);
 
   return walk != DeadlockWalk::NONE || !single;
+}
+
+bool LockSys::deadlock_suspect_req(Trx *trx) noexcept {
+  Trx *pred{};
+  bool single{};
+
+  const auto walk = deadlock_search(trx, 0, &pred, &single);
+
+  /* Several blockers on the path, no cycle on it: the queue local check,
+  with the shard latch of the request, before the full check with X. */
+  return walk != DeadlockWalk::NONE || (!single && deadlock_local(trx));
+}
+
+bool LockSys::deadlock_local(Trx *start) noexcept {
+  /* The shard latch of the queue of start's waiting lock is held (the
+  request's): its queue can't change. See THE QUEUE LOCAL CHECK in
+  lock0deadlock.h. */
+  trx_mutex_enter(start);
+  const Lock *wait_lock = start->m_wait_lock;
+  trx_mutex_exit(start);
+
+  ut_a(wait_lock != nullptr);
+
+  /* Scratch space of the thread: the locks of the queue (of the record),
+  in queue order; its waiting locks, sorted; the owners of the waiting
+  locks, with their places in the queue. */
+  thread_local std::vector<const Lock *> q;
+  thread_local std::vector<const Lock *> waiting;
+  thread_local std::vector<std::pair<const Trx *, size_t>> owners;
+  thread_local std::vector<uint8_t> seen;
+  thread_local std::vector<size_t> todo;
+
+  q.clear();
+  waiting.clear();
+  owners.clear();
+  todo.clear();
+
+  ulint heap_no{ULINT_UNDEFINED};
+
+  if (wait_lock->type() == LOCK_REC) {
+    ut_ad(owns_page(wait_lock->page_id()));
+
+    heap_no = wait_lock->rec_find_set_bit();
+
+    for (auto lock : *rec_queue(wait_lock->page_id())) {
+      if (lock->rec_is_nth_bit_set(heap_no)) {
+        q.push_back(lock);
+      }
+    }
+  } else {
+    ut_ad(owns_table(wait_lock->m_table.m_table));
+
+    for (auto lock : wait_lock->m_table.m_table->m_locks) {
+      q.push_back(lock);
+    }
+  }
+
+  size_t start_at{q.size()};
+
+  for (size_t i{}; i < q.size(); ++i) {
+    if (q[i]->is_waiting()) {
+      waiting.push_back(q[i]);
+      owners.emplace_back(q[i]->m_trx, i);
+    }
+
+    if (q[i] == wait_lock) {
+      start_at = i;
+    }
+  }
+
+  ut_a(start_at < q.size());
+
+  std::sort(waiting.begin(), waiting.end());
+  std::sort(owners.begin(), owners.end());
+
+  /* The owner of a granted lock of the queue waits in it (its waiting lock
+  is one of the queue's) or does not wait: else the graph reachable from
+  start may leave the queue, and only the full check decides. The wait
+  state with the owner's mutex; the queue's waiting locks are compared,
+  not read (a lock of another queue is not latched here). */
+  for (auto lock : q) {
+    if (lock->is_waiting() || lock->m_trx == start) {
+      continue;
+    }
+
+    auto trx = lock->m_trx;
+
+    trx_mutex_enter(trx);
+    const Lock *wl = trx->m_wait_lock;
+    trx_mutex_exit(trx);
+
+    if (wl != nullptr && !std::binary_search(waiting.begin(), waiting.end(), wl)) {
+      return true;
+    }
+  }
+
+  /* The search of the graph in the queue from start: a waiting lock waits
+  for the locks ahead of it it has to wait for; their owners that wait (in
+  the queue) are searched in turn, each once. */
+  seen.assign(q.size(), 0);
+  seen[start_at] = 1;
+  todo.push_back(start_at);
+
+  while (!todo.empty()) {
+    const auto i = todo.back();
+
+    todo.pop_back();
+
+    for (size_t j{}; j < i; ++j) {
+      if (!q[i]->has_to_wait_for(q[j], heap_no)) {
+        continue;
+      }
+
+      const auto blocker = q[j]->m_trx;
+
+      if (blocker == start) {
+        /* A cycle: the full check finds it, and chooses the victim. */
+        return true;
+      }
+
+      const auto it = std::lower_bound(owners.begin(), owners.end(), std::pair<const Trx *, size_t>(blocker, 0));
+
+      if (it != owners.end() && it->first == blocker && !seen[it->second]) {
+        seen[it->second] = 1;
+        todo.push_back(it->second);
+      }
+    }
+  }
+
+  return false;
 }
 
 DbErr LockSys::deadlock_resolve(Trx *trx) noexcept {

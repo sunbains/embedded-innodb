@@ -451,25 +451,6 @@ LockSys::~LockSys() noexcept {}
 
 namespace {
 
-/** Lock a shard latch: a short spin of try_lock() first, then block. The
-critical sections of the lock system are short: a waiter that sleeps at
-once (a futex wait and wake) costs more than the hold it waits for. */
-inline void spin_lock(std::mutex &mutex) noexcept {
-  for (uint32_t i{}; i < 32; ++i) {
-    if (mutex.try_lock()) {
-      return;
-    }
-
-    for (uint32_t j{}; j < (1U << std::min(i, 4U)); ++j) {
-#if defined(__x86_64__) || defined(__i386__)
-      __builtin_ia32_pause();
-#endif
-    }
-  }
-
-  mutex.lock();
-}
-
 /** The deadlock checks the thread owes (LockSys::moved(), suspect()). */
 thread_local std::vector<Trx *> t_moved;
 thread_local Trx *t_suspect{};
@@ -477,7 +458,7 @@ thread_local Trx *t_suspect{};
 }  // namespace
 
 uint32_t LockSys::table_shard_no(const Table *table) noexcept {
-  return uint32_t((table->m_id * 0x9E3779B97F4A7C15ULL) >> 55) % N_TABLE_SHARDS;
+  return uint32_t((table->m_id * 0x9E3779B97F4A7C15ULL) >> 58) % N_TABLE_SHARDS;
 }
 
 LockSys::Held &LockSys::held() const noexcept {
@@ -489,7 +470,7 @@ LockSys::Held &LockSys::held() const noexcept {
   if (unlikely(h.m_owner != this)) {
     /* Another lock system (another System of the process): the thread must
     hold none of its latches. */
-    ut_a(h.m_x == 0 && h.m_s < 0);
+    ut_a(h.m_x == 0 && h.m_pages[0] < 0 && h.m_table < 0);
 
     h = Held{};
     h.m_owner = this;
@@ -506,37 +487,6 @@ Trx *&LockSys::suspect() noexcept {
   return t_suspect;
 }
 
-void LockSys::s_lock() noexcept {
-  auto &h = held();
-
-  /* The latching order: the global latch first, with no trx sys mutex, no
-  trx mutex held. */
-  ut_ad(h.m_x == 0 && h.m_s < 0);
-  ut_ad(h.m_pages[0] < 0 && h.m_table < 0);
-  ut_ad(!mutex_own(&m_sys.m_trx_sys->m_mutex));
-  ut_ad(TrxMutex::n_held() == 0);
-
-  /* The slot of the calling thread: fixed per thread, so that the threads
-  spread over the slots. */
-  thread_local const auto slot = uint32_t(std::hash<std::thread::id>{}(std::this_thread::get_id()) * 0x9E3779B97F4A7C15ULL >> 58) %
-                                 uint32_t(N_GLOBAL_SLOTS);
-
-  m_global[slot].m_latch.lock_shared();
-
-  h.m_s = int32_t(slot);
-}
-
-void LockSys::s_unlock() noexcept {
-  auto &h = held();
-
-  ut_ad(h.m_s >= 0);
-  ut_ad(h.m_pages[0] < 0 && h.m_table < 0);
-
-  m_global[h.m_s].m_latch.unlock_shared();
-
-  h.m_s = -1;
-}
-
 void LockSys::x_lock() noexcept {
   auto &h = held();
 
@@ -545,12 +495,17 @@ void LockSys::x_lock() noexcept {
     return;
   }
 
-  ut_ad(h.m_s < 0);
+  ut_ad(h.m_pages[0] < 0 && h.m_table < 0);
   ut_ad(!mutex_own(&m_sys.m_trx_sys->m_mutex));
   ut_ad(TrxMutex::n_held() == 0);
 
-  for (auto &slot : m_global) {
-    slot.m_latch.lock();
+  /* The latching order: the page shards, then the table shards. */
+  for (auto &shard : m_page_shards) {
+    shard.m_mutex.lock();
+  }
+
+  for (auto &shard : m_table_shards) {
+    shard.m_mutex.lock();
   }
 
   h.m_x = 1;
@@ -565,23 +520,32 @@ void LockSys::x_unlock() noexcept {
     return;
   }
 
-  for (auto it = m_global.rbegin(); it != m_global.rend(); ++it) {
-    it->m_latch.unlock();
+  for (auto &shard : m_table_shards) {
+    shard.m_mutex.unlock();
+  }
+
+  for (auto &shard : m_page_shards) {
+    shard.m_mutex.unlock();
   }
 }
 
-LockSys::PageLatch::PageLatch(LockSys &lock_sys, PageId page_id) noexcept : m_lock_sys(lock_sys) {
+LockSys::PageLatch::PageLatch(LockSys &lock_sys, PageId page_id) noexcept : PageLatch(lock_sys, ShardNo{page_shard_no(page_id)}) {}
+
+LockSys::PageLatch::PageLatch(LockSys &lock_sys, ShardNo shard_no) noexcept : m_lock_sys(lock_sys) {
   if (m_lock_sys.x_own()) {
     m_noop = true;
     return;
   }
 
-  m_lock_sys.s_lock();
-
   auto &h = m_lock_sys.held();
-  const auto shard = page_shard_no(page_id);
 
-  spin_lock(m_lock_sys.m_page_shards[shard].m_mutex);
+  /* The latching order. */
+  ut_ad(h.m_pages[0] < 0 && h.m_table < 0);
+  ut_ad(!mutex_own(&m_lock_sys.m_sys.m_trx_sys->m_mutex));
+  ut_ad(TrxMutex::n_held() == 0);
+  const auto shard = shard_no.m_no;
+
+  m_lock_sys.m_page_shards[shard].m_mutex.lock();
 
   h.m_pages[0] = int32_t(shard);
 }
@@ -592,9 +556,12 @@ LockSys::PageLatch::PageLatch(LockSys &lock_sys, PageId a, PageId b) noexcept : 
     return;
   }
 
-  m_lock_sys.s_lock();
-
   auto &h = m_lock_sys.held();
+
+  /* The latching order. */
+  ut_ad(h.m_pages[0] < 0 && h.m_table < 0);
+  ut_ad(!mutex_own(&m_lock_sys.m_sys.m_trx_sys->m_mutex));
+  ut_ad(TrxMutex::n_held() == 0);
   auto sa = page_shard_no(a);
   auto sb = page_shard_no(b);
 
@@ -603,11 +570,11 @@ LockSys::PageLatch::PageLatch(LockSys &lock_sys, PageId a, PageId b) noexcept : 
     std::swap(sa, sb);
   }
 
-  spin_lock(m_lock_sys.m_page_shards[sa].m_mutex);
+  m_lock_sys.m_page_shards[sa].m_mutex.lock();
   h.m_pages[0] = int32_t(sa);
 
   if (sb != sa) {
-    spin_lock(m_lock_sys.m_page_shards[sb].m_mutex);
+    m_lock_sys.m_page_shards[sb].m_mutex.lock();
     h.m_pages[1] = int32_t(sb);
   }
 }
@@ -627,10 +594,11 @@ LockSys::PageLatch::~PageLatch() noexcept {
   m_lock_sys.m_page_shards[h.m_pages[0]].m_mutex.unlock();
   h.m_pages[0] = -1;
 
-  m_lock_sys.s_unlock();
 }
 
-LockSys::TableLatch::TableLatch(LockSys &lock_sys, const Table *table) noexcept : m_lock_sys(lock_sys) {
+LockSys::TableLatch::TableLatch(LockSys &lock_sys, const Table *table) noexcept : TableLatch(lock_sys, ShardNo{table_shard_no(table)}) {}
+
+LockSys::TableLatch::TableLatch(LockSys &lock_sys, ShardNo shard_no) noexcept : m_lock_sys(lock_sys) {
   if (m_lock_sys.x_own()) {
     m_noop = true;
     return;
@@ -638,19 +606,14 @@ LockSys::TableLatch::TableLatch(LockSys &lock_sys, const Table *table) noexcept 
 
   auto &h = m_lock_sys.held();
 
-  ut_ad(h.m_table < 0);
-
-  if (h.m_s < 0) {
-    m_lock_sys.s_lock();
-    m_s_taken = true;
-  }
-
   /* After a page shard latch, if any: the latching order. */
+  ut_ad(h.m_table < 0);
+  ut_ad(!mutex_own(&m_lock_sys.m_sys.m_trx_sys->m_mutex));
   ut_ad(TrxMutex::n_held() == 0);
 
-  const auto shard = table_shard_no(table);
+  const auto shard = shard_no.m_no;
 
-  spin_lock(m_lock_sys.m_table_shards[shard].m_mutex);
+  m_lock_sys.m_table_shards[shard].m_mutex.lock();
 
   h.m_table = int32_t(shard);
 }
@@ -664,10 +627,6 @@ LockSys::TableLatch::~TableLatch() noexcept {
 
   m_lock_sys.m_table_shards[h.m_table].m_mutex.unlock();
   h.m_table = -1;
-
-  if (m_s_taken) {
-    m_lock_sys.s_unlock();
-  }
 }
 
 DbErr LockSys::rec_lock_for(Trx *trx, LockMode mode, const BufBlock *block, ulint heap_no, const Index *index, QueThr *thr) noexcept {

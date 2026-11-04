@@ -28,10 +28,6 @@ is split, each piece owned by one latch:
 
   Latch                      Level (sync0sync.h)   Owns
   -------------------------  --------------------  --------------------------
-  global rw-latch, sharded   SYNC_LOCK_SYS_GLOBAL  S: the right to take the
-  (N_GLOBAL_SLOTS slots, a   330                   shard latches below; X
-  thread S-latches one, X                          (all slots): all of the
-  takes all)                                       lock system at once
   page shard latch           SYNC_LOCK_SYS_PAGE    the record lock queues of
   (N_PAGE_SHARDS, by page)   320                   the pages of the shard, the
                                                    bitmaps of their locks
@@ -50,10 +46,9 @@ is split, each piece owned by one latch:
                                                    the query threads in it
 
 A thread acquires a latch only if its level is lower than that of every latch
-it holds. So: the global latch first, then at most two page shard latches (in
-the order of their shard numbers: the page operations that move locks between
-two pages), or one table shard latch, possibly after a page shard latch; then
-one trx mutex. The trx sys mutex may be taken with lock system latches held
+it holds. So: at most two page shard latches (in the order of their shard
+numbers: the page operations that move locks between two pages), or one table
+shard latch, possibly after a page shard latch; then one trx mutex. The trx sys mutex may be taken with lock system latches held
 (it is not, in practice); a lock system latch is never taken with the trx sys
 mutex held: the callers that used to call the lock system with it held now
 release it first (Trx::commit_off_kernel(), the lock monitor). A trx mutex is
@@ -61,9 +56,13 @@ taken last. The debug builds check this order (LockSys::Held, TrxMutex::n_held()
 and mutex_own() of the trx sys mutex), and every internal function of the lock
 system asserts the latch of the queue it reads (owns_page(), owns_table()).
 
-The global latch in X replaces all the shard latches: the full deadlock
-search, the cancel of a deadlock victim, validation, the lock monitor, DROP
-and TRUNCATE (remove_all_on_table()) take it; they are rare.
+X is every shard latch held by one thread (x_lock(): the page shards in the
+order of their numbers, then the table shards: the latching order, so it can't
+deadlock with a thread on its way through the shards; reentrant). It is all of
+the lock system at once: the full deadlock search, the cancel of a deadlock
+victim, validation, the lock monitor, DROP and TRUNCATE
+(remove_all_on_table()) take it; they are rare, and it is slow (hundreds of
+latches). The common paths pay for one shard latch only.
 
 LOCK WAIT STATE
 
@@ -92,13 +91,17 @@ for W waiters, not O(W^2).
 
 A commit releases its locks shard by shard (release()): the latch of one
 shard at a time, for at most LOCK_RELEASE_BATCH locks of it in a row, with no
-other latch held; others lock in other shards meanwhile.
+other latch held; others lock in other shards meanwhile. With the shard latch,
+the batch leaves the lock list of the trx with one hold of its trx mutex, then
+the queues: a lock is out of the list only while the latch of its queue is
+held by the thread that releases it, which is the only thread that can see it.
 
 DEADLOCKS
 
 The fast path is latch free (the walk of the one edge graph, the edges are
-atomics); the full search runs with the global latch in X, after the
-requester released its shard latch (deadlock_resolve()). See lock0deadlock.h.
+atomics), then the queue local check with the shard latch of the request; the
+full search runs with X, after the requester released its shard latch
+(deadlock_resolve()). See lock0deadlock.h.
 
 IMPLICIT LOCKS AND THE LIFE OF A TRANSACTION
 
@@ -122,19 +125,21 @@ The commit of T (Trx::commit_off_kernel()):
   C2  T leaves the active ids. [trx sys mutex, then the id shard mutex]
   C3  wait until T has no pins (TrxSys::drain_pins(): yield, then sleep).
       [no latch at all: a converter holding a pin may wait for a page latch
-      and a lock system latch]
+      and a lock system latch; if T has no pin, read after C2 with acquire,
+      nothing to wait for: the trx sys mutex is kept]
   C4  T's state becomes TRX_COMMITTED_IN_MEMORY. [trx sys mutex, then T's
       trx mutex]
   C6  T leaves the trx list (the read views). [trx sys mutex]
   C5  T's locks are released, shard by shard. [the shard latches, one at a
-      time]
+      time; skipped if T's lock list was empty at C4 (read with T's trx
+      mutex): no lock can be created for T after C4]
 C6 comes before C5: a waiter granted by C5 that then opens a read view sees
 T's changes.
 
 A conversion for the record R of the page P with the trx id I in it:
   V1  pin the transaction with id I, if it is in the active ids
       (TrxSys::pin_active(), with the id shard mutex). [no lock latch]
-  V2  latch the shard of P (global S, page shard).
+  V2  latch the shard of P.
   V3  T is still in the active ids (TrxSys::in_ids(), with the id shard
       mutex), and no other transaction holds a granted lock on R that
       conflicts with X: create T's explicit lock on R unless it has one; the
@@ -189,6 +194,9 @@ TrxSys::pin_active(): the same V1..V4. */
 /*******************************************************/
 
 #pragma once
+
+#include "lock0queues.h"
+#include "ut0latch.h"
 
 #include "srv0sys.h"
 
@@ -1076,24 +1084,21 @@ struct LockSys {
   [[nodiscard]] Rec_locks *rec_queue(PageId page_id) const noexcept {
     ut_ad(owns_page(page_id));
 
-    auto &locks = const_cast<LockSys *>(this)->m_page_shards[page_shard_no(page_id)].m_locks;
-    auto it = locks.find(page_id);
-
-    return it == locks.end() ? nullptr : &it->second;
+    return m_page_shards[page_shard_no(page_id)].m_locks.find(page_id);
   }
 
   /** @return the queue of a page, created if it has none. */
   [[nodiscard]] Rec_locks &rec_queue_add(PageId page_id) noexcept {
     ut_ad(owns_page(page_id));
 
-    return m_page_shards[page_shard_no(page_id)].m_locks[page_id];
+    return m_page_shards[page_shard_no(page_id)].m_locks.get(page_id);
   }
 
   /** Erase the (empty) queue of a page. */
   void rec_queue_erase(PageId page_id) noexcept {
     ut_ad(owns_page(page_id));
 
-    (void)m_page_shards[page_shard_no(page_id)].m_locks.erase(page_id);
+    m_page_shards[page_shard_no(page_id)].m_locks.erase(page_id);
   }
 
   /**
@@ -1114,7 +1119,29 @@ struct LockSys {
   [[nodiscard]] bool deadlock_suspect(const Trx *trx) const noexcept;
 
   /**
-   * @brief The full deadlock check of a request, with the global latch in X:
+   * The deadlock check of a request, with the shard latch of its queue held:
+   * the walk of the one edge graph, then, if it can't rule a cycle out
+   * because of several blockers, the queue local check.
+   *
+   * @param[in] trx The requester, its waiting lock just created.
+   *
+   * @return true if the full check must run (deadlock_resolve()).
+   */
+  [[nodiscard]] bool deadlock_suspect_req(Trx *trx) noexcept;
+
+  /**
+   * The queue local check (lock0deadlock.h), with the shard latch of the
+   * queue of start's waiting lock held.
+   *
+   * @param[in] start The requester.
+   *
+   * @return false if no cycle goes through start; true if one does, or if
+   *  the graph reachable from start may leave the queue.
+   */
+  [[nodiscard]] bool deadlock_local(Trx *start) noexcept;
+
+  /**
+   * @brief The full deadlock check of a request, with X:
    * cancels the request if the requester is the victim.
    *
    * @param[in] trx The requester, in its lock wait.
@@ -1135,12 +1162,12 @@ struct LockSys {
 
   /**
    * @brief Marks a transaction as a deadlock victim and cancels its waiting
-   * request; with the global latch in X.
+   * request; with X.
    */
   void choose_victim(Trx *victim) noexcept;
 
   /** @return the waiting lock of trx if it is in the lock wait state, else
-  nullptr; with the global latch in X. */
+  nullptr; with X. */
   [[nodiscard]] Lock *waiting_lock(Trx *trx) noexcept;
 
   /**
@@ -1469,11 +1496,13 @@ struct LockSys {
    * to a lock and grants it to them if they qualify. Note that all record locks contained
    * in the provided lock object are removed.
    *
+   * @param[in] in_trx false if the caller took the lock out of the lock list of its trx already
+   * (LockSys::release()), with the trx mutex.
    * @param[in] in_lock The record lock object. All record locks contained in this lock object
    *                    are removed. Transactions waiting behind will get their lock requests
    *                    granted if they are now qualified.
    */
-  void rec_dequeue_from_page(Lock *in_lock) noexcept;
+  void rec_dequeue_from_page(Lock *in_lock, bool in_trx = true) noexcept;
 
   /**
    * @brief Grants the waiting locks of a page queue that no lock ahead blocks.
@@ -1601,8 +1630,9 @@ struct LockSys {
    * can now be granted.
    *
    * @param[in] lock The lock object to be removed.
+   * @param[in] in_trx false if it is out of the lock list of its trx already.
    */
-  void table_remove_low(Lock *lock) noexcept;
+  void table_remove_low(Lock *lock, bool in_trx = true) noexcept;
 
   /**
    * @brief Enqueues a waiting request for a table lock which cannot be granted immediately. Checks for deadlocks.
@@ -1651,10 +1681,11 @@ struct LockSys {
    * It then checks the remaining transactions in the queue and grants their lock requests if they
    * are now qualified to receive the lock.
    *
+   * @param[in] in_trx false if it is out of the lock list of its trx already.
    * @param[in] in_lock The table lock to be removed. Transactions waiting behind this lock will
    *                    get their lock requests granted if they are now qualified.
    */
-  void table_dequeue(Lock *in_lock) noexcept;
+  void table_dequeue(Lock *in_lock, bool in_trx = true) noexcept;
 
   /**
    * @brief Grants the waiting locks of a table queue that no lock ahead
@@ -1760,41 +1791,21 @@ struct LockSys {
  private:
 #endif /* !UNIT_TESTING */
 
-  /** The number of slots of the global latch. ThreadSanitizer tracks at
-  most 64 mutexes held by one thread (sanitizer_deadlock_detector.h): X holds
-  every slot and may then take shard and trx latches, so fewer slots there. */
-#if defined(__SANITIZE_THREAD__)
-  static constexpr size_t N_GLOBAL_SLOTS = 16;
-#elif defined(__has_feature)
-#if __has_feature(thread_sanitizer)
-  static constexpr size_t N_GLOBAL_SLOTS = 16;
-#else
-  static constexpr size_t N_GLOBAL_SLOTS = 64;
-#endif
-#else
-  static constexpr size_t N_GLOBAL_SLOTS = 64;
-#endif
-
   /** The number of page shards: the record lock queues, by page. */
   static constexpr size_t N_PAGE_SHARDS = 512;
 
   /** The number of table shards: the table lock queues, by table id. */
-  static constexpr size_t N_TABLE_SHARDS = 512;
-
-  /** A slot of the global latch, on a cache line of its own. */
-  struct alignas(64) GlobalSlot {
-    std::shared_mutex m_latch;
-  };
+  static constexpr size_t N_TABLE_SHARDS = 64;
 
   /** A page shard: its latch and the record lock queues of its pages. */
   struct alignas(64) PageShard {
-    std::mutex m_mutex;
-    Page_id_hash<Rec_locks> m_locks;
+    ut::Latch m_mutex;
+    PageQueues m_locks;
   };
 
   /** A table shard: its latch (the queues are in Table::m_locks). */
   struct alignas(64) TableShard {
-    std::mutex m_mutex;
+    ut::Latch m_mutex;
   };
 
   /** @return the page shard of a page. */
@@ -1812,7 +1823,6 @@ struct LockSys {
   struct Held {
     const LockSys *m_owner{};
     uint32_t m_x{};
-    int32_t m_s{-1};
     std::array<int32_t, 2> m_pages{-1, -1};
     int32_t m_table{-1};
   };
@@ -1820,11 +1830,14 @@ struct LockSys {
   /** @return the latches of this lock system the calling thread holds. */
   [[nodiscard]] Held &held() const noexcept;
 
-  /** @return true if the calling thread holds the global latch in X. */
+  /** @return true if the calling thread holds X. */
   [[nodiscard]] bool x_own() const noexcept { return held().m_x > 0; }
 
-  /** @return true if the calling thread holds the global latch, S or X. */
-  [[nodiscard]] bool latched() const noexcept { return x_own() || held().m_s >= 0; }
+  /** @return true if the calling thread holds X or a shard latch. */
+  [[nodiscard]] bool latched() const noexcept {
+    const auto &h = held();
+    return h.m_x > 0 || h.m_pages[0] >= 0 || h.m_table >= 0;
+  }
 
   /** @return true if the calling thread holds no latch of the lock system. */
   [[nodiscard]] bool nothing_latched() const noexcept { return !latched(); }
@@ -1833,25 +1846,21 @@ struct LockSys {
   [[nodiscard]] bool owns_page(PageId page_id) const noexcept {
     const auto &h = held();
     const auto shard = int32_t(page_shard_no(page_id));
-    return h.m_x > 0 || (h.m_s >= 0 && (h.m_pages[0] == shard || h.m_pages[1] == shard));
+    return h.m_x > 0 || h.m_pages[0] == shard || h.m_pages[1] == shard;
   }
 
   /** @return true if the calling thread may read and change the queue of table. */
   [[nodiscard]] bool owns_table(const Table *table) const noexcept {
     const auto &h = held();
-    return h.m_x > 0 || (h.m_s >= 0 && h.m_table == int32_t(table_shard_no(table)));
+    return h.m_x > 0 || h.m_table == int32_t(table_shard_no(table));
   }
 
-  /** The global latch in X (all its slots), reentrant. No other latch of
-  the lock system, nor the trx sys mutex, nor a trx mutex may be held. */
+  /** X: every shard latch, in the latching order; reentrant. No other latch
+  of the lock system, nor the trx sys mutex, nor a trx mutex may be held. */
   void x_lock() noexcept;
   void x_unlock() noexcept;
 
-  /** The global latch in S, one slot. */
-  void s_lock() noexcept;
-  void s_unlock() noexcept;
-
-  /** The global latch in X for a scope (a no-op if the thread has it). */
+  /** X for a scope (a no-op if the thread has it). */
   class Exclusive {
    public:
     explicit Exclusive(LockSys &lock_sys) noexcept : m_lock_sys(lock_sys) { m_lock_sys.x_lock(); }
@@ -1864,12 +1873,21 @@ struct LockSys {
     LockSys &m_lock_sys;
   };
 
-  /** The global latch in S and one or two page shard latches for a scope (a
-  no-op if the thread holds X). */
+  /** The number of a shard. */
+  struct ShardNo {
+    uint32_t m_no;
+  };
+
+  /** One or two page shard latches for a scope (a no-op if the thread holds
+  X). */
   class PageLatch {
    public:
     PageLatch(LockSys &lock_sys, PageId page_id) noexcept;
     PageLatch(LockSys &lock_sys, PageId a, PageId b) noexcept;
+
+    /** The latch of a page shard, by its number. */
+    PageLatch(LockSys &lock_sys, ShardNo shard) noexcept;
+
     ~PageLatch() noexcept;
 
     PageLatch(const PageLatch &) = delete;
@@ -1880,11 +1898,15 @@ struct LockSys {
     bool m_noop{};
   };
 
-  /** The global latch in S and a table shard latch for a scope (a no-op if
-  the thread holds X). A page shard latch may be held. */
+  /** A table shard latch for a scope (a no-op if the thread holds X). A page
+  shard latch may be held. */
   class TableLatch {
    public:
     TableLatch(LockSys &lock_sys, const Table *table) noexcept;
+
+    /** The latch of a table shard, by its number. */
+    TableLatch(LockSys &lock_sys, ShardNo shard) noexcept;
+
     ~TableLatch() noexcept;
 
     TableLatch(const TableLatch &) = delete;
@@ -1893,7 +1915,6 @@ struct LockSys {
    private:
     LockSys &m_lock_sys;
     bool m_noop{};
-    bool m_s_taken{};
   };
 
   /** The waiting transactions whose waiting lock a page operation of the
@@ -1903,9 +1924,6 @@ struct LockSys {
   /** The requester of the calling thread whose latch free deadlock walk was
   suspect, for deadlock_after_wait(). Thread local. */
   [[nodiscard]] static Trx *&suspect() noexcept;
-
-  /** The slots of the global latch. */
-  std::array<GlobalSlot, N_GLOBAL_SLOTS> m_global{};
 
   /** The page shards. */
   std::array<PageShard, N_PAGE_SHARDS> m_page_shards{};
@@ -1954,7 +1972,7 @@ struct LockSys {
 
   /** The epoch of the latest full deadlock search: Trx::m_deadlock_mark
   equal to it marks a transaction whose subtree that search visited.
-  Starts at 1, transactions at 0. With the global latch in X. */
+  Starts at 1, transactions at 0. With X. */
   uint64_t m_deadlock_epoch{1};
 
   /**

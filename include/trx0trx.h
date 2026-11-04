@@ -37,6 +37,7 @@ class System;
 #include "srv0srv.h"
 #include "trx0types.h"
 #include "usr0types.h"
+#include "ut0latch.h"
 
 struct Lock;
 struct ReadView;
@@ -47,20 +48,43 @@ level is SYNC_TRX, below the trx sys mutex and the lock system latches: a
 thread may take it while it holds those, and takes none of them while it
 holds it. A thread holds at most one trx mutex at a time. */
 struct TrxMutex {
-  void lock() noexcept;
-  void unlock() noexcept;
+  void lock() noexcept {
+    ut_ad(n_held() == 0);
+
+    m_mutex.lock();
+
+    ut_d(m_owner.store(self(), std::memory_order_relaxed));
+    ut_d(++s_n_held);
+  }
+
+  void unlock() noexcept {
+    ut_ad(own());
+    ut_d(--s_n_held);
+    ut_d(m_owner.store(nullptr, std::memory_order_relaxed));
+
+    m_mutex.unlock();
+  }
 
 #ifdef UNIV_DEBUG
   /** @return true if the calling thread holds it. */
-  [[nodiscard]] bool own() const noexcept { return m_owner.load(std::memory_order_relaxed) == std::this_thread::get_id(); }
+  [[nodiscard]] bool own() const noexcept { return m_owner.load(std::memory_order_relaxed) == self(); }
 
   /** @return the number of trx mutexes the calling thread holds, 0 or 1. */
-  [[nodiscard]] static ulint n_held() noexcept;
+  [[nodiscard]] static ulint n_held() noexcept { return s_n_held; }
 
-  std::atomic<std::thread::id> m_owner{};
+  /** @return a token of the calling thread (cheaper than its id). */
+  [[nodiscard]] static const void *self() noexcept {
+    static thread_local char t;
+    return &t;
+  }
+
+  std::atomic<const void *> m_owner{};
+
+  /** The trx mutexes the thread holds: at most one. */
+  static inline thread_local ulint s_n_held{};
 #endif /* UNIV_DEBUG */
 
-  std::mutex m_mutex;
+  ut::Latch m_mutex;
 };
 
 /*
@@ -74,8 +98,10 @@ struct Trx {
    *
    * @param[in] sess The session.
    * @param[in] arg Any context that needs to be passed to the trx.
+   * @param[in] wait_event The event for its lock waits, of a Trx of the pool
+   *  in TrxSys; nullptr to create one.
    */
-  Trx(Session *sess, void *arg) noexcept;
+  Trx(Session *sess, void *arg, CondVar *wait_event = nullptr) noexcept;
 
   /**
    * Destructs a transaction object.
@@ -742,6 +768,14 @@ struct Trx {
 
   /** Detailed error message for last error, or empty. */
   std::array<char, 256> m_detailed_error{};
+
+  /** Where the last lock created for the transaction is: its page shard, or
+LOCK_HINT_TABLE and its table shard. Written with the trx mutex, read without
+it by LockSys::release() to choose its first shard latch: only a hint, what
+to release is read with the latch and the trx mutex. */
+  std::atomic<uint32_t> m_lock_hint{};
+
+  static constexpr uint32_t LOCK_HINT_TABLE = 1U << 31;
 
   /** The mutex of the transaction, see TrxMutex. */
   mutable TrxMutex m_mutex{};

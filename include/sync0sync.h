@@ -288,10 +288,6 @@ order of their shard numbers). So the trx sys mutex can be taken with lock
 system latches held, never the reverse; a trx mutex can be taken with any of
 them held, and no other of these while it is held. */
 
-/** The global rw-latch of the lock system (S for operations on shards, X for
-operations on all of it). */
-constexpr ulint SYNC_LOCK_SYS_GLOBAL = 330;
-
 /** A page shard latch of the lock system (record lock queues). */
 constexpr ulint SYNC_LOCK_SYS_PAGE = 320;
 

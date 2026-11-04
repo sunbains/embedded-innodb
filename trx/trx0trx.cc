@@ -39,7 +39,7 @@ Created 3/26/1996 Heikki Tuuri
 
 /* Threads with unknown id. */
 
-Trx::Trx(Session *sess, void *arg) noexcept : m_client_ctx(arg), m_sess(sess) {
+Trx::Trx(Session *sess, void *arg, CondVar *wait_event) noexcept : m_client_ctx(arg), m_sess(sess) {
 
   m_op_info = "";
   m_start_time = ::time(nullptr);
@@ -50,7 +50,7 @@ Trx::Trx(Session *sess, void *arg) noexcept : m_client_ctx(arg), m_sess(sess) {
 
   m_global_read_view_heap = mem_heap_create(256);
 
-  m_wait_event = os_event_create(nullptr);
+  m_wait_event = wait_event != nullptr ? wait_event : os_event_create(nullptr);
 
 #ifdef WITH_XOPEN
   memset(&m_xid, 0, sizeof(m_xid));
@@ -94,7 +94,9 @@ Trx::~Trx() noexcept {
   ut_a(m_wait_lock == nullptr);
   ut_a(m_wait_thrs.empty());
 
-  os_event_free(m_wait_event);
+  if (m_wait_event != nullptr) {
+    os_event_free(m_wait_event);
+  }
 
   ut_a(m_dict_operation_lock_mode == 0);
 
@@ -112,48 +114,6 @@ Trx::~Trx() noexcept {
 
   ut_a(m_read_view == nullptr);
 }
-
-namespace {
-
-#ifdef UNIV_DEBUG
-/** The trx mutexes the thread holds: at most one. */
-thread_local ulint t_n_trx_mutex{};
-#endif /* UNIV_DEBUG */
-
-}  // namespace
-
-void TrxMutex::lock() noexcept {
-  ut_ad(t_n_trx_mutex == 0);
-
-  /* A short spin of try_lock() first: the holds are short. */
-  for (uint32_t i{}; !m_mutex.try_lock(); ++i) {
-    if (i == 32) {
-      m_mutex.lock();
-      break;
-    }
-
-#if defined(__x86_64__) || defined(__i386__)
-    __builtin_ia32_pause();
-#endif
-  }
-
-  ut_d(m_owner.store(std::this_thread::get_id(), std::memory_order_relaxed));
-  ut_d(++t_n_trx_mutex);
-}
-
-void TrxMutex::unlock() noexcept {
-  ut_ad(own());
-  ut_d(--t_n_trx_mutex);
-  ut_d(m_owner.store(std::thread::id{}, std::memory_order_relaxed));
-
-  m_mutex.unlock();
-}
-
-#ifdef UNIV_DEBUG
-ulint TrxMutex::n_held() noexcept {
-  return t_n_trx_mutex;
-}
-#endif /* UNIV_DEBUG */
 
 void Trx::interrupt() noexcept {
   /* The flag first: the waiting thread resets the event, then reads the
@@ -336,14 +296,18 @@ void Trx::commit_off_kernel(System &sys) noexcept {
   /* C3: wait for the pins of the implicit to explicit lock conversions in
   flight to go away. A converter holds a pin while it waits for a page latch
   and a lock system latch: the committing thread must hold neither, nor the
-  trx sys mutex, nor any trx mutex. */
-  mutex_exit(&sys.m_trx_sys->m_mutex);
+  trx sys mutex, nor any trx mutex. No new pin after C2: if there is none
+  now (acquire, against the release of the unpin), there is nothing to wait
+  for, and the trx sys mutex stays. */
+  if (m_n_ref.load(std::memory_order_acquire) != 0) {
+    mutex_exit(&sys.m_trx_sys->m_mutex);
 
-  ut_ad(sys.m_lock_sys->nothing_latched());
+    ut_ad(sys.m_lock_sys->nothing_latched());
 
-  sys.m_trx_sys->drain_pins(this);
+    sys.m_trx_sys->drain_pins(this);
 
-  mutex_enter(&sys.m_trx_sys->m_mutex);
+    mutex_enter(&sys.m_trx_sys->m_mutex);
+  }
 
   /* The following assignment makes the transaction committed in memory
   and makes its changes to data visible to other transactions.
@@ -364,6 +328,11 @@ void Trx::commit_off_kernel(System &sys) noexcept {
   it with that). No conversion can create a lock for it from here on. */
   trx_mutex_enter(this);
   m_conc_state = TRX_COMMITTED_IN_MEMORY;
+
+  /* No lock now: none can be created for it from here on (no conversion
+  after C4; a page operation creates one only from a lock of it), C5 has
+  nothing to do. */
+  const bool has_locks = !m_trx_locks.empty();
   trx_mutex_exit(this);
 
   /* If we release sys.m_trx_sys->m_mutex below and we are still doing
@@ -388,11 +357,13 @@ void Trx::commit_off_kernel(System &sys) noexcept {
 
   /* C5: release the explicit locks, shard by shard, with no other latch
   held (LockSys::release()). */
-  mutex_exit(&sys.m_trx_sys->m_mutex);
+  if (has_locks) {
+    mutex_exit(&sys.m_trx_sys->m_mutex);
 
-  sys.m_lock_sys->release(this);
+    sys.m_lock_sys->release(this);
 
-  mutex_enter(&sys.m_trx_sys->m_mutex);
+    mutex_enter(&sys.m_trx_sys->m_mutex);
+  }
 
   if (m_global_read_view != nullptr) {
     sys.m_trx_sys->close_read_view(m_global_read_view);

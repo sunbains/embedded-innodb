@@ -138,9 +138,17 @@ Lock *LockSys::table_create(Table *table, LockMode type_mode, Trx *trx) noexcept
   /* The lock heap and the lock list of trx: its mutex. */
   trx_mutex_enter(trx);
 
+  /* The lock heap of trx is emptied when its list is (LockSys::release()
+  leaves a small heap for here): no lock of trx is in use then (a lock is
+  only created for trx from a lock of trx in its list, or by trx). */
+  if (trx->m_trx_locks.empty()) {
+    mem_heap_empty(trx->m_lock_heap);
+  }
+
   auto lock = reinterpret_cast<Lock *>(mem_heap_alloc(trx->m_lock_heap, sizeof(Lock)));
 
   trx->m_trx_locks.push_back(lock);
+  trx->m_lock_hint.store(Trx::LOCK_HINT_TABLE | table_shard_no(table), std::memory_order_relaxed);
 
   lock->m_trx = trx;
   lock->m_type_mode = LockMode(Lock_mode_type(type_mode) | LOCK_TABLE);
@@ -175,15 +183,17 @@ Lock *LockSys::table_create(Table *table, LockMode type_mode, Trx *trx) noexcept
   return lock;
 }
 
-void LockSys::table_remove_low(Lock *lock) noexcept {
+void LockSys::table_remove_low(Lock *lock, bool in_trx) noexcept {
   auto trx = lock->m_trx;
   auto table = lock->m_table.m_table;
 
   ut_ad(owns_table(table));
 
-  trx_mutex_enter(trx);
-  trx->m_trx_locks.remove(lock);
-  trx_mutex_exit(trx);
+  if (in_trx) {
+    trx_mutex_enter(trx);
+    trx->m_trx_locks.remove(lock);
+    trx_mutex_exit(trx);
+  }
 
   table->m_locks.remove(lock);
 }
@@ -291,14 +301,14 @@ bool LockSys::table_has_to_wait_in_queue(Lock *wait_lock) noexcept {
   return false;
 }
 
-void LockSys::table_dequeue(Lock *in_lock) noexcept {
+void LockSys::table_dequeue(Lock *in_lock, bool in_trx) noexcept {
   ut_a(in_lock->type() == LOCK_TABLE);
 
   auto table = in_lock->m_table.m_table;
 
   ut_ad(owns_table(table));
 
-  table_remove_low(in_lock);
+  table_remove_low(in_lock, in_trx);
 
   /* Check if waiting locks in the queue can now be granted: grant
   locks if there are no conflicting locks ahead. */

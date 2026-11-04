@@ -45,6 +45,9 @@ Created 3/26/1996 Heikki Tuuri
 #include "ut0byte.h"
 
 #include <array>
+#include <bit>
+#include <tuple>
+#include <utility>
 #include <mutex>
 #include <unordered_map>
 #include <vector>
@@ -704,10 +707,121 @@ struct TrxSys {
   /** Number of shards of the active ids. */
   static constexpr size_t N_ID_SHARDS = 256;
 
+  /** The active ids of a shard: an open addressing hash table (id 0 marks
+  a free slot: no transaction has id 0), linear probing, backward shift
+  deletion; no allocation but to grow. */
+  class IdMap {
+   public:
+    [[nodiscard]] Trx *find(trx_id_t id) const noexcept {
+      if (m_n == 0) {
+        return nullptr;
+      }
+
+      for (auto i = slot(id);; i = (i + 1) & mask()) {
+        if (m_slots[i].first == id) {
+          return m_slots[i].second;
+        } else if (m_slots[i].first == 0) {
+          return nullptr;
+        }
+      }
+    }
+
+    [[nodiscard]] bool contains(trx_id_t id) const noexcept { return find(id) != nullptr; }
+
+    /** Map id to trx (insert, or replace). */
+    void insert(trx_id_t id, Trx *trx) noexcept {
+      ut_ad(id != 0);
+
+      if ((m_n + 1) * 2 > m_slots.size()) {
+        grow();
+      }
+
+      for (auto i = slot(id);; i = (i + 1) & mask()) {
+        if (m_slots[i].first == id) {
+          m_slots[i].second = trx;
+          return;
+        } else if (m_slots[i].first == 0) {
+          m_slots[i] = {id, trx};
+          ++m_n;
+          return;
+        }
+      }
+    }
+
+    /** Erase id, if it maps to trx. */
+    void erase(trx_id_t id, const Trx *trx) noexcept {
+      if (m_n == 0) {
+        return;
+      }
+
+      auto i = slot(id);
+
+      for (;; i = (i + 1) & mask()) {
+        if (m_slots[i].first == 0) {
+          return;
+        } else if (m_slots[i].first == id) {
+          break;
+        }
+      }
+
+      if (m_slots[i].second != trx) {
+        return;
+      }
+
+      /* Shift back the entries after it that may take its slot: an entry
+      at j whose home k is not in (i, j], cyclically. */
+      for (auto j = i;;) {
+        j = (j + 1) & mask();
+
+        if (m_slots[j].first == 0) {
+          break;
+        }
+
+        const auto k = slot(m_slots[j].first);
+        const bool stays = i <= j ? (i < k && k <= j) : (i < k || k <= j);
+
+        if (!stays) {
+          m_slots[i] = m_slots[j];
+          i = j;
+        }
+      }
+
+      m_slots[i] = {0, nullptr};
+      --m_n;
+    }
+
+   private:
+    [[nodiscard]] size_t mask() const noexcept { return m_slots.size() - 1; }
+
+    [[nodiscard]] size_t slot(trx_id_t id) const noexcept { return size_t((id * 0xD6E8FEB86659FD93ULL) >> m_shift); }
+
+    void grow() noexcept {
+      std::vector<std::pair<trx_id_t, Trx *>> old;
+
+      old.swap(m_slots);
+
+      const size_t n = old.empty() ? 16 : old.size() * 2;
+
+      m_slots.assign(n, {0, nullptr});
+      m_shift = 64 - uint32_t(std::countr_zero(n));
+      m_n = 0;
+
+      for (const auto &[id, trx] : old) {
+        if (id != 0) {
+          insert(id, trx);
+        }
+      }
+    }
+
+    std::vector<std::pair<trx_id_t, Trx *>> m_slots;
+    uint32_t m_shift{64};
+    size_t m_n{};
+  };
+
   /** A shard of the active ids. */
   struct alignas(64) IdShard {
-    std::mutex m_mutex;
-    std::unordered_map<trx_id_t, Trx *> m_trxs;
+    ut::Latch m_mutex;
+    IdMap m_trxs;
   };
 
   /** The shards. */
@@ -723,10 +837,10 @@ struct TrxSys {
   with the TrxSys: a Trx is type stable while the System lives, the deadlock
   walk can read the edge of a transaction that committed under it (see
   lock0deadlock.h). */
-  std::vector<void *> m_trx_pool{};
+  std::vector<std::pair<void *, CondVar *>> m_trx_pool{};
 
   /** Protects m_trx_pool. */
-  std::mutex m_trx_pool_mutex{};
+  ut::Latch m_trx_pool_mutex{};
 
   /** Latest rollback segment in the round-robin assignment
   of rollback segments to transactions */

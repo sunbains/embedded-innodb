@@ -2439,6 +2439,117 @@ TEST_F(LockDbTest, DeadlockPastIdleBlocker) {
   }
 }
 
+/** The queue local deadlock check against the full search (lock0deadlock.h,
+step 3): random requests on one record, as the engine makes them (a request
+waits if it conflicts with a lock in the queue, a transaction waits for at
+most one lock; upgrades of S holders to X), some transactions also waiting on
+another page. At each new wait both decide from that transaction: if the
+check says no cycle, the full search finds none; when every wait is in the
+queue, the check is exact. A wait that closes a cycle is cancelled, as the
+victim's would be: no older cycle in the graph. 2000 rounds. */
+TEST_F(LockDbTest, LocalCheckEquivalence) {
+  const PageId r{FAKE_SPACE, 1};
+  const PageId other{FAKE_SPACE, 2};
+  std::mt19937 rng(17);
+  size_t n_cycles{};
+  size_t n_exact{};
+  size_t n_outside{};
+
+  for (int round{}; round < 2000; ++round) {
+    const int n = 2 + int(rng() % 5);
+    std::vector<Trx *> t;
+
+    for (int i{}; i < n; ++i) {
+      t.push_back(trx());
+    }
+
+    std::vector<bool> waits(n, false);
+
+    /* The checks of the new wait of t[i], on lock. */
+    auto check = [&](int i, Lock *lock) {
+      m_lock_sys->x_lock();
+
+      ASSERT_EQ(t[i]->m_wait_lock, lock);
+
+      const bool local = m_lock_sys->deadlock_local(t[i]);
+      Trx *pred{};
+      const auto walk = m_lock_sys->deadlock_find(t[i], &pred);
+
+      ASSERT_NE(walk, DeadlockWalk::TOO_DEEP) << "round " << round;
+
+      const bool cycle = walk == DeadlockWalk::CYCLE;
+
+      bool in_queue{true};
+
+      for (auto x : t) {
+        if (x->m_wait_lock != nullptr && x->m_wait_lock->page_id() != lock->page_id()) {
+          in_queue = false;
+        }
+      }
+
+      if (!local) {
+        EXPECT_FALSE(cycle) << "round " << round << ": a cycle the queue local check ruled out";
+      } else if (in_queue) {
+        EXPECT_TRUE(cycle) << "round " << round << ": the queue local check saw a cycle the full search did not";
+      }
+
+      n_exact += in_queue ? 1 : 0;
+      n_outside += in_queue ? 0 : 1;
+      n_cycles += cycle ? 1 : 0;
+
+      if (cycle) {
+        m_lock_sys->cancel_waiting_and_release(lock);
+        waits[i] = false;
+      }
+
+      m_lock_sys->x_unlock();
+    };
+
+    for (int step{}; step < 4 * n; ++step) {
+      const int i = int(rng() % n);
+
+      if (waits[i]) {
+        continue;
+      }
+
+      if (rng() % 8 == 0) {
+        /* A wait outside the queue: for X on the other page, held by another. */
+        const int h = int(rng() % n);
+
+        if (h != i) {
+          (void)rec_lock(other, LOCK_X | LOCK_REC_NOT_GAP, 2, t[h]);
+
+          waits[i] = true;
+          check(i, rec_lock(other, LOCK_X | LOCK_REC_NOT_GAP | LOCK_WAIT, 2, t[i]));
+        }
+
+        continue;
+      }
+
+      const ulint mode = (rng() % 2 ? LOCK_S : LOCK_X) | (rng() % 2 ? LOCK_REC_NOT_GAP : 0);
+
+      m_lock_sys->x_lock();
+      const bool conflict = m_lock_sys->rec_other_has_conflicting(r, LockMode(mode), 2, t[i]) != nullptr;
+      m_lock_sys->x_unlock();
+
+      if (conflict) {
+        waits[i] = true;
+        check(i, rec_lock(r, mode | LOCK_WAIT, 2, t[i]));
+      } else {
+        (void)rec_lock(r, mode, 2, t[i]);
+      }
+    }
+
+    finish();
+  }
+
+  std::printf("LocalCheckEquivalence: %zu cycles, %zu checks with all waits in the queue, %zu with one outside\n", n_cycles, n_exact, n_outside);
+
+  EXPECT_GT(n_cycles, 0u);
+  EXPECT_GT(n_exact, 0u);
+  EXPECT_GT(n_outside, 0u);
+}
+
 /** A cycle closed through an edge that the one edge graph does not hold, at
 depth 2: d holds X on r4, then waits for X on q, which i (idle) and a hold
 in S: d's edge names one of them (neither waits yet). e holds X on r3 and
@@ -2755,7 +2866,7 @@ TEST_F(LockDbPerf, DeadlockCheck) {
 
     auto req = rec_lock(PageId{FAKE_SPACE, 1}, LOCK_X | LOCK_WAIT, 2, t[0]);
 
-    /* The check itself, with the global latch in X for the whole loop (a
+    /* The check itself, with the lock system latched X for the whole loop (a
     request takes X only for the full search, not for the latch free walk). */
     m_lock_sys->x_lock();
     auto r = ut::bench(std::format("deadlock_check_chain{}", n), 2000, [&](uint64_t) { EXPECT_FALSE(deadlock(req, t[0])); });

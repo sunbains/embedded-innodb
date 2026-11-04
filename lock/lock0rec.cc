@@ -157,9 +157,17 @@ Lock *LockSys::rec_create_low(
   conversion) while trx itself requests one in another shard. */
   trx_mutex_enter(trx);
 
+  /* The lock heap of trx is emptied when its list is (LockSys::release()
+  leaves a small heap for here): no lock of trx is in use then (a lock is
+  only created for trx from a lock of trx in its list, or by trx). */
+  if (trx->m_trx_locks.empty()) {
+    mem_heap_empty(trx->m_lock_heap);
+  }
+
   auto lock = reinterpret_cast<Lock *>(mem_heap_alloc(trx->m_lock_heap, sizeof(Lock) + n_bytes));
 
   trx->m_trx_locks.push_back(lock);
+  trx->m_lock_hint.store(page_shard_no(page_id), std::memory_order_relaxed);
 
   lock->m_trx = trx;
 
@@ -490,7 +498,7 @@ void LockSys::rec_cancel(Lock *lock) noexcept {
   trx_mutex_exit(trx);
 }
 
-void LockSys::rec_dequeue_from_page(Lock *lock) noexcept {
+void LockSys::rec_dequeue_from_page(Lock *lock, bool in_trx) noexcept {
   ut_ad(lock->type() == LOCK_REC);
   ut_ad(owns_page(lock->page_id()));
 
@@ -506,11 +514,13 @@ void LockSys::rec_dequeue_from_page(Lock *lock) noexcept {
     rec_queue_erase(lock->page_id());
   }
 
-  auto trx = lock->m_trx;
+  if (in_trx) {
+    auto trx = lock->m_trx;
 
-  trx_mutex_enter(trx);
-  trx->m_trx_locks.remove(lock);
-  trx_mutex_exit(trx);
+    trx_mutex_enter(trx);
+    trx->m_trx_locks.remove(lock);
+    trx_mutex_exit(trx);
+  }
 
   /* Check if waiting locks in the queue can now be granted: grant
   locks if there are no conflicting locks ahead. */
