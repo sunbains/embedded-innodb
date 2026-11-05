@@ -39,23 +39,20 @@ ELSE()
   SET(LIBURING_LIB_DIR "${LIBURING_INSTALL_DIR}/lib")
   SET(LIBURING_INCLUDE_DIR "${LIBURING_INSTALL_DIR}/include")
 
-  ExternalProject_Add(liburing
-    SOURCE_DIR "${CMAKE_SOURCE_DIR}/deps/liburing"
-    PREFIX ${DEPS_INSTALL_DIR}
-    BUILD_COMMAND make -C ${LIBURING_SRC_DIR} prefix=${LIBURING_INSTALL_DIR}
-    CONFIGURE_COMMAND ""
-    INSTALL_COMMAND make 
-      -C ${LIBURING_SRC_DIR}
-      prefix=${LIBURING_INSTALL_DIR}
-      includedir=${LIBURING_INCLUDE_DIR}
-      libdir=${LIBURING_LIB_DIR}
-      libdevdir=${LIBURING_LIB_DIR}
-      mandir=${LIBURING_INSTALL_DIR}/man
-      install
+  # Runs at each build and builds only if the source changed: see liburing-build.cmake.
+  ADD_CUSTOM_TARGET(liburing
+    COMMAND ${CMAKE_COMMAND}
+      -DSRC=${LIBURING_SRC_DIR}
+      -DPREFIX=${LIBURING_INSTALL_DIR}
+      -P ${CMAKE_SOURCE_DIR}/deps/liburing-build.cmake
+    BYPRODUCTS ${LIBURING_LIB_DIR}/liburing.a
+    COMMENT "liburing"
+    VERBATIM
   )
 
   LINK_DIRECTORIES(${LIBURING_LIB_DIR})
-  INCLUDE_DIRECTORIES(${LIBURING_INCLUDE_DIR})
+  # SYSTEM: -Werror is for our code, not for the warnings of its headers.
+  INCLUDE_DIRECTORIES(SYSTEM ${LIBURING_INCLUDE_DIR})
 
 ENDIF()
 
