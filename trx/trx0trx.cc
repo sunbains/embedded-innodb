@@ -136,8 +136,6 @@ void Trx::destroy(Trx *&trx) noexcept {
 }
 
 bool Trx::start_low(System &sys, ulint rseg_id) noexcept {
-  ut_ad(mutex_own(&sys.m_trx_sys->m_mutex));
-
   m_interrupted.store(false, std::memory_order_release);
 
   ut_ad(m_magic_n == TRX_MAGIC_N);
@@ -157,8 +155,6 @@ bool Trx::start_low(System &sys, ulint rseg_id) noexcept {
     rseg_id = sys.m_trx_sys->trx_assign_rseg();
   }
 
-  m_id = sys.m_trx_sys->get_new_trx_id();
-
   ut_ad(m_rseg == nullptr);
   m_rseg = sys.m_trx_sys->get_nth_rseg(rseg_id);
 
@@ -173,11 +169,9 @@ bool Trx::start_low(System &sys, ulint rseg_id) noexcept {
   m_must_flush_log_later = false;
 #endif /* WITH_XOPEN */
 
-  sys.m_trx_sys->m_trx_list.push_front(this);
-
-  /* Active, found by its id (implicit locks), until its commit erases it. */
-  sys.m_trx_sys->ids_insert(this);
-  sys.m_trx_sys->update_min_active_id();
+  /* In the list, then the id, then found by its id (the commit table, the
+  implicit locks). */
+  sys.m_trx_sys->node_start(this);
 
   return true;
 }
@@ -200,24 +194,30 @@ bool Trx::start(System &sys, ulint rseg_id) noexcept {
   /* FIXME: This requires an API change to support */
   /* trx->m_support_xa = ib_supports_xa(trx->m_client_ctx); */
 
-  mutex_enter(&sys.m_trx_sys->m_mutex);
-
-  auto ret = start_low(sys, rseg_id);
-
-  mutex_exit(&sys.m_trx_sys->m_mutex);
-
-  return ret;
+  return start_low(sys, rseg_id);
 }
 
 void Trx::commit_off_kernel(System &sys) noexcept {
   ut_ad(mutex_own(&sys.m_trx_sys->m_mutex));
 
+  mutex_exit(&sys.m_trx_sys->m_mutex);
+
+  commit_low(sys);
+
+  mutex_enter(&sys.m_trx_sys->m_mutex);
+}
+
+void Trx::commit_low(System &sys) noexcept {
+  ut_ad(!mutex_own(&sys.m_trx_sys->m_mutex));
+
   lsn_t lsn{};
   auto rseg{m_rseg};
 
+  /* The wall clock, once per commit. */
+  const auto wall = sys.m_trx_sys->m_clock.wall();
+
   if (m_insert_undo != nullptr || m_update_undo != nullptr) {
 
-    mutex_exit(&sys.m_trx_sys->m_mutex);
 
     Mtr mtr;
 
@@ -238,10 +238,14 @@ void Trx::commit_off_kernel(System &sys) noexcept {
     auto undo = m_update_undo;
 
     if (undo != nullptr) {
-      mutex_enter(&sys.m_trx_sys->m_mutex);
-      m_no = sys.m_trx_sys->get_new_trx_no();
+      /* In the rseg mutex: the numbers of a rollback segment enter its history in
+      their order. The intent first (THE NUMBER, in trx0sys.h). */
+      sys.m_trx_sys->node_no_store(this, m_id);
 
-      mutex_exit(&sys.m_trx_sys->m_mutex);
+      m_no = sys.m_trx_sys->get_new_trx_no(wall);
+
+      sys.m_trx_sys->node_no_store(this, m_no);
+
 
       /* It is not necessary to obtain trx->undo_mutex here
       because only a single OS thread is allowed to do the
@@ -280,33 +284,27 @@ void Trx::commit_off_kernel(System &sys) noexcept {
 
     lsn = mtr.m_end_lsn;
 
-    mutex_enter(&sys.m_trx_sys->m_mutex);
   }
 
   ut_ad(m_conc_state == TRX_ACTIVE || m_conc_state == TRX_PREPARED);
-  ut_ad(mutex_own(&sys.m_trx_sys->m_mutex));
 
   /* The commit sequence, see the LATCHING comment of lock0lock.h. C1, the
   commit in the file based world, is done (above): it can't be undone.
 
-  C2: erase the transaction from the active ids, with the trx sys mutex (and
-  the id shard mutex): no lookup finds it any more, no new pin. */
+  C2: out of the active ids, with the id shard mutex: no lookup finds it as
+  active any more, no new pin. */
   sys.m_trx_sys->ids_erase(this);
 
   /* C3: wait for the pins of the implicit to explicit lock conversions in
   flight to go away. A converter holds a pin while it waits for a page latch
-  and a lock system latch: the committing thread must hold neither, nor the
-  trx sys mutex, nor any trx mutex. No new pin after C2: if there is none
-  now (acquire, against the release of the unpin), there is nothing to wait
-  for, and the trx sys mutex stays. */
+  and a lock system latch: the committing thread must hold neither, nor any
+  trx mutex. No new pin after C2. */
   if (m_n_ref.load(std::memory_order_acquire) != 0) {
-    mutex_exit(&sys.m_trx_sys->m_mutex);
 
     ut_ad(sys.m_lock_sys->nothing_latched());
 
     sys.m_trx_sys->drain_pins(this);
 
-    mutex_enter(&sys.m_trx_sys->m_mutex);
   }
 
   /* The following assignment makes the transaction committed in memory
@@ -323,11 +321,10 @@ void Trx::commit_off_kernel(System &sys) noexcept {
   flush fails, and T never gets committed, also T2 will never get
   committed. */
 
-  /* C4: committed in memory, with the trx sys mutex (is_active() and the
-  read views read the state with it) and the trx mutex (a conversion checks
-  it with that). No conversion can create a lock for it from here on. */
+  /* C4: committed in memory, with the trx mutex (a conversion checks it with
+  that). No conversion can create a lock for it from here on. */
   trx_mutex_enter(this);
-  m_conc_state = TRX_COMMITTED_IN_MEMORY;
+  m_conc_state.store(TRX_COMMITTED_IN_MEMORY, std::memory_order_release);
 
   /* No lock now: none can be created for it from here on (no conversion
   after C4; a page operation creates one only from a lock of it), C5 has
@@ -335,8 +332,7 @@ void Trx::commit_off_kernel(System &sys) noexcept {
   const bool has_locks = !m_trx_locks.empty();
   trx_mutex_exit(this);
 
-  /* If we release sys.m_trx_sys->m_mutex below and we are still doing
-  recovery i.e.: back ground rollback thread is still active
+  /* If we are still doing recovery i.e.: back ground rollback thread is still active
   then there is a chance that the rollback thread may see
   this trx as COMMITTED_IN_MEMORY and goes adhead to clean it
   up calling trx_cleanup_at_db_startup(). This can happen
@@ -347,22 +343,28 @@ void Trx::commit_off_kernel(System &sys) noexcept {
   background thread. To avoid this race we unconditionally
   unset the m_is_recovered flag from the trx. */
 
-  m_is_recovered = false;
+  if (m_is_recovered) {
+    /* The rollback thread reads it with the mutex. */
+    mutex_enter(&sys.m_trx_sys->m_mutex);
+    m_is_recovered = false;
+    mutex_exit(&sys.m_trx_sys->m_mutex);
+  }
 
-  /* C6: off the list of active transactions, with the trx sys mutex: a read
-  view opened from here on sees its changes; before C5, so that a waiter
-  granted by C5, which then opens a read view, sees them. */
-  sys.m_trx_sys->m_trx_list.remove(this);
-  sys.m_trx_sys->update_min_active_id();
+  /* C6: the commit stamp, in the commit table: a read view opened from here on
+  sees its changes (READ VIEWS in trx0sys.h); before C5, so that a waiter granted
+  by C5, which then opens a read view, sees them. */
+  m_commit_word = sys.m_trx_sys->commit_stamp(this, wall);
+
+  if (m_in_recv_list) {
+    sys.m_trx_sys->recv_list_remove(this);
+  }
 
   /* C5: release the explicit locks, shard by shard, with no other latch
   held (LockSys::release()). */
   if (has_locks) {
-    mutex_exit(&sys.m_trx_sys->m_mutex);
 
     sys.m_lock_sys->release(this);
 
-    mutex_enter(&sys.m_trx_sys->m_mutex);
   }
 
   if (m_global_read_view != nullptr) {
@@ -375,7 +377,6 @@ void Trx::commit_off_kernel(System &sys) noexcept {
 
   if (lsn > 0) {
 
-    mutex_exit(&sys.m_trx_sys->m_mutex);
 
     if (m_insert_undo != nullptr) {
       sys.m_undo->insert_cleanup(this);
@@ -436,7 +437,6 @@ void Trx::commit_off_kernel(System &sys) noexcept {
 
     /*-------------------------------------*/
 
-    mutex_enter(&sys.m_trx_sys->m_mutex);
   }
 
   /* Free all savepoints */
@@ -447,7 +447,7 @@ void Trx::commit_off_kernel(System &sys) noexcept {
   m_client_query_str = nullptr;
 
   trx_mutex_enter(this);
-  m_conc_state = TRX_NOT_STARTED;
+  m_conc_state.store(TRX_NOT_STARTED, std::memory_order_release);
   trx_mutex_exit(this);
 
   m_last_sql_stat_start.least_undo_no = 0;
@@ -469,13 +469,7 @@ void Trx::cleanup_at_db_startup(System &sys) noexcept {
   /* Called without the trx sys mutex (rollback_or_clean_recovered()). */
   ut_ad(!mutex_own(&sys.m_trx_sys->m_mutex));
 
-  mutex_enter(&sys.m_trx_sys->m_mutex);
-
-  sys.m_trx_sys->ids_erase(this);
-  sys.m_trx_sys->m_trx_list.remove(this);
-  sys.m_trx_sys->update_min_active_id();
-
-  mutex_exit(&sys.m_trx_sys->m_mutex);
+  sys.m_trx_sys->trx_list_remove(this);
 }
 
 ReadView *Trx::assign_read_view(System &sys) noexcept {
@@ -485,14 +479,8 @@ ReadView *Trx::assign_read_view(System &sys) noexcept {
     return m_read_view;
   }
 
-  mutex_enter(&sys.m_trx_sys->m_mutex);
-
-  if (m_read_view == nullptr) {
-    m_read_view = sys.m_trx_sys->open_read_view_now(m_id, m_global_read_view_heap);
-    m_global_read_view = m_read_view;
-  }
-
-  mutex_exit(&sys.m_trx_sys->m_mutex);
+  m_read_view = sys.m_trx_sys->open_read_view_now(m_id, m_global_read_view_heap);
+  m_global_read_view = m_read_view;
 
   return m_read_view;
 }
@@ -872,11 +860,7 @@ DbErr Trx::commit(System &sys) noexcept {
 
   m_op_info = "committing";
 
-  mutex_enter(&sys.m_trx_sys->m_mutex);
-
-  commit_off_kernel(sys);
-
-  mutex_exit(&sys.m_trx_sys->m_mutex);
+  commit_low(sys);
 
   m_op_info = "";
 

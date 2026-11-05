@@ -1876,6 +1876,7 @@ void BufPool::refresh_io_stats() {
   mutex_release();
 }
 
+#ifdef UNIV_DEBUG
 BufPage *BufPool::set_file_page_was_freed(const PageId &page_id) {
   mutex_acquire();
 
@@ -1889,3 +1890,4 @@ BufPage *BufPool::set_file_page_was_freed(const PageId &page_id) {
 
   return bpage;
 }
+#endif /* UNIV_DEBUG */

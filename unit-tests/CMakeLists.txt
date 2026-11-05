@@ -45,7 +45,7 @@ add_custom_target(unit-build)
 
 # ib_unit_test(<name> [source...]): a gtest program, <name>.cc by default,
 # registered with ctest twice: <name> runs its correctness tests under the
-# "unit" label, <name>_perf its *Perf suites under the "perf" label, alone.
+# "unit" label, <name>_perf (Release only) its *Perf suites under the "perf" label, alone.
 function(ib_unit_test name)
   SET(sources ${ARGN})
 
@@ -62,12 +62,15 @@ function(ib_unit_test name)
     TIMEOUT 1200
     ENVIRONMENT "TMPDIR=${UNIT_TEST_TMPDIR}")
 
-  add_test(NAME ${name}_perf COMMAND ${name} --gtest_filter=*Perf.*)
-  set_tests_properties(${name}_perf PROPERTIES
-    LABELS perf
-    TIMEOUT 3600
-    RUN_SERIAL TRUE
-    ENVIRONMENT "TMPDIR=${UNIT_TEST_TMPDIR};UT_PERF_OUT=${UNIT_TEST_PERF_OUT}")
+  # Performance tests only in a Release build, without UNIV_DEBUG.
+  IF(NOT CMAKE_BUILD_TYPE MATCHES Debug)
+    add_test(NAME ${name}_perf COMMAND ${name} --gtest_filter=*Perf.*)
+    set_tests_properties(${name}_perf PROPERTIES
+      LABELS perf
+      TIMEOUT 3600
+      RUN_SERIAL TRUE
+      ENVIRONMENT "TMPDIR=${UNIT_TEST_TMPDIR};UT_PERF_OUT=${UNIT_TEST_PERF_OUT}")
+  ENDIF()
 
   add_dependencies(unit-build ${name})
 endfunction()
@@ -82,6 +85,8 @@ ib_unit_test(test_page)
 ib_unit_test(test_sync)
 ib_unit_test(test_mem)
 ib_unit_test(test_ut)
+ib_unit_test(test_hlc)
+ib_unit_test(test_lflist)
 ib_unit_test(test_os)
 ib_unit_test(test_data)
 ib_unit_test(test_wal)
@@ -94,6 +99,8 @@ ib_unit_test(test_log)
 ib_unit_test(test_recv)
 ib_unit_test(test_fsp)
 ib_unit_test(test_trx)
+ib_unit_test(test_mvcc)
+ib_unit_test(test_mvperf)
 ib_unit_test(test_lock)
 ib_unit_test(test_lock_mt)
 ib_unit_test(test_lock_mt_db)

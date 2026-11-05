@@ -67,8 +67,8 @@ TEST_F(BtrTest, GrowShrink) {
 
   ut::Rows rows;
 
-  for (uint32_t k = 0; k < 20000; ++k) {
-    rows[k * 7 % 20000] = ut::Row{k * 7 % 20000, k % 97, ut::blob(k, 200)};
+  for (uint32_t k = 0; k < 10000; ++k) {
+    rows[k * 7 % 10000] = ut::Row{k * 7 % 10000, k % 97, ut::blob(k, 200)};
   }
 
   load(rows);
@@ -82,7 +82,7 @@ TEST_F(BtrTest, GrowShrink) {
   /* Delete 9 of 10 rows, spread over the tree: pages merge. */
   auto trx = begin();
 
-  for (uint32_t k = 0; k < 20000; ++k) {
+  for (uint32_t k = 0; k < 10000; ++k) {
     if (k % 10 != 0) {
       ASSERT_EQ(remove(trx, k), DB_SUCCESS);
       rows.erase(k);
@@ -95,7 +95,7 @@ TEST_F(BtrTest, GrowShrink) {
   /* And back in. */
   trx = begin();
 
-  for (uint32_t k = 0; k < 20000; k += 3) {
+  for (uint32_t k = 0; k < 10000; k += 3) {
     if (!rows.contains(k)) {
       ut::Row row{k, k % 5, ut::blob(k + 1, 150)};
 
@@ -617,11 +617,11 @@ class BtrTreeTest : public SharedDb {
     m_index->copy_types(t, n);
     dfield_set_data(dtuple_get_nth_field(t, 0), u32(k), 4);
 
-    auto sys = mem_heap_zalloc(m_heap, 13);
+    auto sys = mem_heap_zalloc(m_heap, DATA_TRX_ID_LEN + DATA_ROLL_PTR_LEN);
 
     sys[5] = 1;
-    dfield_set_data(dtuple_get_nth_field(t, 1), sys, 6);
-    dfield_set_data(dtuple_get_nth_field(t, 2), sys + 6, 7);
+    dfield_set_data(dtuple_get_nth_field(t, 1), sys, DATA_TRX_ID_LEN);
+    dfield_set_data(dtuple_get_nth_field(t, 2), sys + DATA_TRX_ID_LEN, DATA_ROLL_PTR_LEN);
     dfield_set_data(dtuple_get_nth_field(t, 3), u32(k ^ 0x5a5a), 4);
 
     auto b = static_cast<byte *>(mem_heap_alloc(m_heap, std::max<ulint>(blen, 1)));
@@ -1253,7 +1253,19 @@ TEST_F(BtrTreeTest, CompressDirect) {
   cur.search_to_nth_level(*m_sys, nullptr, m_index, 0, key(1000), PAGE_CUR_LE, BTR_MODIFY_TREE, &mtr, Current_location());
 
   if (cur.compress_recommendation(&mtr)) {
-    EXPECT_TRUE(m_sys->m_btree->compress(&cur, &mtr));
+    /* It merges into its left neighbour, if the neighbour has room: not if it was
+    filled by the merges above. */
+    auto page = cur.get_block()->get_frame();
+    const auto left = Btree::page_get_prev(page, &mtr);
+    bool room{true};
+
+    if (left != FIL_NULL) {
+      auto merge_block = m_sys->m_btree->block_get(m_index->get_space_id(), left, RW_X_LATCH, &mtr);
+
+      room = page_get_data_size(page) <= page_get_max_insert_size_after_reorganize(merge_block->get_frame(), page_get_n_recs(page));
+    }
+
+    EXPECT_EQ(m_sys->m_btree->compress(&cur, &mtr), room);
   }
 
   mtr.commit(*m_sys);

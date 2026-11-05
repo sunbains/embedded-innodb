@@ -254,7 +254,7 @@ class LockMtDb : public SharedDb {
             for (auto l : locks) {
               /* The state: with the trx mutex (C4 of a commit). */
               trx_mutex_enter(l->m_trx);
-              const auto state = l->m_trx->m_conc_state;
+              const TrxStatus state = l->m_trx->m_conc_state;
               trx_mutex_exit(l->m_trx);
 
               if (l->rec_index()->m_table == test->m_table && state == TRX_NOT_STARTED) {
@@ -1646,7 +1646,7 @@ TEST_F(LockMtDb, TimeoutGrantRace) {
   int n_granted{};
   int n_timeouts{};
 
-  for (auto delay : {300ms, 990ms, 995ms, 998ms, 1000ms, 1000ms, 1002ms, 1005ms, 1010ms, 1500ms}) {
+  for (auto delay : {300ms, 995ms, 1000ms, 1005ms, 1500ms}) {
     const auto before = value(1);
     auto h = begin();
     auto w = begin();

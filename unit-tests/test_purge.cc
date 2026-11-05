@@ -264,7 +264,7 @@ class PurgeBase : public Base {
   /** @return the length of the history list. */
   ulint hist_len() {
     mutex_enter(&m_sys->m_trx_sys->m_mutex);
-    auto len = m_sys->m_trx_sys->m_rseg_history_len;
+    const ulint len = m_sys->m_trx_sys->m_rseg_history_len;
     mutex_exit(&m_sys->m_trx_sys->m_mutex);
 
     return len;

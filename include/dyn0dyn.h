@@ -48,7 +48,7 @@ template <size_t N = DYN_ARRAY_DATA_SIZE>
 struct DynamicArray {
   /** @brief A block in a dynamically allocated array. */
   struct Block {
-    Block() : m_used(0), m_magic_n(DYN_BLOCK_MAGIC_N) {}
+    Block() : m_used(0) {}
 
     ~Block() noexcept { ut_ad(m_magic_n == DYN_BLOCK_MAGIC_N); }
 

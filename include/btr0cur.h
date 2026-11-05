@@ -629,7 +629,7 @@ struct BtreeCursor {
    * @param[in] val             The value to set for the delete mark.
    * @param[in] mtr             The mini-transaction handle.
    */
-  inline void del_mark_set_sec_rec_log(Rec rec, bool val, Mtr *mtr) noexcept;
+  inline void del_mark_set_sec_rec_log(Rec rec, bool val, trx_id_t id, Mtr *mtr) noexcept;
 
 
 #ifndef UNIT_TESTING

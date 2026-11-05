@@ -1615,8 +1615,8 @@ DbErr BtreeCursor::del_mark_set_clust_rec(System &sys, ulint flags, bool val, Qu
   return err;
 }
 
-void BtreeCursor::del_mark_set_sec_rec_log(Rec rec, bool val, Mtr *mtr) noexcept {
-  auto log_ptr = mlog_open(mtr, 11 + 1 + 2);
+void BtreeCursor::del_mark_set_sec_rec_log(Rec rec, bool val, trx_id_t id, Mtr *mtr) noexcept {
+  auto log_ptr = mlog_open(mtr, 11 + 1 + 2 + DATA_TRX_ID_LEN);
 
   if (log_ptr == nullptr) {
     /* Logging in mtr is switched off during crash recovery:
@@ -1632,11 +1632,14 @@ void BtreeCursor::del_mark_set_sec_rec_log(Rec rec, bool val, Mtr *mtr) noexcept
   mach_write_to_2(log_ptr, page_offset(rec));
   log_ptr += 2;
 
+  mach_write_to_8(log_ptr, id);
+  log_ptr += DATA_TRX_ID_LEN;
+
   mlog_close(mtr, log_ptr);
 }
 
 byte *BtreeCursor::parse_del_mark_set_sec_rec(byte *ptr, byte *end_ptr, page_t *page) noexcept {
-  if (end_ptr < ptr + 3) {
+  if (end_ptr < ptr + 3 + DATA_TRX_ID_LEN) {
 
     return nullptr;
   }
@@ -1649,10 +1652,14 @@ byte *BtreeCursor::parse_del_mark_set_sec_rec(byte *ptr, byte *end_ptr, page_t *
 
   ut_a(offset <= UNIV_PAGE_SIZE);
 
+  const auto id = mach_read_from_8(ptr);
+  ptr += DATA_TRX_ID_LEN;
+
   if (page != nullptr) {
-    auto rec = page + offset;
+    Rec rec(page + offset);
 
     set_deleted_flag(rec, val > 0);
+    mach_write_to_8(rec.get() + row_get_sec_trx_id_offset(rec), id);
   }
 
   return ptr;
@@ -1675,9 +1682,13 @@ DbErr BtreeCursor::del_mark_set_sec_rec(System &sys, ulint flags, bool val, QueT
     return err;
   }
 
-  set_deleted_flag(rec, val > 0);
+  /* The mark and the last modifier change together, under the X latch of the page. */
+  const auto id = thr_get_trx(thr)->m_id;
 
-  del_mark_set_sec_rec_log(rec, val, mtr);
+  set_deleted_flag(rec, val > 0);
+  mach_write_to_8(rec.get() + row_get_sec_trx_id_offset(rec), id);
+
+  del_mark_set_sec_rec_log(rec, val, id, mtr);
 
   return DB_SUCCESS;
 }

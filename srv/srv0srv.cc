@@ -679,7 +679,7 @@ bool Srv::printf_innodb_monitor(FILE *stream, bool nowait, ulint *trx_start, uli
     "--------------\n"
   );
 
-  log_warn(std::format("{} read views open inside InnoDB", UT_LIST_GET_LEN(m_sys.m_trx_sys->m_view_list)));
+  log_warn(std::format("{} read views open inside InnoDB", m_sys.m_trx_sys->n_read_views()));
 
   auto n_reserved = m_sys.m_fil->space_get_n_reserved_extents(0);
 
@@ -1077,12 +1077,19 @@ loop:
   skip_sleep = (m_shutdown_state != SRV_SHUTDOWN_NONE);
 
   for (i = 0; i < 10; i++) {
+    /* The high water of the clock, with its fsync, off the user threads. */
+    m_sys.m_trx_sys->hlc_tick();
+
+    /* A quiet instance gets a fresh watermark too: it saves the lookups of the table. */
+    m_sys.m_trx_sys->retire();
+
     m_main_thread_op_info = "sleeping";
     m_main_1_second_loops++;
 
     if (!skip_sleep) {
 
-      os_thread_sleep(1000000);
+      /* Woken by the start of a shutdown: every shutdown would wait for this. */
+      sleep_unless_shutdown(std::chrono::seconds(1));
       m_main_sleeps++;
     }
 

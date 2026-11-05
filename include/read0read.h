@@ -27,11 +27,16 @@ Created 2/16/1997 Heikki Tuuri
 #include "innodb0types.h"
 #include "read0types.h"
 #include "ut0byte.h"
+#include "ut0hlc.h"
+#include "ut0lflist.h"
 
 struct Trx;
 
+struct TrxSys;
+
 /**
- * ReadView class containing read view data and operations.
+ * A read view is a timestamp: see READ VIEWS in trx0sys.h. Opening one is O(1): a
+ * slot, and two loads. There is no list of ids.
  */
 struct ReadView {
   /** Check whether the changes by id are visible.
@@ -45,64 +50,31 @@ struct ReadView {
   std::string to_string() const noexcept;
 
   /**
-   * Gets the nth trx id in a read view.
-   *
-   * @param n in: position
-   * @return trx id
-   */
-  inline trx_id_t get_nth_trx_id(ulint n) const {
-    ut_ad(n < m_n_trx_ids);
-
-    return m_trx_ids[n];
-  }
-
-  /**
-   * Sets the nth trx id in a read view.
-   *
-   * @param n in: position
-   * @param trx_id in: trx id to set
-   */
-  inline void set_nth_trx_id(ulint n, trx_id_t trx_id) {
-    ut_ad(n < m_n_trx_ids);
-
-    m_trx_ids[n] = trx_id;
-  }
-
-  /**
-   * Checks if a read view sees the specified transaction.
+   * Checks if a read view sees the specified transaction: the rules of READ VIEWS.
    *
    * @param trx_id in: trx id
    * @return true if sees
    */
   inline bool sees_trx_id(trx_id_t trx_id) const {
-    if (trx_id < m_up_limit_id) {
-
+    /* Its own changes. Not for a cursor view: its creator is like any active
+    transaction, RowVers looks at the undo number. */
+    if (trx_id == m_creator_trx_id && m_type == ReadViewType::NORMAL) {
       return true;
     }
 
-    if (trx_id >= m_low_limit_id) {
+    if (trx_id < m_watermark) {
+      return true;
+    }
 
+    if ((trx_id & ~ut::HLC_NODE_MASK) > m_snap_word) {
       return false;
     }
 
-    /* We go through the trx ids in the array smallest first: this order
-    may save CPU time, because if there was a very long running
-    transaction in the trx id array, its trx id is looked at first, and
-    the first two comparisons may well decide the visibility of trx_id. */
-
-    const auto n_ids = m_n_trx_ids;
-
-    for (ulint i = 0; i < n_ids; ++i) {
-
-      const auto id = get_nth_trx_id(n_ids - i - 1);
-
-      if (trx_id <= id) {
-        return trx_id < id;
-      }
-    }
-
-    return true;
+    return lookup(trx_id);
   }
+
+  /** @return true if the commit table says the view sees id. */
+  [[nodiscard]] bool lookup(trx_id_t id) const noexcept;
 
   /** Read view type */
   ReadViewType m_type;
@@ -111,37 +83,25 @@ struct ReadView {
   this high-granularity consistent read view was created */
   undo_no_t m_undo_no;
 
-  /** The view does not need to see the undo logs for transactions
-  whose transaction number is strictly smaller (<) than this value:
-  they can be removed in purge if not needed by other views */
+  /** The snapshot, S: the word of the clock (ut0hlc.h) at the open. The view sees a
+  commit whose stamp is <= S. */
+  uint64_t m_snap_word;
+
+  /** W: all the ids below this one were committed, with a stamp <= S. */
+  trx_id_t m_watermark;
+
+  /** The purge view only: undo logs of a transaction number below this can go. */
   trx_id_t m_low_limit_no;
-
-  /** The read should not see any transaction with trx id >= this value.
-  In other words, this is the "high water mark". */
-  trx_id_t m_low_limit_id;
-
-  /** The read should see all trx ids which are strictly smaller (<) than
-  this value.  In other words, this is the "low water mark". */
-  trx_id_t m_up_limit_id;
-
-  /** Number of cells in the m_trx_ids array */
-  ulint m_n_trx_ids;
-
-  /** Additional trx ids which the read should not see: typically, these are
-  the active transactions at the time when the read is serialized, except the
-  reading transaction itself; the trx ids in this array are in a descending
-  order. These m_trx_ids should be between the "low" and "high" water marks,
-  that is, m_up_limit_id and m_low_limit_id. */
-  trx_id_t *m_trx_ids;
 
   /** trx id of creating transaction, or 0 used in purge */
   trx_id_t m_creator_trx_id;
 
-  /** List of read views in srv_trx_sys */
-  UT_LIST_NODE_T(ReadView) m_view_list;
-};
+  /** The slot of the snapshot. */
+  ut::SnapSlot *m_slot;
 
-UT_LIST_NODE_GETTER_DEFINITION(ReadView, m_view_list);
+  /** The transaction system of its commit table. */
+  TrxSys *m_trx_sys;
+};
 
 /** Read view types @{ */
 

@@ -769,7 +769,14 @@ DbErr UndoNode::del_unmark_secondary_index_and_undo_update(System &sys,
     ut_a(err == DB_SUCCESS);
 
     auto heap = mem_heap_create(100);
-    auto update = RowUpdate::build_sec_rec_difference_binary(index, entry, btr_cur->get_rec(), trx, heap);
+    byte id[DATA_TRX_ID_LEN];
+
+    /* The record stays this transaction's: READ VIEWS in trx0sys.h. */
+    auto stamped = dtuple_copy(entry, heap);
+
+    row_sec_entry_set_trx_id(stamped, index, id, trx->m_id);
+
+    auto update = RowUpdate::build_sec_rec_difference_binary(index, stamped, btr_cur->get_rec(), trx, heap);
 
     if (RowUpdate::upd_get_n_fields(update) == 0) {
 

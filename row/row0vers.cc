@@ -39,8 +39,6 @@ Trx *RowVers::impl_x_locked_off_trx_sys_mutex(const Rec rec, const Index *index,
   ut_ad(!mutex_own(&m_sys.m_trx_sys->m_mutex));
 
   auto func_exit = [this](Mtr &mtr, MemHeap *heap, Trx *trx) -> auto {
-    mutex_exit(&m_sys.m_trx_sys->m_mutex);
-
     mtr.commit(m_sys);
     mem_heap_free(heap);
 
@@ -85,7 +83,6 @@ Trx *RowVers::impl_x_locked_off_trx_sys_mutex(const Rec rec, const Index *index,
 
   mtr_s_lock(&m_sys.m_trx_sys->m_purge->m_latch, &mtr);
 
-  mutex_enter(&m_sys.m_trx_sys->m_mutex);
 
   Trx *trx{};
 
@@ -95,7 +92,7 @@ Trx *RowVers::impl_x_locked_off_trx_sys_mutex(const Rec rec, const Index *index,
     return func_exit(mtr, heap, nullptr);
   }
 
-  if (!m_sys.m_lock_sys->check_trx_id_sanity(trx_id, clust_rec, clust_index, clust_offsets, true)) {
+  if (!m_sys.m_lock_sys->check_trx_id_sanity(trx_id, clust_rec, clust_index, clust_offsets)) {
     /* Corruption noticed: try to avoid a crash by returning */
     return func_exit(mtr, heap, nullptr);
   }
@@ -120,7 +117,6 @@ Trx *RowVers::impl_x_locked_off_trx_sys_mutex(const Rec rec, const Index *index,
     RowExt *ext;
     Rec prev_version;
 
-    mutex_exit(&m_sys.m_trx_sys->m_mutex);
 
     /* While we retrieve an earlier version of clust_rec, we
     release the kernel mutex, because it may take time to access
@@ -138,7 +134,6 @@ Trx *RowVers::impl_x_locked_off_trx_sys_mutex(const Rec rec, const Index *index,
     mem_heap_free(heap2); /* free version and clust_offsets */
 
     if (prev_version.is_null()) {
-      mutex_enter(&m_sys.m_trx_sys->m_mutex);
 
       if (!m_sys.m_trx_sys->is_active(trx_id)) {
         /* Transaction no longer active: no implicit x-lock */
@@ -171,7 +166,6 @@ Trx *RowVers::impl_x_locked_off_trx_sys_mutex(const Rec rec, const Index *index,
     cannot hold any implicit lock. */
     if (vers_del != 0 && trx_id != prev_trx_id) {
 
-      mutex_enter(&m_sys.m_trx_sys->m_mutex);
 
       break;
     }
@@ -186,7 +180,6 @@ Trx *RowVers::impl_x_locked_off_trx_sys_mutex(const Rec rec, const Index *index,
     record were not initialized yet.  But in that case, prev_version should be NULL. */
     ut_a(entry != nullptr);
 
-    mutex_enter(&m_sys.m_trx_sys->m_mutex);
 
     if (!m_sys.m_trx_sys->is_active(trx_id)) {
       /* Transaction no longer active: no implicit x-lock */
@@ -496,15 +489,9 @@ DbErr RowVers::build_for_semi_consistent_read(Row &row) noexcept {
   for (;;) {
     auto version_trx_id = row_get_rec_trx_id(version, row.m_cluster_index, row.m_cluster_offsets);
 
-    mutex_enter(&m_sys.m_trx_sys->m_mutex);
-
-    /* Decided under the mutex: after mutex_exit() the trx may commit and be
-    freed (reading its state there was a race and a use after free). */
-    const auto version_trx = m_sys.m_trx_sys->get_on_id(version_trx_id);
-    const bool committed = version_trx == nullptr || version_trx->m_conc_state == TRX_NOT_STARTED ||
-                           version_trx->m_conc_state == TRX_COMMITTED_IN_MEMORY;
-
-    mutex_exit(&m_sys.m_trx_sys->m_mutex);
+    /* Not in the active ids: past C2 of its commit, so past C1, or not a local
+    transaction. */
+    const bool committed = !m_sys.m_trx_sys->in_ids(version_trx_id);
 
     if (committed) {
 

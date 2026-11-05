@@ -96,6 +96,16 @@ static void *io_handler_thread(void *arg) noexcept {
 }
 
 DbErr Config::normalize() noexcept {
+  if (m_trx.m_node_id >= ut::HLC_MAX_NODES) {
+    log_err(std::format("The node id must be below {}, the bits of a transaction id for it, it is {}", ut::HLC_MAX_NODES, m_trx.m_node_id));
+    return DB_INVALID_INPUT;
+  }
+
+  if (m_trx.m_epoch >= ut::HLC_MAX_EPOCHS) {
+    log_err(std::format("The epoch must be below {}, the bits of a transaction id for it, it is {}", ut::HLC_MAX_EPOCHS, m_trx.m_epoch));
+    return DB_INVALID_INPUT;
+  }
+
   if (m_log.m_checkpoint_age < 1024 * 1024) {
     log_err(std::format("The checkpoint age must be at least 1 MB, it is {} bytes", m_log.m_checkpoint_age));
     return DB_INVALID_INPUT;
@@ -344,6 +354,12 @@ static DbErr open_system_tablespace(System &sys, const std::string &path, lsn_t 
   /* Convert to number of pages. */
   size /= UNIV_PAGE_SIZE;
 
+  /* Before anything reads the files as of this format. */
+  if (TrxSys::check_format(fh, sys.m_config.m_trx.m_node_id) != DB_SUCCESS) {
+    (void)os_file_close(fh);
+    return DB_ERROR;
+  }
+
   sys.m_fil->read_flushed_lsn(fh, flushed_lsn);
 
   {
@@ -434,7 +450,7 @@ static void prepare_for_shutdown(System &sys, ShutdownMode shutdown) noexcept {
   lsn_t lsn;
 
   for (;;) {
-    os_thread_sleep(100000);
+    os_thread_sleep(1000);
 
     mutex_enter(&trx_sys.m_mutex);
 
@@ -452,7 +468,7 @@ static void prepare_for_shutdown(System &sys, ShutdownMode shutdown) noexcept {
     for the 'very fast' shutdown, because the InnoDB layer may have
     committed or prepared transactions and we don't want to lose them. */
 
-    if (trx_sys.m_n_user_trx > 0 || !trx_sys.m_trx_list.empty()) {
+    if (trx_sys.m_n_user_trx > 0 || !trx_sys.trx_list_empty()) {
 
       mutex_exit(&trx_sys.m_mutex);
 
@@ -737,6 +753,11 @@ DbErr System::startup() noexcept {
     start_wal();
 
     err = m_trx_sys->start(force_recovery);
+
+    if (err != DB_SUCCESS) {
+      startup_abort(err);
+      return DB_ERROR;
+    }
 
     {
       auto free_limit = m_fsp->init_system_space_free_limit();

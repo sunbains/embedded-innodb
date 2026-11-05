@@ -52,7 +52,7 @@ TEST_F(DynArrayTest, PushSingleElement) {
 
   EXPECT_EQ(m_dyn_arr.get_used(m_dyn_arr.get_first_block()), len);
 
-  m_dyn_arr.eq(0, test_str, len);
+  ut_d(m_dyn_arr.eq(0, test_str, len));
 }
 
 // Test pushing multiple elements that fit in one block
@@ -70,8 +70,8 @@ TEST_F(DynArrayTest, PushMultipleElementsSingleBlock) {
 
   EXPECT_EQ(m_dyn_arr.get_used(m_dyn_arr.get_first_block()), len1 + len2);
 
-  m_dyn_arr.eq(0, test_str1, len1);
-  m_dyn_arr.eq(len1, test_str2, len2);
+  ut_d(m_dyn_arr.eq(0, test_str1, len1));
+  ut_d(m_dyn_arr.eq(len1, test_str2, len2));
 }
 
 // Test pushing elements that require multiple blocks
@@ -83,7 +83,7 @@ TEST_F(DynArrayTest, PushMultipleBlocks) {
 
   // Verify data is split across blocks
   EXPECT_GT(m_dyn_arr.get_data_size(), DYN_ARRAY_DATA_SIZE);
-  m_dyn_arr.eq(0, large_str.c_str(), large_str.size());
+  ut_d(m_dyn_arr.eq(0, large_str.c_str(), large_str.size()));
 }
 
 // Test open/close buffer functionality
@@ -96,7 +96,7 @@ TEST_F(DynArrayTest, OpenCloseBuffer) {
   m_dyn_arr.close(buf + len);
 
   EXPECT_EQ(m_dyn_arr.get_used(m_dyn_arr.get_first_block()), len);
-  m_dyn_arr.eq(0, test_str, len);
+  ut_d(m_dyn_arr.eq(0, test_str, len));
 }
 
 // Test push_string method
@@ -107,7 +107,7 @@ TEST_F(DynArrayTest, PushString) {
   m_dyn_arr.push_string(reinterpret_cast<const byte *>(test_str), len);
 
   EXPECT_EQ(m_dyn_arr.get_used(m_dyn_arr.get_first_block()), len);
-  m_dyn_arr.eq(0, test_str, len);
+  ut_d(m_dyn_arr.eq(0, test_str, len));
 }
 
 // Test large string that requires multiple blocks
@@ -117,7 +117,7 @@ TEST_F(DynArrayTest, PushLargeString) {
   m_dyn_arr.push_string(reinterpret_cast<const byte *>(large_str.data()), large_str.size());
 
   EXPECT_GT(m_dyn_arr.get_data_size(), DYN_ARRAY_DATA_SIZE);
-  m_dyn_arr.eq(0, large_str.c_str(), large_str.size());
+  ut_d(m_dyn_arr.eq(0, large_str.c_str(), large_str.size()));
 }
 
 // Test get_data_size
@@ -140,8 +140,8 @@ TEST_F(DynArrayTest, GetElementMultipleBlocks) {
   m_dyn_arr.push_string(reinterpret_cast<const byte *>(str2.data()), str2.size());
 
   // Test accessing elements in both blocks
-  m_dyn_arr.eq(0, str1.c_str(), str1.size());
-  m_dyn_arr.eq(str1.size(), str2.c_str(), str2.size());
+  ut_d(m_dyn_arr.eq(0, str1.c_str(), str1.size()));
+  ut_d(m_dyn_arr.eq(str1.size(), str2.c_str(), str2.size()));
 }
 
 // Test block full flag
@@ -164,6 +164,7 @@ TEST_F(DynArrayTest, BlockFullFlag) {
 }
 
 // Test error cases
+#ifdef UNIV_DEBUG
 TEST_F(DynArrayTest, ErrorCases) {
   // Test pushing zero size
   EXPECT_DEATH(m_dyn_arr.push(0), ".*");
@@ -177,6 +178,7 @@ TEST_F(DynArrayTest, ErrorCases) {
   // Test opening buffer with size larger than block
   EXPECT_DEATH(m_dyn_arr.open(DYN_ARRAY_DATA_SIZE + 1), ".*");
 }
+#endif /* UNIV_DEBUG */
 
 /** clear() empties the array: one block, nothing used, ready for reuse. */
 TEST_F(DynArrayTest, Clear) {
@@ -209,7 +211,7 @@ TEST_F(DynArrayTest, ClearBlocks) {
   auto ptr = m_dyn_arr.push(4);
 
   std::memcpy(ptr, "wxyz", 4);
-  m_dyn_arr.eq(0, "wxyz", 4);
+  ut_d(m_dyn_arr.eq(0, "wxyz", 4));
 }
 
 #include "ut0perf.h"
@@ -345,7 +347,7 @@ TEST_F(DynArrayTest, OpenClosePartial) {
   m_dyn_arr.close(p);
 
   EXPECT_EQ(m_dyn_arr.get_data_size(), 3UL);
-  m_dyn_arr.eq(0, "abc", 3);
+  ut_d(m_dyn_arr.eq(0, "abc", 3));
 }
 
 /** open() of more than is left in the block opens in a new block, the

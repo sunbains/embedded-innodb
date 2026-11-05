@@ -776,7 +776,7 @@ TEST_F(UndoTest, PurgeFreesHistory) {
   }
 
   auto trx_sys = m_sys->m_trx_sys.get();
-  const auto before = trx_sys->m_rseg_history_len;
+  const ulint before = trx_sys->m_rseg_history_len;
 
   /* Run purge until it has nothing left to do, as the master thread does. */
   for (int i = 0; i < 1000 && m_sys->m_trx_sys->m_purge->run() > 0; ++i) {

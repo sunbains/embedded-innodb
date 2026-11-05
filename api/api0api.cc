@@ -380,9 +380,23 @@ Trx *trx_begin(System &sys, TrxLevel trx_level) noexcept {
   return trx;
 }
 
+ut::Timestamp clock_next(System &sys) noexcept { return sys.m_trx_sys->clock_next(); }
+
+DbErr clock_update(System &sys, const ut::Timestamp &received) noexcept {
+  return sys.m_trx_sys->clock_update(received) ? DB_SUCCESS : DB_INVALID_INPUT;
+}
+
+ut::Timestamp trx_timestamp(const Trx *trx) noexcept { return ut::id_to_timestamp(trx->m_id); }
+
+ut::Timestamp trx_commit_timestamp(System &sys, const Trx *trx) noexcept { return sys.m_trx_sys->timestamp_of_word(trx->m_commit_word); }
+
+ut::Timestamp trx_view_timestamp(System &sys, const Trx *trx) noexcept {
+  return trx->m_read_view == nullptr ? ut::Timestamp{} : sys.m_trx_sys->timestamp_of_word(trx->m_read_view->m_snap_word);
+}
+
 TrxState trx_state(Trx *trx) noexcept {
 
-  return static_cast<TrxState>(trx->m_conc_state);
+  return static_cast<TrxState>(trx->m_conc_state.load());
 }
 
 DbErr trx_release(System &sys, Trx *trx) noexcept {

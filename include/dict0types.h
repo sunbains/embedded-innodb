@@ -280,7 +280,6 @@ struct Column {
    * @return SQL null storage size in ROW_FORMAT=REDUNDANT
    */
   [[nodiscard]] inline ulint get_sql_null_size() const noexcept { return get_fixed_size(); }
-#ifdef UNIV_DEBUG
 
   /**
    * Gets the column data type.
@@ -295,6 +294,7 @@ struct Column {
     type->mbmaxlen = mbmaxlen;
   }
 
+#ifdef UNIV_DEBUG
   /**
    * Assert that a column and a data type match.
    *
@@ -312,6 +312,7 @@ struct Column {
 
     return true;
   }
+#endif /* UNIV_DEBUG */
 
   /**
    * @brief Gets the minimum size of the column.
@@ -329,7 +330,6 @@ struct Column {
    */
   [[nodiscard]] inline ulint get_max_size() const noexcept { return dtype_get_max_size_low(mtype, len); }
 
-#endif /* UNIV_DEBUG */
   /* @{ */
   DTYPE_FIELDS
   /* @} */
@@ -548,7 +548,8 @@ struct Index {
     ut_ad(m_magic_n == DICT_INDEX_MAGIC_N);
     ut_ad(m_cached == 1);
 
-    return is_clustered() ? get_n_unique() : get_n_fields();
+    /* All but the DB_TRX_ID of a secondary index: it is not part of the key. */
+    return is_clustered() ? get_n_unique() : get_n_fields() - 1;
   }
 
   /**

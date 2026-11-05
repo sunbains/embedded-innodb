@@ -72,7 +72,9 @@ DTuple *row_build_index_entry(const DTuple *row, RowExt *ext, const Index *index
     ext = nullptr;
   }
 
-  for (ulint i{}; i < entry_len; ++i) {
+  const auto n_copy = index->is_clustered() ? entry_len : entry_len - 1;
+
+  for (ulint i{}; i < n_copy; ++i) {
     const auto ind_field = index->get_nth_field(i);
     const auto col = ind_field->m_col;
     ulint col_no = col->get_no();
@@ -110,6 +112,15 @@ DTuple *row_build_index_entry(const DTuple *row, RowExt *ext, const Index *index
 
       dfield_set_len(dfield, len);
     }
+  }
+
+  if (!index->is_clustered()) {
+    /* Whatever the row has: entries compare equal whatever their source. A write
+    stamps it, RowInsert::index_entry(). */
+    auto dfield = dtuple_get_nth_field(entry, entry_len - 1);
+
+    index->get_nth_field(entry_len - 1)->m_col->copy_type(dfield_get_type(dfield));
+    dfield_set_data(dfield, field_ref_zero, DATA_TRX_ID_LEN);
   }
 
   ut_ad(dtuple_check_typed(entry));
@@ -482,7 +493,6 @@ bool row_search_index_entry(System &sys, Index *index, const DTuple *entry, ulin
 
   auto rec = pcur->get_rec();
 
-  auto n_fields = dtuple_get_n_fields(entry);
-
-  return !page_rec_is_infimum(rec) && low_match == n_fields;
+  /* All the fields of the key: the DB_TRX_ID of a secondary record is not one of them. */
+  return !page_rec_is_infimum(rec) && low_match == dtuple_get_n_fields_cmp(entry);
 }

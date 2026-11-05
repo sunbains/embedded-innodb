@@ -16,6 +16,8 @@
 
 # The Embedded InnoDB test programs, written against the C++ API in api0api.h.
 # The compiler settings and include directories come from the parent project.
+# These programs check results with assert(): keep it in a Release build.
+ADD_COMPILE_OPTIONS(-UNDEBUG)
 
 
 # Test programs built from a single source file plus the shared helpers.

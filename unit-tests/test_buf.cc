@@ -663,7 +663,8 @@ TEST_F(BufPoolTest, Eviction) {
     cached += pool().peek(PageId(space, p));
   }
 
-  EXPECT_LT(cached, pool().m_curr_size);
+  /* All of the pool may be this table's: nothing else has to stay in it. */
+  EXPECT_LE(cached, pool().m_curr_size);
   EXPECT_FALSE(pool().peek(PageId(space, 0))) << "the first pages are the least recently used";
   EXPECT_TRUE(pool().peek(PageId(space, N - 1)));
   EXPECT_LE(UT_LIST_GET_LEN(pool().m_LRU_list), pool().m_curr_size);

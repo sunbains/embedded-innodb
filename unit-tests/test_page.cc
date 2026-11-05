@@ -507,11 +507,11 @@ class PageTest : public SharedDb {
 
     dfield_set_data(dtuple_get_nth_field(t, 0), u32(k), 4);
 
-    auto sys = static_cast<byte *>(mem_heap_zalloc(m_heap, 13));
+    auto sys = static_cast<byte *>(mem_heap_zalloc(m_heap, DATA_TRX_ID_LEN + DATA_ROLL_PTR_LEN));
 
     sys[5] = 1;
-    dfield_set_data(dtuple_get_nth_field(t, 1), sys, 6);
-    dfield_set_data(dtuple_get_nth_field(t, 2), sys + 6, 7);
+    dfield_set_data(dtuple_get_nth_field(t, 1), sys, DATA_TRX_ID_LEN);
+    dfield_set_data(dtuple_get_nth_field(t, 2), sys + DATA_TRX_ID_LEN, DATA_ROLL_PTR_LEN);
     dfield_set_data(dtuple_get_nth_field(t, 3), u32(k * 3), 4);
 
     auto b = static_cast<byte *>(mem_heap_alloc(m_heap, std::max<ulint>(blen, 1)));

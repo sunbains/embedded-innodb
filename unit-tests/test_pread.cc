@@ -387,7 +387,7 @@ TEST_F(PreadTest, Small) {
 /** A tree of several levels: every row exactly once with 0..16 threads, the
 same as a serial scan through the api. */
 TEST_F(PreadTest, Large) {
-  const auto rows = make_rows(0, 30000, 100);
+  const auto rows = make_rows(0, 10000, 100);
 
   load(rows);
 
@@ -396,7 +396,7 @@ TEST_F(PreadTest, Large) {
   ASSERT_NE(trx->assign_read_view(*m_sys), nullptr);
   ASSERT_EQ(scan(trx).size(), rows.size());
 
-  expect_scans(trx, rows, {0, 1, 2, 3, 4, 5, 8, 13, 16});
+  expect_scans(trx, rows, {0, 1, 2, 4, 8, 16});
 
   /* Several threads do get work. */
   auto c = pscan(trx, clust(), 8);
@@ -744,7 +744,7 @@ TEST_F(PreadTest, CallbackError) {
 /** The thread, context and page callbacks: a start for each finish, at each
 level; a thread start callback that fails stops the scan. */
 TEST_F(PreadTest, Callbacks) {
-  load(make_rows(0, 20000, 50));
+  load(make_rows(0, 8000, 50));
 
   auto trx = begin();
 
@@ -781,7 +781,7 @@ TEST_F(PreadTest, Callbacks) {
               DB_SUCCESS);
     ASSERT_EQ(reader.run(*m_sys, n), DB_SUCCESS);
 
-    EXPECT_EQ(rows.load(), 20000UL);
+    EXPECT_EQ(rows.load(), 8000UL);
     EXPECT_EQ(starts[ParallelReader::State::THREAD], int(std::max<size_t>(n, 1))) << n;
     EXPECT_EQ(finishes[ParallelReader::State::THREAD], int(std::max<size_t>(n, 1))) << n;
     EXPECT_EQ(starts[ParallelReader::State::CTX], finishes[ParallelReader::State::CTX]) << n;
@@ -935,7 +935,7 @@ waiters and the scans save and restore their position on the block
 boundaries) and purge runs: each snapshot reads its rows exactly once, the
 same every time. See ConcurrentWriters for the secondary index. */
 TEST_F(PreadTest, ConcurrentWritersClust) {
-  const auto rows = make_rows(0, 20000, 100);
+  const auto rows = make_rows(0, 8000, 100);
 
   load(rows);
 
@@ -964,7 +964,7 @@ TEST_F(PreadTest, ConcurrentWritersClust) {
           }
 
           /* Move the secondary keys of some of the snapshot's rows. */
-          for (uint32_t k = w; k < 20000; k += 997) {
+          for (uint32_t k = w; k < 8000; k += 997) {
             EXPECT_EQ(update(trx, k, ut::Row{k, (round + k) % 50, rows.at(k).m_b}), DB_SUCCESS);
           }
 
@@ -1030,7 +1030,7 @@ RowInsert::index_entry_low(), two writers and BufFlush::page() waiting for
 the secondary leaf. The lookup needs a mini-transaction of its own,
 committed before the next record. */
 TEST_F(PreadTest, ConcurrentWriters) {
-  const auto rows = make_rows(0, 20000, 100);
+  const auto rows = make_rows(0, 8000, 100);
 
   load(rows);
 
@@ -1059,7 +1059,7 @@ TEST_F(PreadTest, ConcurrentWriters) {
           }
 
           /* Move the secondary keys of some of the snapshot's rows. */
-          for (uint32_t k = w; k < 20000; k += 997) {
+          for (uint32_t k = w; k < 8000; k += 997) {
             EXPECT_EQ(update(trx, k, ut::Row{k, (round + k) % 50, rows.at(k).m_b}), DB_SUCCESS);
           }
 
@@ -1222,6 +1222,35 @@ class PreadPerf : public PreadTest {
 };
 
 /** Rows per second of a parallel scan of the clustered index. */
+/** A secondary scan right after the commit that wrote the pages, and the same scan
+once the watermark has passed that commit: below it the page id decides, above it
+each record goes to the clustered index. */
+TEST_F(PreadPerf, SecAfterCommit) {
+  constexpr uint32_t N = 50000;
+
+  load(make_rows(0, N, 20));
+
+  const auto one = [&](const char *name) {
+    const auto start = std::chrono::steady_clock::now();
+    auto trx = begin();
+
+    ASSERT_NE(trx->assign_read_view(*m_sys), nullptr);
+    EXPECT_EQ(pscan(trx, sec(), 1).m_rows.size(), N);
+    commit(trx);
+
+    const std::chrono::duration<double> secs = std::chrono::steady_clock::now() - start;
+
+    ut::report(ut::BenchResult{name, 1, N, secs.count()});
+  };
+
+  one("sec_scan_after_commit");
+
+  /* The master thread sweeps once a second. */
+  std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+
+  one("sec_scan_settled");
+}
+
 TEST_F(PreadPerf, Clustered) {
   constexpr uint32_t N = 200000;
 

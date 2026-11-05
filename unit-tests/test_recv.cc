@@ -96,9 +96,9 @@ TEST_F(RecvParseTest, ClustDelMark) {
   }
 }
 
-/** MLOG_REC_SEC_DELETE_MARK: value and record offset. */
+/** MLOG_REC_SEC_DELETE_MARK: value, record offset, and the transaction. */
 TEST_F(RecvParseTest, SecDelMark) {
-  (void)parse(*m_sys, MLOG_REC_SEC_DELETE_MARK, {1, 0x01, 0x23});
+  (void)parse(*m_sys, MLOG_REC_SEC_DELETE_MARK, {1, 0x01, 0x23, 0, 0, 0, 0, 0, 0, 0, 0});
 }
 
 /** MLOG_nBYTES: offset and the value, compressed for 4 and 8 bytes. */
@@ -295,8 +295,8 @@ TEST_F(RecvParseTest, FixedBodies) {
     expect_body(*m_sys, type, {0x00, 0x63});
   }
 
-  /* Delete mark value and record offset. */
-  expect_body(*m_sys, MLOG_REC_SEC_DELETE_MARK, {1, 0x01, 0x23});
+  /* Delete mark value, record offset, and the transaction. */
+  expect_body(*m_sys, MLOG_REC_SEC_DELETE_MARK, {1, 0x01, 0x23, 0, 0, 0, 0, 0, 0, 0, 0});
 }
 
 /** The clustered index delete mark of trx ids of every size, truncated. */
@@ -1503,6 +1503,43 @@ TEST_F(RecvTest, DuringCheckpoint) {
   expect_rows(expected);
   restart();
   expect_rows(expected);
+}
+
+/** The stamps of a secondary record are redo logged: after recovery the new records of
+a committed key update have the id of the clustered row. */
+TEST_F(RecvTest, SecIds) {
+  ut::Rows rows;
+
+  crash_model([&] {
+    rows = committed(50);
+
+    auto t = b();
+
+    for (const auto &[k, row] : rows) {
+      /* Values no row of committed() has: the key of each record changes. */
+      EXPECT_EQ(upd(t, k, ut::Row{k, k + 200000, row.m_b}), DB_SUCCESS) << k;
+    }
+
+    c(t);
+  });
+
+  ASSERT_FALSE(rows.empty());
+
+  for (const auto &[k, row] : rows) {
+    const auto id = clust_id(k);
+    const auto moved = sec_rec(k + 200000, k);
+    const auto old = sec_rec(row.m_a, k);
+
+    ASSERT_TRUE(moved.has_value()) << k;
+    EXPECT_FALSE(moved->m_deleted) << k;
+
+    /* The delete mark is its own redo record, with the id in it. Both records were
+    last changed by the update. */
+    ASSERT_TRUE(old.has_value()) << k;
+    EXPECT_TRUE(old->m_deleted) << k;
+    EXPECT_EQ(old->m_id, id) << k;
+    EXPECT_EQ(moved->m_id, id) << k;
+  }
 }
 
 /** Killed again and again while recovery rolls back a big transaction. */

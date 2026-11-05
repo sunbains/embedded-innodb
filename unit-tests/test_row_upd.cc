@@ -754,7 +754,7 @@ class RowUpdIdxTest : public SharedDb {
       }
 
       if (index->is_clustered()) {
-        f.m_trx_id = mach_read_from_6(reinterpret_cast<const byte *>(f.m_fields[1]->data()));
+        f.m_trx_id = mach_read_from_8(reinterpret_cast<const byte *>(f.m_fields[1]->data()));
       }
 
       v.push_back(std::move(f));
@@ -1406,7 +1406,7 @@ class Watchdog {
 
           const auto cmd = std::format("gdb -p {} -batch -ex 'thread apply all bt 30' 1>&2", ::getpid());
 
-          (void)std::system(cmd.c_str());
+          [[maybe_unused]] const auto rc = std::system(cmd.c_str());
           std::abort();
         }
       }) {}

@@ -137,7 +137,7 @@ const ulint DATA_ROW_ID_LEN = 6;
 
 /** Transaction id: 6 bytes */
 const ulint DATA_TRX_ID = 1;
-const ulint DATA_TRX_ID_LEN = 6;
+const ulint DATA_TRX_ID_LEN = 8;
 
 /** Rollback data pointer: 7 bytes */
 const ulint DATA_ROLL_PTR = 2;

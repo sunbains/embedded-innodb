@@ -288,7 +288,7 @@ TEST_F(TypeTest, Sizes) {
          {DATA_FLOAT, 0, 4, 4, 4, 4},
          {DATA_DOUBLE, 0, 8, 8, 8, 8},
          {DATA_SYS, DATA_ROW_ID, DATA_ROW_ID_LEN, 6, 6, 6},
-         {DATA_SYS, DATA_TRX_ID, DATA_TRX_ID_LEN, 6, 6, 6},
+         {DATA_SYS, DATA_TRX_ID, DATA_TRX_ID_LEN, 8, 8, 8},
          {DATA_SYS, DATA_ROLL_PTR, DATA_ROLL_PTR_LEN, 7, 7, 7},
          {DATA_VARCHAR, 0, 100, 0, 0, 100},
          {DATA_BINARY, 0, 100, 0, 0, 100},
@@ -698,7 +698,7 @@ TEST_F(TupleTest, CheckTyped) {
   set(heap, t, 0, DATA_VARCHAR, 0, 10, std::string("ab"));
   set(heap, t, 1, DATA_CLIENT, 0, 10, std::nullopt);
 
-  EXPECT_TRUE(dtuple_check_typed(t));
+  IF_DEBUG(EXPECT_TRUE(dtuple_check_typed(t));)
   EXPECT_TRUE(dtuple_check_typed_no_assert(t));
   IF_DEBUG(EXPECT_TRUE(dtuple_validate(t));)
 
@@ -1314,7 +1314,10 @@ TEST_F(RowTest, IndexEntries) {
 
         EXPECT_EQ(cmp_dtuple_rec(nullptr, entry, rec, offs.get()), 0);
 
-        for (ulint i{}; i < idx->get_n_fields(); ++i) {
+        /* Not the DB_TRX_ID of a secondary record: a built entry has none yet. */
+        const auto n = idx->is_clustered() ? idx->get_n_fields() : idx->get_n_fields() - 1;
+
+        for (ulint i{}; i < n; ++i) {
           EXPECT_EQ(bytes(dtuple_get_nth_field(entry, i)), bytes(rec, offs, i)) << idx->m_name << " " << i;
         }
 

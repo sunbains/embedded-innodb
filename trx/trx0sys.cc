@@ -25,6 +25,7 @@ Created 3/26/1996 Heikki Tuuri
 #include "trx0sys.h"
 #include "buf0dblwr.h"
 
+#include <algorithm>
 #include <chrono>
 #include <thread>
 #include "fsp0fsp.h"
@@ -44,11 +45,10 @@ TrxSys::TrxSys(System &sys) noexcept : m_sys(sys) {
 }
 
 TrxSys::~TrxSys() noexcept {
-  /* Check that all read views are closed except read view owned
-  by a purge. */
+  /* Check that all read views are closed. Purge's holds no slot. */
 
-  if (m_view_list.size() > 1) {
-    log_err(std::format("All read views were not closed before shutdown: {} read views open", m_view_list.size() - 1));
+  if (const auto n = n_read_views(); n > 0) {
+    log_err(std::format("All read views were not closed before shutdown: {} read views open", n));
   }
 
   /* Purge is created late in startup: an aborted startup has none. */
@@ -78,22 +78,13 @@ TrxSys::~TrxSys() noexcept {
     prev_rseg->memory_free(m_sys);
   }
 
-  auto view = m_view_list.front();
-
-  while (view != nullptr) {
-    auto prev_view = view;
-
-    view = UT_LIST_GET_NEXT(m_view_list, prev_view);
-
-    /* Views are allocated from the m_global_read_view_heap.
-    So, we simply remove the element here. */
-    m_view_list.remove(prev_view);
-  }
-
-  ut_a(m_trx_list.empty());
+  ut_a(active_ids().empty());
+  ut_a(m_recv_trx_list.empty());
   ut_a(m_rseg_list.empty());
-  ut_a(m_view_list.empty());
-  ut_a(m_client_trx_list.empty());
+
+  for (auto &shard : m_client_shards) {
+    ut_a(shard.m_trxs.empty());
+  }
 
   mutex_exit(&m_mutex);
 
@@ -105,37 +96,39 @@ TrxSys::~TrxSys() noexcept {
   }
 }
 
-void TrxSys::ids_insert(Trx *trx) noexcept {
-  ut_ad(trx->m_id != 0);
+void TrxSys::ids_insert(trx_id_t id, TrxNode *node) noexcept {
+  ut_ad(id != 0);
 
-  auto &shard = id_shard(trx->m_id);
+  auto &shard = id_shard(id);
   std::lock_guard<ut::Latch> guard(shard.m_mutex);
 
-  shard.m_trxs.insert(trx->m_id, trx);
+  shard.m_trxs.insert(id, node);
 }
 
 void TrxSys::ids_erase(Trx *trx) noexcept {
-  if (trx->m_id == 0) {
+  if (trx->m_id == 0 || trx->m_node == nullptr) {
     return;
   }
 
   auto &shard = id_shard(trx->m_id);
   std::lock_guard<ut::Latch> guard(shard.m_mutex);
 
-  shard.m_trxs.erase(trx->m_id, trx);
+  static_cast<TrxNode *>(trx->m_node)->m_payload.m_trx.store(nullptr, std::memory_order_release);
 }
 
 Trx *TrxSys::pin_active(trx_id_t id) noexcept {
   auto &shard = id_shard(id);
   std::lock_guard<ut::Latch> guard(shard.m_mutex);
 
-  if (auto trx = shard.m_trxs.find(id); trx != nullptr) {
-    /* In the map: active or prepared (it leaves the map before it is
-    committed in memory). The pin is taken with the shard mutex, which the
-    erase at C2 takes too: after C2, no new pin. */
-    trx->m_n_ref.fetch_add(1, std::memory_order_acquire);
+  if (auto node = shard.m_trxs.find(id); node != nullptr) {
+    if (auto trx = node->m_payload.m_trx.load(std::memory_order_acquire); trx != nullptr) {
+      /* Active or prepared (it stops being it before it is committed in memory).
+      The pin is taken with the shard latch, which the C2 takes too: after C2, no
+      new pin. An id of another node is not in the table. */
+      trx->m_n_ref.fetch_add(1, std::memory_order_acquire);
 
-    return trx;
+      return trx;
+    }
   }
 
   return nullptr;
@@ -145,11 +138,223 @@ bool TrxSys::in_ids(trx_id_t id) noexcept {
   auto &shard = id_shard(id);
   std::lock_guard<ut::Latch> guard(shard.m_mutex);
 
-  return shard.m_trxs.contains(id);
+  const auto node = shard.m_trxs.find(id);
+
+  return node != nullptr && node->m_payload.m_trx.load(std::memory_order_acquire) != nullptr;
 }
 
+bool TrxSys::visible_at(trx_id_t id, uint64_t snap) noexcept {
+  auto &shard = id_shard(id);
+  std::lock_guard<ut::Latch> guard(shard.m_mutex);
+
+  const auto node = shard.m_trxs.find(id);
+
+  if (node == nullptr) {
+    return true;
+  }
+
+  const auto c = m_nodes.final_seq(*node);
+
+  return c != 0 && c <= snap;
+}
+
+bool ReadView::lookup(trx_id_t id) const noexcept { return m_trx_sys->visible_at(id, m_snap_word); }
+
+void TrxSys::node_start(Trx *trx) noexcept {
+  TrxNode *node;
+
+  for (ulint i{}; (node = m_nodes.alloc()) == nullptr; ++i) {
+    /* The limit of the nodes: an old read view holds the horizon. */
+    retire();
+
+    if (i % 10000 == 0) {
+      log_warn("The commit table is full, a transaction waits: close the oldest read view");
+    }
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  }
+
+  node->m_payload.m_no.store(LSN_MAX, std::memory_order_relaxed);
+  node->m_payload.m_trx.store(trx, std::memory_order_relaxed);
+
+  /* In the list first: an id <= a word read by the retirer is of a node its walk
+  can meet (READ VIEWS, W). */
+  m_nodes.push(node);
+
+  const auto id = m_nodes.final_ticket(*node);
+
+  hlc_issued(ut::id_to_hlc(id));
+
+  trx->m_id = id;
+  trx->m_node = node;
+
+  /* Before T writes a row with the id. */
+  ids_insert(id, node);
+}
+
+uint64_t TrxSys::commit_stamp(Trx *trx, uint64_t wall) noexcept {
+  auto node = static_cast<TrxNode *>(trx->m_node);
+
+  if (m_commit_hook != nullptr) {
+    m_commit_hook(m_commit_hook_arg, trx, 0);
+  }
+
+  m_nodes.mark_pending(node);
+
+  if (m_commit_hook != nullptr) {
+    m_commit_hook(m_commit_hook_arg, trx, 1);
+  }
+
+  const auto mine = next_word(wall);
+
+  if (m_commit_hook != nullptr) {
+    m_commit_hook(m_commit_hook_arg, trx, 2);
+  }
+
+  /* A helper's may have won: above mine, or below. */
+  auto stamp = TrxList::PENDING;
+
+  if (node->m_seq.compare_exchange_strong(stamp, mine, std::memory_order_seq_cst, std::memory_order_seq_cst)) {
+    stamp = mine;
+  }
+
+  hlc_issued(ut::id_to_hlc(stamp));
+
+  if (m_commit_hook != nullptr) {
+    m_commit_hook(m_commit_hook_arg, trx, 3);
+  }
+
+  /* The list's now: it can't be touched by this thread any more. */
+  trx->m_node = nullptr;
+  TrxList::release(node);
+
+  if (m_nodes.sweep_due(stamp)) {
+    retire();
+  }
+
+  return stamp;
+}
+
+void TrxSys::trx_list_remove(Trx *trx) noexcept {
+  ids_erase(trx);
+
+  if (auto node = static_cast<TrxNode *>(trx->m_node); node != nullptr) {
+    (void)m_nodes.remove(node);
+    trx->m_node = nullptr;
+  }
+
+  recv_list_remove(trx);
+}
+
+void TrxSys::recv_list_remove(Trx *trx) noexcept {
+  if (trx->m_in_recv_list) {
+    mutex_enter(&m_mutex);
+
+    m_recv_trx_list.remove(trx);
+    trx->m_in_recv_list = false;
+
+    mutex_exit(&m_mutex);
+  }
+}
+
+void TrxSys::retire() noexcept {
+  /* The order of reads is the proof of READ VIEWS: the clock, the slots. */
+  const auto c0 = m_clock.read_word();
+  const auto h = m_snaps.min(c0);
+
+  auto w = ut::word_id_limit(c0);
+
+  const auto visit = [&](TrxNode &node) {
+    const auto id = m_nodes.final_ticket(node);
+    const auto c = m_nodes.final_seq(node);
+
+    if ((c == 0 || c > c0) && id < w) {
+      w = id;
+    }
+  };
+
+  const auto unlink = [&](TrxNode &node) {
+    const auto id = node.m_ticket.load(std::memory_order_seq_cst);
+
+    auto &shard = id_shard(id);
+    std::lock_guard<ut::Latch> guard(shard.m_mutex);
+
+    shard.m_trxs.erase(id, &node);
+  };
+
+  if (m_nodes.try_sweep(h, visit, unlink)) {
+    raise(m_low_water, w);
+    raise(m_snap_floor, h);
+  }
+}
+
+void TrxSys::refresh_low_water() noexcept {
+  m_low_water.store(get_min_trx_id(), std::memory_order_release);
+}
+
+trx_id_t TrxSys::get_min_trx_id() noexcept {
+  const auto ids = active_ids();
+
+  return ids.empty() ? max_trx_id() : ids.back();
+}
+
+std::vector<trx_id_t> TrxSys::active_ids() noexcept {
+  std::vector<trx_id_t> ids;
+
+  {
+    TrxList::Scan scan(m_nodes);
+
+    for (auto node = scan.head(); node != nullptr; node = TrxList::Scan::next(node)) {
+      if (m_nodes.final_seq(*node) == 0) {
+        ids.push_back(scan.ticket(*node));
+      }
+    }
+  }
+
+  /* A push before its id: the order may be off. */
+  std::sort(ids.begin(), ids.end(), std::greater<>());
+
+  return ids;
+}
+
+bool TrxSys::trx_list_empty() noexcept {
+  ut_ad(mutex_own(&m_mutex));
+
+  return active_ids().empty() && m_recv_trx_list.empty();
+}
+
+Trx *TrxSys::get_on_id(trx_id_t id) noexcept {
+  {
+    auto &shard = id_shard(id);
+    std::lock_guard<ut::Latch> guard(shard.m_mutex);
+
+    if (auto node = shard.m_trxs.find(id); node != nullptr) {
+      if (auto trx = node->m_payload.m_trx.load(std::memory_order_acquire); trx != nullptr) {
+        return trx;
+      }
+    }
+  }
+
+  /* A recovered transaction committed in memory has no node. */
+  mutex_enter(&m_mutex);
+
+  Trx *found{};
+
+  for (auto trx : m_recv_trx_list) {
+    if (trx->m_id == id) {
+      found = trx;
+      break;
+    }
+  }
+
+  mutex_exit(&m_mutex);
+
+  return found;
+}
+
+bool TrxSys::in_trx_list(Trx *trx) noexcept { return trx->m_node != nullptr || trx->m_in_recv_list; }
+
 void TrxSys::drain_pins(Trx *trx) noexcept {
-  ut_ad(!mutex_own(&m_mutex));
   ut_ad(TrxMutex::n_held() == 0);
 
   for (ulint i{}; trx->m_n_ref.load(std::memory_order_acquire) > 0; ++i) {
@@ -185,22 +390,51 @@ DbErr TrxSys::start(IbRecovery recovery) noexcept {
 
   m_latest_rseg = m_rseg_list.front();
 
-  /* VERY important: after the database is started, max_trx_id value is
-   * divisible by TRX_SYS_TRX_ID_WRITE_MARGIN, and the 'if' in
-   * trx_sys_get_new_trx_id will evaluate to true when the function
-   * is first time called, and the value for trx id will be written
-   * to the disk-based header! Thus trx id values will not overlap when
-   * the database is repeatedly started! */
+  const auto stored = mtr.read_uint64(sys_header + TRX_SYS_HLC_STORE);
 
-  m_max_trx_id = ut_uint64_align_up(mtr.read_uint64(sys_header + TRX_SYS_TRX_ID_STORE), TRX_SYS_TRX_ID_WRITE_MARGIN) +
-                 2 * TRX_SYS_TRX_ID_WRITE_MARGIN;
+  m_clock.set_node(uint32_t(mach_read_from_4(sys_header + TRX_SYS_NODE)));
 
   init_at_db_start(recovery);
 
+  /* The clock restarts past anything issued: above the store plus the margin
+  (hlc_store()), which includes the ids and numbers of the undo logs, checked
+  anyway, and the wall clock if it is ahead. It is seeded above the base: no id
+  underflows, and none is 0, whatever the wall clock says. */
+  {
+    uint64_t last = std::max({stored + TRX_SYS_HLC_MARGIN_US, m_clock.wall(), ut::HLC_BASE_US + 1, m_sys.m_config.m_trx.m_hlc_start});
+    uint64_t epoch = std::max(mtr.read_uint64(sys_header + TRX_SYS_EPOCH), m_sys.m_config.m_trx.m_epoch);
+
+    const auto note = [&](trx_id_t id) {
+      last = std::max(last, ut::id_to_hlc(id));
+      epoch = std::max(epoch, ut::id_to_epoch(id));
+    };
+
+    for (auto trx : m_recv_trx_list) {
+      note(trx->m_id);
+
+      if (trx->m_no != LSN_MAX) {
+        note(trx->m_no);
+      }
+    }
+
+    for (auto rseg : m_rseg_list) {
+      if (rseg->m_last_page_no != FIL_NULL) {
+        note(rseg->m_last_trx_no);
+      }
+    }
+
+    m_hlc_stored.store(stored, std::memory_order_release);
+    m_clock.reset(epoch, last);
+
+    /* The recovered ones are in the table: W can't be above them. */
+    refresh_low_water();
+    m_snap_floor.store(m_clock.read_word(), std::memory_order_release);
+  }
+
   int64_t rows_to_undo{};
 
-  if (!m_trx_list.empty()) {
-    for (auto trx : m_trx_list) {
+  if (!m_recv_trx_list.empty()) {
+    for (auto trx : m_recv_trx_list) {
       if (trx->m_conc_state != TRX_PREPARED) {
         rows_to_undo += trx->m_undo_no;
       }
@@ -214,12 +448,12 @@ DbErr TrxSys::start(IbRecovery recovery) noexcept {
     log_info(std::format(
       "{} transaction(s) which must be rolled back or cleaned up"
       " in total {}s row operations to undo",
-      m_trx_list.size(),
+      m_recv_trx_list.size(),
       rows_to_undo,
       unit
     ));
 
-    log_info(std::format("Trx id counter is {}", m_max_trx_id));
+    log_info(std::format("Trx id high water is {}", max_trx_id()));
   }
 
   {
@@ -236,31 +470,92 @@ DbErr TrxSys::start(IbRecovery recovery) noexcept {
   return DB_SUCCESS;
 }
 
-bool TrxSys::in_trx_list(Trx *in_trx) noexcept {
-  ut_ad(mutex_own(&m_mutex));
+void TrxSys::hlc_store(uint64_t hlc) noexcept {
+  /* The latch even for a thread that doesn't have to wait yet: the master thread
+  only comes here while nobody is in a hurry. */
+  m_hlc_store_latch.lock();
 
-  for (auto trx : m_trx_list) {
-    if (trx == in_trx) {
+  if (hlc > m_hlc_stored.load(std::memory_order_relaxed)) {
+    Mtr mtr;
 
-      return true;
-    }
+    mtr.start();
+
+    auto sys_header = read_header(&mtr);
+
+    mlog_write_uint64(sys_header + TRX_SYS_HLC_STORE, hlc, &mtr);
+    mlog_write_uint64(sys_header + TRX_SYS_EPOCH, m_clock.epoch(), &mtr);
+
+    mtr.commit(m_sys);
+
+    /* Durable before any thread relies on it: a commit is durable to its own
+    lsn only, which may be before this. */
+    m_sys.m_log->write_up_to(mtr.m_end_lsn, m_sys.m_config.m_fil.m_flush_method != SRV_UNIX_NOSYNC);
+
+    m_hlc_stored.store(hlc, std::memory_order_release);
   }
 
-  return false;
+  m_hlc_store_latch.unlock();
 }
 
-void TrxSys::flush_max_trx_id() noexcept {
-  ut_ad(mutex_own(&m_mutex));
+void TrxSys::clock_set_epoch(uint64_t epoch) noexcept {
+  std::lock_guard<ut::Latch> guard(m_hlc_store_latch);
 
+  /* Fatal past the last one. */
+  if (epoch >= ut::HLC_MAX_EPOCHS) {
+    m_clock.set_epoch(epoch);
+  }
+
+  /* Durable first: no id of the epoch before a restart knows of it. */
   Mtr mtr;
 
   mtr.start();
 
-  auto sys_header = read_header(&mtr);
-
-  mlog_write_uint64(sys_header + TRX_SYS_TRX_ID_STORE, m_max_trx_id, &mtr);
+  mlog_write_uint64(read_header(&mtr) + TRX_SYS_EPOCH, epoch, &mtr);
 
   mtr.commit(m_sys);
+
+  m_sys.m_log->write_up_to(mtr.m_end_lsn, m_sys.m_config.m_fil.m_flush_method != SRV_UNIX_NOSYNC);
+
+  m_clock.set_epoch(epoch);
+}
+
+DbErr TrxSys::check_format(os_file_t fh, uint32_t node) noexcept {
+  auto ptr = static_cast<byte *>(ut_new(2 * UNIV_PAGE_SIZE));
+  auto page = static_cast<byte *>(ut_align(ptr, UNIV_PAGE_SIZE));
+
+  auto success = os_file_read(fh, page, UNIV_PAGE_SIZE, off_t(TRX_SYS_PAGE_NO) * UNIV_PAGE_SIZE);
+  ut_a(success);
+
+  auto err{DB_SUCCESS};
+  const auto hdr = page + TRX_SYS;
+
+  /* All zero: the page was never written, a crash while the instance was being
+  created. The redo log has it, and it is of this format: the log of an older
+  format file has a written page here. */
+  const bool empty = std::all_of(page, page + UNIV_PAGE_SIZE, [](byte b) { return b == 0; });
+
+  if (empty) {
+    /* Nothing to check. */
+  } else if (mach_read_from_8(hdr + TRX_SYS_FORMAT_MAGIC) != TRX_SYS_FORMAT_MAGIC_N) {
+    log_err(
+      "The data files are of an older format, without clock based transaction ids. There is no upgrade path:"
+      " this version can't read them. Create a new instance and load the data into it."
+    );
+    err = DB_ERROR;
+  } else if (const auto version = mach_read_from_4(hdr + TRX_SYS_FORMAT_VERSION); version != TRX_SYS_FORMAT_VERSION_N) {
+    log_err(std::format("The data files are of format version {}, this version reads format version {} only.", version, TRX_SYS_FORMAT_VERSION_N));
+    err = DB_ERROR;
+  } else if (const auto stored = mach_read_from_4(hdr + TRX_SYS_NODE); stored != node) {
+    /* An id says nothing of its node, a row is of the instance: rebuilt
+    timestamps of the history would change node, and two nodes would issue the
+    same timestamps, if this were let pass. */
+    log_err(std::format("The data files belong to node id {}, the configuration says node id {}. Set the node id of the data files.", stored, node));
+    err = DB_ERROR;
+  }
+
+  ut_delete(ptr);
+
+  return err;
 }
 
 ulint TrxSys::frseg_find_free(Mtr *mtr) noexcept {
@@ -313,8 +608,12 @@ DbErr TrxSys::create_system_tablespace() noexcept {
 
   auto sys_header = read_header(&mtr);
 
-  /* Start counting transaction ids from number 1 up */
-  mlog_write_uint64(sys_header + TRX_SYS_TRX_ID_STORE, 1, &mtr);
+  /* The clock starts now, and the format is of this version. */
+  mlog_write_uint64(sys_header + TRX_SYS_HLC_STORE, std::max({m_clock.wall(), ut::HLC_BASE_US + 1, m_sys.m_config.m_trx.m_hlc_start}), &mtr);
+  mlog_write_uint64(sys_header + TRX_SYS_FORMAT_MAGIC, TRX_SYS_FORMAT_MAGIC_N, &mtr);
+  mlog_write_ulint(sys_header + TRX_SYS_FORMAT_VERSION, TRX_SYS_FORMAT_VERSION_N, MLOG_4BYTES, &mtr);
+  mlog_write_uint64(sys_header + TRX_SYS_EPOCH, m_sys.m_config.m_trx.m_epoch, &mtr);
+  mlog_write_ulint(sys_header + TRX_SYS_NODE, m_sys.m_config.m_trx.m_node_id, MLOG_4BYTES, &mtr);
 
   /* Reset the rollback segment slots */
   for (ulint i{}; i < TRX_SYS_N_RSEGS; ++i) {
@@ -325,9 +624,8 @@ DbErr TrxSys::create_system_tablespace() noexcept {
   /* The remaining area (up to the page trailer) is uninitialized.
   Silence Valgrind warnings about it. */
   UNIV_MEM_VALID(
-    sys_header + (TRX_SYS_RSEGS + TRX_SYS_N_RSEGS * TRX_SYS_RSEG_SLOT_SIZE + TRX_SYS_RSEG_SPACE),
-    (UNIV_PAGE_SIZE - FIL_PAGE_DATA_END - (TRX_SYS_RSEGS + TRX_SYS_N_RSEGS * TRX_SYS_RSEG_SLOT_SIZE + TRX_SYS_RSEG_SPACE)) + page -
-      sys_header
+    sys_header + (TRX_SYS_NODE + 4),
+    (UNIV_PAGE_SIZE - FIL_PAGE_DATA_END - (TRX_SYS_NODE + 4)) + page - sys_header
   );
 
   /* Create the first rollback segment in the SYSTEM tablespace */
@@ -401,51 +699,42 @@ void TrxSys::destroy_trx(Trx *&trx) noexcept {
 Trx *TrxSys::create_user_trx(void *arg) noexcept {
   auto trx = create_trx(arg);
 
-  mutex_enter(&m_mutex);
-
   ++m_n_user_trx;
 
-  m_client_trx_list.push_front(trx);
+  auto &shard = m_client_shards[(reinterpret_cast<uintptr_t>(trx) >> 6) % m_client_shards.size()];
+  std::lock_guard<ut::Latch> guard(shard.m_latch);
 
-  mutex_exit(&m_mutex);
+  shard.m_trxs.push_front(trx);
 
   return trx;
 }
 
 void TrxSys::destroy_user_trx(Trx *&trx) noexcept {
-  mutex_enter(&m_mutex);
+  {
+    auto &shard = m_client_shards[(reinterpret_cast<uintptr_t>(trx) >> 6) % m_client_shards.size()];
+    std::lock_guard<ut::Latch> guard(shard.m_latch);
 
-  m_client_trx_list.remove(trx);
+    shard.m_trxs.remove(trx);
+  }
 
-  ut_a(m_n_user_trx > 0);
-  --m_n_user_trx;
+  const auto n = m_n_user_trx.fetch_sub(1);
+  ut_a(n > 0);
 
-  mutex_exit(&m_mutex);
-
-  /* Off the lists: nothing of it is the trx sys mutex's any more (the
-  memory goes to the pool, type stable). */
+  /* Off the lists (the memory goes to the pool, type stable). */
   destroy_trx(trx);
 }
 
 Trx *TrxSys::create_background_trx(void *arg) noexcept {
   auto trx = create_trx(arg);
 
-  mutex_enter(&m_mutex);
-
   ++m_n_background_trx;
-
-  mutex_exit(&m_mutex);
 
   return trx;
 }
 
 void TrxSys::destroy_background_trx(Trx *&trx) noexcept {
-  mutex_enter(&m_mutex);
-
-  ut_a(m_n_background_trx > 0);
-  --m_n_background_trx;
-
-  mutex_exit(&m_mutex);
+  const auto n = m_n_background_trx.fetch_sub(1);
+  ut_a(n > 0);
 
   destroy_trx(trx);
 }
@@ -455,7 +744,7 @@ void TrxSys::trx_list_insert_ordered(Trx *in_trx) noexcept {
 
   Trx *prev_trx{};
 
-  for (auto trx : m_trx_list) {
+  for (auto trx : m_recv_trx_list) {
     if (in_trx->m_id >= trx->m_id) {
       ut_ad(in_trx->m_id > trx->m_id);
       prev_trx = trx;
@@ -468,26 +757,41 @@ void TrxSys::trx_list_insert_ordered(Trx *in_trx) noexcept {
     auto trx = UT_LIST_GET_PREV(m_trx_list, prev_trx);
 
     if (trx == nullptr) {
-      m_trx_list.push_front(in_trx);
+      m_recv_trx_list.push_front(in_trx);
     } else {
-      UT_LIST_INSERT_AFTER(m_trx_list, trx, in_trx);
+      UT_LIST_INSERT_AFTER(m_recv_trx_list, trx, in_trx);
     }
   } else {
-    m_trx_list.push_back(in_trx);
+    m_recv_trx_list.push_back(in_trx);
   }
 
-  /* An active or prepared recovered transaction owns implicit locks. */
+  in_trx->m_in_recv_list = true;
+
+  /* An active or prepared recovered transaction owns implicit locks, and a view
+  must not see it: in the commit table from here on. One that is committed in
+  memory has no entry: not found, visible. */
   if (in_trx->m_conc_state == TRX_ACTIVE || in_trx->m_conc_state == TRX_PREPARED) {
-    ids_insert(in_trx);
+    auto node = m_nodes.alloc();
+
+    ut_a(node != nullptr);
+
+    node->m_ticket.store(in_trx->m_id, std::memory_order_relaxed);
+    node->m_payload.m_no.store(in_trx->m_no, std::memory_order_relaxed);
+    node->m_payload.m_trx.store(in_trx, std::memory_order_relaxed);
+
+    m_nodes.insert_ordered(node);
+
+    in_trx->m_node = node;
+
+    ids_insert(in_trx->m_id, node);
   }
 
-  update_min_active_id();
+  refresh_low_water();
 }
 
 ulint TrxSys::trx_assign_rseg() noexcept {
-  ut_ad(mutex_own(&m_mutex));
-
-  auto rseg = m_latest_rseg;
+  /* The list is fixed once the instance has started. */
+  auto rseg = m_latest_rseg.load(std::memory_order_relaxed);
   const auto n_rsegs = m_rseg_list.size();
 
   for (;;) {
@@ -502,7 +806,7 @@ ulint TrxSys::trx_assign_rseg() noexcept {
     /* If it is the SYSTEM rollback segment, and there exist others, skip it */
 
     if ((rseg->m_id != TRX_SYS_SYSTEM_RSEG_ID) || n_rsegs == 1) {
-      m_latest_rseg = rseg;
+      m_latest_rseg.store(rseg, std::memory_order_relaxed);
       return rseg->m_id;
     }
   }
@@ -575,7 +879,15 @@ void TrxSys::init_at_db_start(IbRecovery recovery) noexcept {
 
     for (auto undo : rseg->m_update_undo_list) {
 
-      auto trx = get_on_id(undo->m_trx_id);
+      /* The mutex is held, and only the recovered are there. */
+      Trx *trx{};
+
+      for (auto recv_trx : m_recv_trx_list) {
+        if (recv_trx->m_id == undo->m_trx_id) {
+          trx = recv_trx;
+          break;
+        }
+      }
 
       if (trx == nullptr) {
         trx = create_trx(nullptr);
@@ -643,9 +955,14 @@ int TrxSys::recover(Xid *xid_list, ulint len) noexcept {
 
   int count{};
 
-  mutex_enter(&m_mutex);
+  for (const auto id : active_ids()) {
+    /* Pinned: it can't reach C4 of its commit meanwhile. */
+    auto trx = pin_active(id);
 
-  for (const auto trx : m_trx_list) {
+    if (trx == nullptr) {
+      continue;
+    }
+
     if (trx->m_conc_state == TRX_PREPARED) {
 #ifdef WITH_XOPEN
       xid_list[count] = trx->m_xid;
@@ -658,14 +975,14 @@ int TrxSys::recover(Xid *xid_list, ulint len) noexcept {
       log_info(std::format("Transaction contains changes to {} rows", trx->m_undo_no));
 
       ++count;
+    }
 
-      if (count == int(len)) {
-        break;
-      }
+    unpin(trx);
+
+    if (count == int(len)) {
+      break;
     }
   }
-
-  mutex_exit(&m_mutex);
 
   if (count > 0) {
     log_info(std::format("{} transactions in prepared state after recovery", count));
@@ -678,39 +995,47 @@ int TrxSys::recover(Xid *xid_list, ulint len) noexcept {
 Trx *TrxSys::get_trx_by_xid(Xid *xid) noexcept {
   ut_a(xid != nullptr);
 
-  mutex_enter(&m_mutex);
-
   Trx *xid_trx{};
 
-  for (auto trx : m_trx_list) {
+  for (const auto id : active_ids()) {
+    auto trx = pin_active(id);
+
+    if (trx == nullptr) {
+      continue;
+    }
+
     /* Compare two X/Open XA transaction id's: their
     length should be the same and binary comparison
     of gtrid_lenght+bqual_length bytes should be
     the same */
 
-    if (xid->gtrid_length == trx->m_xid.gtrid_length && xid->bqual_length == trx->m_xid.bqual_length &&
+    if (trx->m_conc_state == TRX_PREPARED && xid->gtrid_length == trx->m_xid.gtrid_length && xid->bqual_length == trx->m_xid.bqual_length &&
         memcmp(xid->data, trx->m_xid.data, xid->gtrid_length + xid->bqual_length) == 0) {
       xid_trx = trx;
+    }
+
+    unpin(trx);
+
+    if (xid_trx != nullptr) {
       break;
     }
   }
 
-  mutex_exit(&m_mutex);
-
-  return xid_trx == nullptr ? nullptr : (xid_trx->m_conc_state != TRX_PREPARED ? nullptr : xid_trx);
+  return xid_trx;
 }
 #endif /* WITH_XOPEN */
 
 void TrxSys::close_read_view(ReadView *view) {
-  ut_ad(mutex_own(&m_mutex));
+  /* Purge's has none. */
+  if (view->m_slot != nullptr) {
+    m_snaps.free(view->m_slot);
 
-  m_view_list.remove(view);
+    view->m_slot = nullptr;
+  }
 }
 
 void TrxSys::close_read_view_for_read_committed(Trx *trx) {
   ut_a(trx->m_global_read_view != nullptr);
-
-  mutex_enter(&m_mutex);
 
   close_read_view(trx->m_global_read_view);
 
@@ -718,20 +1043,38 @@ void TrxSys::close_read_view_for_read_committed(Trx *trx) {
 
   trx->m_read_view = nullptr;
   trx->m_global_read_view = nullptr;
-
-  mutex_exit(&m_mutex);
 }
 
 void TrxSys::set_cursor_view(Trx *trx, CursorView *cursor_view) {
-  mutex_enter(&m_mutex);
-
   if (likely(cursor_view != nullptr)) {
     trx->m_read_view = cursor_view->read_view;
   } else {
     trx->m_read_view = trx->m_global_read_view;
   }
+}
 
-  mutex_exit(&m_mutex);
+void TrxSys::open_snapshot(ReadView *view) noexcept {
+  auto slot = m_snaps.alloc();
+
+  if (m_view_hook != nullptr) {
+    m_view_hook(m_view_hook_arg, 0);
+  }
+
+  /* The order is the proof of READ VIEWS: the slot with a lower bound, in the total
+  order; then W; then S. */
+  slot->m_v.exchange(m_snap_floor.load(std::memory_order_acquire), std::memory_order_seq_cst);
+
+  if (m_view_hook != nullptr) {
+    m_view_hook(m_view_hook_arg, 1);
+  }
+
+  view->m_watermark = m_low_water.load(std::memory_order_acquire);
+  view->m_snap_word = m_clock.read_word();
+  view->m_low_limit_no = ut::word_id_limit(view->m_snap_word);
+  view->m_slot = slot;
+  view->m_trx_sys = this;
+
+  slot->m_v.store(view->m_snap_word, std::memory_order_release);
 }
 
 CursorView *TrxSys::create_cursor_view(Trx *cr_trx) {
@@ -748,55 +1091,15 @@ CursorView *TrxSys::create_cursor_view(Trx *cr_trx) {
   curview->n_client_tables_in_use = cr_trx->m_n_client_tables_in_use;
   cr_trx->m_n_client_tables_in_use = 0;
 
-  mutex_enter(&m_mutex);
+  auto view = reinterpret_cast<ReadView *>(mem_heap_alloc(heap, sizeof(ReadView)));
 
-  curview->read_view = create_read_view_low(m_trx_list.size(), curview->heap);
-
-  auto view = curview->read_view;
   view->m_creator_trx_id = cr_trx->m_id;
   view->m_type = ReadViewType::HIGH_GRANULARITY;
   view->m_undo_no = cr_trx->m_undo_no;
 
-  /* No future transactions should be visible in the view */
+  open_snapshot(view);
 
-  view->m_low_limit_no = m_max_trx_id;
-  view->m_low_limit_id = view->m_low_limit_no;
-
-  ulint n = 0;
-  /* No active transaction should be visible */
-
-  for (auto trx : m_trx_list) {
-    if (trx->m_conc_state == TRX_ACTIVE || trx->m_conc_state == TRX_PREPARED) {
-
-      view->set_nth_trx_id(n, trx->m_id);
-
-      n++;
-
-      /* NOTE that a transaction whose trx number is <
-      m_max_trx_id can still be active, if it is
-      in the middle of its commit! Note that when a
-      transaction starts, we initialize trx->no to
-      LSN_MAX. */
-
-      if (view->m_low_limit_no > trx->m_no) {
-
-        view->m_low_limit_no = trx->m_no;
-      }
-    }
-  }
-
-  view->m_n_trx_ids = n;
-
-  if (n > 0) {
-    /* The last active transaction has the smallest id: */
-    view->m_up_limit_id = view->get_nth_trx_id(n - 1);
-  } else {
-    view->m_up_limit_id = view->m_low_limit_id;
-  }
-
-  m_view_list.push_front(view);
-
-  mutex_exit(&m_mutex);
+  curview->read_view = view;
 
   return curview;
 }
@@ -809,126 +1112,67 @@ void TrxSys::close_cursor_view(Trx *trx, CursorView *curview) {
   belong to this transaction */
   trx->m_n_client_tables_in_use += curview->n_client_tables_in_use;
 
-  mutex_enter(&m_mutex);
-
   close_read_view(curview->read_view);
   trx->m_read_view = trx->m_global_read_view;
-
-  mutex_exit(&m_mutex);
 
   mem_heap_free(curview->heap);
 }
 
-ReadView *TrxSys::create_read_view_low(ulint n, MemHeap *heap) {
-  auto view = reinterpret_cast<ReadView *>(mem_heap_alloc(heap, sizeof(ReadView)));
-
-  view->m_n_trx_ids = n;
-  view->m_trx_ids = reinterpret_cast<trx_id_t *>(mem_heap_alloc(heap, n * sizeof *view->m_trx_ids));
-
-  return view;
-}
-
-ReadView *TrxSys::oldest_copy_or_open_new(trx_id_t cr_trx_id, MemHeap *heap) {
-  ut_ad(mutex_own(&m_mutex));
-
-  auto old_view = m_view_list.back();
-
-  if (old_view == nullptr) {
-
-    return open_read_view_now(cr_trx_id, heap);
-  }
-
-  auto n = old_view->m_n_trx_ids;
-
-  /* The creator of the oldest view, if any, is active for the copy. */
-  bool needs_insert{old_view->m_creator_trx_id > 0};
-
-  if (needs_insert) {
-    ++n;
-  }
-
-  auto view_copy = create_read_view_low(n, heap);
-
-  /* Insert the id of the creator in the right place of the descending
-  array of ids, if needs_insert is true: */
-
-  ulint insert_done{0};
-
-  for (ulint i{}; i < n; ++i) {
-    if (needs_insert && (i >= old_view->m_n_trx_ids || old_view->m_creator_trx_id > old_view->get_nth_trx_id(i))) {
-
-      view_copy->set_nth_trx_id(i, old_view->m_creator_trx_id);
-      needs_insert = false;
-      insert_done = 1;
-    } else {
-      view_copy->set_nth_trx_id(i, old_view->get_nth_trx_id(i - insert_done));
-    }
-  }
-
-  view_copy->m_creator_trx_id = cr_trx_id;
-
-  view_copy->m_low_limit_no = old_view->m_low_limit_no;
-  view_copy->m_low_limit_id = old_view->m_low_limit_id;
-
-  if (n > 0) {
-    /* The last active transaction has the smallest id: */
-    view_copy->m_up_limit_id = view_copy->get_nth_trx_id(n - 1);
-  } else {
-    view_copy->m_up_limit_id = old_view->m_up_limit_id;
-  }
-
-  m_view_list.push_back(view_copy);
-
-  return view_copy;
-}
-
 ReadView *TrxSys::open_read_view_now(trx_id_t cr_trx_id, MemHeap *heap) {
-  ut_ad(mutex_own(&m_mutex));
-
-  auto view = create_read_view_low(m_trx_list.size(), heap);
+  auto view = reinterpret_cast<ReadView *>(mem_heap_alloc(heap, sizeof(ReadView)));
 
   view->m_creator_trx_id = cr_trx_id;
   view->m_type = ReadViewType::NORMAL;
   view->m_undo_no = 0;
 
-  /* No future transactions should be visible in the view */
-
-  view->m_low_limit_no = m_max_trx_id;
-  view->m_low_limit_id = view->m_low_limit_no;
-
-  ulint n{};
-
-  /* No active transaction should be visible, except cr_trx */
-  for (auto trx : m_trx_list) {
-    ut_ad(trx->m_magic_n == TRX_MAGIC_N);
-
-    if (trx->m_id != cr_trx_id && (trx->m_conc_state == TRX_ACTIVE || trx->m_conc_state == TRX_PREPARED)) {
-
-      view->set_nth_trx_id(n, trx->m_id);
-
-      ++n;
-
-      /* NOTE that a transaction whose trx number is < m_max_trx_id can still be active, if it is
-      in the middle of its commit! Note that when a transaction starts, we initialize trx->no to LSN_MAX. */
-
-      if (view->m_low_limit_no > trx->m_no) {
-
-        view->m_low_limit_no = trx->m_no;
-      }
-    }
-  }
-
-  view->m_n_trx_ids = n;
-
-  if (n > 0) {
-    /* The last active transaction has the smallest id: */
-    view->m_up_limit_id = view->get_nth_trx_id(n - 1);
-  } else {
-    view->m_up_limit_id = view->m_low_limit_id;
-  }
-
-  m_view_list.push_front(view);
+  open_snapshot(view);
 
   return view;
 }
 
+ReadView *TrxSys::open_purge_view(MemHeap *heap) {
+  auto view = reinterpret_cast<ReadView *>(mem_heap_alloc(heap, sizeof(ReadView)));
+
+  /* A slot for the walk only: PURGE in READ VIEWS. It doesn't hold the table after
+  the open. */
+  auto slot = m_snaps.alloc();
+
+  slot->m_v.exchange(m_snap_floor.load(std::memory_order_acquire), std::memory_order_seq_cst);
+
+  const auto c0 = m_clock.read_word();
+  const auto h = m_snaps.min(c0, slot);
+
+  slot->m_v.store(h, std::memory_order_release);
+
+  const auto limit = ut::word_id_limit(h);
+
+  auto w = limit;
+  auto l = limit;
+
+  {
+    TrxList::Scan scan(m_nodes);
+
+    for (auto node = scan.head(); node != nullptr; node = TrxList::Scan::next(node)) {
+      const auto id = scan.ticket(*node);
+      const auto c = m_nodes.final_seq(*node);
+
+      if (id < limit && (c == 0 || c > h)) {
+        w = std::min(w, id);
+        l = std::min(l, node->m_payload.m_no.load(std::memory_order_seq_cst));
+      }
+    }
+  }
+
+  view->m_creator_trx_id = 0;
+  view->m_type = ReadViewType::NORMAL;
+  view->m_undo_no = 0;
+  view->m_snap_word = h;
+  view->m_watermark = w;
+  view->m_low_limit_no = l;
+  view->m_slot = nullptr;
+  view->m_trx_sys = this;
+
+  m_snaps.free(slot);
+
+  return view;
+}

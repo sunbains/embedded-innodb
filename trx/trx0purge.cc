@@ -177,12 +177,8 @@ void PurgeSys::free_segment(TrxRseg *rseg, FilAddr hdr_addr, ulint n_removed_log
 
   flst_cut_end(m_sys, rseg_hdr + TRX_RSEG_HISTORY, log_hdr + TRX_UNDO_HISTORY_NODE, n_removed_logs, &mtr);
 
-  mutex_enter(&m_sys.m_trx_sys->m_mutex);
-
   ut_ad(m_sys.m_trx_sys->m_rseg_history_len >= n_removed_logs);
   m_sys.m_trx_sys->m_rseg_history_len -= n_removed_logs;
-
-  mutex_exit(&m_sys.m_trx_sys->m_mutex);
 
   /* Here we assume that a file segment with just the header page can be
   freed in a few steps, so that the buffer pool is not flooded with
@@ -239,12 +235,8 @@ void PurgeSys::truncate_rseg_history(TrxRseg *rseg, trx_id_t limit_trx_no, undo_
     }
 
     if (log_trx_no >= limit_trx_no) {
-      mutex_enter(&m_sys.m_trx_sys->m_mutex);
-
       ut_a(m_sys.m_trx_sys->m_rseg_history_len >= n_removed_logs);
       m_sys.m_trx_sys->m_rseg_history_len -= n_removed_logs;
-
-      mutex_exit(&m_sys.m_trx_sys->m_mutex);
 
       flst_truncate_end(m_sys, rseg_hdr + TRX_RSEG_HISTORY, log_hdr + TRX_UNDO_HISTORY_NODE, n_removed_logs, &mtr);
 
@@ -369,8 +361,6 @@ void PurgeSys::rseg_get_next_history_log(TrxRseg *rseg) noexcept {
 
     mtr.commit(m_sys);
 
-    mutex_enter(&m_sys.m_trx_sys->m_mutex);
-
     /* Add debug code to track history list corruption reported
     on the MySQL mailing list on Nov 9, 2004. The fut0lst.c
     file-based list was corrupt. The prev node pointer was
@@ -379,15 +369,13 @@ void PurgeSys::rseg_get_next_history_log(TrxRseg *rseg) noexcept {
     size pieces, and if we here reach the head of the list, the
     list cannot be longer than 20 000 undo logs now. */
 
-    if (m_sys.m_trx_sys->m_rseg_history_len > 20000) {
+    if (const ulint len = m_sys.m_trx_sys->m_rseg_history_len; len > 20000) {
       log_warn(std::format(
         "Purge reached the head of the history list, but its length is still"
         " reported as {}! Please submit a detailed bug report.",
-        m_sys.m_trx_sys->m_rseg_history_len
+        len
       ));
     }
-
-    mutex_exit(&m_sys.m_trx_sys->m_mutex);
 
     return;
   }
@@ -619,7 +607,7 @@ PurgeSys::PurgeSys(System &sys, Trx *trx) noexcept : m_sys(sys), m_trx(trx) {
 
   m_query = graph_build();
 
-  m_view = sys.m_trx_sys->oldest_copy_or_open_new(0, m_heap);
+  m_view = sys.m_trx_sys->open_purge_view(m_heap);
 }
 
 PurgeSys::~PurgeSys() noexcept {
@@ -631,14 +619,8 @@ PurgeSys::~PurgeSys() noexcept {
   m_trx->m_conc_state = TRX_NOT_STARTED;
 
   if (m_view != nullptr) {
-    /* Because acquiring the kernel mutex is a pre-condition
-    of read_view_close(). We don't really need it here. */
-    mutex_enter(&m_sys.m_trx_sys->m_mutex);
-
     m_sys.m_trx_sys->close_read_view(m_view);
     m_view = nullptr;
-
-    mutex_exit(&m_sys.m_trx_sys->m_mutex);
   }
 
   trx_undo_arr_free(m_arr);
@@ -684,9 +666,7 @@ void PurgeSys::add_update_undo_to_history(Trx *trx, page_t *undo_page, Mtr *mtr)
   /* Add the log as the first in the history list */
   flst_add_first(m_sys, rseg_header + TRX_RSEG_HISTORY, undo_header + TRX_UNDO_HISTORY_NODE, mtr);
 
-  mutex_enter(&m_sys.m_trx_sys->m_mutex);
   ++m_sys.m_trx_sys->m_rseg_history_len;
-  mutex_exit(&m_sys.m_trx_sys->m_mutex);
 
   /* Write the trx number to the undo log header */
   mlog_write_uint64(undo_header + TRX_UNDO_TRX_NO, trx->m_no, mtr);
@@ -734,8 +714,6 @@ ulint PurgeSys::run() noexcept {
 
   rw_lock_x_lock(&m_latch);
 
-  mutex_enter(&m_sys.m_trx_sys->m_mutex);
-
   /* Close and free the old purge view */
 
   m_sys.m_trx_sys->close_read_view(m_view);
@@ -757,7 +735,7 @@ ulint PurgeSys::run() noexcept {
   /* If we cannot advance the 'purge view' because of an old
   'consistent read view', then the DML statements cannot be delayed.
   Also, m_sys.m_config.m_trx.m_max_purge_lag <= 0 means 'infinity'. */
-  if (m_sys.m_config.m_trx.m_max_purge_lag > 0 && !UT_LIST_GET_LAST(m_sys.m_trx_sys->m_view_list)) {
+  if (m_sys.m_config.m_trx.m_max_purge_lag > 0 && m_sys.m_trx_sys->n_read_views() == 0) {
     const double ratio = double(m_sys.m_trx_sys->m_rseg_history_len) / double(m_sys.m_config.m_trx.m_max_purge_lag);
     constexpr ulint max_delay = UINT32_MAX;
 
@@ -775,9 +753,11 @@ ulint PurgeSys::run() noexcept {
 
   m_sys.m_srv->m_dml_needed_delay = delay;
 
-  m_view = m_sys.m_trx_sys->oldest_copy_or_open_new(0, m_heap);
+  /* Commits leave entries in the commit table: retire what can go, the view has
+  a fresher watermark for it. */
+  m_sys.m_trx_sys->retire();
 
-  mutex_exit(&m_sys.m_trx_sys->m_mutex);
+  m_view = m_sys.m_trx_sys->open_purge_view(m_heap);
 
   rw_lock_x_unlock(&m_latch);
 

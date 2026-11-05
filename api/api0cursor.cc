@@ -1513,7 +1513,8 @@ Tuple *Cursor::sec_search_tuple_create() noexcept {
 Tuple *Cursor::sec_read_tuple_create() noexcept {
   auto cursor = this;
   auto index = cursor->m_prebuilt->m_index;
-  const auto n_cols = index->get_n_fields();
+  /* Not the DB_TRX_ID: it is not a column of the index to the user. */
+  const auto n_cols = index->get_n_fields() - 1;
 
   return row_tuple_new(index, n_cols);
 }

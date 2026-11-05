@@ -628,7 +628,7 @@ void Btree::page_empty(BufBlock *block, Index *index, ulint level, Mtr *mtr) noe
   /* Recreate the page: note that global data on page (possible
   segment headers, next page-field, etc.) is preserved intact */
 
-  auto new_page = ::page_create(index, block, mtr);
+  [[maybe_unused]] auto new_page = ::page_create(index, block, mtr);
   ut_ad(new_page != nullptr);
 
   page_set_level(page, level, mtr);

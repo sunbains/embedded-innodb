@@ -1217,9 +1217,11 @@ TEST(UtBitsTest, Bytes) {
 }
 
 /** Asserting that n < 64 in debug builds. */
+#ifdef UNIV_DEBUG
 TEST(UtBitsDeathTest, BitIndexOutOfRange) {
   EXPECT_DEATH(ut::keep(ut_bit_get_nth(1, 64)), "");
 }
+#endif /* UNIV_DEBUG */
 
 /* ------------------------------------------------------------- ut0ucode */
 
@@ -1794,6 +1796,7 @@ TEST_F(UtListTest, ClearInitCopy) {
 }
 
 /** A list in memory that was not constructed is caught in debug builds. */
+#ifdef UNIV_DEBUG
 TEST_F(UtListTest, UninitialisedAsserts) {
   alignas(ListA) byte mem[sizeof(ListA)];
 
@@ -1807,6 +1810,7 @@ TEST_F(UtListTest, UninitialisedAsserts) {
   list->push_back(e(0));
   EXPECT_EQ(list->size(), 1UL);
 }
+#endif /* UNIV_DEBUG */
 
 /* BUG: ut_list_reverse() (include/ut0lst.h:636) and ut_list_move_to_front()
 (include/ut0lst.h:686) use list.first_element, a member UtListBase doesn't

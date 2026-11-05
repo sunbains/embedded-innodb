@@ -583,7 +583,7 @@ class Watchdog {
 
           const auto cmd = std::format("gdb -p {} -batch -ex 'thread apply all bt 30' 1>&2", ::getpid());
 
-          (void)std::system(cmd.c_str());
+          [[maybe_unused]] const auto rc = std::system(cmd.c_str());
           std::abort();
         }
       }) {}

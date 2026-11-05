@@ -25,6 +25,7 @@ a System. Per-object classes reach the engine through a System& parameter. */
 
 #include "api0types.h"
 #include "innodb0types.h"
+#include "ut0hlc.h"
 
 #include <functional>
 #include <vector>
@@ -905,6 +906,22 @@ void trx_set_client_data(Trx *trx, void *client_data) noexcept;
 * @param trx is the transaction handle
 * @return  transaction state */
 [[nodiscard]] TrxState trx_state(Trx *trx) noexcept;
+
+/** @return a new timestamp of the clock of the instance: an Accord timestamp. */
+[[nodiscard]] ut::Timestamp clock_next(System &sys) noexcept;
+
+/** Pass in a timestamp received from another node: the clock moves past it.
+@return DB_INVALID_INPUT if its hlc is past the last transaction id. */
+[[nodiscard]] DbErr clock_update(System &sys, const ut::Timestamp &received) noexcept;
+
+/** @return the timestamp of the id of a started transaction. */
+[[nodiscard]] ut::Timestamp trx_timestamp(const Trx *trx) noexcept;
+
+/** @return the commit timestamp of the last commit of the transaction. */
+[[nodiscard]] ut::Timestamp trx_commit_timestamp(System &sys, const Trx *trx) noexcept;
+
+/** @return the read timestamp of the read view of the transaction, zero if none. */
+[[nodiscard]] ut::Timestamp trx_view_timestamp(System &sys, const Trx *trx) noexcept;
 
 /** Release the resources of the transaction. If the transaction was
 * selected as a victim by InnoDB and rolled back then use this function

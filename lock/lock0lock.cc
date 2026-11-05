@@ -651,33 +651,28 @@ DbErr LockSys::rec_lock_for(Trx *trx, LockMode mode, const BufBlock *block, ulin
 }
 
 bool LockSys::check_trx_id_sanity(
-  trx_id_t trx_id, const Rec rec, const Index *index, const ulint *offsets, bool has_trx_sys_mutex
+  trx_id_t trx_id, const Rec rec, const Index *index, const ulint *offsets
 ) noexcept {
   bool is_ok{true};
 
   ut_ad(rec.offs_validate(index, offsets));
 
-  if (!has_trx_sys_mutex) {
-    mutex_enter(&m_sys.m_trx_sys->m_mutex);
-  }
-
   /* A sanity check: the trx_id in rec must be smaller than the global trx id counter */
 
-  if (trx_id >= m_sys.m_trx_sys->m_max_trx_id) {
+  const auto max_trx_id = m_sys.m_trx_sys->max_trx_id();
+
+  /* An id of another node may be ahead of the local clock. */
+  if (trx_id >= max_trx_id && m_sys.m_trx_sys->id_is_local(trx_id)) {
     log_err("Transaction id associated with record");
     log_err(rec.to_string());
     log_err(std::format(
       "\nis {} which is higher than the global trx id counter {}"
       " The table is corrupt. You have to do dump + drop + reimport.",
       trx_id,
-      m_sys.m_trx_sys->m_max_trx_id
+      max_trx_id
     ));
 
     is_ok = false;
-  }
-
-  if (!has_trx_sys_mutex) {
-    mutex_exit(&m_sys.m_trx_sys->m_mutex);
   }
 
   return is_ok;
@@ -708,10 +703,7 @@ bool LockSys::sec_rec_cons_read_sees(const Rec rec, ReadView *view) const noexce
     return false;
   }
 
-  const auto max_trx_id = page_get_max_trx_id(rec.page_align());
-  ut_ad(max_trx_id > 0);
-
-  return max_trx_id < view->m_up_limit_id;
+  return view->sees_trx_id(TrxSys::read_trx_id(rec.get() + row_get_sec_trx_id_offset(rec)));
 }
 
 Trx *LockSys::sec_rec_some_has_impl_off_trx_sys_mutex(const Rec rec, const Index *index, const ulint *offsets) noexcept {
@@ -731,7 +723,7 @@ Trx *LockSys::sec_rec_some_has_impl_off_trx_sys_mutex(const Rec rec, const Index
   for a page may be incorrect. The smallest active id is read without
   the trx sys mutex: a stale value is smaller, it only makes us look. */
 
-  if (page_get_max_trx_id(page) < m_sys.m_trx_sys->m_min_active_id.load(std::memory_order_acquire) && !m_sys.m_recv->m_recovery_on) {
+  if (page_get_max_trx_id(page) < m_sys.m_trx_sys->m_low_water.load(std::memory_order_acquire) && !m_sys.m_recv->m_recovery_on) {
 
     return nullptr;
   }
@@ -739,7 +731,7 @@ Trx *LockSys::sec_rec_some_has_impl_off_trx_sys_mutex(const Rec rec, const Index
   /* Ok, in this case it is possible that some transaction has an
   implicit x-lock. We have to look in the clustered index. */
 
-  if (!check_trx_id_sanity(page_get_max_trx_id(page), rec, index, offsets, false)) {
+  if (!check_trx_id_sanity(page_get_max_trx_id(page), rec, index, offsets)) {
     buf_page_print(page, 0);
 
     /* The page is corrupt: try to avoid a crash by returning
@@ -794,13 +786,13 @@ bool LockSys::print_info_summary(bool nowait) const noexcept {
     "------------\n"
   );
 
-  log_info("Trx id counter ", m_sys.m_trx_sys->m_max_trx_id);
+  log_info("Trx id high water ", m_sys.m_trx_sys->max_trx_id());
 
   log_info(std::format(
     "Purge done for trx's n:o < {} undo n:o < {}", m_sys.m_trx_sys->m_purge->m_purge_trx_no, m_sys.m_trx_sys->m_purge->m_purge_undo_no
   ));
 
-  log_info("History list length ", m_sys.m_trx_sys->m_rseg_history_len);
+  log_info("History list length ", m_sys.m_trx_sys->m_rseg_history_len.load());
 
   return true;
 }
@@ -814,32 +806,49 @@ void LockSys::print_info_all_transactions() noexcept {
 
   /* First print info on non-active transactions */
 
-  for (auto trx : m_sys.m_trx_sys->m_client_trx_list) {
-    if (trx->m_conc_state == TRX_NOT_STARTED) {
-      log_info("---");
-      log_info(trx->to_string(600));
+  for (auto &shard : m_sys.m_trx_sys->m_client_shards) {
+    std::lock_guard<ut::Latch> guard(shard.m_latch);
+
+    for (auto trx : shard.m_trxs) {
+      if (trx->m_conc_state == TRX_NOT_STARTED) {
+        log_info("---");
+        log_info(trx->to_string(600));
+      }
     }
   }
 
   const Lock *lock{};
+  Trx *pinned{};
+
+  /* The pin of the last round. */
+  const auto unpin = [&pinned]() {
+    if (pinned != nullptr) {
+      TrxSys::unpin(pinned);
+      pinned = nullptr;
+    }
+  };
 
   for (;;) {
     ulint i{};
-    Trx *trx{};
 
-    /* Since we temporarily release the trx system mutex when
-    reading a database page in below, variable trx may be
-    obsolete now and we must loop through the trx list to
-    get probably the same trx, or some other trx. */
+    unpin();
 
-    for (auto tx : m_sys.m_trx_sys->m_trx_list) {
-      if (i == nth_trx) {
-        trx = tx;
-        break;
+    /* We temporarily release the latches when reading a database page in below:
+    look the transaction up again, pinned: it can't reach C4 of its commit
+    meanwhile. A list of ids, it is short lived. */
+    const auto ids = m_sys.m_trx_sys->active_ids();
+
+    if (nth_trx < ids.size()) {
+      pinned = m_sys.m_trx_sys->pin_active(ids[nth_trx]);
+
+      if (pinned == nullptr) {
+        ++nth_trx;
+        nth_lock = 0;
+        continue;
       }
-
-      ++i;
     }
+
+    auto trx = pinned;
 
     if (trx == nullptr) {
       mutex_exit(&m_sys.m_trx_sys->m_mutex);
@@ -856,9 +865,9 @@ void LockSys::print_info_all_transactions() noexcept {
 
       if (trx->m_read_view) {
         log_info(std::format(
-          "Trx read view will not see trx with id >= {}, sees < {}",
-          trx->m_read_view->m_low_limit_id,
-          trx->m_read_view->m_up_limit_id
+          "Trx read view at {}, sees ids < {}",
+          trx->m_read_view->m_snap_word,
+          trx->m_read_view->m_watermark
         ));
       }
 
@@ -1170,7 +1179,13 @@ bool LockSys::validate() noexcept {
 
     mutex_enter(&m_sys.m_trx_sys->m_mutex);
 
-    for (auto trx : m_sys.m_trx_sys->m_trx_list) {
+    for (const auto id : m_sys.m_trx_sys->active_ids()) {
+      /* Pinned: it can't reach C4 of its commit meanwhile. */
+      auto trx = m_sys.m_trx_sys->pin_active(id);
+
+      if (trx == nullptr) {
+        continue;
+      }
 
       for (auto lock : trx->m_trx_locks) {
 
@@ -1178,6 +1193,8 @@ bool LockSys::validate() noexcept {
           (void)table_queue_validate(lock->m_table.m_table);
         }
       }
+
+      TrxSys::unpin(trx);
     }
 
     mutex_exit(&m_sys.m_trx_sys->m_mutex);
@@ -1461,7 +1478,7 @@ DbErr LockSys::sec_rec_read_check_and_lock(
   owner is found and pinned before the latch (lock0lock.h). */
   Trx *impl_trx{};
 
-  if ((page_get_max_trx_id(block->m_frame) >= m_sys.m_trx_sys->m_min_active_id.load(std::memory_order_acquire) || m_sys.m_recv->m_recovery_on) &&
+  if ((page_get_max_trx_id(block->m_frame) >= m_sys.m_trx_sys->m_low_water.load(std::memory_order_acquire) || m_sys.m_recv->m_recovery_on) &&
       !page_rec_is_supremum(rec)) {
 
     impl_trx = sec_rec_some_has_impl_off_trx_sys_mutex(rec, index, offsets);

@@ -26,6 +26,7 @@ locks and the summaries of the grant pass. Private to lock/.
 #pragma once
 
 #include "lock0lock.h"
+#include "log0recv.h"
 
 #include "trx0purge.h"
 #include "ut0ucode.h"
@@ -87,7 +88,7 @@ static const bool Lock_strength_matrix[4][4] = {
 static inline void validate_trx_state(const Trx *trx) noexcept {
   /* The state changes with the trx mutex (C4 of a commit, lock0lock.h). */
   trx_mutex_enter(trx);
-  const auto state = trx->m_conc_state;
+  const TrxStatus state = trx->m_conc_state;
   trx_mutex_exit(trx);
 
   switch (state) {
@@ -400,6 +401,7 @@ Lock *Lock::rec_clone(MemHeap *heap) const noexcept {
   constexpr auto rest = offsetof(Lock, m_n_bits);
 
   auto clone = static_cast<byte *>(mem_heap_alloc(heap, size));
+  ut_a(clone != nullptr);
   auto src = reinterpret_cast<const byte *>(this);
 
   std::memcpy(clone, src, node);

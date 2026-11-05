@@ -33,10 +33,15 @@ is split, each piece owned by one latch:
                                                    bitmaps of their locks
   table shard latch          SYNC_LOCK_SYS_TABLE   Table::m_locks of the tables
   (N_TABLE_SHARDS, by table) 318                   of the shard
-  trx sys mutex              SYNC_TRX_SYS 300      the trx lists, read views,
-                                                   trx ids; not lock state
-  active id shard mutex      SYNC_TRX_SYS_SHARD    TrxSys::m_ids (the active
-  (TrxSys::m_ids)            299                   transactions by id)
+  trx sys mutex              SYNC_TRX_SYS 300      the list of recovered trxs;
+                                                   queries (que0que.cc) and
+                                                   signals of a trx; not lock
+                                                   state; not begin, commit, a
+                                                   read view (trx0sys.h)
+  id shard latch             SYNC_TRX_SYS_SHARD    TrxSys::m_ids (the commit
+  (TrxSys::m_ids)            299                   table, by id: the active
+                                                   transactions of it are those
+                                                   with a Trx in the entry)
   trx mutex (Trx::m_mutex)   SYNC_TRX 297          the lock list and lock heap
                                                    of the trx, its lock wait
                                                    state: m_wait_lock,
@@ -51,7 +56,7 @@ numbers: the page operations that move locks between two pages), or one table
 shard latch, possibly after a page shard latch; then one trx mutex. The trx sys mutex may be taken with lock system latches held
 (it is not, in practice); a lock system latch is never taken with the trx sys
 mutex held: the callers that used to call the lock system with it held now
-release it first (Trx::commit_off_kernel(), the lock monitor). A trx mutex is
+release it first (Trx::commit_low() has none, the lock monitor). A trx mutex is
 taken last. The debug builds check this order (LockSys::Held, TrxMutex::n_held()
 and mutex_own() of the trx sys mutex), and every internal function of the lock
 system asserts the latch of the queue it reads (owns_page(), owns_table()).
@@ -114,22 +119,23 @@ in its lock list before its commit releases its locks, never after (a lock
 left for a committed transaction), and never skipped while it is active (a
 missed conflict). Without the trx sys mutex, as follows.
 
-TrxSys::m_ids holds the active (and prepared) read-write transactions by id,
-sharded, each shard with its own mutex. A transaction enters it when it gets
-its id, and leaves it at C2 of its commit. Trx::m_n_ref counts pins.
+TrxSys::m_ids holds the active (and prepared) transactions by id, sharded, each
+shard with its own latch. A transaction enters it when it gets its id, and
+stops being active in it at C2 of its commit. An id that isn't local, a row of
+another node, is not there: it holds no local lock. Trx::m_n_ref counts pins.
 
 The commit of T (Trx::commit_off_kernel()):
   C1  the commit in the file based world (undo log states, the mini-
-      transaction): it can't be undone from here. [no latch held at its end
-      but the trx sys mutex]
-  C2  T leaves the active ids. [trx sys mutex, then the id shard mutex]
+      transaction, m_no): it can't be undone from here. [no latch at its end]
+  C2  T leaves the active ids: its commit table entry stays, without the Trx.
+      [the id shard latch]
   C3  wait until T has no pins (TrxSys::drain_pins(): yield, then sleep).
       [no latch at all: a converter holding a pin may wait for a page latch
       and a lock system latch; if T has no pin, read after C2 with acquire,
-      nothing to wait for: the trx sys mutex is kept]
-  C4  T's state becomes TRX_COMMITTED_IN_MEMORY. [trx sys mutex, then T's
-      trx mutex]
-  C6  T leaves the trx list (the read views). [trx sys mutex]
+      nothing to wait for]
+  C4  T's state becomes TRX_COMMITTED_IN_MEMORY. [T's trx mutex]
+  C6  T gets its commit stamp in the commit table (READ VIEWS in trx0sys.h).
+      [none, lock free]
   C5  T's locks are released, shard by shard. [the shard latches, one at a
       time; skipped if T's lock list was empty at C4 (read with T's trx
       mutex): no lock can be created for T after C4]
@@ -187,9 +193,9 @@ that found T would have created T's lock before its own request). If B's
 lock is gone by V3, T gets an extra explicit X lock on R: harmless, A waits
 for it, and C5 (or the end of the rollback) releases it.
 
-The secondary index: the page max trx id against TrxSys::m_min_active_id, an
-atomic lower bound of the smallest active id (stale means smaller: more
-checks, never fewer), then the clustered record (RowVers), which ends in
+The secondary index: the page max trx id against TrxSys::m_low_water, an atomic
+lower bound of the smallest active id (stale means smaller: more checks, never
+fewer; an id of another node above the local ones means a check too), then the clustered record (RowVers), which ends in
 TrxSys::pin_active(): the same V1..V4. */
 /*******************************************************/
 
@@ -766,12 +772,11 @@ struct LockSys {
    * @param[in] rec The user record.
    * @param[in] index The clustered index.
    * @param[in] offsets The column offsets obtained from PhyRec::get_col_offsets(rec, index).
-   * @param[in] has_trx_sys_mutex True if the caller owns the trx system mutex.
    *
    * @return true if the transaction id is sensible, false otherwise.
    */
   [[nodiscard]] bool check_trx_id_sanity(
-    trx_id_t trx_id, const Rec rec, const Index *index, const ulint *offsets, bool has_trx_sys_mutex
+    trx_id_t trx_id, const Rec rec, const Index *index, const ulint *offsets
   ) noexcept;
 
   /**

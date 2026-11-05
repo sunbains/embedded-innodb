@@ -558,7 +558,7 @@ void Dict::table_change_id_in_cache(Table *table, uint64_t new_id) noexcept {
   table->m_id = new_id;
 
   /* Add the table back to the hash table */
-  auto ret = m_table_ids.emplace(table->m_id, table);
+  [[maybe_unused]] auto ret = m_table_ids.emplace(table->m_id, table);
   ut_ad(ret.second);
 }
 
@@ -1278,7 +1278,8 @@ Index *Dict::build_secondary_index(Index *index) noexcept {
   ut_ad(clust_index->is_clustered());
 
   {
-    const auto n_fields = index->m_n_fields + 1 + clust_index->m_n_uniq;
+    /* Its own fields, those of the clustered key, and DB_TRX_ID. */
+    const auto n_fields = index->m_n_fields + 2 + clust_index->m_n_uniq;
 
     new_index = Index::create(table, index->m_name, index->m_page_id, index->m_type, n_fields);
 
@@ -1322,6 +1323,10 @@ Index *Dict::build_secondary_index(Index *index) noexcept {
   } else {
     new_index->m_n_uniq = new_index->m_n_defined;
   }
+
+  /* The last modifier of the record, READ VIEWS in trx0sys.h: on the leaf records, last,
+  not part of the key (m_n_uniq was set above), and so not in the node pointers. */
+  new_index->add_col(table, const_cast<Column *>(table->get_sys_col(DATA_TRX_ID)), 0);
 
   /* Set the n_fields value in new_index to the actual defined number of fields */
 

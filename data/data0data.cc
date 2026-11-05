@@ -333,7 +333,7 @@ void dfield_print_also_hex(const Dfield *dfield) {
     case DATA_SYS:
       switch (prtype & DATA_SYS_PRTYPE_MASK) {
         case DATA_TRX_ID:
-          id = mach_read_from_6(data);
+          id = mach_read_from_8(data);
 
           ib_logger(stderr, "trx_id %lu", TRX_ID_PREP_PRINTF(id));
           break;

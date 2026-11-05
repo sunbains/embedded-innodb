@@ -231,6 +231,7 @@ class FspOps {
 
   /** @return true if the segment is valid (asserts otherwise). */
   bool seg_valid(const Seg &seg) {
+#ifdef UNIV_DEBUG
     Mtr mtr;
 
     mtr.start();
@@ -240,6 +241,11 @@ class FspOps {
     mtr.commit(*m_s);
 
     return ok;
+#else
+    /* fseg_validate() is debug only. */
+    (void)seg;
+    return true;
+#endif /* UNIV_DEBUG */
   }
 
   Fsp &fsp() { return *m_s->m_fsp; }

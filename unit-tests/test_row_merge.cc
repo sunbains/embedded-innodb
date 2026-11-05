@@ -126,6 +126,9 @@ class MergeTest : public ::testing::Test {
     wait for the disk. */
     s_config.m_log.m_flush_at_trx_commit = 2;
 
+    /* WriterWaits waits for a whole index build, 26 s under TSan with a loaded machine. */
+    s_config.m_lock.m_wait_timeout = std::chrono::seconds(300);
+
     s_sys = new System();
 
     ASSERT_EQ(s_sys->init(s_config), DB_SUCCESS);
@@ -233,7 +236,17 @@ class MergeTest : public ::testing::Test {
     api::Cursor *crsr{};
 
     ASSERT_EQ(api::cursor_open_table(*m_sys, tbl.c_str(), trx, &crsr), DB_SUCCESS);
-    ASSERT_EQ(crsr->lock(*m_sys, IB_LOCK_IX), DB_SUCCESS);
+
+    /* Not an ASSERT: a transaction left active would hang the shutdown of the suite. */
+    const auto err = crsr->lock(*m_sys, IB_LOCK_IX);
+
+    EXPECT_EQ(err, DB_SUCCESS);
+
+    if (err != DB_SUCCESS) {
+      EXPECT_EQ(api::Cursor::close(*m_sys, crsr), DB_SUCCESS);
+      rollback(trx);
+      return;
+    }
 
     {
       Tpl tpl(crsr->clust_read_tuple_create());
@@ -331,7 +344,10 @@ class MergeTest : public ::testing::Test {
 
       e.m_deleted = rec.get_deleted_flag();
 
-      for (ulint i{}; i < index->get_n_fields(); ++i) {
+      /* Not the DB_TRX_ID of a secondary record: who wrote it, not what it holds. */
+      const auto n_fields = index->is_clustered() ? index->get_n_fields() : index->get_n_fields() - 1;
+
+      for (ulint i{}; i < n_fields; ++i) {
         ulint len;
         auto f = rec.get_nth_field(offs, i, &len);
 

@@ -29,6 +29,13 @@ Performance tests of the components, see ut0perf.h. */
 namespace ut {
 
 void report(const BenchResult &r) {
+#ifdef UNIV_DEBUG
+  /* Numbers from a debug build mean nothing: it hid a bug on the visibility fast path
+  and it changes the ratios between versions. Build with -DCMAKE_BUILD_TYPE=Release. */
+  ADD_FAILURE() << "Performance test " << r.m_name << " in a UNIV_DEBUG build: nothing recorded";
+  return;
+#endif /* UNIV_DEBUG */
+
   const auto *info = ::testing::UnitTest::GetInstance()->current_test_info();
   const auto test = info != nullptr ? std::format("{}.{}", info->test_suite_name(), info->name()) : std::string("-");
 

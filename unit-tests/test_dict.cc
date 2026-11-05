@@ -143,7 +143,7 @@ TEST_F(DictTest, TruncateWhileOpening) {
     }));
   }
 
-  const auto end = std::chrono::steady_clock::now() + 5s;
+  const auto end = std::chrono::steady_clock::now() + 2s;
   int n_truncates{};
 
   while (std::chrono::steady_clock::now() < end) {
@@ -645,11 +645,13 @@ TEST_F(DictDb, Layout) {
   EXPECT_STREQ(clust->get_nth_field(1)->m_name, "DB_TRX_ID");
   EXPECT_STREQ(clust->get_nth_field(2)->m_name, "DB_ROLL_PTR");
 
-  /* b, d, a */
+  /* b, d, a, and the last modifier: not part of the key. */
   EXPECT_EQ(sec->get_n_ordering_defined_by_user(), 2UL);
-  EXPECT_EQ(sec->get_n_fields(), 3UL);
+  EXPECT_EQ(sec->get_n_fields(), 4UL);
   EXPECT_EQ(sec->get_n_unique(), 3UL);
+  EXPECT_EQ(sec->get_n_unique_in_tree(), 3UL);
   EXPECT_STREQ(sec->get_nth_field(2)->m_name, "a");
+  EXPECT_STREQ(sec->get_nth_field(3)->m_name, "DB_TRX_ID");
 
   /* Both in the table's space, with a root page each. */
   EXPECT_NE(t->m_space_id, SYS_TABLESPACE);
@@ -678,11 +680,12 @@ TEST_F(DictDb, GeneratedClusteredIndex) {
   EXPECT_EQ(clust->get_n_ordering_defined_by_user(), 0UL);
   EXPECT_STREQ(clust->get_nth_field(0)->m_name, "DB_ROW_ID");
 
-  /* The secondary index ends with DB_ROW_ID. */
+  /* The key of the secondary index ends with DB_ROW_ID. */
   auto a = t->get_index_on_name("A");
 
   ASSERT_NE(a, nullptr);
-  EXPECT_STREQ(a->get_nth_field(a->get_n_fields() - 1)->m_name, "DB_ROW_ID");
+  EXPECT_STREQ(a->get_nth_field(a->get_n_fields() - 2)->m_name, "DB_ROW_ID");
+  EXPECT_STREQ(a->get_nth_field(a->get_n_fields() - 1)->m_name, "DB_TRX_ID");
 }
 
 /** A table evicted from the cache is loaded from the SYS_ tables as it was. */

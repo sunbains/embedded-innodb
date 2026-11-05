@@ -64,11 +64,10 @@ has more fields than the other. */
  * @return 1, 0, -1, if dtuple is greater, equal, less than rec,
  *  respectively, when only the common first fields are compared
  */
-#endif /* UNIV_DEBUG */
-
 static int cmp_debug_dtuple_rec_with_match(
   void *cmp_ctx, const DTuple *dtuple, const Rec rec, const RecOffs &offsets, ulint *matched_fields
 ) noexcept;
+#endif /* UNIV_DEBUG */
 
 /**
  * Transforms the character code so that it is ordered appropriately for the

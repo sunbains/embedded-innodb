@@ -56,6 +56,27 @@ constexpr ulint ROW_COPY_POINTERS = 2;
 ulint row_get_trx_id_offset(const Rec rec, const Index *index, const ulint *offsets);
 
 /**
+ * @param[in] rec  A record of a leaf page of a secondary index.
+ * @return the offset from rec of its DB_TRX_ID, the last field.
+ */
+[[nodiscard]] inline ulint row_get_sec_trx_id_offset(const Rec rec) noexcept {
+  return rec.get_data_size() - DATA_TRX_ID_LEN;
+}
+
+/**
+ * Set the DB_TRX_ID of an entry of a secondary index.
+ *
+ * @param[in,out] entry  The entry, it refers to buf until set again.
+ * @param[in] index      The index.
+ * @param[out] buf       The storage of the id.
+ * @param[in] id         The transaction.
+ */
+inline void row_sec_entry_set_trx_id(DTuple *entry, const Index *index, byte *buf, trx_id_t id) noexcept {
+  mach_write_to_8(buf, id);
+  dfield_set_data(dtuple_get_nth_field(entry, index->get_n_fields() - 1), buf, DATA_TRX_ID_LEN);
+}
+
+/**
  * @brief Reads the trx id field from a clustered index record.
  *
  * @param[in] rec Record

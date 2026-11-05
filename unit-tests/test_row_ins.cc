@@ -1205,7 +1205,7 @@ TEST_F(RowInsIdxTest, InsertNoExplicitLock) {
 
   ASSERT_EQ(recs.size(), 1UL);
   EXPECT_FALSE(recs[0].m_deleted);
-  EXPECT_EQ(mach_read_from_6(reinterpret_cast<const byte *>(recs[0].m_fields[1]->data())), trx->m_id);
+  EXPECT_EQ(mach_read_from_8(reinterpret_cast<const byte *>(recs[0].m_fields[1]->data())), trx->m_id);
   commit(trx);
 }
 
@@ -1282,7 +1282,7 @@ class Watchdog {
 
           const auto cmd = std::format("gdb -p {} -batch -ex 'thread apply all bt 30' 1>&2", ::getpid());
 
-          (void)std::system(cmd.c_str());
+          [[maybe_unused]] const auto rc = std::system(cmd.c_str());
           std::abort();
         }
       }) {}

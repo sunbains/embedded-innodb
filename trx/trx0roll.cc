@@ -248,7 +248,7 @@ void TrxRollback::rollback_active(System &sys,
 void TrxRollback::rollback_or_clean_recovered(System &sys, bool all) {
   mutex_enter(&sys.m_trx_sys->m_mutex);
 
-  if (!UT_LIST_GET_FIRST(sys.m_trx_sys->m_trx_list)) {
+  if (!UT_LIST_GET_FIRST(sys.m_trx_sys->m_recv_trx_list)) {
     goto leave_function;
   }
 
@@ -261,7 +261,7 @@ void TrxRollback::rollback_or_clean_recovered(System &sys, bool all) {
 loop:
   mutex_enter(&sys.m_trx_sys->m_mutex);
 
-  for (auto trx : sys.m_trx_sys->m_trx_list) {
+  for (auto trx : sys.m_trx_sys->m_recv_trx_list) {
     if (!trx->m_is_recovered) {
       continue;
     }

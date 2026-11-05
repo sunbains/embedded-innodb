@@ -149,6 +149,17 @@ struct LockConfig {
 struct TrxConfig {
   /** Maximum allowed purge history length, 0 means no limit. */
   ulint m_max_purge_lag{};
+
+  /** The node id of this instance, below ut::HLC_MAX_NODES: stored at creation,
+  and any later start with another one is refused. */
+  uint32_t m_node_id{};
+
+  /** The epoch of the clock, below ut::HLC_MAX_EPOCHS, at least: the stored
+  one is kept if it is larger. */
+  uint64_t m_epoch{1};
+
+  /** Start the clock at this value, if it is above the others: UNIX microseconds. */
+  uint64_t m_hlc_start{};
 };
 
 /** Data dictionary. */

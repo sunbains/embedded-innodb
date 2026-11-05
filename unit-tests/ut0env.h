@@ -141,6 +141,21 @@ class DbTest : public ::testing::Test {
   /** @return the rows visible to trx, read through SEC_A, in (a, k) order. */
   [[nodiscard]] std::vector<Row> scan_sec(Trx *trx);
 
+  /** A record of SEC_A as it is on the page. */
+  struct SecRec {
+    trx_id_t m_id{};
+    bool m_deleted{};
+  };
+
+  /** @return the record of SEC_A with this (a, k), delete marked or not. */
+  [[nodiscard]] std::optional<SecRec> sec_rec(uint32_t a, uint32_t k);
+
+  /** @return the DB_TRX_ID of the clustered record of key k. */
+  [[nodiscard]] trx_id_t clust_id(uint32_t k);
+
+  /** @return the (a, k) visible to trx from SEC_A alone, not a look at the table. */
+  [[nodiscard]] std::vector<std::pair<uint32_t, uint32_t>> scan_sec_only(Trx *trx);
+
   /** Read the row with SEC_A value a through SEC_A with cluster access.
   @return the row, or nullopt if no row has a. */
   [[nodiscard]] std::optional<Row> find_sec(Trx *trx, uint32_t a);

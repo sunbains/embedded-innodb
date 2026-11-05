@@ -20,6 +20,15 @@ Scaffolding shared by the component unit tests, see ut0env.h. */
 
 #include "ut0env.h"
 
+#include "btr0pcur.h"
+#include "dict0dict.h"
+#include "mach0data.h"
+#include "mtr0mtr.h"
+#include "rem0rec.h"
+#include "trx0sys.h"
+
+#include <cstdlib>
+
 #include <atomic>
 #include <csignal>
 #include <format>
@@ -174,6 +183,11 @@ Config make_config(const fs::path &dir) {
   config.m_log.m_log_dir = dir.string();
   config.m_buf_pool.m_size = 32 * 1024 * 1024;
   config.m_lock.m_wait_timeout = 10s;
+
+  /* A run of the DB suites with the clock forced high. */
+  if (const auto start = std::getenv("UT_HLC_START"); start != nullptr) {
+    config.m_trx.m_hlc_start = std::strtoull(start, nullptr, 10);
+  }
 
   return config;
 }
@@ -438,6 +452,123 @@ std::vector<Row> DbTest::scan_sec(Trx *trx) {
   } else {
     sec->set_cluster_access();
     rows = read_all(sys, sec, sec->first(sys));
+    (void)api::Cursor::close(sys, sec);
+  }
+
+  (void)api::Cursor::close(sys, crsr);
+
+  return rows;
+}
+
+std::optional<DbTest::SecRec> DbTest::sec_rec(uint32_t a, uint32_t k) {
+  m_sys->m_dict->mutex_acquire();
+  auto table = m_sys->m_dict->table_get(TABLE);
+  m_sys->m_dict->mutex_release();
+
+  auto index = table->get_index_on_name(SEC_A);
+  std::optional<SecRec> found;
+  Mtr mtr;
+  BtreePcursor pcur;
+  MemHeap *heap{};
+
+  mtr.start();
+  pcur.open_at_index_side(*m_sys, true, index, BTR_SEARCH_LEAF, true, 0, &mtr);
+
+  while (pcur.move_to_next_user_rec(*m_sys, &mtr)) {
+    auto rec = pcur.get_rec();
+    RecOffs offs = PhyRec(index, rec).get_all_col_offsets(nullptr, &heap, Current_location());
+    ulint len;
+
+    const auto a_rec = mach_read_from_4(rec.get_nth_field(offs, 0, &len).get());
+    const auto k_rec = mach_read_from_4(rec.get_nth_field(offs, 1, &len).get());
+
+    if (a_rec == a && k_rec == k) {
+      found = SecRec{TrxSys::read_trx_id(rec.get_nth_field(offs, index->get_n_fields() - 1, &len).get()), rec.get_deleted_flag() != 0};
+      break;
+    }
+  }
+
+  pcur.close();
+  mtr.commit(*m_sys);
+
+  if (heap != nullptr) {
+    mem_heap_free(heap);
+  }
+
+  return found;
+}
+
+trx_id_t DbTest::clust_id(uint32_t k) {
+  m_sys->m_dict->mutex_acquire();
+  auto table = m_sys->m_dict->table_get(TABLE);
+  m_sys->m_dict->mutex_release();
+
+  auto index = table->get_first_index();
+  trx_id_t id{};
+  Mtr mtr;
+  BtreePcursor pcur;
+  MemHeap *heap{};
+
+  mtr.start();
+  pcur.open_at_index_side(*m_sys, true, index, BTR_SEARCH_LEAF, true, 0, &mtr);
+
+  while (pcur.move_to_next_user_rec(*m_sys, &mtr)) {
+    auto rec = pcur.get_rec();
+    RecOffs offs = PhyRec(index, rec).get_all_col_offsets(nullptr, &heap, Current_location());
+    ulint len;
+
+    if (mach_read_from_4(rec.get_nth_field(offs, 0, &len).get()) == k) {
+      id = TrxSys::read_trx_id(rec.get_nth_field(offs, index->get_sys_col_field_pos(DATA_TRX_ID), &len).get());
+      break;
+    }
+  }
+
+  pcur.close();
+  mtr.commit(*m_sys);
+
+  if (heap != nullptr) {
+    mem_heap_free(heap);
+  }
+
+  return id;
+}
+
+std::vector<std::pair<uint32_t, uint32_t>> DbTest::scan_sec_only(Trx *trx) {
+  auto &sys = *m_sys;
+  api::Cursor *crsr{};
+  api::Cursor *sec{};
+  std::vector<std::pair<uint32_t, uint32_t>> rows;
+
+  if (auto err = open(sys, trx, IB_LOCK_IS, &crsr); err != DB_SUCCESS) {
+    ADD_FAILURE() << "open: " << err;
+    return rows;
+  }
+
+  if (auto err = crsr->open_index(sys, SEC_A, &sec); err != DB_SUCCESS) {
+    ADD_FAILURE() << "open_index: " << err;
+  } else {
+    auto tpl = sec->sec_read_tuple_create();
+    auto err2 = sec->first(sys);
+
+    while (err2 == DB_SUCCESS) {
+      uint32_t a{};
+      uint32_t k{};
+
+      err2 = sec->read_row(sys, tpl);
+
+      if (err2 != DB_SUCCESS) {
+        break;
+      }
+
+      /* The columns of a row tuple are those of the table. */
+      EXPECT_EQ(tpl->read_u32(0, &k), DB_SUCCESS);
+      EXPECT_EQ(tpl->read_u32(1, &a), DB_SUCCESS);
+      rows.emplace_back(a, k);
+      err2 = sec->next(sys);
+      tpl = tpl->clear();
+    }
+
+    api::Tuple::destroy(tpl);
     (void)api::Cursor::close(sys, sec);
   }
 

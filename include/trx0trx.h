@@ -164,6 +164,9 @@ struct Trx {
    */
   void commit_off_kernel(System &sys) noexcept;
 
+  /** The commit, without the trx sys mutex. */
+  void commit_low(System &sys) noexcept;
+
   /**
    * Cleans up a transaction at database startup. The cleanup is needed if
    * the transaction already got to the middle of a commit when the database
@@ -522,7 +525,7 @@ struct Trx {
   void prepare_for_commit(System &sys) noexcept;
 
  public:
-  IF_DEBUG(ulint m_magic_n{TRX_MAGIC_N};)
+  ulint m_magic_n{TRX_MAGIC_N};
 
   /** Transaction start id. See m_no below too. */
   trx_id_t m_id{};
@@ -534,7 +537,7 @@ struct Trx {
 
   /** State of the trx from the point of view of concurrency control:
    * TRX_ACTIVE, TRX_COMMITTED_IN_MEMORY, ... */
-  TrxStatus m_conc_state{TRX_NOT_STARTED};
+  std::atomic<TrxStatus> m_conc_state{TRX_NOT_STARTED};
 
   /** TRX_ISO_REPEATABLE_READ, ... */
   TrxIsolation m_isolation_level{TRX_ISO_REPEATABLE_READ};
@@ -628,6 +631,11 @@ struct Trx {
   /** LSN at the time of the commit */
   lsn_t m_commit_lsn{};
 
+  /** The word of the clock of the commit, the stamp of its visibility to read
+  views (step C6 of the commit, lock0lock.h). Not m_no: that is assigned before
+  the commit is durable, for the order of the history lists. */
+  uint64_t m_commit_word{};
+
   /** Table to drop iff dict_operation is true, or 0. */
   trx_id_t m_table_id{};
 
@@ -646,8 +654,16 @@ struct Trx {
   /** how many tables the current SQL statement uses, except those in consistent read */
   ulint m_client_n_tables_locked{};
 
-  /** List of transactions */
+  /** The list of recovered transactions (TrxSys::m_recv_trx_list), with the trx
+  sys mutex. */
   UT_LIST_NODE_T(Trx) m_trx_list;
+
+  /** True if it is in that list. */
+  bool m_in_recv_list{};
+
+  /** Its node in the list of transactions and in the commit table (TrxSys::TrxNode),
+  from its start to step C6 of its commit, when the node is the list's. */
+  void *m_node{};
 
   /** List of transactions created for client */
   UT_LIST_NODE_T(Trx) m_client_trx_list;

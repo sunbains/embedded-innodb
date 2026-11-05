@@ -66,7 +66,7 @@ InsertNode *RowInsert::node_create(IbInsMode ins_type, Table *table, MemHeap *he
 
   node->m_entry_sys_heap = mem_heap_create(128);
 
-  node->m_magic_n = INS_NODE_MAGIC_N;
+  ut_d(node->m_magic_n = INS_NODE_MAGIC_N);
 
   return node;
 }
@@ -1623,18 +1623,28 @@ DbErr RowInsert::index_entry(const Index *index, DTuple *entry, ulint n_ext, boo
     }
   }
 
-  /* Try first optimistic descent to the B-tree */
-  {
-    const auto err = index_entry_low(BTR_MODIFY_LEAF, index, entry, n_ext, thr);
+  /* An insert, or the reuse of a delete marked record by modification: both make T the
+  last modifier (READ VIEWS in trx0sys.h). */
+  byte id[DATA_TRX_ID_LEN];
 
-    if (err != DB_FAIL) {
-
-      return err;
-    }
+  if (!index->is_clustered()) {
+    row_sec_entry_set_trx_id(entry, index, id, thr_get_trx(thr)->m_id);
   }
 
-  /* Try then pessimistic descent to the B-tree */
-  return index_entry_low(BTR_MODIFY_TREE, index, entry, n_ext, thr);
+  /* Try first optimistic descent to the B-tree */
+  auto err = index_entry_low(BTR_MODIFY_LEAF, index, entry, n_ext, thr);
+
+  if (err == DB_FAIL) {
+    /* Try then pessimistic descent to the B-tree */
+    err = index_entry_low(BTR_MODIFY_TREE, index, entry, n_ext, thr);
+  }
+
+  if (!index->is_clustered()) {
+    /* Not left pointing to this frame: the caller may reuse the entry. */
+    dfield_set_data(dtuple_get_nth_field(entry, index->get_n_fields() - 1), field_ref_zero, DATA_TRX_ID_LEN);
+  }
+
+  return err;
 }
 
 void RowInsert::index_entry_set_vals(Index *index, DTuple *entry, const DTuple *row) noexcept {
