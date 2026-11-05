@@ -55,6 +55,8 @@ struct BoundedChannel {
     ut_delete(m_ptr);
   }
 
+  /** @return false if the cell at the head isn't free. That is also so for a moment when
+  the queue isn't full: a dequeue has taken a ticket for it and not yet given it back. */
   [[nodiscard]] bool enqueue(T const &data) noexcept {
     /* m_epos only wraps at MAX(m_epos), instead we use the capacity to
     convert the sequence to an array index. This is why the ring buffer

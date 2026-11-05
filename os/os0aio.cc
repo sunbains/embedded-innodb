@@ -563,8 +563,12 @@ void Handler::mark_as_free(Slot *slot) noexcept {
   ut_ad(slot->m_reserved);
   ut_d(slot->m_reserved = false);
 
-  auto success = m_free_pool->enqueue(slot);
-  ut_a(success);
+  /* The slots of the pool are never more than its capacity, so there is room for this
+  one. But enqueue() can say full when it isn't: the cell it needs may be of a dequeue that
+  has its ticket and has yet to give the cell back. That one finishes without us. */
+  while (!m_free_pool->enqueue(slot)) {
+    std::this_thread::yield();
+  }
 
   /* The waiters reset the events and check again before they wait (see
   reserve_slot() and wait_for_pending_ops()): set them after the change. */

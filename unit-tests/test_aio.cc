@@ -28,11 +28,13 @@ threads of a System do. The queue ids of reap() are global: the log queue is
 
 #include "fil0types.h"
 #include "os0aio.h"
+#include "ut0mpmcbq.h"
 
 #include <fcntl.h>
 #include <unistd.h>
 
 #include <atomic>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <set>
@@ -471,9 +473,12 @@ TEST_F(AioFileTest, WaitPending) {
   });
 
   m_aio->wait_for_pending_ops(aio::WRITE);
-  EXPECT_EQ(reaped.load(), N);
+
+  /* All were reaped; the reaper may not have counted the last one yet. */
+  EXPECT_GE(reaped.load() + 1, N);
 
   reaper.join();
+  EXPECT_EQ(reaped.load(), N);
 }
 
 /** After shutdown() a reap on every queue returns the shutdown marker, and
@@ -615,6 +620,54 @@ TEST_F(AioFileTest, MultiQueue) {
   open(4, 4);
 
   EXPECT_EQ(multi_queue(*this, *m_aio, m_node, m_n_read, m_n_write, 1), 0UL);
+}
+
+/** A pool of objects, each taken and given back, as the free slots of Handler: never more
+in it than its capacity, and enqueue() may still say full for a moment. Each give back must
+get in by trying again: the objects are all there at the end, and none is there twice. */
+TEST(AioPool, GiveBackRetries) {
+  constexpr size_t N = 4;
+  constexpr int OPS = 200000;
+
+  BoundedChannel<size_t> pool(N);
+
+  for (size_t i{}; i < N; ++i) {
+    ASSERT_TRUE(pool.enqueue(i));
+  }
+
+  std::atomic<uint64_t> n_retries{};
+  std::vector<std::thread> threads;
+
+  for (size_t t{}; t < 2 * N; ++t) {
+    threads.emplace_back([&] {
+      for (int i{}; i < OPS; ++i) {
+        size_t v{};
+
+        while (!pool.dequeue(v)) {
+          std::this_thread::yield();
+        }
+
+        while (!pool.enqueue(v)) {
+          n_retries.fetch_add(1, std::memory_order_relaxed);
+          std::this_thread::yield();
+        }
+      }
+    });
+  }
+
+  for (auto &t : threads) {
+    t.join();
+  }
+
+  std::set<size_t> seen;
+  size_t v{};
+
+  while (pool.dequeue(v)) {
+    EXPECT_TRUE(seen.insert(v).second) << v;
+  }
+
+  EXPECT_EQ(seen.size(), N);
+  std::printf("AioPool: %lu give backs had to retry\n", static_cast<unsigned long>(n_retries.load()));
 }
 
 /* Regression: Aio::submit() is not thread safe. Handler::Queue::submit() calls
