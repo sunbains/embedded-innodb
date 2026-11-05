@@ -585,12 +585,12 @@ DbErr TrxSys::create_system_tablespace() noexcept {
   then enter the kernel: we must do it in this order to conform
   to the latching order rules. */
 
-  mtr_x_lock(m_sys.m_fil->space_get_latch(TRX_SYS_SPACE), &mtr);
+  m_sys.m_fsp->latch(TRX_SYS_SPACE, &mtr);
 
   mutex_enter(&m_mutex);
 
   /* Create the trx sys file block in a new allocated file segment */
-  auto block = m_sys.m_fsp->fseg_create(TRX_SYS_SPACE, 0, TRX_SYS + TRX_SYS_FSEG_HEADER, &mtr);
+  auto block = m_sys.m_fsp->fseg_create(TRX_SYS_SPACE, nullptr, TRX_SYS + TRX_SYS_FSEG_HEADER, &mtr);
 
   buf_block_dbg_add_level();
 

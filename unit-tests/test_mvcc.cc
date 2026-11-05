@@ -142,6 +142,11 @@ TEST_F(Mvcc, SecIdInsert) {
 TEST_F(Mvcc, SecIdDelete) {
   load({{1, row(1)}});
 
+  /* The view keeps background purge from removing the delete marked record. */
+  auto r = begin();
+
+  ASSERT_NE(r->assign_read_view(*m_sys), nullptr);
+
   auto t = begin();
   const auto id = t->m_id;
 
@@ -153,11 +158,17 @@ TEST_F(Mvcc, SecIdDelete) {
   ASSERT_TRUE(rec.has_value());
   EXPECT_EQ(rec->m_id, id);
   EXPECT_TRUE(rec->m_deleted);
+  commit(r);
 }
 
 /** An update of the key: the old record delete marked, a new one, both this one's. */
 TEST_F(Mvcc, SecIdMove) {
   load({{1, row(1)}});
+
+  /* The view keeps background purge from removing the delete marked record. */
+  auto r = begin();
+
+  ASSERT_NE(r->assign_read_view(*m_sys), nullptr);
 
   auto t = begin();
   const auto id = t->m_id;
@@ -169,6 +180,7 @@ TEST_F(Mvcc, SecIdMove) {
   EXPECT_TRUE(sec_rec(1, 1)->m_deleted);
   EXPECT_EQ(sec_rec(9, 1)->m_id, id);
   EXPECT_FALSE(sec_rec(9, 1)->m_deleted);
+  commit(r);
 }
 
 /** An update of the row that leaves the key: the record is not touched. A view that

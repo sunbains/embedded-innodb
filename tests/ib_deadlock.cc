@@ -87,8 +87,7 @@ static DbErr create_table(System &sys, const char *dbname, /*!< in: database nam
 
   snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
 
-  /* Pass a table page size of 0, ie., use default page size. */
-  err = TableSchema::create(table_name, &ib_tbl_sch, tbl_fmt, 0);
+  err = TableSchema::create(table_name, &ib_tbl_sch, tbl_fmt);
 
   assert(err == DB_SUCCESS);
 
@@ -314,7 +313,7 @@ static void set_options(Config &config, int argc, char *argv[]) {
   memset(longopts, 0x0, size);
   memcpy(longopts, ib_longopts, sizeof(struct option) * count);
 
-  /* Add the local parameters (threads, rows and page_size). */
+  /* Add the local parameters (threads and rows). */
   longopts[count].name = "threads";
   longopts[count].has_arg = required_argument;
   longopts[count].flag = nullptr;
@@ -325,12 +324,6 @@ static void set_options(Config &config, int argc, char *argv[]) {
   longopts[count].has_arg = required_argument;
   longopts[count].flag = nullptr;
   longopts[count].val = USER_OPT + 2;
-  ++count;
-
-  longopts[count].name = "page_size";
-  longopts[count].has_arg = required_argument;
-  longopts[count].flag = nullptr;
-  longopts[count].val = USER_OPT + 3;
 
   while ((opt = getopt_long(argc, argv, "", longopts, &optind)) != -1) {
     switch (opt) {
@@ -341,9 +334,6 @@ static void set_options(Config &config, int argc, char *argv[]) {
 
     case USER_OPT + 2:
       n_rows = strtoul(optarg, nullptr, 10);
-      break;
-
-    case USER_OPT + 3:
       break;
 
     default:

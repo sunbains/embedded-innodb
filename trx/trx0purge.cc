@@ -155,6 +155,9 @@ void PurgeSys::free_segment(TrxRseg *rseg, FilAddr hdr_addr, ulint n_removed_log
       marked = true;
     }
 
+    /* Held by this mini-transaction past the break, for fseg_free_step() below. */
+    m_sys.m_fsp->latch(rseg->m_space, &mtr);
+
     if (m_sys.m_fsp->fseg_free_step_not_header(seg_hdr + TRX_UNDO_FSEG_HEADER, &mtr)) {
       break;
     }

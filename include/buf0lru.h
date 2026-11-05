@@ -65,11 +65,6 @@ struct BufLru {
     /** Freed */
     FREED = 0,
 
-    /** Not freed because the caller asked to remove the
-    uncompressed frame but the control block cannot be
-    relocated */
-    CANNOT_RELOCATE,
-
     /** Not freed because of some other reason */
     NOT_FREED
   };
@@ -116,8 +111,7 @@ struct BufLru {
   void invalidate_tablespace(space_id_t space_id); /*!< in: space id */
 
   /**
-   * Try to free a block. If bpage is a descriptor of a compressed-only page, the
-   *  descriptor object will be freed as well.
+   * Try to free a block.
    *
    * NOTE: If this function returns FREED, it will not temporarily release
    * buf_pool_mutex. Furthermore, the page frame will no longer be accessible via bpage.
@@ -130,7 +124,7 @@ struct BufLru {
    * @param buf_pool_mutex_released Pointer to a variable that will be assigned true
    *             if buf_pool_mutex was temporarily released, or nullptr.
    * 
-   * @return FREED if freed, CANNOT_RELOCATE or NOT_FREED otherwise.
+   * @return FREED if freed or NOT_FREED otherwise.
    */
   BlockStatus free_block(BufPage *bpage, bool *buf_pool_mutex_released);
 

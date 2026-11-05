@@ -403,10 +403,10 @@ inline void buf_page_set_accessed(BufPage *bpage, ulint time_ms) {
 }
 
 /**
- * Get the buf_block_t handle of a buffered file block if an uncompressed page frame exists, or nullptr.
+ * Get the buf_block_t handle of a buffered file block if it has a page frame, or nullptr.
  *
  * @param bpage Pointer to the control block.
- * @return The control block if an uncompressed page frame exists, or nullptr.
+ * @return The control block if it has a page frame, or nullptr.
  */
 inline BufBlock *buf_page_get_block(BufPage *bpage) {
   if (likely(bpage != nullptr)) {

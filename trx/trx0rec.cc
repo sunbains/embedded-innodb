@@ -173,8 +173,8 @@ ulint UndoPage::report_insert(Trx *trx, const Index *index, const DTuple *clust_
   *ptr = TRX_UNDO_INSERT_REC;
   ++ptr;
 
-  ptr += mach_uint64_write_much_compressed(ptr, trx->m_undo_no);
-  ptr += mach_uint64_write_much_compressed(ptr, index->m_table->m_id);
+  ptr += varint::encode_id(ptr, trx->m_undo_no);
+  ptr += varint::encode_id(ptr, index->m_table->m_id);
   /*----------------------------------------*/
   /* Store then the fields required to uniquely determine the record
   to be inserted in the clustered index */
@@ -189,7 +189,7 @@ ulint UndoPage::report_insert(Trx *trx, const Index *index, const DTuple *clust_
       return 0;
     }
 
-    ptr += mach_write_compressed(ptr, flen);
+    ptr += varint::encode(ptr, flen);
 
     if (flen != UNIV_SQL_NULL) {
       if (trx_undo_left(*this, ptr) < flen) {
@@ -244,15 +244,15 @@ static byte *trx_undo_page_report_modify_ext(System &sys, byte *ptr, byte *ext_b
     have to store a longer prefix of the field.  In this
     case, write to the log a marker followed by the
     original length and the real length of the field. */
-    ptr += mach_write_compressed(ptr, UNIV_EXTERN_STORAGE_FIELD);
+    ptr += varint::encode(ptr, UNIV_EXTERN_STORAGE_FIELD);
 
-    ptr += mach_write_compressed(ptr, *len);
+    ptr += varint::encode(ptr, *len);
 
     *field = trx_undo_page_fetch_ext(sys, ext_buf, *field, len);
 
-    ptr += mach_write_compressed(ptr, *len);
+    ptr += varint::encode(ptr, *len);
   } else {
-    ptr += mach_write_compressed(ptr, UNIV_EXTERN_STORAGE_FIELD + *len);
+    ptr += varint::encode(ptr, UNIV_EXTERN_STORAGE_FIELD + *len);
   }
 
   return ptr;
@@ -323,9 +323,9 @@ ulint UndoPage::report_modify(System &sys, Trx *trx, const Index *index, const R
   type_cmpl_ptr = ptr;
 
   *ptr++ = (byte)type_cmpl;
-  ptr += mach_uint64_write_much_compressed(ptr, trx->m_undo_no);
+  ptr += varint::encode_id(ptr, trx->m_undo_no);
 
-  ptr += mach_uint64_write_much_compressed(ptr, table->m_id);
+  ptr += varint::encode_id(ptr, table->m_id);
 
   /*----------------------------------------*/
   /* Store the state of the info bits */
@@ -346,14 +346,14 @@ ulint UndoPage::report_modify(System &sys, Trx *trx, const Index *index, const R
     ignore_prefix = trx_id != trx->m_id;
   }
 
-  ptr += mach_uint64_write_compressed(ptr, trx_id);
+  ptr += varint::encode64(ptr, trx_id);
 
   field = rec.get_nth_field(offsets, index->get_sys_col_field_pos(DATA_ROLL_PTR), &flen);
   ut_ad(flen == DATA_ROLL_PTR_LEN);
 
   const auto roll_ptr = trx_read_roll_ptr(field);
 
-  ptr += mach_uint64_write_compressed(ptr, roll_ptr);
+  ptr += varint::encode64(ptr, roll_ptr);
 
   /*----------------------------------------*/
   /* Store then the fields required to uniquely determine the
@@ -372,7 +372,7 @@ ulint UndoPage::report_modify(System &sys, Trx *trx, const Index *index, const R
       return 0;
     }
 
-    ptr += mach_write_compressed(ptr, flen);
+    ptr += varint::encode(ptr, flen);
 
     if (flen != UNIV_SQL_NULL) {
       if (trx_undo_left(*this, ptr) < flen) {
@@ -394,7 +394,7 @@ ulint UndoPage::report_modify(System &sys, Trx *trx, const Index *index, const R
       return 0;
     }
 
-    ptr += mach_write_compressed(ptr, RowUpdate::upd_get_n_fields(update));
+    ptr += varint::encode(ptr, RowUpdate::upd_get_n_fields(update));
 
     for (ulint i = 0; i < RowUpdate::upd_get_n_fields(update); i++) {
 
@@ -406,7 +406,7 @@ ulint UndoPage::report_modify(System &sys, Trx *trx, const Index *index, const R
         return 0;
       }
 
-      ptr += mach_write_compressed(ptr, pos);
+      ptr += varint::encode(ptr, pos);
 
       /* Save the old value of field */
       field = rec.get_nth_field(offsets, pos, &flen);
@@ -431,7 +431,7 @@ ulint UndoPage::report_modify(System &sys, Trx *trx, const Index *index, const R
 
         *type_cmpl_ptr |= TRX_UNDO_UPD_EXTERN;
       } else {
-        ptr += mach_write_compressed(ptr, flen);
+        ptr += varint::encode(ptr, flen);
       }
 
       if (flen != UNIV_SQL_NULL) {
@@ -488,7 +488,7 @@ ulint UndoPage::report_modify(System &sys, Trx *trx, const Index *index, const R
 
         auto pos = index->get_nth_field_pos(col_no);
 
-        ptr += mach_write_compressed(ptr, pos);
+        ptr += varint::encode(ptr, pos);
 
         /* Save the old value of field */
         field = rec.get_nth_field(offsets, pos, &flen);
@@ -497,7 +497,7 @@ ulint UndoPage::report_modify(System &sys, Trx *trx, const Index *index, const R
           ptr =
             trx_undo_page_report_modify_ext(sys, ptr, flen < REC_MAX_INDEX_COL_LEN && !ignore_prefix ? ext_buf : nullptr, &field, &flen);
         } else {
-          ptr += mach_write_compressed(ptr, flen);
+          ptr += varint::encode(ptr, flen);
         }
 
         if (flen != UNIV_SQL_NULL) {
@@ -547,8 +547,8 @@ inline byte *trx_undo_update_rec_get_n_upd_fields(
   ulint *n
 ) /*!< out: number of fields */
 {
-  *n = mach_read_compressed(ptr);
-  ptr += mach_get_compressed_size(*n);
+  *n = varint::decode(ptr);
+  ptr += varint::size(*n);
 
   return ptr;
 }
@@ -566,8 +566,8 @@ inline byte *trx_undo_update_rec_get_field_no(
   ulint *field_no
 ) /*!< out: field number */
 {
-  *field_no = mach_read_compressed(ptr);
-  ptr += mach_get_compressed_size(*field_no);
+  *field_no = varint::decode(ptr);
+  ptr += varint::size(*field_no);
 
   return ptr;
 }

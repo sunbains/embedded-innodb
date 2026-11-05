@@ -157,13 +157,13 @@ TEST(MachTest, IntTypeRoundTrip) {
 
 namespace {
 
-/** A compressed 32-bit value and the size of its encoding. */
+/** A 32-bit varint and the size of its encoding. */
 struct Enc {
   ulint m_val;
   ulint m_size;
 };
 
-/** Every size boundary of the compressed 32-bit encoding, on both sides:
+/** Every size boundary of the varint 32-bit encoding, on both sides:
 1-4 bytes for small values, 5 bytes in the middle, and the "extended" 2-4
 byte forms for values close to 2^32 (small negative numbers). */
 constexpr Enc ENC32[] = {
@@ -294,73 +294,73 @@ TEST(MachTest, Encode2) {
 
 /** Each boundary value takes the documented size, and write, size, read and
 the stream reader agree. */
-TEST(MachTest, Compressed32Sizes) {
+TEST(MachTest, Varint32Sizes) {
   for (const auto &[v, size] : ENC32) {
     std::array<byte, 8> b;
 
     b.fill(0xEE);
 
-    EXPECT_EQ(mach_write_compressed(b.data(), v), size) << std::hex << v;
-    EXPECT_EQ(mach_get_compressed_size(v), size) << std::hex << v;
-    EXPECT_EQ(mach_read_compressed(b.data()), v) << std::hex << v;
+    EXPECT_EQ(varint::encode(b.data(), v), size) << std::hex << v;
+    EXPECT_EQ(varint::size(v), size) << std::hex << v;
+    EXPECT_EQ(varint::decode(b.data()), v) << std::hex << v;
 
     /* Nothing written past the encoding. */
     EXPECT_EQ(b[size], 0xEE) << std::hex << v;
 
     const byte *p = b.data();
 
-    EXPECT_EQ(mach_uint32_read_compressed(p), uint32_t(v)) << std::hex << v;
+    EXPECT_EQ(varint::decode_next(p), uint32_t(v)) << std::hex << v;
     EXPECT_EQ(p, b.data() + size) << std::hex << v;
   }
 }
 
 /** The first byte announces the length: 0xxxxxxx, 10xxxxxx, 110xxxxx,
 1110xxxx, 11110000 and the extended 111110xx, 1111110x, 11111110. */
-TEST(MachTest, Compressed32Prefix) {
+TEST(MachTest, Varint32Prefix) {
   std::array<byte, 8> b{};
 
-  (void)mach_write_compressed(b.data(), 0x7F);
+  (void)varint::encode(b.data(), 0x7F);
   EXPECT_EQ(b[0], 0x7F);
 
-  (void)mach_write_compressed(b.data(), 0x80);
+  (void)varint::encode(b.data(), 0x80);
   EXPECT_EQ(b[0], 0x80);
   EXPECT_EQ(b[1], 0x80);
 
-  (void)mach_write_compressed(b.data(), 0x4000);
+  (void)varint::encode(b.data(), 0x4000);
   EXPECT_EQ(b[0], 0xC0);
 
-  (void)mach_write_compressed(b.data(), 0x200000);
+  (void)varint::encode(b.data(), 0x200000);
   EXPECT_EQ(b[0], 0xE0);
 
-  (void)mach_write_compressed(b.data(), 0x12345678);
+  (void)varint::encode(b.data(), 0x12345678);
   EXPECT_EQ(b[0], 0xF0);
   EXPECT_EQ(mach_read_from_4(b.data() + 1), 0x12345678UL);
 
-  (void)mach_write_compressed(b.data(), 0xFFFFFFFF);
+  (void)varint::encode(b.data(), 0xFFFFFFFF);
   EXPECT_EQ(b[0] & 0xFC, 0xF8);
 
-  (void)mach_write_compressed(b.data(), 0xFFFE0000);
+  (void)varint::encode(b.data(), 0xFFFE0000);
   EXPECT_EQ(b[0] & 0xFE, 0xFC);
 
-  (void)mach_write_compressed(b.data(), 0xFF000000);
+  (void)varint::encode(b.data(), 0xFF000000);
   EXPECT_EQ(b[0], 0xFE);
 }
 
 /** The encoding preserves order within each size class but not across
 the classes: it is not memcmp()-comparable and must not be used in keys. */
-TEST(MachTest, Compressed32SweepLow) {
+TEST(MachTest, Varint32SweepLow) {
   std::array<byte, 8> b{};
 
   for (ulint v = 0; v < (1UL << 22); v += 1 + v / 1024) {
-    const auto n = mach_write_compressed(b.data(), v);
+    const auto n = varint::encode(b.data(), v);
 
-    ASSERT_EQ(n, mach_get_compressed_size(v)) << v;
-    ASSERT_EQ(mach_read_compressed(b.data()), v) << v;
+    ASSERT_EQ(n, varint::size(v)) << v;
+    ASSERT_EQ(varint::decode(b.data()), v) << v;
   }
 }
 
 /** Random 32-bit values, and the values near 2^32, round trip. */
-TEST(MachTest, Compressed32Random) {
+TEST(MachTest, Varint32Random) {
   std::mt19937_64 rng(7);
   std::array<byte, 8> b{};
 
@@ -373,113 +373,113 @@ TEST(MachTest, Compressed32Random) {
       v &= 0x3FFFFF;
     }
 
-    const auto n = mach_write_compressed(b.data(), v);
+    const auto n = varint::encode(b.data(), v);
 
-    ASSERT_EQ(n, mach_get_compressed_size(v)) << v;
-    ASSERT_EQ(mach_read_compressed(b.data()), v) << v;
+    ASSERT_EQ(n, varint::size(v)) << v;
+    ASSERT_EQ(varint::decode(b.data()), v) << v;
 
     byte *p = b.data();
 
-    ASSERT_EQ(mach_parse_compressed(p, b.data() + n), uint32_t(v)) << v;
+    ASSERT_EQ(varint::parse(p, b.data() + n), uint32_t(v)) << v;
     ASSERT_EQ(p, b.data() + n) << v;
   }
 }
 
 /** The log parser's reader takes exactly the encoding from a buffer that
 holds it, and reports a truncated one with a null pointer. */
-TEST(MachTest, ParseCompressed) {
+TEST(MachTest, ParseVarint) {
   for (const auto &[v, size] : ENC32) {
     std::array<byte, 8> b{};
 
-    (void)mach_write_compressed(b.data(), v);
+    (void)varint::encode(b.data(), v);
 
     byte *p = b.data();
 
-    EXPECT_EQ(mach_parse_compressed(p, b.data() + size), uint32_t(v)) << std::hex << v;
+    EXPECT_EQ(varint::parse(p, b.data() + size), uint32_t(v)) << std::hex << v;
     EXPECT_EQ(p, b.data() + size) << std::hex << v;
 
     /* Bytes after the value don't matter. */
     p = b.data();
-    EXPECT_EQ(mach_parse_compressed(p, b.data() + b.size()), uint32_t(v)) << std::hex << v;
+    EXPECT_EQ(varint::parse(p, b.data() + b.size()), uint32_t(v)) << std::hex << v;
     EXPECT_EQ(p, b.data() + size) << std::hex << v;
 
     for (ulint len = 0; len < size; ++len) {
       p = b.data();
 
-      EXPECT_EQ(mach_parse_compressed(p, b.data() + len), 0U) << std::hex << v << " len " << len;
+      EXPECT_EQ(varint::parse(p, b.data() + len), 0U) << std::hex << v << " len " << len;
       EXPECT_EQ(p, nullptr) << std::hex << v << " len " << len;
     }
   }
 }
 
 /** Several values back to back are read in sequence. */
-TEST(MachTest, ParseCompressedStream) {
+TEST(MachTest, ParseVarintStream) {
   std::vector<byte> buf(5 * std::size(ENC32));
   byte *w = buf.data();
 
   for (const auto &e : ENC32) {
-    w += mach_write_compressed(w, e.m_val);
+    w += varint::encode(w, e.m_val);
   }
 
   byte *p = buf.data();
 
   for (const auto &e : ENC32) {
     ASSERT_NE(p, nullptr);
-    EXPECT_EQ(mach_parse_compressed(p, w), uint32_t(e.m_val));
+    EXPECT_EQ(varint::parse(p, w), uint32_t(e.m_val));
   }
 
   EXPECT_EQ(p, w);
 }
 
-/** 64-bit compressed: the high half compressed, the low half in 4 bytes. */
-TEST(MachTest, Compressed64) {
+/** 64-bit varint: the high half a varint, the low half in 4 bytes. */
+TEST(MachTest, Varint64) {
   for (auto v : VAL64) {
     std::array<byte, 16> b;
 
     b.fill(0xEE);
 
-    const auto n = mach_uint64_write_compressed(b.data(), v);
+    const auto n = varint::encode64(b.data(), v);
 
-    EXPECT_EQ(n, mach_uint64_get_compressed_size(v)) << std::hex << v;
-    EXPECT_EQ(n, 4 + mach_get_compressed_size(ulint(v >> 32))) << std::hex << v;
+    EXPECT_EQ(n, varint::size64(v)) << std::hex << v;
+    EXPECT_EQ(n, 4 + varint::size(ulint(v >> 32))) << std::hex << v;
     EXPECT_GE(n, 5UL);
     EXPECT_LE(n, 9UL);
     EXPECT_EQ(b[n], 0xEE) << std::hex << v;
-    EXPECT_EQ(mach_uint64_read_compressed(b.data()), v) << std::hex << v;
+    EXPECT_EQ(varint::decode64(b.data()), v) << std::hex << v;
     EXPECT_EQ(mach_read_from_4(b.data() + n - 4), ulint(uint32_t(v))) << std::hex << v;
   }
 }
 
 /** The log parser's 64-bit reader: complete, with trailing bytes, and every
 truncation of the encoding. */
-TEST(MachTest, ParseCompressed64) {
+TEST(MachTest, ParseVarint64) {
   for (auto v : VAL64) {
     std::array<byte, 16> b{};
-    const auto n = mach_uint64_write_compressed(b.data(), v);
+    const auto n = varint::encode64(b.data(), v);
     uint64_t r{};
 
-    EXPECT_EQ(mach_uint64_parse_compressed(b.data(), b.data() + n, &r), b.data() + n) << std::hex << v;
+    EXPECT_EQ(varint::parse64(b.data(), b.data() + n, &r), b.data() + n) << std::hex << v;
     EXPECT_EQ(r, v);
 
     r = 0;
-    EXPECT_EQ(mach_uint64_parse_compressed(b.data(), b.data() + b.size(), &r), b.data() + n) << std::hex << v;
+    EXPECT_EQ(varint::parse64(b.data(), b.data() + b.size(), &r), b.data() + n) << std::hex << v;
     EXPECT_EQ(r, v);
 
     for (ulint len = 0; len < n; ++len) {
-      EXPECT_EQ(mach_uint64_parse_compressed(b.data(), b.data() + len, &r), nullptr) << std::hex << v << " len " << len;
+      EXPECT_EQ(varint::parse64(b.data(), b.data() + len, &r), nullptr) << std::hex << v << " len " << len;
     }
   }
 }
 
-/** The "much compressed" form of undo numbers and table ids: 0 in one byte,
-other values below 2^32 as 0xFF, the compressed high half, the compressed low
+/** The id form of undo numbers and table ids: 0 in one byte,
+other values below 2^32 as 0xFF, the varint high half, the varint low
 half. Size and write agree. */
-TEST(MachTest, MuchCompressedSize) {
+TEST(MachTest, VarintIdSize) {
   for (auto v : VAL64) {
     std::array<byte, 16> b{};
-    const auto n = mach_uint64_write_much_compressed(b.data(), v);
+    const auto n = varint::encode_id(b.data(), v);
 
-    EXPECT_EQ(n, mach_uint64_get_much_compressed_size(v)) << std::hex << v;
+    EXPECT_EQ(n, varint::size_id(v)) << std::hex << v;
 
     if (v == 0) {
       EXPECT_EQ(n, 1UL);
@@ -491,31 +491,31 @@ TEST(MachTest, MuchCompressedSize) {
 }
 
 /** Values below 2^32 read back. */
-TEST(MachTest, MuchCompressedLow) {
+TEST(MachTest, VarintIdLow) {
   for (uint64_t v : {0ULL, 1ULL, 0x7FULL, 0x80ULL, 0x12345ULL, 0xFFFFFFFFULL}) {
     std::array<byte, 16> b{};
 
-    (void)mach_uint64_write_much_compressed(b.data(), v);
-    EXPECT_EQ(mach_uint64_read_much_compressed(b.data()), v) << std::hex << v;
+    (void)varint::encode_id(b.data(), v);
+    EXPECT_EQ(varint::decode_id(b.data()), v) << std::hex << v;
   }
 }
 
-/* Regression: mach_uint64_read_much_compressed() mis-reads every value >= 2^32. It
-shifts the high half before taking its compressed size (mach0data.h:425):
-  high = uint64_t(mach_read_compressed(b + 1)) << 32;
-  size = 1 + mach_get_compressed_size(high);
-mach_get_compressed_size(high) of a value >= 2^32 is 2 (the "extended" form
+/* Regression: varint::decode_id() mis-reads every value >= 2^32. It
+shifts the high half before taking its encoded size:
+  high = uint64_t(varint::decode(b + 1)) << 32;
+  size = 1 + varint::size(high);
+varint::size(high) of a value >= 2^32 is 2 (the "extended" form
 for values >= 0xFFFFFC00), not the size of the high half: the low half is
 read from the wrong offset. The undo number and table id of an undo record
 (trx0rec.cc, trx0undo_rec.cc) go through it; upstream
-mach_dulint_read_much_compressed() took the size of the unshifted high half.
-The debug build stops on ut_ad(val == 0xFE) in mach_read_compressed(). */
-TEST(MachTest, MuchCompressedHigh) {
+The old decoder took the size of the unshifted high half.
+The debug build stops on ut_ad(val == 0xFE) in varint::decode(). */
+TEST(MachTest, VarintIdHigh) {
   for (auto v : VAL64) {
     std::array<byte, 16> b{};
 
-    (void)mach_uint64_write_much_compressed(b.data(), v);
-    EXPECT_EQ(mach_uint64_read_much_compressed(b.data()), v) << std::hex << v;
+    (void)varint::encode_id(b.data(), v);
+    EXPECT_EQ(varint::decode_id(b.data()), v) << std::hex << v;
   }
 }
 
@@ -618,7 +618,7 @@ TEST(MachDeathTest, TooWide) {
 
 namespace {
 
-/** Values of every size class of the compressed encoding, for the benchmarks. */
+/** Values of every size class of the varint encoding, for the benchmarks. */
 std::vector<ulint> bench_values() {
   std::vector<ulint> v;
   std::mt19937_64 rng(1);
@@ -630,14 +630,14 @@ std::vector<ulint> bench_values() {
   return v;
 }
 
-/** Write a compressed 32-bit value. */
-TEST(MachPerf, WriteCompressed) {
+/** Encode a 32-bit varint. */
+TEST(MachPerf, WriteVarint) {
   const auto vals = bench_values();
   std::array<byte, 8> b{};
   ulint sum{};
 
-  auto r = ut::bench("write_compressed", 20000000, [&](uint64_t i) {
-    sum += mach_write_compressed(b.data(), vals[i & 4095]);
+  auto r = ut::bench("write_varint", 20000000, [&](uint64_t i) {
+    sum += varint::encode(b.data(), vals[i & 4095]);
     ut::keep(b);
   });
 
@@ -645,8 +645,8 @@ TEST(MachPerf, WriteCompressed) {
   EXPECT_LT(r.ns_per_op(), 200.0);
 }
 
-/** Read a compressed 32-bit value. */
-TEST(MachPerf, ReadCompressed) {
+/** Decode a 32-bit varint. */
+TEST(MachPerf, ReadVarint) {
   const auto vals = bench_values();
   std::vector<byte> buf(vals.size() * 5);
   std::vector<byte *> ptrs;
@@ -654,34 +654,34 @@ TEST(MachPerf, ReadCompressed) {
 
   for (auto v : vals) {
     ptrs.push_back(w);
-    w += mach_write_compressed(w, v);
+    w += varint::encode(w, v);
   }
 
   ulint sum{};
 
-  auto r = ut::bench("read_compressed", 20000000, [&](uint64_t i) { sum += mach_read_compressed(ptrs[i & 4095]); });
+  auto r = ut::bench("read_varint", 20000000, [&](uint64_t i) { sum += varint::decode(ptrs[i & 4095]); });
 
   ut::keep(sum);
   EXPECT_LT(r.ns_per_op(), 200.0);
 }
 
 /** The log parser's bounds checked reader over a stream of values. */
-TEST(MachPerf, ParseCompressed) {
+TEST(MachPerf, ParseVarint) {
   const auto vals = bench_values();
   std::vector<byte> buf(vals.size() * 5);
   byte *w = buf.data();
 
   for (auto v : vals) {
-    w += mach_write_compressed(w, v);
+    w += varint::encode(w, v);
   }
 
   ulint sum{};
 
-  auto r = ut::bench("parse_compressed_4096", 5000, [&](uint64_t) {
+  auto r = ut::bench("parse_varint_4096", 5000, [&](uint64_t) {
     byte *p = buf.data();
 
     while (p < w) {
-      sum += mach_parse_compressed(p, w);
+      sum += varint::parse(p, w);
     }
   });
 
@@ -690,16 +690,16 @@ TEST(MachPerf, ParseCompressed) {
   EXPECT_LT(r.ns_per_op(), 4096 * 200.0);
 }
 
-/** Write and parse a compressed 64-bit value. */
-TEST(MachPerf, Compressed64) {
+/** Encode and parse a 64-bit varint. */
+TEST(MachPerf, Varint64) {
   std::array<byte, 16> b{};
   uint64_t sum{};
 
-  auto r = ut::bench("uint64_compressed_round_trip", 10000000, [&](uint64_t i) {
-    const auto n = mach_uint64_write_compressed(b.data(), VAL64[i % std::size(VAL64)]);
+  auto r = ut::bench("uint64_varint_round_trip", 10000000, [&](uint64_t i) {
+    const auto n = varint::encode64(b.data(), VAL64[i % std::size(VAL64)]);
     uint64_t v;
 
-    (void)mach_uint64_parse_compressed(b.data(), b.data() + n, &v);
+    (void)varint::parse64(b.data(), b.data() + n, &v);
     sum += v;
   });
 

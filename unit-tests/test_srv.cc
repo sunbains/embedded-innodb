@@ -120,7 +120,7 @@ void create_kv(System &sys, const std::string &name) {
   api::TableSchema *sch{};
   api::IndexSchema *idx{};
 
-  ASSERT_EQ(api::TableSchema::create(name.c_str(), &sch, IB_TBL_V1, 0), DB_SUCCESS);
+  ASSERT_EQ(api::TableSchema::create(name.c_str(), &sch, IB_TBL_V1), DB_SUCCESS);
   ASSERT_EQ(sch->add_col("k", IB_INT, IB_COL_UNSIGNED, 0, 4), DB_SUCCESS);
   ASSERT_EQ(sch->add_col("v", IB_INT, IB_COL_UNSIGNED, 0, 4), DB_SUCCESS);
   ASSERT_EQ(sch->add_index("PRIMARY", &idx), DB_SUCCESS);

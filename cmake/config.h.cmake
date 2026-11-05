@@ -98,7 +98,6 @@
 #cmakedefine HAVE_UNSIGNED_LONG_LONG_INT
 #cmakedefine HAVE_U_INT32_T
 #cmakedefine HAVE_VALGRIND_MEMCHECK_H
-#cmakedefine HAVE_ZLIB_H
 #cmakedefine HAVE__BOOL
 #cmakedefine HUGETLB_USE_PROC_MEMINFO
 #cmakedefine IB_ATOMIC_MODE_INNODB

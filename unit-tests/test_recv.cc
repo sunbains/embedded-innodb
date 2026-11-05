@@ -75,10 +75,10 @@ std::vector<byte> clust_del_mark_body(trx_id_t trx_id) {
 
   *ptr++ = 0;  /* flags */
   *ptr++ = 1;  /* delete mark */
-  ptr += mach_write_compressed(ptr, 1);  /* position of DATA_TRX_ID */
+  ptr += varint::encode(ptr, 1);  /* position of DATA_TRX_ID */
   memset(ptr, 0, DATA_ROLL_PTR_LEN);
   ptr += DATA_ROLL_PTR_LEN;
-  ptr += mach_uint64_write_compressed(ptr, trx_id);
+  ptr += varint::encode64(ptr, trx_id);
   mach_write_to_2(ptr, 0x0d47);  /* record offset */
   ptr += 2;
 
@@ -101,14 +101,14 @@ TEST_F(RecvParseTest, SecDelMark) {
   (void)parse(*m_sys, MLOG_REC_SEC_DELETE_MARK, {1, 0x01, 0x23, 0, 0, 0, 0, 0, 0, 0, 0});
 }
 
-/** MLOG_nBYTES: offset and the value, compressed for 4 and 8 bytes. */
+/** MLOG_nBYTES: offset and the value, a varint for 4 and 8 bytes. */
 TEST_F(RecvParseTest, NBytes) {
   std::vector<byte> body(16);
   auto ptr = body.data();
 
   mach_write_to_2(ptr, 38);
   ptr += 2;
-  ptr += mach_write_compressed(ptr, 0x12345);
+  ptr += varint::encode(ptr, 0x12345);
   body.resize(ptr - body.data());
 
   (void)parse(*m_sys, MLOG_4BYTES, body);
@@ -117,7 +117,7 @@ TEST_F(RecvParseTest, NBytes) {
   ptr = body.data();
   mach_write_to_2(ptr, 56);
   ptr += 2;
-  ptr += mach_uint64_write_compressed(ptr, 0xaf6);
+  ptr += varint::encode64(ptr, 0xaf6);
   body.resize(ptr - body.data());
 
   (void)parse(*m_sys, MLOG_8BYTES, body);
@@ -205,22 +205,22 @@ void expect_corrupt(System &sys, MlogType type, std::vector<byte> body) {
   sys.m_recv->m_found_corrupt_log = false;
 }
 
-/** @return offset (2 bytes) followed by the compressed value. */
+/** @return offset (2 bytes) followed by the varint. */
 std::vector<byte> nbytes_body(ulint offset, ulint v) {
   std::vector<byte> b(2 + 5);
 
   mach_write_to_2(b.data(), offset);
-  b.resize(2 + mach_write_compressed(b.data() + 2, v));
+  b.resize(2 + varint::encode(b.data() + 2, v));
 
   return b;
 }
 
-/** @return offset (2 bytes) followed by the compressed 64-bit value. */
+/** @return offset (2 bytes) followed by the 64-bit varint. */
 std::vector<byte> nbytes8_body(ulint offset, uint64_t v) {
   std::vector<byte> b(2 + 9);
 
   mach_write_to_2(b.data(), offset);
-  b.resize(2 + mach_uint64_write_compressed(b.data() + 2, v));
+  b.resize(2 + varint::encode64(b.data() + 2, v));
 
   return b;
 }
@@ -306,20 +306,20 @@ TEST_F(RecvParseTest, ClustDelMarkTruncated) {
   }
 }
 
-/** The undo log records: the page init (compressed type), the header create
-and reuse (compressed trx id) and an undo record (length and bytes). */
+/** The undo log records: the page init (varint type), the header create
+and reuse (varint trx id) and an undo record (length and bytes). */
 TEST_F(RecvParseTest, UndoTruncated) {
   for (ulint type : {1UL, 2UL, 0x80UL}) {
     std::vector<byte> b(5);
 
-    b.resize(mach_write_compressed(b.data(), type));
+    b.resize(varint::encode(b.data(), type));
     expect_body(*m_sys, MLOG_UNDO_INIT, b);
   }
 
   for (trx_id_t id : {trx_id_t{5}, trx_id_t{1} << 33, ~trx_id_t{0}}) {
     std::vector<byte> b(9);
 
-    b.resize(mach_uint64_write_compressed(b.data(), id));
+    b.resize(varint::encode64(b.data(), id));
     expect_body(*m_sys, MLOG_UNDO_HDR_CREATE, b);
     expect_body(*m_sys, MLOG_UNDO_HDR_REUSE, b);
   }
@@ -381,7 +381,7 @@ TEST_F(RecvParseTest, FileExtend) {
 }
 
 /** The header of a record: type (the single record flag stripped), the
-compressed space id and page number; truncated anywhere, nullptr. */
+varint space id and page number; truncated anywhere, nullptr. */
 TEST_F(RecvParseTest, InitialRecord) {
   for (space_id_t space : {0U, 0x80U, 0x12345678U, 0xFFFFFFF0U}) {
     for (page_no_t page_no : {0U, 0x3FFFU, 0x4000U, 0xFFFFFFFEU}) {
@@ -389,9 +389,9 @@ TEST_F(RecvParseTest, InitialRecord) {
 
       b[0] = MLOG_4BYTES | MLOG_SINGLE_REC_FLAG;
 
-      auto n = 1 + mach_write_compressed(b.data() + 1, space);
+      auto n = 1 + varint::encode(b.data() + 1, space);
 
-      n += mach_write_compressed(b.data() + n, page_no);
+      n += varint::encode(b.data() + n, page_no);
       b.resize(n);
 
       Guarded g(b.size());
@@ -519,12 +519,12 @@ class RecvGroupTest : public ut::SysTest {
 
     b[0] = byte(MLOG_4BYTES | (single ? MLOG_SINGLE_REC_FLAG : 0));
 
-    auto n = 1 + mach_write_compressed(b.data() + 1, space);
+    auto n = 1 + varint::encode(b.data() + 1, space);
 
-    n += mach_write_compressed(b.data() + n, page_no);
+    n += varint::encode(b.data() + n, page_no);
     mach_write_to_2(b.data() + n, 38);
     n += 2;
-    n += mach_write_compressed(b.data() + n, v);
+    n += varint::encode(b.data() + n, v);
     b.resize(n);
 
     return b;
@@ -859,7 +859,7 @@ TEST_F(RecvStoreTest, GroupPerPage) {
     std::vector<byte> b{MLOG_4BYTES, 0, byte(page_no), 0, 38};
     std::vector<byte> c(5);
 
-    c.resize(mach_write_compressed(c.data(), v));
+    c.resize(varint::encode(c.data(), v));
     b.insert(b.end(), c.begin(), c.end());
 
     return b;
@@ -896,7 +896,7 @@ TEST_F(RecvStoreTest, GroupPerPage) {
 
   size_t chunks{};
 
-  EXPECT_EQ(mach_read_compressed(body_of(p7[1], &chunks).data() + 2), 3UL);
+  EXPECT_EQ(varint::decode(body_of(p7[1], &chunks).data() + 2), 3UL);
   EXPECT_EQ(m_sys->m_recv->m_n_log_records, 2UL);
 }
 

@@ -197,7 +197,7 @@ inline void mlog_close(Mtr *mtr, byte *ptr) {
 }
 
 /**
- * @brief Catenates 1 - 4 bytes to the mtr log. The value is not compressed.
+ * @brief Catenates 1 - 4 bytes to the mtr log. The value is fixed width.
  *
  * @param mtr Mtr.
  * @param val Value to write.
@@ -228,12 +228,12 @@ inline void mlog_catenate_ulint(Mtr *mtr, ulint val, MlogType type) {
 }
 
 /**
- * @brief Catenates a compressed ulint to mlog.
+ * @brief Catenates a ulint to mlog as a varint.
  *
  * @param mtr Mtr.
  * @param val Value to write.
  */
-inline void mlog_catenate_ulint_compressed(Mtr *mtr, ulint val) {
+inline void mlog_catenate_varint(Mtr *mtr, ulint val) {
   auto log_ptr = mlog_open(mtr, 10);
 
   /**
@@ -243,18 +243,18 @@ inline void mlog_catenate_ulint_compressed(Mtr *mtr, ulint val) {
     return;
   }
 
-  log_ptr += mach_write_compressed(log_ptr, val);
+  log_ptr += varint::encode(log_ptr, val);
 
   mlog_close(mtr, log_ptr);
 }
 
 /**
- * @brief Catenates a compressed uint64_t to mlog.
+ * @brief Catenates a uint64_t to mlog as a varint.
  *
  * @param mtr Mtr.
  * @param val Value to write.
  */
-inline void mlog_catenate_uint64_compressed(Mtr *mtr, uint64_t val) {
+inline void mlog_catenate_varint64(Mtr *mtr, uint64_t val) {
   auto log_ptr = mlog_open(mtr, 15);
 
   /**
@@ -264,7 +264,7 @@ inline void mlog_catenate_uint64_compressed(Mtr *mtr, uint64_t val) {
     return;
   }
 
-  log_ptr += mach_uint64_write_compressed(log_ptr, val);
+  log_ptr += varint::encode64(log_ptr, val);
 
   mlog_close(mtr, log_ptr);
 }
@@ -287,8 +287,8 @@ inline byte *mlog_write_initial_log_record_for_file_op(
   ++log_ptr;
 
   /* We write dummy space id and page number */
-  log_ptr += mach_write_compressed(log_ptr, space_id);
-  log_ptr += mach_write_compressed(log_ptr, page_no);
+  log_ptr += varint::encode(log_ptr, space_id);
+  log_ptr += varint::encode(log_ptr, page_no);
 
   ++mtr->m_n_log_recs;
 

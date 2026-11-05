@@ -355,10 +355,7 @@ void BufFlush::buffered_writes() {
 
     auto block = reinterpret_cast<const BufBlock *>(m_sys.m_dblwr->m_bpages[i]);
 
-    if (block->get_state() != BUF_BLOCK_FILE_PAGE) {
-      /* No simple validate for compressed pages exists. */
-      continue;
-    }
+    ut_a(block->get_state() == BUF_BLOCK_FILE_PAGE);
 
     if (unlikely(memcmp(block->m_frame + (FIL_PAGE_LSN + 4), block->m_frame + (UNIV_PAGE_SIZE - FIL_PAGE_END_LSN_CHKSUM + 4), 4))) {
       log_err(

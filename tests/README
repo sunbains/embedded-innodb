@@ -15,7 +15,6 @@
 
 Requirements
 ==============================================================================
-ZLib 1.2.3		http://www.zlib.net
 PThreads library	unix only
 CMake 2.6 or above	Windows only
 

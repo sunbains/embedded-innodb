@@ -351,7 +351,7 @@ void dfield_print_also_hex(const Dfield *dfield) {
           break;
 
         default:
-          id = mach_uint64_read_compressed(data);
+          id = varint::decode64(data);
 
           ib_logger(stderr, "mix_id {%lu %lu}", id, id);
       }
@@ -512,7 +512,7 @@ BigRec* dtuple_convert_big_rec(const Index *index, DTuple *entry, ulint *n_ext) 
         goto skip_field;
       }
 
-      /* In DYNAMIC and COMPRESSED format, store
+      /* Store
       locally any non-BLOB columns whose maximum
       length does not exceed 256 bytes.  This is
       because there is no room for the "external

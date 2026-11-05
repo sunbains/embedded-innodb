@@ -983,7 +983,7 @@ void create_int_table(System &sys, const std::string &name, const IntType &type)
   api::TableSchema *tbl_sch{};
   api::IndexSchema *idx_sch{};
 
-  ASSERT_EQ(api::TableSchema::create(name.c_str(), &tbl_sch, IB_TBL_V1, 0), DB_SUCCESS);
+  ASSERT_EQ(api::TableSchema::create(name.c_str(), &tbl_sch, IB_TBL_V1), DB_SUCCESS);
   ASSERT_EQ(tbl_sch->add_col("k", IB_INT, type.m_unsigned ? IB_COL_UNSIGNED : IB_COL_NONE, 0, type.m_len), DB_SUCCESS);
   ASSERT_EQ(tbl_sch->add_col("v", IB_VARCHAR, IB_COL_NONE, 0, 20), DB_SUCCESS);
   ASSERT_EQ(tbl_sch->add_index("PRIMARY", &idx_sch), DB_SUCCESS);

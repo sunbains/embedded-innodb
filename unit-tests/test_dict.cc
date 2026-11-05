@@ -225,7 +225,7 @@ struct IdxDef {
 DbErr create(System &sys, const std::string &name, const std::vector<ColDef> &cols, const std::vector<IdxDef> &idxs) {
   api::TableSchema *tbl_sch{};
 
-  if (auto err = api::TableSchema::create(name.c_str(), &tbl_sch, IB_TBL_V1, 0); err != DB_SUCCESS) {
+  if (auto err = api::TableSchema::create(name.c_str(), &tbl_sch, IB_TBL_V1); err != DB_SUCCESS) {
     return err;
   }
 

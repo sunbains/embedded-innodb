@@ -162,9 +162,6 @@ bool BufLru::free_from_common_LRU_list(ulint n_iterations) {
         /* The block was dirty, buffer-fixed, or I/O-fixed.  Keep looking. */
         continue;
 
-      case BlockStatus::CANNOT_RELOCATE:
-        /* This should never occur, because we want to discard the compressed page too. */
-        break;
     }
 
     ut_error;

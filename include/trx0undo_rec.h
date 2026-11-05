@@ -343,21 +343,21 @@ struct TrxUndoRecord {
    * @brief Reads the undo log record number from this record.
    * @return undo no
    */
-  undo_no_t get_undo_no() const { return mach_uint64_read_much_compressed(m_undo_rec + 3); }
+  undo_no_t get_undo_no() const { return varint::decode_id(m_undo_rec + 3); }
 
   /**
    * @brief Static version for compatibility - reads the undo log record number.
    * @param[in] undo_rec undo log record
    * @return undo no
    */
-  static undo_no_t get_undo_no(const trx_undo_rec_t undo_rec) { return mach_uint64_read_much_compressed(undo_rec + 3); }
+  static undo_no_t get_undo_no(const trx_undo_rec_t undo_rec) { return varint::decode_id(undo_rec + 3); }
 
   /**
    * @brief Returns the start of the undo record data area.
    * @param[in] undo_no undo no read from node
    * @return offset to the data area
    */
-  static ulint get_offset(undo_no_t undo_no) { return mach_uint64_get_much_compressed_size(undo_no) + 3; }
+  static ulint get_offset(undo_no_t undo_no) { return varint::size_id(undo_no) + 3; }
 
  private:
   trx_undo_rec_t m_undo_rec{};

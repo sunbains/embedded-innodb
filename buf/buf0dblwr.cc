@@ -92,13 +92,9 @@ DbErr Dblwr::initialize() noexcept {
     return DB_FATAL;
   }
 
-  auto block2 = m_sys.m_fsp->fseg_create(SYS_TABLESPACE, TRX_SYS_PAGE_NO, SYS_DOUBLEWRITE + SYS_DOUBLEWRITE_FSEG, &mtr);
+  m_sys.m_fsp->latch(SYS_TABLESPACE, &mtr);
 
-  /* fseg_create acquires a second latch on the page, therefore we must declare it: */
-
-  buf_block_dbg_add_level();
-
-  if (block2 == nullptr) {
+  if (m_sys.m_fsp->fseg_create(SYS_TABLESPACE, block, SYS_DOUBLEWRITE + SYS_DOUBLEWRITE_FSEG, &mtr) == nullptr) {
     log_err(
       "Cannot create doublewrite buffer: you must increase your tablespace size."
       " Cannot continue operation."
@@ -115,9 +111,9 @@ DbErr Dblwr::initialize() noexcept {
   auto fseg_header = block->get_frame() + SYS_DOUBLEWRITE + SYS_DOUBLEWRITE_FSEG;
 
   for (ulint i{}; i < 2 * SYS_DOUBLEWRITE_BLOCK_SIZE + FSP_EXTENT_SIZE / 2; ++i) {
-    auto page_no = m_sys.m_fsp->fseg_alloc_free_page(fseg_header, prev_page_no + 1, FSP_UP, &mtr);
+    const auto new_block = m_sys.m_fsp->fseg_alloc_free_page(fseg_header, prev_page_no + 1, FSP_UP, &mtr);
 
-    if (page_no == FIL_NULL) {
+    if (new_block == nullptr) {
       log_err(
         "Cannot create doublewrite buffer: you must increase your tablespace size."
         " Cannot continue operation."
@@ -132,8 +128,7 @@ DbErr Dblwr::initialize() noexcept {
     read pages from the doublewrite buffer, we know that if the space id and page number in them
     are the same as the page position in the tablespace, then the page has not been written to in
     doublewrite. */
-
-    
+    const auto page_no = new_block->get_page_no();
 
     if (i == FSP_EXTENT_SIZE / 2) {
       ut_a(page_no == FSP_EXTENT_SIZE);

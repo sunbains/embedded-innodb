@@ -59,7 +59,7 @@ constexpr auto PAGE_CUR_DBG = 6;
 struct PageCursor {
 
   /**
-   * @brief Inserts a record next to page cursor on an uncompressed page.
+   * @brief Inserts a record next to page cursor.
    * Returns pointer to inserted record if succeed, i.e., enough
    * space available, NULL otherwise. The cursor stays at the same position.
    *
@@ -311,8 +311,7 @@ struct PageCursor {
   /**
    * @brief Inserts a record next to the page cursor.
    * Returns a pointer to the inserted record if successful (i.e., enough space available),
-   * NULL otherwise. The cursor stays at the same logical position, but the physical position
-   * may change if it is pointing to a compressed page that was reorganized.
+   * NULL otherwise. The cursor stays at the same position.
    *
    * @param tuple In: Pointer to a data tuple.
    * @param index In: Record descriptor.
@@ -341,8 +340,7 @@ struct PageCursor {
   /**
    * @brief Inserts a record next to the page cursor.
    * Returns a pointer to the inserted record if successful (i.e., enough space available),
-   * NULL otherwise. The cursor stays at the same logical position, but the physical position
-   * may change if it is pointing to a compressed page that was reorganized.
+   * NULL otherwise. The cursor stays at the same position.
    *
    * @param rec In: Record to insert.
    * @param index In: Record descriptor.

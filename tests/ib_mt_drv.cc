@@ -142,7 +142,6 @@ static int num_tables = 0;
 /* These are going to be configurable parameters for table
 creation */
 static constexpr TableFormat tbl_format = IB_TBL_V1;
-static ulint page_size = 0;
 
 /* Datastructure to hold error statistics for DML and Ddl operations */
 static op_err_t dml_op_errs[DML_OP_TYPE_MAX];
@@ -489,7 +488,6 @@ static void register_test_tables(void) {
     register_base_table(&tbl_array[i]);
     tbl_array[i].m_db_name = DATABASE;
     tbl_array[i].format = tbl_format;
-    tbl_array[i].page_size = page_size;
   }
 
   /* Individually register different table types here */

@@ -71,8 +71,7 @@ static DbErr create_table(System &sys, const char *dbname, /*!< in: database nam
 
   snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
 
-  /* Pass a table page size of 0, ie., use default page size. */
-  err = TableSchema::create(table_name, &ib_tbl_sch, IB_TBL_V1, 0);
+  err = TableSchema::create(table_name, &ib_tbl_sch, IB_TBL_V1);
   assert(err == DB_SUCCESS);
 
   err = ib_tbl_sch->add_col("c1", IB_INT, IB_COL_NONE, 0, 4);

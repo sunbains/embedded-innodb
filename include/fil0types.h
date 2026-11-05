@@ -120,7 +120,7 @@ enum FilPageType {
   /** Extent descriptor page */
   FIL_PAGE_TYPE_XDES = 9,
 
-  /** Uncompressed BLOB page */
+  /** BLOB page */
   FIL_PAGE_TYPE_BLOB = 10
 };
 

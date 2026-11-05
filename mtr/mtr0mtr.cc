@@ -243,7 +243,7 @@ BufBlock *Mtr::memo_find_block(const byte *ptr) const noexcept {
     }
   }
 
-  return nullptr;
+  return m_outer != nullptr ? m_outer->memo_find_block(ptr) : nullptr;
 }
 
 bool Mtr::memo_contains_page(const byte *ptr, ulint type) const noexcept {

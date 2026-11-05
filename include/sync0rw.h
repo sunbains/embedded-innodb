@@ -198,6 +198,9 @@ struct RwLock {
   /** true if there are waiters */
   std::atomic<bool> m_waiters;
 
+  /** This latch must not be acquired recursively: each operation takes it in one place. */
+  ut_d(bool m_no_recursion{};)
+
   /** Default value false which means the lock is non-recursive.
   The value is typically set to true making normal rw_locks recursive.
   In case of asynchronous IO, when a non-zero value of 'pass' is passed
@@ -478,6 +481,7 @@ inline bool rw_lock_x_lock_func_nowait(RwLock *lock, const char *file_name, ulin
     /* Relock: this lock_word modification is safe since no other
     threads can modify (lock, unlock, or reserve) m_lock_word while
     there is an exclusive writer and this is the writer thread. */
+    ut_ad(!lock->m_no_recursion);
 
     if (lock->m_lock_word == 0 || lock->m_lock_word <= -X_LOCK_DECR) {
       /* One more X-LOCK. */

@@ -55,13 +55,11 @@ typedef struct visitor_arg {
 static int visit_table_list(void *arg,            /*!< User callback arg */
                             const char *name,     /*!< Table name */
                             TableFormat tbl_fmt, /*!< Table type */
-                            ulint page_size,      /*!< Table page size */
                             int n_cols,           /*!< No. of cols defined */
                             int n_indexes)        /*!< No. of indexes defined */
 {
   (void)arg;
   (void)name;
-  (void)page_size;
   (void)tbl_fmt;
   (void)n_cols;
   (void)n_indexes;
@@ -73,7 +71,6 @@ static int visit_table_list(void *arg,            /*!< User callback arg */
 static int visit_table(void *arg,            /*!< User callback arg */
                        const char *name,     /*!< Table name */
                        TableFormat tbl_fmt, /*!< Table type */
-                       ulint page_size,      /*!< Table page size */
                        int n_cols,           /*!< No. of cols defined */
                        int n_indexes)        /*!< No. of indexes defined */
 {
@@ -81,7 +78,6 @@ static int visit_table(void *arg,            /*!< User callback arg */
   visitor_arg_t *visitor_arg = (visitor_arg_t *)arg;
   FILE *fp = (FILE *)visitor_arg->fp;
 
-  (void)page_size;
   (void)tbl_fmt;
 
   p = strchr(name, '/');
@@ -270,8 +266,7 @@ static DbErr create_table(System &sys, const char *dbname, /*!< in: database nam
 
   snprintf(table_name, sizeof(table_name), "%s/%s%d", dbname, name, n);
 
-  /* Pass a table page size of 0, ie., use default page size. */
-  err = TableSchema::create(table_name, &ib_tbl_sch, IB_TBL_V1, 0);
+  err = TableSchema::create(table_name, &ib_tbl_sch, IB_TBL_V1);
 
   assert(err == DB_SUCCESS);
 

@@ -447,11 +447,8 @@ DbErr savepoint_rollback(System &sys, Trx *trx, const void *name, ulint name_len
  *
  * @param[in] table - in: table definition
  * @param[out] tbl_fmt - out: table format
- * @param[out] page_size - out: page size
  */
-static void table_get_format(const Table *table, TableFormat *tbl_fmt, ulint *page_size) noexcept {
-  *page_size = 0;
-
+static void table_get_format(const Table *table, TableFormat *tbl_fmt) noexcept {
   if (table->m_flags == DICT_TF_FORMAT_V1) {
     *tbl_fmt = IB_TBL_V1;
   } else {
@@ -529,10 +526,9 @@ DbErr table_schema_visit(System &sys, Trx *trx, const char *name, const SchemaVi
     return DB_TABLE_NOT_FOUND;
   }
 
-  ulint page_size;
   TableFormat tbl_fmt;
 
-  table_get_format(table, &tbl_fmt, &page_size);
+  table_get_format(table, &tbl_fmt);
 
   /* We need the count of user defined indexes only. */
   auto n_indexes = table->m_indexes.size();
@@ -550,7 +546,7 @@ DbErr table_schema_visit(System &sys, Trx *trx, const char *name, const SchemaVi
     goto func_exit;
 
   } else if (visitor->table) {
-    user_err = visitor->table(arg, table->m_name, tbl_fmt, page_size, table->m_n_cols, n_indexes);
+    user_err = visitor->table(arg, table->m_name, tbl_fmt, table->m_n_cols, n_indexes);
 
     if (user_err > 0) {
       goto func_exit;

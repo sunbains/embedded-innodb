@@ -59,8 +59,33 @@ struct Mtr {
     m_modifications = false;
     m_n_log_recs = 0;
     m_state = MTR_ACTIVE;
+    m_fsp_header = nullptr;
+    m_fsp_xdes = nullptr;
+    m_fsp_inode = nullptr;
 
     ut_d(m_magic_n = MTR_MAGIC_N);
+    ut_d(m_outer = nullptr);
+
+    return this;
+  }
+
+  /**
+   * @brief Starts a mini-transaction that runs under the latches of another one.
+   *
+   * A long walk commits every step to release its pages, while the outer mini-transaction
+   * keeps the index or tablespace latch for the whole walk. The debug checks of the latches
+   * look at outer: it says why this one doesn't take the latch itself. The tablespace header
+   * outer latched can be read here; to change it use Fsp::latch_header() first, or the
+   * change is logged by a mini-transaction that doesn't have the page in its memo.
+   *
+   * @param[in] outer           The mini-transaction that holds the latches.
+   *
+   * @return this.
+   */
+  inline Mtr *start(const Mtr *outer) noexcept {
+    start();
+    m_fsp_header = outer->m_fsp_header;
+    ut_d(m_outer = outer);
 
     return this;
   }
@@ -289,7 +314,7 @@ struct Mtr {
       }
     }
 
-    return false;
+    return m_outer != nullptr && m_outer->memo_contains(object, type);
   }
 #endif /* UNIV_DEBUG */
 
@@ -310,6 +335,15 @@ struct Mtr {
 
   /** True if the doublewrite is being created. */
   bool m_dblwr_create_in_progress{};
+
+  /** The tablespace header Fsp::latch() X-latched for this mini-transaction. */
+  byte *m_fsp_header{};
+
+  /** The last extent descriptor page, not page 0, the tablespace code X-latched here. */
+  BufBlock *m_fsp_xdes{};
+
+  /** The last segment inode page the tablespace code X-latched here. */
+  BufBlock *m_fsp_inode{};
 
   /** True if the mtr made modifications to buffer pool pages */
   bool m_modifications;
@@ -334,6 +368,9 @@ struct Mtr {
 
   /** For debugging. */
   ut_d(ulint m_magic_n;)
+
+  /** The mini-transaction whose latches this one runs under, see start(). */
+  ut_d(const Mtr *m_outer{};)
 };
 
 /** This macro locks an rw-lock in s-mode. */

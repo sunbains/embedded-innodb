@@ -179,7 +179,7 @@ trx_undo_rec_t Undo::get_next_rec_from_next_page(
 inline void trx_undo_page_init_log(page_t *undo_page, ulint type, Mtr *mtr) {
   mlog_write_initial_log_record(undo_page, MLOG_UNDO_INIT, mtr);
 
-  mlog_catenate_ulint_compressed(mtr, type);
+  mlog_catenate_varint(mtr, type);
 }
 
 /**
@@ -233,6 +233,9 @@ static DbErr trx_undo_seg_create(System &sys,
 
   ulint n_reserved;
   auto space = page_get_space_id(Rec(rseg_hdr).page_align());
+
+  sys.m_fsp->latch(space, mtr);
+
   auto success = sys.m_fsp->reserve_free_extents(&n_reserved, space, 2, FSP_UNDO, mtr);
 
   if (!success) {
@@ -241,7 +244,7 @@ static DbErr trx_undo_seg_create(System &sys,
   }
 
   /* Allocate a new file segment for the undo log */
-  auto block = sys.m_fsp->fseg_create_general(space, 0, TRX_UNDO_SEG_HDR + TRX_UNDO_FSEG_HEADER, true, mtr);
+  auto block = sys.m_fsp->fseg_create_general(space, nullptr, TRX_UNDO_SEG_HDR + TRX_UNDO_FSEG_HEADER, true, mtr);
 
   sys.m_fil->space_release_free_extents(space, n_reserved);
 
@@ -284,7 +287,7 @@ static DbErr trx_undo_seg_create(System &sys,
 inline void trx_undo_header_create_log(const page_t *undo_page, trx_id_t trx_id, Mtr *mtr) {
   mlog_write_initial_log_record(undo_page, MLOG_UNDO_HDR_CREATE, mtr);
 
-  mlog_catenate_uint64_compressed(mtr, trx_id);
+  mlog_catenate_varint64(mtr, trx_id);
 }
 
 /**
@@ -436,7 +439,7 @@ static void trx_undo_header_add_space_for_xid(page_t *undo_page, trx_ulogf_t *lo
 inline void trx_undo_insert_header_reuse_log(const page_t *undo_page, trx_id_t trx_id, Mtr *mtr) {
   mlog_write_initial_log_record(undo_page, MLOG_UNDO_HDR_REUSE, mtr);
 
-  mlog_catenate_uint64_compressed(mtr, trx_id);
+  mlog_catenate_varint64(mtr, trx_id);
 }
 
 /**
@@ -551,6 +554,8 @@ ulint Undo::free_page(
 
   flst_remove(m_sys, header_page + TRX_UNDO_SEG_HDR + TRX_UNDO_PAGE_LIST, undo_page + TRX_UNDO_PAGE_HDR + TRX_UNDO_PAGE_NODE, mtr);
 
+  m_sys.m_fsp->latch(space, mtr);
+
   m_sys.m_fsp->fseg_free_page(header_page + TRX_UNDO_SEG_HDR + TRX_UNDO_FSEG_HEADER, space, page_no, mtr);
 
   auto last_addr = flst_get_last(header_page + TRX_UNDO_SEG_HDR + TRX_UNDO_PAGE_LIST, mtr);
@@ -601,6 +606,8 @@ void Undo::seg_free(TrxUndo *undo) noexcept {
 
     auto seg_header = page_get(undo->m_space, undo->m_hdr_page_no, &mtr) + TRX_UNDO_SEG_HDR;
     auto file_seg = seg_header + TRX_UNDO_FSEG_HEADER;
+
+    m_sys.m_fsp->latch(undo->m_space, &mtr);
 
     finished = m_sys.m_fsp->fseg_free_step(file_seg, &mtr);
 
@@ -1171,7 +1178,7 @@ trx_undo_rec_t Undo::get_first_rec(space_id_t space, page_no_t page_no, ulint of
 }
 
 byte *Undo::parse_page_init(byte *ptr, byte *end_ptr, page_t *page, Mtr *mtr) noexcept {
-  auto type = mach_parse_compressed(ptr, end_ptr);
+  auto type = varint::parse(ptr, end_ptr);
 
   if (ptr == nullptr) {
 
@@ -1188,7 +1195,7 @@ byte *Undo::parse_page_init(byte *ptr, byte *end_ptr, page_t *page, Mtr *mtr) no
 byte *Undo::parse_page_header(ulint type, byte *ptr, byte *end_ptr, page_t *page, Mtr *mtr) noexcept {
   trx_id_t trx_id;
 
-  ptr = mach_uint64_parse_compressed(ptr, end_ptr, &trx_id);
+  ptr = varint::parse64(ptr, end_ptr, &trx_id);
 
   if (ptr == nullptr) {
 
@@ -1221,6 +1228,9 @@ ulint Undo::add_page(Trx *trx, TrxUndo *undo, Mtr *mtr) noexcept {
 
   ulint n_reserved;
   auto header_page = page_get(undo->m_space, undo->m_hdr_page_no, mtr);
+
+  m_sys.m_fsp->latch(undo->m_space, mtr);
+
   auto success = m_sys.m_fsp->reserve_free_extents(&n_reserved, undo->m_space, 1, FSP_UNDO, mtr);
 
   if (!success) {
@@ -1228,16 +1238,19 @@ ulint Undo::add_page(Trx *trx, TrxUndo *undo, Mtr *mtr) noexcept {
     return FIL_NULL;
   }
 
-  auto page_no = m_sys.m_fsp->fseg_alloc_free_page_general(
+  auto block = m_sys.m_fsp->fseg_alloc_free_page_general(
     header_page + TRX_UNDO_SEG_HDR + TRX_UNDO_FSEG_HEADER, undo->m_top_page_no + 1, FSP_UP, true, mtr
   );
 
   m_sys.m_fil->space_release_free_extents(undo->m_space, n_reserved);
 
-  if (page_no != FIL_NULL) {
+  page_no_t page_no{FIL_NULL};
+
+  if (block != nullptr) {
+    page_no = block->get_page_no();
     undo->m_last_page_no = page_no;
 
-    auto new_page = page_get(undo->m_space, page_no, mtr);
+    auto new_page = block->get_frame();
 
     trx_undo_page_init(new_page, undo->m_type, mtr);
 

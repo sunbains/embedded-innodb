@@ -245,29 +245,7 @@ BufBlock *Btree::page_alloc(const Index *index, page_no_t hint_page_no, byte fil
   reservation for free extents, and thus we know that a page can
   be allocated: */
 
-  const auto new_page_no = m_sys.m_fsp->fseg_alloc_free_page_general(seg_header, hint_page_no, file_direction, true, mtr);
-
-  if (new_page_no == FIL_NULL) {
-
-    return nullptr;
-
-  } else {
-
-    BufPool::Request req{
-      .m_rw_latch = RW_X_LATCH,
-      .m_page_id = {index->get_space_id(), new_page_no},
-      .m_mode = BUF_GET,
-      .m_file = __FILE__,
-      .m_line = __LINE__,
-      .m_mtr = mtr
-    };
-
-    auto new_block = m_sys.m_buf_pool->get(req, nullptr);
-
-    buf_block_dbg_add_level();
-
-    return new_block;
-  }
+  return m_sys.m_fsp->fseg_alloc_free_page_general(seg_header, hint_page_no, file_direction, true, mtr);
 }
 
 ulint Btree::get_size(const Index *index, ulint flag) noexcept {
@@ -280,6 +258,8 @@ ulint Btree::get_size(const Index *index, ulint flag) noexcept {
   mtr_s_lock(index->get_lock(), &mtr);
 
   auto root = root_get(index->m_page_id, &mtr);
+
+  m_sys.m_fsp->latch(index->get_space_id(), &mtr);
 
   if (flag == BTR_N_LEAF_PAGES) {
     auto seg_header = root + PAGE_HEADER + PAGE_BTR_SEG_LEAF;
@@ -438,7 +418,7 @@ void Btree::page_get_father(Index *index, BufBlock *block, Mtr *mtr, BtreeCursor
 }
 
 page_no_t Btree::create(ulint type, space_id_t space, uint64_t index_id, Index *index, Mtr *mtr) noexcept {
-  auto block = m_sys.m_fsp->fseg_create(space, 0, PAGE_HEADER + PAGE_BTR_SEG_TOP, mtr);
+  auto block = m_sys.m_fsp->fseg_create(space, nullptr, PAGE_HEADER + PAGE_BTR_SEG_TOP, mtr);
 
   if (block == nullptr) {
 
@@ -449,15 +429,11 @@ page_no_t Btree::create(ulint type, space_id_t space, uint64_t index_id, Index *
 
   buf_block_dbg_add_level();
 
-  if (!m_sys.m_fsp->fseg_create(space, page_no, PAGE_HEADER + PAGE_BTR_SEG_LEAF, mtr)) {
+  if (!m_sys.m_fsp->fseg_create(space, block, PAGE_HEADER + PAGE_BTR_SEG_LEAF, mtr)) {
     /* Not enough space for new segment, free root segment before return. */
     free_root(space, page_no, mtr);
     return FIL_NULL;
   }
-
-  /* The fseg create acquires a second latch on the page,
-  therefore we must declare it: */
-  buf_block_dbg_add_level();
 
   /* Create a new index page on the allocated segment page */
   auto page = ::page_create(index, block, mtr);
@@ -499,6 +475,8 @@ void Btree::free_but_not_root(space_id_t space, page_no_t root_page_no) noexcept
 
     /* NOTE: page hash indexes are dropped when a page is freed inside fsp0fsp. */
 
+    m_sys.m_fsp->latch(space, &mtr);
+
     finished = m_sys.m_fsp->fseg_free_step(root + PAGE_HEADER + PAGE_BTR_SEG_LEAF, &mtr);
 
     mtr.commit(m_sys);
@@ -514,6 +492,8 @@ void Btree::free_but_not_root(space_id_t space, page_no_t root_page_no) noexcept
     ut_a(root_fseg_validate(FIL_PAGE_DATA + PAGE_BTR_SEG_TOP + root, space));
 #endif /* UNIV_BTR_DEBUG */
 
+    m_sys.m_fsp->latch(space, &mtr);
+
     finished = m_sys.m_fsp->fseg_free_step_not_header(root + PAGE_HEADER + PAGE_BTR_SEG_TOP, &mtr);
 
     mtr.commit(m_sys);
@@ -522,6 +502,7 @@ void Btree::free_but_not_root(space_id_t space, page_no_t root_page_no) noexcept
 }
 
 void Btree::free_root(space_id_t space, page_no_t root_page_no, Mtr *mtr) noexcept {
+  /* The caller holds the tablespace latch, like Btree::create(). */
   auto block = block_get(space, root_page_no, RW_X_LATCH, mtr);
   auto header = block->get_frame() + PAGE_HEADER + PAGE_BTR_SEG_TOP;
 
@@ -1424,9 +1405,7 @@ void Btree::lift_page_up(Index *index, BufBlock *block, Mtr *mtr) noexcept {
   /* Make the father empty */
   page_empty(father_block, index, page_level, mtr);
 
-  /* Copy the records to the father page one by one (this also moves their
-  locks). The copy was lost with the compressed page code: every lift
-  emptied the father, and the level's records were gone. */
+  /* Copy the records to the father page one by one (this also moves their locks). */
   (void)page_copy_rec_list_end(m_sys, father_block, block, page_get_infimum_rec(page), index, mtr);
 
   m_sys.m_lock_sys->update_copy_and_discard(father_block, block);
@@ -1446,7 +1425,7 @@ void Btree::lift_page_up(Index *index, BufBlock *block, Mtr *mtr) noexcept {
   ut_ad(check_node_ptr(index, father_block, mtr));
 }
 
-bool Btree::compress(BtreeCursor *cursor, Mtr *mtr) noexcept {
+bool Btree::merge(BtreeCursor *cursor, Mtr *mtr) noexcept {
   page_t *merge_page;
 
   /* Positioned on the node pointer to the page, in the father. */
@@ -1930,7 +1909,7 @@ void Btree::validate_report2(const Index *index, ulint level, const BufBlock *bl
   }
 }
 
-bool Btree::validate_level(Index *index, Trx *trx, ulint level) noexcept {
+bool Btree::validate_level(Index *index, Trx *trx, ulint level, const Mtr *outer) noexcept {
   Rec rec;
   bool ret{true};
   ulint *offsets2{};
@@ -1943,9 +1922,7 @@ bool Btree::validate_level(Index *index, Trx *trx, ulint level) noexcept {
 
   Mtr mtr;
 
-  mtr.start();
-
-  mtr_x_lock(index->get_lock(), &mtr);
+  mtr.start(outer);
 
   ulint *offsets{};
   auto block = root_block_get(index->m_page_id, &mtr);
@@ -1972,13 +1949,13 @@ bool Btree::validate_level(Index *index, Trx *trx, ulint level) noexcept {
     page = block->get_frame();
   }
 
-  auto node_ptr_fails = [this](Mtr &mtr, PageId page_id, BufBlock *&block, page_t *&page) -> bool {
+  auto node_ptr_fails = [this, outer](Mtr &mtr, PageId page_id, BufBlock *&block, page_t *&page) -> bool {
     /* Commit the mini-transaction to release the latch on 'page'. Re-acquire the latch on right_page,
     which will become 'page' on the next loop.  The page has already been checked. */
     mtr.commit(m_sys);
 
     if (page_id.m_page_no != FIL_NULL) {
-      mtr.start();
+      mtr.start(outer);
 
       block = block_get(page_id.m_space_id, page_id.m_page_no, RW_X_LATCH, &mtr);
       page = block->get_frame();
@@ -2003,8 +1980,6 @@ bool Btree::validate_level(Index *index, Trx *trx, ulint level) noexcept {
     mem_heap_empty(heap);
 
     auto offsets = offsets2 = nullptr;
-
-    mtr_x_lock(index->get_lock(), &mtr);
 
     /* Check ordering etc. of records */
 
@@ -2219,26 +2194,33 @@ bool Btree::validate_level(Index *index, Trx *trx, ulint level) noexcept {
 }
 
 bool Btree::validate_index(Index *index, Trx *trx) noexcept {
-  Mtr mtr;
+  /* Freeze the tree for the whole walk: validate_level() commits page by page under this. */
+  Mtr outer;
 
-  mtr.start();
+  outer.start();
 
-  mtr_x_lock(index->get_lock(), &mtr);
+  mtr_x_lock(index->get_lock(), &outer);
 
-  const auto root = root_get(index->m_page_id, &mtr);
-  const auto n = page_get_level(root, &mtr);
+  const auto n = [&] {
+    Mtr mtr;
 
-  for (ulint i = 0; i <= n && !trx->is_interrupted(); ++i) {
-    if (!validate_level(index, trx, n - i)) {
+    mtr.start(&outer);
 
-      mtr.commit(m_sys);
+    const auto level = page_get_level(root_get(index->m_page_id, &mtr), &mtr);
 
-      return (false);
-    }
+    mtr.commit(m_sys);
+
+    return level;
+  }();
+
+  bool ret{true};
+
+  for (ulint i = 0; ret && i <= n && !trx->is_interrupted(); ++i) {
+    ret = validate_level(index, trx, n - i, &outer);
   }
 
-  mtr.commit(m_sys);
+  outer.commit(m_sys);
 
-  return true;
+  return ret;
 }
 

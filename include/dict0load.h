@@ -156,7 +156,7 @@ struct DictLoad {
    *
    * @param[in] rec A record of SYS_TABLES.
    *
-   * @return Compressed page size in kilobytes; or 0 if the tablespace is uncompressed, ULINT_UNDEFINED on error.
+   * @return The flags, ULINT_UNDEFINED on error.
    */
   [[nodiscard]] ulint sys_tables_get_flags(const Rec rec, const ulint *offsets) const noexcept;
 

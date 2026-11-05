@@ -52,10 +52,10 @@ struct BufFlush;
 /** Buffer pool LRU implementation. */
 struct BufLru;
 
-/** Buffer page (uncompressed or compressed) */
+/** Buffer page */
 struct BufPage;
 
-/** Buffer block for which an uncompressed page exists */
+/** Buffer block, with its page frame */
 struct BufBlock;
 
 /** Buffer pool chunk comprising buf_block_t */
@@ -197,8 +197,7 @@ enum BufPageState {
   BUF_BLOCK_REMOVE_HASH
 };
 
-/** The common buffer control block structure
-for compressed and uncompressed frames */
+/** The buffer control block structure */
 struct BufPage {
 
   /**

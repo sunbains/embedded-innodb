@@ -153,12 +153,11 @@ struct SchemaVisitor {
   * @param arg User callback argument.
   * @param name The name of the table being visited.
   * @param tbl_fmt The type of the table.
-  * @param page_size The page size of the table.
   * @param n_cols The number of columns defined in the table.
   * @param n_indexes The number of indexes defined in the table.
   * @return 0 on success, nonzero on failure.
   */
-  using table_t = std::function<int(void *arg, const char *name, TableFormat tbl_fmt, ulint page_size, int n_cols, int n_indexes)>;
+  using table_t = std::function<int(void *arg, const char *name, TableFormat tbl_fmt, int n_cols, int n_indexes)>;
 
   /** Table column visitor */
   /**
@@ -828,10 +827,9 @@ struct TableSchema {
    * @param name is the table name for which to create the schema
    * @param[out] tbl_sch is the schema instance that is created
    * @param tbl_fmt is the format of the table to be created
-   * @param page_size is the page size for the table or 0 for default
    *
    * @return  DB_SUCCESS or err code */
-  [[nodiscard]] static DbErr create(const char *name, TableSchema **tbl_sch, TableFormat tbl_fmt, ulint page_size) noexcept;
+  [[nodiscard]] static DbErr create(const char *name, TableSchema **tbl_sch, TableFormat tbl_fmt) noexcept;
 
   /** Heap used to build this and all its columns in the list */
   MemHeap *m_heap{};
@@ -841,9 +839,6 @@ struct TableSchema {
 
   /** Row format */
   TableFormat m_tbl_fmt{};
-
-  /** Page size */
-  ulint m_page_size{};
 
   /** Vector of columns */
   std::vector<Col *> *m_cols{};

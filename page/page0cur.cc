@@ -561,24 +561,24 @@ void PageCursor::insert_rec_write_log(Rec insert_rec, ulint rec_size, Rec cursor
   need_extra_info:
     /* Write the record end segment length
     and the extra info storage flag */
-    log_ptr += mach_write_compressed(log_ptr, 2 * (rec_size - i) + 1);
+    log_ptr += varint::encode(log_ptr, 2 * (rec_size - i) + 1);
 
     /* Write the info bits */
     mach_write_to_1(log_ptr, insert_rec.get_info_and_status_bits());
     ++log_ptr;
 
     /* Write the record origin offset */
-    log_ptr += mach_write_compressed(log_ptr, extra_size);
+    log_ptr += varint::encode(log_ptr, extra_size);
 
     /* Write the mismatch index */
-    log_ptr += mach_write_compressed(log_ptr, i);
+    log_ptr += varint::encode(log_ptr, i);
 
     ut_a(i < UNIV_PAGE_SIZE);
     ut_a(extra_size < UNIV_PAGE_SIZE);
   } else {
     /* Write the record end segment length
     and the extra info storage flag */
-    log_ptr += mach_write_compressed(log_ptr, 2 * (rec_size - i));
+    log_ptr += varint::encode(log_ptr, 2 * (rec_size - i));
   }
 
   /* Write to the log the inserted index record end segment which
@@ -635,7 +635,7 @@ byte *PageCursor::parse_insert_rec(System &sys, bool is_short, byte *ptr, byte *
     }
   }
 
-  auto end_seg_len = mach_parse_compressed(ptr, end_ptr);
+  auto end_seg_len = varint::parse(ptr, end_ptr);
 
   if (ptr == nullptr) {
 
@@ -662,7 +662,7 @@ byte *PageCursor::parse_insert_rec(System &sys, bool is_short, byte *ptr, byte *
     info_and_status_bits = mach_read_from_1(ptr);
     ptr++;
 
-    origin_offset = mach_parse_compressed(ptr, end_ptr);
+    origin_offset = varint::parse(ptr, end_ptr);
 
     if (ptr == nullptr) {
 
@@ -671,7 +671,7 @@ byte *PageCursor::parse_insert_rec(System &sys, bool is_short, byte *ptr, byte *
 
     ut_a(origin_offset < UNIV_PAGE_SIZE);
 
-    mismatch_index = mach_parse_compressed(ptr, end_ptr);
+    mismatch_index = varint::parse(ptr, end_ptr);
 
     if (ptr == nullptr) {
 

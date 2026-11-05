@@ -101,7 +101,7 @@ void create_rows(System &sys, const char *name, uint32_t n) {
   api::TableSchema *sch{};
   api::IndexSchema *idx{};
 
-  ASSERT_EQ(api::TableSchema::create(name, &sch, IB_TBL_V1, 0), DB_SUCCESS);
+  ASSERT_EQ(api::TableSchema::create(name, &sch, IB_TBL_V1), DB_SUCCESS);
   ASSERT_EQ(sch->add_col("k", IB_INT, IB_COL_UNSIGNED, 0, 4), DB_SUCCESS);
   ASSERT_EQ(sch->add_index("PRIMARY", &idx), DB_SUCCESS);
   ASSERT_EQ(idx->add_col("k", 0), DB_SUCCESS);

@@ -190,7 +190,7 @@ struct IdxDef {
 
   api::TableSchema *tbl_sch{};
 
-  if (auto err = api::TableSchema::create(name.c_str(), &tbl_sch, IB_TBL_V1, 0); err != DB_SUCCESS) {
+  if (auto err = api::TableSchema::create(name.c_str(), &tbl_sch, IB_TBL_V1); err != DB_SUCCESS) {
     return err;
   }
 
@@ -660,6 +660,7 @@ class BtrTreeTest : public SharedDb {
     if (err == DB_FAIL) {
       mtr.start();
       cur.search_to_nth_level(*m_sys, nullptr, m_index, 0, e, PAGE_CUR_LE, BTR_MODIFY_TREE, &mtr, Current_location());
+      m_sys->m_fsp->latch(m_index->get_space_id(), &mtr);
       err = cur.pessimistic_insert(*m_sys, TREE_FLAGS, e, &rec, &big, 0, nullptr, &mtr);
       mtr.commit(*m_sys);
     }
@@ -1205,9 +1206,9 @@ tree has fewer leaves. */
 TEST_F(BtrTreeTest, MergeOnDelete) {
   /* Regression: pages are never merged. BtreeCursor::pessimistic_delete()
   (btr/btr0cur.cc:1723) and pessimistic_update() lost upstream's
-  btr_cur_compress_if_useful() call: Btree::compress() is never called,
+  merge_recommendation() call: Btree::merge() is never called,
   a page is only freed when its last record goes. See also
-  CompressDirect: compress() itself is broken. */
+  MergeDirect: merge() itself is broken. */
   fill(seq(6000), 300);
 
   const auto [leaves, fill1] = leaf_fill();
@@ -1225,11 +1226,11 @@ TEST_F(BtrTreeTest, MergeOnDelete) {
 }
 
 /** Deleting records merges the pages that become too empty: pessimistic
-deletes call Btree::compress(), which merges into the left (or right)
-neighbour and removes the node pointer. compress() was never called (the
-call of upstream btr_cur_compress_if_useful() was lost), read its block from
+deletes call Btree::merge(), which merges into the left (or right)
+neighbour and removes the node pointer. merge() was never called (the
+call of upstream merge_recommendation() was lost), read its block from
 an empty cursor, and asserted on merges to the right. */
-TEST_F(BtrTreeTest, CompressDirect) {
+TEST_F(BtrTreeTest, MergeDirect) {
   fill(seq(2000), 300);
   ASSERT_GE(root_level(), 1UL);
 
@@ -1252,7 +1253,7 @@ TEST_F(BtrTreeTest, CompressDirect) {
   mtr.start();
   cur.search_to_nth_level(*m_sys, nullptr, m_index, 0, key(1000), PAGE_CUR_LE, BTR_MODIFY_TREE, &mtr, Current_location());
 
-  if (cur.compress_recommendation(&mtr)) {
+  if (cur.merge_recommendation(&mtr)) {
     /* It merges into its left neighbour, if the neighbour has room: not if it was
     filled by the merges above. */
     auto page = cur.get_block()->get_frame();
@@ -1265,7 +1266,9 @@ TEST_F(BtrTreeTest, CompressDirect) {
       room = page_get_data_size(page) <= page_get_max_insert_size_after_reorganize(merge_block->get_frame(), page_get_n_recs(page));
     }
 
-    EXPECT_EQ(m_sys->m_btree->compress(&cur, &mtr), room);
+    m_sys->m_fsp->latch(m_index->get_space_id(), &mtr);
+
+    EXPECT_EQ(m_sys->m_btree->merge(&cur, &mtr), room);
   }
 
   mtr.commit(*m_sys);

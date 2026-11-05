@@ -76,7 +76,7 @@ struct IdxDef {
 
   api::TableSchema *tbl_sch{};
 
-  if (auto err = api::TableSchema::create(name.c_str(), &tbl_sch, IB_TBL_V1, 0); err != DB_SUCCESS) {
+  if (auto err = api::TableSchema::create(name.c_str(), &tbl_sch, IB_TBL_V1); err != DB_SUCCESS) {
     return err;
   }
 
@@ -695,6 +695,7 @@ TEST_F(PageTest, CreateEmpty) {
   Mtr mtr;
 
   mtr.start();
+  m_sys->m_fsp->latch(m_sec->get_space_id(), &mtr);
 
   auto block = alloc(mtr, m_sec);
   auto page = block->get_frame();
@@ -749,6 +750,7 @@ TEST_F(PageTest, InsertAscending) {
   Mtr mtr;
 
   mtr.start();
+  m_sys->m_fsp->latch(m_sec->get_space_id(), &mtr);
 
   auto block = alloc(mtr, m_sec);
   auto page = block->get_frame();
@@ -788,6 +790,7 @@ TEST_F(PageTest, InsertDescending) {
   Mtr mtr;
 
   mtr.start();
+  m_sys->m_fsp->latch(m_sec->get_space_id(), &mtr);
 
   auto block = alloc(mtr, m_sec);
   auto page = block->get_frame();
@@ -825,6 +828,7 @@ TEST_F(PageTest, InsertUntilFull) {
     Mtr mtr;
 
     mtr.start();
+    m_sys->m_fsp->latch(m_clust->get_space_id(), &mtr);
 
     auto block = alloc(mtr, m_clust);
     auto page = block->get_frame();
@@ -867,6 +871,7 @@ TEST_F(PageTest, SearchModes) {
   Mtr mtr;
 
   mtr.start();
+  m_sys->m_fsp->latch(m_sec->get_space_id(), &mtr);
 
   auto block = alloc(mtr, m_sec);
   auto page = block->get_frame();
@@ -949,6 +954,7 @@ TEST_F(PageTest, DeleteGarbage) {
   Mtr mtr;
 
   mtr.start();
+  m_sys->m_fsp->latch(m_clust->get_space_id(), &mtr);
 
   auto block = alloc(mtr, m_clust);
   auto page = block->get_frame();
@@ -999,6 +1005,7 @@ TEST_F(PageTest, FreeListReuse) {
   Mtr mtr;
 
   mtr.start();
+  m_sys->m_fsp->latch(m_clust->get_space_id(), &mtr);
 
   auto block = alloc(mtr, m_clust);
   auto page = block->get_frame();
@@ -1054,6 +1061,7 @@ TEST_F(PageTest, DirSlots) {
   Mtr mtr;
 
   mtr.start();
+  m_sys->m_fsp->latch(m_sec->get_space_id(), &mtr);
 
   auto block = alloc(mtr, m_sec);
   auto page = block->get_frame();
@@ -1109,6 +1117,7 @@ TEST_F(PageTest, OwnerAndPrev) {
   Mtr mtr;
 
   mtr.start();
+  m_sys->m_fsp->latch(m_sec->get_space_id(), &mtr);
 
   auto block = alloc(mtr, m_sec);
   auto page = block->get_frame();
@@ -1151,6 +1160,7 @@ TEST_F(PageTest, NRecsBefore) {
   Mtr mtr;
 
   mtr.start();
+  m_sys->m_fsp->latch(m_sec->get_space_id(), &mtr);
 
   auto block = alloc(mtr, m_sec);
   auto page = block->get_frame();
@@ -1177,6 +1187,7 @@ TEST_F(PageTest, NRecsBeforeOwners) {
   Mtr mtr;
 
   mtr.start();
+  m_sys->m_fsp->latch(m_sec->get_space_id(), &mtr);
 
   auto block = alloc(mtr, m_sec);
   auto page = block->get_frame();
@@ -1205,6 +1216,7 @@ TEST_F(PageTest, MiddleRec) {
   Mtr mtr;
 
   mtr.start();
+  m_sys->m_fsp->latch(m_sec->get_space_id(), &mtr);
 
   auto block = alloc(mtr, m_sec);
   auto page = block->get_frame();
@@ -1232,6 +1244,7 @@ TEST_F(PageTest, FindHeapNo) {
   Mtr mtr;
 
   mtr.start();
+  m_sys->m_fsp->latch(m_sec->get_space_id(), &mtr);
 
   auto block = alloc(mtr, m_sec);
   auto page = block->get_frame();
@@ -1263,6 +1276,7 @@ TEST_F(PageTest, Reorganize) {
   Mtr mtr;
 
   mtr.start();
+  m_sys->m_fsp->latch(m_clust->get_space_id(), &mtr);
 
   auto block = alloc(mtr, m_clust);
   auto page = block->get_frame();
@@ -1313,6 +1327,7 @@ TEST_F(PageTest, CopyLists) {
   Mtr mtr;
 
   mtr.start();
+  m_sys->m_fsp->latch(m_sec->get_space_id(), &mtr);
 
   auto block = alloc(mtr, m_sec);
   auto page = block->get_frame();
@@ -1364,6 +1379,7 @@ TEST_F(PageTest, MoveLists) {
   Mtr mtr;
 
   mtr.start();
+  m_sys->m_fsp->latch(m_clust->get_space_id(), &mtr);
 
   auto block = alloc(mtr, m_clust);
   auto page = block->get_frame();
@@ -1408,6 +1424,7 @@ TEST_F(PageTest, DeleteLists) {
       Mtr mtr;
 
       mtr.start();
+      m_sys->m_fsp->latch(m_sec->get_space_id(), &mtr);
 
       auto block = alloc(mtr, m_sec);
       auto page = block->get_frame();
@@ -1446,6 +1463,7 @@ TEST_F(PageTest, DeleteLists) {
     Mtr mtr;
 
     mtr.start();
+    m_sys->m_fsp->latch(m_sec->get_space_id(), &mtr);
 
     auto block = alloc(mtr, m_sec);
     auto page = block->get_frame();
@@ -1472,6 +1490,7 @@ TEST_F(PageTest, ValidateCatchesDisorder) {
   Mtr mtr;
 
   mtr.start();
+  m_sys->m_fsp->latch(m_sec->get_space_id(), &mtr);
 
   auto block = alloc(mtr, m_sec);
   auto page = block->get_frame();
@@ -1501,6 +1520,7 @@ TEST_F(PageTest, MaxTrxId) {
   Mtr mtr;
 
   mtr.start();
+  m_sys->m_fsp->latch(m_sec->get_space_id(), &mtr);
 
   m_max_trx_id = false;
 
@@ -1551,6 +1571,7 @@ TEST_F(PagePerf, InsertSearch) {
       Mtr mtr;
 
       mtr.start();
+      m_sys->m_fsp->latch(m_sec->get_space_id(), &mtr);
 
       auto block = alloc(mtr, m_sec);
       const auto start = std::chrono::steady_clock::now();
@@ -1578,6 +1599,7 @@ TEST_F(PagePerf, InsertSearch) {
   Mtr mtr;
 
   mtr.start();
+  m_sys->m_fsp->latch(m_sec->get_space_id(), &mtr);
 
   auto block = alloc(mtr, m_sec);
 

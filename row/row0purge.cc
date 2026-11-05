@@ -375,6 +375,9 @@ skip_secondaries:
       data_field = block->get_frame() + offset + internal_offset;
 
       ut_a(dfield_get_len(&ufield->m_new_val) >= BTR_EXTERN_FIELD_REF_SIZE);
+
+      sys.m_fsp->latch(idx->get_space_id(), &mtr);
+
       blob.free_externally_stored_field(sys, 
         idx, data_field + dfield_get_len(&ufield->m_new_val) - BTR_EXTERN_FIELD_REF_SIZE, nullptr, nullptr, 0, RB_NONE, &mtr
       );

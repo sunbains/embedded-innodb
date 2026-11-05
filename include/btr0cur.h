@@ -182,9 +182,7 @@ struct BtreeCursor {
    *                            the caller, or nullptr
    * @param[in] n_ext           Number of externally stored columns
    * @param[in] thr             Query thread or nullptr
-   * @param[in] mtr             If this function returns DB_SUCCESS on a leaf page of
-   *                            a secondary index in a compressed tablespace, the mtr must be
-   *                            committed before latching any further pages
+   * @param[in] mtr             Mini-transaction
    *
    * @return DB_SUCCESS, DB_WAIT_LOCK, DB_FAIL, or error number
    */
@@ -307,7 +305,7 @@ struct BtreeCursor {
   [[nodiscard]] bool optimistic_delete(System &sys, Mtr *mtr) noexcept;
 
   /**
-   * Removes the record on which the tree cursor is positioned. Tries to compress the page if its
+   * Removes the record on which the tree cursor is positioned. Tries to merge the page if its
    * fillfactor drops below a threshold or if it is the only page on the level. It is assumed that
    * mtr holds an x-latch on the tree and on the cursor page. To avoid deadlocks, mtr must also own
    * x-latches to brothers of page, if those brothers exist.
@@ -451,7 +449,7 @@ struct BtreeCursor {
    *
    * @return True if merge is recommended.
    */
-  [[nodiscard]] inline bool compress_recommendation(Mtr *mtr) noexcept {
+  [[nodiscard]] inline bool merge_recommendation(Mtr *mtr) noexcept {
     ut_ad(mtr->memo_contains(get_block(), MTR_MEMO_PAGE_X_FIX));
 
     auto page = get_page_no();

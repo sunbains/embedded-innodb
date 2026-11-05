@@ -323,6 +323,7 @@ inline bool rw_lock_x_lock_low(RwLock *lock, ulint pass, const char *file_name, 
     /* Decrement failed: relock or failed lock */
     if (!pass && lock->m_recursive && lock->m_writer_thread.load() == std::this_thread::get_id()) {
       /* Relock */
+      ut_ad(!lock->m_no_recursion);
       lock->m_lock_word -= X_LOCK_DECR;
     } else {
       /* Another thread locked before us */

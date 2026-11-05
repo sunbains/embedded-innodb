@@ -196,7 +196,7 @@ class ApiTest : public ::testing::Test {
     api::TableSchema *tbl_sch{};
     api::IndexSchema *idx_sch{};
 
-    ASSERT_EQ(api::TableSchema::create("test/t", &tbl_sch, IB_TBL_V1, 0), DB_SUCCESS);
+    ASSERT_EQ(api::TableSchema::create("test/t", &tbl_sch, IB_TBL_V1), DB_SUCCESS);
     ASSERT_EQ(tbl_sch->add_col("c1", IB_INT, IB_COL_UNSIGNED, 0, 4), DB_SUCCESS);
     ASSERT_EQ(tbl_sch->add_index("PRIMARY", &idx_sch), DB_SUCCESS);
     ASSERT_EQ(idx_sch->add_col("c1", 0), DB_SUCCESS);
@@ -389,7 +389,7 @@ DbErr create_table(
 ) {
   api::TableSchema *tbl_sch{};
 
-  if (auto err = api::TableSchema::create(name.c_str(), &tbl_sch, IB_TBL_V1, 0); err != DB_SUCCESS) {
+  if (auto err = api::TableSchema::create(name.c_str(), &tbl_sch, IB_TBL_V1); err != DB_SUCCESS) {
     return err;
   }
 
@@ -703,10 +703,10 @@ TEST(ApiSchema, TableNames) {
   api::TableSchema *sch{};
 
   for (auto name : {"t", "/t", "db/", "a/b/c", "./t", "../t", "x"}) {
-    EXPECT_EQ(api::TableSchema::create(name, &sch, IB_TBL_V1, 0), DB_DATA_MISMATCH) << name;
+    EXPECT_EQ(api::TableSchema::create(name, &sch, IB_TBL_V1), DB_DATA_MISMATCH) << name;
   }
 
-  ASSERT_EQ(api::TableSchema::create("db/t", &sch, IB_TBL_V1, 0), DB_SUCCESS);
+  ASSERT_EQ(api::TableSchema::create("db/t", &sch, IB_TBL_V1), DB_SUCCESS);
   EXPECT_STREQ(sch->m_name, "db/t");
   EXPECT_EQ(sch->m_tbl_fmt, IB_TBL_V1);
 
@@ -720,7 +720,7 @@ TEST(ApiSchema, TableNames) {
 TEST(ApiSchema, DuplicateColumn) {
   api::TableSchema *sch{};
 
-  ASSERT_EQ(api::TableSchema::create("db/t", &sch, IB_TBL_V1, 0), DB_SUCCESS);
+  ASSERT_EQ(api::TableSchema::create("db/t", &sch, IB_TBL_V1), DB_SUCCESS);
   EXPECT_EQ(sch->add_col("c1", IB_INT, IB_COL_NONE, 0, 4), DB_SUCCESS);
   EXPECT_EQ(sch->add_col("c1", IB_INT, IB_COL_NONE, 0, 4), DB_DUPLICATE_KEY);
   EXPECT_EQ(sch->add_col("C1", IB_VARCHAR, IB_COL_NONE, 0, 4), DB_DUPLICATE_KEY);
@@ -735,7 +735,7 @@ TEST(ApiSchema, DuplicateColumn) {
 TEST(ApiSchema, ColumnLengths) {
   api::TableSchema *sch{};
 
-  ASSERT_EQ(api::TableSchema::create("db/t", &sch, IB_TBL_V1, 0), DB_SUCCESS);
+  ASSERT_EQ(api::TableSchema::create("db/t", &sch, IB_TBL_V1), DB_SUCCESS);
 
   for (ulint len : {1, 2, 4, 8}) {
     EXPECT_EQ(sch->add_col(std::format("i{}", len).c_str(), IB_INT, IB_COL_NONE, 0, len), DB_SUCCESS) << len;
@@ -770,7 +770,7 @@ TEST(ApiSchema, IndexNames) {
   api::TableSchema *sch{};
   api::IndexSchema *idx{};
 
-  ASSERT_EQ(api::TableSchema::create("db/t", &sch, IB_TBL_V1, 0), DB_SUCCESS);
+  ASSERT_EQ(api::TableSchema::create("db/t", &sch, IB_TBL_V1), DB_SUCCESS);
   ASSERT_EQ(sch->add_col("c", IB_INT, IB_COL_NONE, 0, 4), DB_SUCCESS);
 
   EXPECT_EQ(sch->add_index("GEN_CLUST_INDEX", &idx), DB_INVALID_INPUT);
@@ -791,7 +791,7 @@ TEST(ApiSchema, IndexColumns) {
   api::TableSchema *sch{};
   api::IndexSchema *idx{};
 
-  ASSERT_EQ(api::TableSchema::create("db/t", &sch, IB_TBL_V1, 0), DB_SUCCESS);
+  ASSERT_EQ(api::TableSchema::create("db/t", &sch, IB_TBL_V1), DB_SUCCESS);
   ASSERT_EQ(sch->add_col("i", IB_INT, IB_COL_NONE, 0, 4), DB_SUCCESS);
   ASSERT_EQ(sch->add_col("d", IB_DOUBLE, IB_COL_NONE, 0, 8), DB_SUCCESS);
   ASSERT_EQ(sch->add_col("dec", IB_DECIMAL, IB_COL_NONE, 0, 10), DB_SUCCESS);
@@ -818,7 +818,7 @@ TEST(ApiSchema, OneClusteredIndex) {
   api::TableSchema *sch{};
   api::IndexSchema *a{}, *b{};
 
-  ASSERT_EQ(api::TableSchema::create("db/t", &sch, IB_TBL_V1, 0), DB_SUCCESS);
+  ASSERT_EQ(api::TableSchema::create("db/t", &sch, IB_TBL_V1), DB_SUCCESS);
   ASSERT_EQ(sch->add_col("c", IB_INT, IB_COL_NONE, 0, 4), DB_SUCCESS);
   ASSERT_EQ(sch->add_index("A", &a), DB_SUCCESS);
   ASSERT_EQ(sch->add_index("B", &b), DB_SUCCESS);
@@ -928,7 +928,7 @@ TEST_F(ApiDb, DdlNeedsSchemaLock) {
   api::TableSchema *sch{};
   api::IndexSchema *idx{};
 
-  ASSERT_EQ(api::TableSchema::create(table().c_str(), &sch, IB_TBL_V1, 0), DB_SUCCESS);
+  ASSERT_EQ(api::TableSchema::create(table().c_str(), &sch, IB_TBL_V1), DB_SUCCESS);
   ASSERT_EQ(sch->add_col("c", IB_INT, IB_COL_NONE, 0, 4), DB_SUCCESS);
 
   auto trx = begin();
@@ -1005,7 +1005,7 @@ TEST_F(ApiDb, CreateExisting) {
 
   api::TableSchema *sch{};
 
-  ASSERT_EQ(api::TableSchema::create(table().c_str(), &sch, IB_TBL_V1, 0), DB_SUCCESS);
+  ASSERT_EQ(api::TableSchema::create(table().c_str(), &sch, IB_TBL_V1), DB_SUCCESS);
   ASSERT_EQ(sch->add_col("x", IB_INT, IB_COL_NONE, 0, 8), DB_SUCCESS);
 
   auto trx = begin();
@@ -1387,7 +1387,7 @@ TEST_F(ApiDb, SchemaVisit) {
   api::SchemaVisitor visitor{};
 
   visitor.version = api::SchemaVisitor::TABLE_AND_INDEX_COL;
-  visitor.table = [](void *arg, const char *name, TableFormat fmt, ulint, int n_cols, int n_indexes) {
+  visitor.table = [](void *arg, const char *name, TableFormat fmt, int n_cols, int n_indexes) {
     auto s = static_cast<Seen *>(arg);
     s->m_table = name;
     s->m_fmt = fmt;

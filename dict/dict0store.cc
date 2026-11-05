@@ -98,7 +98,9 @@ bool DictStore::bootstrap_system_tables(Mtr *mtr) noexcept {
 
   /* Create the dictionary header file block in a new, allocated file
   segment in the system tablespace */
-  auto block = m_sys.m_fsp->fseg_create(DICT_HDR_SPACE, 0, DICT_HDR + DICT_HDR_FSEG_HEADER, mtr);
+  m_sys.m_fsp->latch(DICT_HDR_SPACE, mtr);
+
+  auto block = m_sys.m_fsp->fseg_create(DICT_HDR_SPACE, nullptr, DICT_HDR + DICT_HDR_FSEG_HEADER, mtr);
 
   ut_a(DICT_HDR_PAGE_NO == block->get_page_no());
 
@@ -602,6 +604,8 @@ DbErr DictStore::create_index_tree_step(IndexNode *node) noexcept {
 
   (void)pcur.move_to_next_user_rec(m_sys, &mtr);
 
+  m_sys.m_fsp->latch(index->m_page_id.m_space_id, &mtr);
+
   node->m_page_no = m_sys.m_btree->create(index->m_type, index->m_page_id.m_space_id, index->m_id, index, &mtr);
 
   page_rec_write_index_page_no(pcur.get_rec(), DICT_SYS_INDEXES_PAGE_NO_FIELD, node->m_page_no, &mtr);
@@ -662,6 +666,8 @@ void DictStore::drop_index_tree(Rec rec, Mtr *mtr) noexcept {
   /* Then we free the root page in the same mini-transaction where
   we write FIL_NULL to the appropriate field in the SYS_INDEXES
   record: this mini-transaction marks the B-tree totally freed */
+
+  m_sys.m_fsp->latch(space_id, mtr);
 
   m_sys.m_btree->free_root(space_id, root_page_no, mtr);
 
@@ -740,6 +746,8 @@ page_no_t DictStore::truncate_index_tree(Table *table, space_id_t space_id, Btre
 
     (void)m_sys.m_btree->page_get(space_id, root_page_no, RW_X_LATCH, mtr);
 
+    m_sys.m_fsp->latch(space_id, mtr);
+
     m_sys.m_btree->free_root(space_id, root_page_no, mtr);
   }
 
@@ -763,6 +771,8 @@ page_no_t DictStore::truncate_index_tree(Table *table, space_id_t space_id, Btre
   /* Find the index corresponding to this SYS_INDEXES record. */
   for (auto index : table->m_indexes) {
     if (index->m_id == index_id) {
+      m_sys.m_fsp->latch(space_id, mtr);
+
       root_page_no = m_sys.m_btree->create(type, space_id, index_id, index, mtr);
       index->m_page_id.m_page_no = root_page_no;
 

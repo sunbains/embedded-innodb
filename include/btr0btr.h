@@ -141,11 +141,6 @@ struct Btree {
   /**
    * Reorganizes an index page.
    *
-   * IMPORTANT: if btr_page_reorganize() is invoked on a compressed leaf
-   * page of a non-clustered index, the caller must update the insert
-   * buffer free bits in the same mini-transaction in such a way that the
-   * modification will be redo-logged.
-   *
    * @param[in] block           Page to be reorganized
    * @param[in] index           Record descriptor
    * @param[in] mtr             Mini-transaction
@@ -257,7 +252,7 @@ struct Btree {
    *
    * @return	true on success
    */
-  [[nodiscard]] bool compress(BtreeCursor *cursor, Mtr *mtr) noexcept;
+  [[nodiscard]] bool merge(BtreeCursor *cursor, Mtr *mtr) noexcept;
 
   /**
    * Discards a page from a B-tree. This is used to remove the last record from
@@ -787,7 +782,7 @@ struct Btree {
   /**
    * Discards a page that is the only page on its level. This will empty
    * the whole B-tree, leaving just an empty root page. This function
-   * should never be reached, because btr_compress(), which is invoked in
+   * should never be reached, because Btree::merge(), which is invoked in
    * delete operations, calls btr_lift_page_up() to flatten the B-tree.
    *
    * @param[in] index           The index tree.
@@ -870,10 +865,11 @@ struct Btree {
    * @param[in] index           The index tree.
    * @param[in] trx             The transaction or nullptr.
    * @param[in] level           The level number.
+   * @param[in] outer           Holds the index latch for the whole walk.
    *
    * @return true if ok.
    */
-  [[nodiscard]] bool validate_level(Index *index, Trx *trx, ulint level) noexcept;
+  [[nodiscard]] bool validate_level(Index *index, Trx *trx, ulint level, const Mtr *outer) noexcept;
 
 
 

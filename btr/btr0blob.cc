@@ -282,6 +282,9 @@ DbErr Blob::store_big_rec_extern_fields(System &sys,
         hint_page_no = prev_page_no + 1;
       }
 
+      /* local_mtr is new and holds no tablespace latch: see the callers. */
+      sys.m_fsp->latch(space_id, &mtr);
+
       auto block = sys.m_btree->page_alloc(index, hint_page_no, FSP_NO_DIR, 0, &mtr);
 
       if (unlikely(block == nullptr)) {
@@ -444,7 +447,10 @@ void Blob::free_externally_stored_field(System &sys,
   Mtr mtr;
 
   for (;;) {
-    mtr.start();
+    /* local_mtr holds the tablespace latch. This one logs the changes to the header. */
+    mtr.start(local_mtr);
+
+    sys.m_fsp->latch_header(index->get_space_id(), &mtr);
 
     auto ptr{Rec(field_ref).page_align()};
 

@@ -609,8 +609,7 @@ struct Fil {
 
   /**
   * @brief Writes the flushed lsn to the page header of the first page of a data
-  * file of the system tablespace (space 0),
-  * which is uncompressed.
+  * file of the system tablespace (space 0).
   *
   * @param sum_of_sizes in: combined size of previous files in space, in database pages
   * @param lsn in: lsn to write
@@ -632,7 +631,7 @@ struct Fil {
   * @param type      in: MLOG_FILE_CREATE, MLOG_FILE_CREATE2, MLOG_FILE_DELETE, or MLOG_FILE_RENAME
   * @param space_id  in: space id
   * @param log_flags in: redo log flags (stored in the page number field)
-  * @param flags     in: compressed page size and file format if type==MLOG_FILE_CREATE2, or 0
+  * @param flags     in: file format if type==MLOG_FILE_CREATE2, or 0
   * @param name      in: table name in the familiar 'databasename/tablename' format, or the file path in the case of MLOG_FILE_DELETE
   * @param new_name  in: if type is MLOG_FILE_RENAME, the new table name in the 'databasename/tablename' format
   * @param mtr       in: mini-transaction handle

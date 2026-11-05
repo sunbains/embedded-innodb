@@ -1195,7 +1195,7 @@ void create_table(System &sys, const char *name) {
   api::TableSchema *tbl_sch{};
   api::IndexSchema *idx_sch{};
 
-  ASSERT_EQ(api::TableSchema::create(name, &tbl_sch, IB_TBL_V1, 0), DB_SUCCESS);
+  ASSERT_EQ(api::TableSchema::create(name, &tbl_sch, IB_TBL_V1), DB_SUCCESS);
   ASSERT_EQ(tbl_sch->add_col("k", IB_INT, IB_COL_UNSIGNED, 0, 4), DB_SUCCESS);
   ASSERT_EQ(tbl_sch->add_col("a", IB_INT, IB_COL_UNSIGNED, 0, 4), DB_SUCCESS);
   ASSERT_EQ(tbl_sch->add_col("b", IB_BLOB, IB_COL_NONE, 0, 0), DB_SUCCESS);

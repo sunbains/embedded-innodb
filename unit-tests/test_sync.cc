@@ -246,6 +246,20 @@ struct RwLockTest : public ::testing::Test {
   RwLock m_lock;
 };
 
+#ifdef UNIV_DEBUG
+/** A latch that is done with recursion stops the thread that tries it. */
+TEST_F(RwLockTest, NoRecursion) {
+  m_lock.m_no_recursion = true;
+
+  rw_lock_x_lock(&m_lock);
+
+  EXPECT_DEATH(rw_lock_x_lock(&m_lock), "m_no_recursion");
+  EXPECT_DEATH((void)rw_lock_x_lock_nowait(&m_lock), "m_no_recursion");
+
+  rw_lock_x_unlock(&m_lock);
+}
+#endif /* UNIV_DEBUG */
+
 /** A new lock is free: lock word X_LOCK_DECR, no readers, no writer. */
 TEST_F(RwLockTest, Created) {
   EXPECT_EQ(m_lock.m_lock_word, X_LOCK_DECR);

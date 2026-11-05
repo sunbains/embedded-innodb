@@ -77,9 +77,7 @@ static DbErr create_t1(System &sys, void *arg) /*!< in: arguments for callback *
   snprintf(table_name, sizeof(table_name), "%s/%s", tbl->m_db_name.c_str(),
            tbl->m_name.c_str());
 
-  /* Pass a table page size of 0, ie., use default page size. */
-  err = TableSchema::create(table_name, &ib_tbl_sch, tbl->format,
-                               tbl->page_size);
+  err = TableSchema::create(table_name, &ib_tbl_sch, tbl->format);
 
   assert(err == DB_SUCCESS);
 

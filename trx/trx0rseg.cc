@@ -50,7 +50,7 @@ page_no_t TrxRseg::header_create(System &sys, space_id_t space, ulint max_size, 
   }
 
   /* Allocate a new file segment for the rollback segment */
-  auto block = sys.m_fsp->fseg_create(space, 0, TRX_RSEG + TRX_RSEG_FSEG_HEADER, mtr);
+  auto block = sys.m_fsp->fseg_create(space, nullptr, TRX_RSEG + TRX_RSEG_FSEG_HEADER, mtr);
 
   if (block == nullptr) {
     /* No space left */

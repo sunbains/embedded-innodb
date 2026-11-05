@@ -24,6 +24,8 @@ Created 12/18/1995 Heikki Tuuri
 
 #pragma once
 
+#include <generator>
+
 #include "srv0sys.h"
 
 #include "innodb0types.h"
@@ -75,6 +77,27 @@ struct Fsp {
    * @param[in] buf_pool        Buffer pool instance
    */
   explicit Fsp(System &sys) noexcept : m_sys(sys) {}
+
+  /**
+   * X-latch a tablespace for a mini-transaction, until it commits.
+   *
+   * An operation takes the latch once, in one place, and everything below relies on it:
+   * the segment functions (fseg_*, reserve_free_extents) don't latch. header_init(),
+   * fseg_validate() and fseg_print() are operations by themselves and latch on entry.
+   *
+   * @param[in] space           Tablespace ID
+   * @param[in,out] mtr         Mini-transaction that takes the latch.
+   */
+  void latch(space_id_t space, Mtr *mtr) noexcept;
+
+  /**
+   * X-latch the tablespace header for a mini-transaction running under another one's
+   * tablespace latch, see Mtr::start(outer), that is going to change the header.
+   *
+   * @param[in] space           Tablespace id.
+   * @param[in,out] mtr         Mini-transaction that takes the page.
+   */
+  void latch_header(space_id_t space, Mtr *mtr) noexcept;
 
   /**
    * Create an instance of the Fsp class.
@@ -129,7 +152,7 @@ struct Fsp {
   [[nodiscard]] ulint get_flags(const page_t *page) noexcept;
 
   /**
-   * Writes the space id and compressed page size to a tablespace header.
+   * Writes the space id and flags to a tablespace header.
    * This function is used past the buffer pool when we in fil0fil.c create
    * a new single-table tablespace.
    * 
@@ -153,10 +176,9 @@ struct Fsp {
    * Creates a new segment.
    * 
    * @param[in] space           Tablespace ID
-   * @param[in] page,           page where the segment header is placed: if
-   *                            this is != 0, the page must belong to another
-   *                            segment, if this is 0, a new page will be
-   *                            allocated and it will belong to the created
+   * @param[in] block           Page where the segment header is placed, x-latched
+   *                            in mtr: it must belong to another segment. If nullptr,
+   *                            a new page is allocated and it belongs to the created
    *                            segment.
    * @param[in] byte_offset     Byte offset of the created segment header on
    *                            the page
@@ -165,7 +187,7 @@ struct Fsp {
    * @return the block where the segment header is placed, x-latched, nullptr if
    *  could not create segment because of lack of space
    */
-  BufBlock *fseg_create(space_id_t space, page_no_t page_no, ulint byte_offset, Mtr *mtr) noexcept;
+  BufBlock *fseg_create(space_id_t space, BufBlock *block, ulint byte_offset, Mtr *mtr) noexcept;
 
   /**
    * Creates a new segment.
@@ -189,7 +211,7 @@ struct Fsp {
    *  if could not create segment because of lack of space
   */
   [[nodiscard]] BufBlock *fseg_create_general(
-    space_id_t space, page_no_t page_no, ulint byte_offset, bool has_done_reservation, Mtr *mtr
+    space_id_t space, BufBlock *block, ulint byte_offset, bool has_done_reservation, Mtr *mtr
   ) noexcept;
 
   /**
@@ -217,9 +239,9 @@ struct Fsp {
    *                            FSP_DOWN, FSP_UP, FSP_NO_DIR
    * @param[in,out] mtr         mtr handle
    * 
-   * @return	the allocated page offset FIL_NULL if no page could be allocated
+   * @return	the allocated page, x-latched, nullptr if no page could be allocated
    */
-  [[nodiscard]] page_no_t fseg_alloc_free_page(fseg_header_t *seg_header, page_no_t hint, byte direction, Mtr *mtr) noexcept;
+  [[nodiscard]] BufBlock *fseg_alloc_free_page(fseg_header_t *seg_header, page_no_t hint, byte direction, Mtr *mtr) noexcept;
 
   /**
    * Allocates a single free page from a segment. This function implements
@@ -238,9 +260,9 @@ struct Fsp {
    *                            page
    * @param[in,out] mtr         mtr handle
    * 
-   * @return	allocated page offset, FIL_NULL if no page could be allocated
+   * @return	the allocated page, x-latched, nullptr if no page could be allocated
    */
-  [[nodiscard]] page_no_t fseg_alloc_free_page_general(
+  [[nodiscard]] BufBlock *fseg_alloc_free_page_general(
     fseg_header_t *seg_header, page_no_t hint, byte direction, bool reserved, Mtr *mtr
   ) noexcept;
 
@@ -398,6 +420,56 @@ struct Fsp {
   [[nodiscard]] ulint get_size_low(page_t *page) noexcept;
 
  private:
+  /** One step of xdes_walk(). */
+  struct Xdes {
+    xdes_t *m_descr;
+    Mtr *m_mtr;
+  };
+
+  /** One step of inode_walk(). */
+  struct Inode {
+    fseg_inode_t *m_inode;
+    Mtr *m_mtr;
+  };
+
+#ifdef UNIV_DEBUG
+  /**
+   * @param[in] space           Tablespace ID
+   * @param[in] mtr             Mini-transaction
+   *
+   * @return true if the mini-transaction, or one it is nested in, holds the latch.
+   */
+  [[nodiscard]] bool latched(space_id_t space, const Mtr *mtr) noexcept;
+#endif /* UNIV_DEBUG */
+
+  /**
+   * Walk a list of extent descriptors. Each step has its own mini-transaction, valid until
+   * the next step: the coroutine commits it when it is resumed.
+   *
+   * @param[in] space           Tablespace ID
+   * @param[in] addr            The first node of the list.
+   * @param[in] outer           Holds the tablespace latch for the whole walk.
+   */
+  std::generator<Xdes> xdes_walk(space_id_t space, FilAddr addr, const Mtr *outer);
+
+  /**
+   * Walk all the inodes on a list of inode pages, used or not, as xdes_walk().
+   *
+   * @param[in] space           Tablespace ID
+   * @param[in] addr            The first node of the list.
+   * @param[in] outer           Holds the tablespace latch for the whole walk.
+   */
+  std::generator<Inode> inode_walk(space_id_t space, FilAddr addr, const Mtr *outer);
+
+  /**
+   * @param[in] space           Tablespace ID
+   * @param[in] base            Offset of a list base node in the space header.
+   * @param[in] outer           Holds the tablespace latch.
+   *
+   * @return the first node of the list.
+   */
+  [[nodiscard]] FilAddr list_first(space_id_t space, ulint base, const Mtr *outer) noexcept;
+
   /**
    * Returns an extent to the free list of a space.
    * 
@@ -428,10 +500,10 @@ struct Fsp {
   void fseg_free_page_low(fseg_inode_t *seg_inode, space_id_t space, ulint page, Mtr *mtr) noexcept;
 
   /**
-   * Gets a pointer to the space header and x-locks its page.
+   * Gets the space header latch() fetched for this mini-transaction.
    *
    * @param[in] id              Tablespace id
-   * @param[in,out] mtr         Mini-transaction handle
+   * @param[in] mtr             Mini-transaction handle
    *
    * @return pointer to the space header, page x-locked
    */
@@ -520,9 +592,9 @@ struct Fsp {
    * @param[in] hint            hint of which page would be desirable
    * @param[in] mtr             Mini-transaction handle
    *
-   * @return the page offset, FIL_NULL if no page could be allocated
+   * @return the page, x-latched, nullptr if no page could be allocated
    */
-  ulint alloc_free_page(space_id_t space, page_no_t hint, Mtr *mtr) noexcept;
+  BufBlock *alloc_free_page(space_id_t space, page_no_t hint, Mtr *mtr) noexcept;
 
   /**
    * Allocates a new file segment inode page.
@@ -559,9 +631,9 @@ struct Fsp {
    *                            FSP_UP, FSP_NO_DIR
    * @param[in,out] mtr         Mini-transaction covering the operation.
    * 
-   * @return	the allocated page number, FIL_NULL if no page could be allocated
+   * @return	the allocated page, x-latched, nullptr if no page could be allocated
    */
-  page_no_t fseg_alloc_free_page_low(
+  BufBlock *fseg_alloc_free_page_low(
     space_id_t space, fseg_inode_t *seg_inode, page_no_t hint, byte direction, Mtr *mtr
   ) noexcept;
 

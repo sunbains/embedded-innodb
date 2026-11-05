@@ -32,37 +32,37 @@ static void create_table(System &sys) {
   DbErr err = DB_SUCCESS;
   TableSchema * ib_tbl_sch = nullptr;
 
-  err = TableSchema::create("", &ib_tbl_sch, IB_TBL_V1, 0);
+  err = TableSchema::create("", &ib_tbl_sch, IB_TBL_V1);
   assert(err == DB_DATA_MISMATCH);
 
-  err = TableSchema::create("a", &ib_tbl_sch, IB_TBL_V1, 0);
+  err = TableSchema::create("a", &ib_tbl_sch, IB_TBL_V1);
   assert(err == DB_DATA_MISMATCH);
 
-  err = TableSchema::create("ab", &ib_tbl_sch, IB_TBL_V1, 0);
+  err = TableSchema::create("ab", &ib_tbl_sch, IB_TBL_V1);
   assert(err == DB_DATA_MISMATCH);
 
-  err = TableSchema::create(".", &ib_tbl_sch, IB_TBL_V1, 0);
+  err = TableSchema::create(".", &ib_tbl_sch, IB_TBL_V1);
   assert(err == DB_DATA_MISMATCH);
 
-  err = TableSchema::create("./", &ib_tbl_sch, IB_TBL_V1, 0);
+  err = TableSchema::create("./", &ib_tbl_sch, IB_TBL_V1);
   assert(err == DB_DATA_MISMATCH);
 
-  err = TableSchema::create("../", &ib_tbl_sch, IB_TBL_V1, 0);
+  err = TableSchema::create("../", &ib_tbl_sch, IB_TBL_V1);
   assert(err == DB_DATA_MISMATCH);
 
-  err = TableSchema::create("/", &ib_tbl_sch, IB_TBL_V1, 0);
+  err = TableSchema::create("/", &ib_tbl_sch, IB_TBL_V1);
   assert(err == DB_DATA_MISMATCH);
 
-  err = TableSchema::create("/aaaaa", &ib_tbl_sch, IB_TBL_V1, 0);
+  err = TableSchema::create("/aaaaa", &ib_tbl_sch, IB_TBL_V1);
   assert(err == DB_DATA_MISMATCH);
 
-  err = TableSchema::create("/a/a", &ib_tbl_sch, IB_TBL_V1, 0);
+  err = TableSchema::create("/a/a", &ib_tbl_sch, IB_TBL_V1);
   assert(err == DB_DATA_MISMATCH);
 
-  err = TableSchema::create("abcdef/", &ib_tbl_sch, IB_TBL_V1, 0);
+  err = TableSchema::create("abcdef/", &ib_tbl_sch, IB_TBL_V1);
   assert(err == DB_DATA_MISMATCH);
 
-  err = TableSchema::create("a/b", &ib_tbl_sch, IB_TBL_V1, 0);
+  err = TableSchema::create("a/b", &ib_tbl_sch, IB_TBL_V1);
   assert(err == DB_SUCCESS);
 
   TableSchema::destroy(sys, ib_tbl_sch);

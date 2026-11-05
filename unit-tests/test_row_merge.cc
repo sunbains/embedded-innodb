@@ -169,7 +169,7 @@ class MergeTest : public ::testing::Test {
     api::TableSchema *sch{};
     api::IndexSchema *idx{};
 
-    EXPECT_EQ(api::TableSchema::create(tbl.c_str(), &sch, IB_TBL_V1, 0), DB_SUCCESS);
+    EXPECT_EQ(api::TableSchema::create(tbl.c_str(), &sch, IB_TBL_V1), DB_SUCCESS);
     EXPECT_EQ(sch->add_col("k", IB_INT, ColAttr(IB_COL_UNSIGNED | IB_COL_NOT_NULL), 0, 4), DB_SUCCESS);
     EXPECT_EQ(sch->add_col("v", IB_INT, IB_COL_UNSIGNED, 0, 4), DB_SUCCESS);
     EXPECT_EQ(sch->add_col("s", IB_VARCHAR, IB_COL_NONE, 0, s_len), DB_SUCCESS);

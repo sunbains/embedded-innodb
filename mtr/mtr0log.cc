@@ -74,14 +74,14 @@ byte *mlog_parse_initial_log_record(byte *ptr, byte *end_ptr, MlogType *type, sp
     return nullptr;
   }
 
-  *space = static_cast<space_id_t>(mach_parse_compressed(ptr, end_ptr));
+  *space = static_cast<space_id_t>(varint::parse(ptr, end_ptr));
 
   if (ptr == nullptr) {
 
     return nullptr;
   }
 
-  *page_no = static_cast<page_no_t>(mach_parse_compressed(ptr, end_ptr));
+  *page_no = static_cast<page_no_t>(varint::parse(ptr, end_ptr));
 
   return ptr;
 }
@@ -108,7 +108,7 @@ byte *mlog_parse_nbytes(System &sys, MlogType type, byte *ptr, byte *end_ptr, by
   }
 
   if (type == MLOG_8BYTES) {
-    ptr = mach_uint64_parse_compressed(ptr, end_ptr, &dval);
+    ptr = varint::parse64(ptr, end_ptr, &dval);
 
     if (ptr == nullptr) {
 
@@ -122,7 +122,7 @@ byte *mlog_parse_nbytes(System &sys, MlogType type, byte *ptr, byte *end_ptr, by
     return ptr;
   }
 
-  val = mach_parse_compressed(ptr, end_ptr);
+  val = varint::parse(ptr, end_ptr);
 
   if (ptr == nullptr) {
 
@@ -188,7 +188,7 @@ void mlog_write_ulint(byte *ptr, ulint val, MlogType type, Mtr *mtr) {
   mach_write_to_2(log_ptr, page_offset(ptr));
   log_ptr += 2;
 
-  log_ptr += mach_write_compressed(log_ptr, val);
+  log_ptr += varint::encode(log_ptr, val);
 
   mlog_close(mtr, log_ptr);
 }
@@ -209,7 +209,7 @@ void mlog_write_uint64(byte *ptr, uint64_t val, Mtr *mtr) {
   mach_write_to_2(log_ptr, page_offset(ptr));
   log_ptr += 2;
 
-  log_ptr += mach_uint64_write_compressed(log_ptr, val);
+  log_ptr += varint::encode64(log_ptr, val);
 
   mlog_close(mtr, log_ptr);
 }
@@ -328,8 +328,8 @@ byte *mlog_write_initial_log_record_fast(const byte *ptr, MlogType type, byte *l
   mach_write_to_1(log_ptr, type);
 
   ++log_ptr;
-  log_ptr += mach_write_compressed(log_ptr, space);
-  log_ptr += mach_write_compressed(log_ptr, offset);
+  log_ptr += varint::encode(log_ptr, space);
+  log_ptr += varint::encode(log_ptr, offset);
 
   ++mtr->m_n_log_recs;
 

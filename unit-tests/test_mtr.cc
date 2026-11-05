@@ -246,7 +246,7 @@ class MtrPageTest : public ut::SysTest {
   std::vector<BufBlock *> m_blocks;
 };
 
-/** The values at the boundaries of the compressed encoding, for a width. */
+/** The values at the boundaries of the varint encoding, for a width. */
 std::vector<ulint> values_of(MlogType type) {
   switch (type) {
     case MLOG_1BYTE:
@@ -259,7 +259,7 @@ std::vector<ulint> values_of(MlogType type) {
 }
 
 /** mlog_write_ulint() writes the page and logs type, space, page number,
-offset and the compressed value; recovery parses exactly that record and
+offset and the varint value; recovery parses exactly that record and
 applies the same value. */
 TEST_F(MtrPageTest, WriteUlint) {
   auto block = page(7, 300);
@@ -280,7 +280,7 @@ TEST_F(MtrPageTest, WriteUlint) {
       const auto log = log_of(mtr);
 
       /* type, space 7, page 300 (2 bytes), offset, value */
-      ASSERT_EQ(log.size(), 1 + 1 + 2 + 2 + mach_get_compressed_size(v)) << int(type) << " " << v;
+      ASSERT_EQ(log.size(), 1 + 1 + 2 + 2 + varint::size(v)) << int(type) << " " << v;
       EXPECT_EQ(log[0], type);
       EXPECT_EQ(log[1], 7);
       EXPECT_EQ(mach_read_from_2(log.data() + 4), off);
@@ -303,7 +303,7 @@ TEST_F(MtrPageTest, WriteUlint) {
   }
 }
 
-/** mlog_write_uint64() logs the 8 bytes compressed; the parser restores them. */
+/** mlog_write_uint64() logs the 8 bytes as a varint; the parser restores them. */
 TEST_F(MtrPageTest, WriteUint64) {
   auto block = page(3, 9);
   auto frame = block->get_frame();
@@ -319,7 +319,7 @@ TEST_F(MtrPageTest, WriteUint64) {
 
     const auto log = log_of(mtr);
 
-    EXPECT_EQ(log.size(), 3 + 2 + mach_uint64_get_compressed_size(v));
+    EXPECT_EQ(log.size(), 3 + 2 + varint::size64(v));
 
     const auto recs = parse_log(*m_sys, log);
 
@@ -336,7 +336,7 @@ TEST_F(MtrPageTest, WriteUint64) {
   }
 }
 
-/** Space ids and page numbers at the boundaries of their compressed
+/** Space ids and page numbers at the boundaries of their varint
 encoding come back from the record header. */
 TEST_F(MtrPageTest, HeaderSpacePage) {
   for (space_id_t space : {0U, 0x7FU, 0x80U, 0x3FFFU, 0x4000U, 0xFFFFFFF0U}) {
@@ -446,7 +446,7 @@ TEST_F(MtrPageTest, InitialRecord) {
   commit(mtr);
 }
 
-/** The catenate helpers append raw big endian or compressed values. */
+/** The catenate helpers append raw big endian or varint values. */
 TEST_F(MtrPageTest, Catenate) {
   Mtr mtr;
 
@@ -455,8 +455,8 @@ TEST_F(MtrPageTest, Catenate) {
   mlog_catenate_ulint(&mtr, 0xAB, MLOG_1BYTE);
   mlog_catenate_ulint(&mtr, 0xABCD, MLOG_2BYTES);
   mlog_catenate_ulint(&mtr, 0x01234567, MLOG_4BYTES);
-  mlog_catenate_ulint_compressed(&mtr, 0x4000);
-  mlog_catenate_uint64_compressed(&mtr, 0x0000008000000001ULL);
+  mlog_catenate_varint(&mtr, 0x4000);
+  mlog_catenate_varint64(&mtr, 0x0000008000000001ULL);
   mlog_catenate_string(&mtr, reinterpret_cast<const byte *>("xyz"), 3);
 
   const std::vector<byte> expected{
@@ -502,7 +502,7 @@ TEST_F(MtrPageTest, LogNone) {
   mlog_write_uint64(frame + 200, 42, &mtr);
   mlog_write_string(frame + 300, reinterpret_cast<const byte *>("abc"), 3, &mtr);
   mlog_catenate_ulint(&mtr, 5, MLOG_4BYTES);
-  mlog_catenate_ulint_compressed(&mtr, 5);
+  mlog_catenate_varint(&mtr, 5);
   mlog_catenate_string(&mtr, reinterpret_cast<const byte *>("abc"), 3);
 
   EXPECT_EQ(mlog_open(&mtr, 10), nullptr);
@@ -750,6 +750,37 @@ TEST_F(MtrMemoTest, RecursiveX) {
 
   mtr.commit(*m_sys);
 }
+
+#ifdef UNIV_DEBUG
+/** A nested mtr vouches for the latches of the outer one, and the outer one keeps them. */
+TEST_F(MtrMemoTest, Nested) {
+  Mtr outer;
+
+  outer.start();
+  mtr_x_lock(&m_locks[0], &outer);
+
+  Mtr mtr;
+
+  mtr.start(&outer);
+  mtr_x_lock(&m_locks[1], &mtr);
+
+  EXPECT_TRUE(mtr.memo_contains(&m_locks[0], MTR_MEMO_X_LOCK));
+  EXPECT_TRUE(mtr.memo_contains(&m_locks[1], MTR_MEMO_X_LOCK));
+  EXPECT_FALSE(outer.memo_contains(&m_locks[1], MTR_MEMO_X_LOCK));
+
+  mtr.commit(*m_sys);
+
+  EXPECT_EQ(rw_lock_get_x_lock_count(&m_locks[0]), 1UL);
+  EXPECT_EQ(rw_lock_get_x_lock_count(&m_locks[1]), 0UL);
+
+  /* start() on its own forgets the outer mtr. */
+  mtr.start();
+  EXPECT_FALSE(mtr.memo_contains(&m_locks[0], MTR_MEMO_X_LOCK));
+  mtr.commit(*m_sys);
+
+  outer.commit(*m_sys);
+}
+#endif /* UNIV_DEBUG */
 
 /** A savepoint is the memo size; rolling back to it releases only the
 latches taken after it, the rest go at commit. */

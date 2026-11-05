@@ -93,9 +93,7 @@ enum DbErr {
   dictionary but a table with that name already exists */
   DB_TABLE_EXISTS,    
 
-  /** A record in an index would not fit on a compressed page,
-  or it would become bigger than 1/2 free space in an uncompressed
-  page frame */
+  /** A record in an index would become bigger than 1/2 free space in a page frame */
   DB_TOO_BIG_RECORD,    
 
   /** Lock wait lasted too long */

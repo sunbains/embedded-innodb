@@ -25,14 +25,14 @@ Created 11/28/1995 Heikki Tuuri
 
 #include "mach0data.h"
 
-byte *mach_uint64_parse_compressed(byte *ptr, byte *end_ptr, uint64_t *v) {
+byte *varint::parse64(byte *ptr, byte *end_ptr, uint64_t *v) {
   if (end_ptr < ptr + 5) {
 
     return nullptr;
   }
 
-  auto high = mach_read_compressed(ptr);
-  auto size = mach_get_compressed_size(high);
+  auto high = varint::decode(ptr);
+  auto size = varint::size(high);
 
   ptr += size;
 
@@ -48,7 +48,7 @@ byte *mach_uint64_parse_compressed(byte *ptr, byte *end_ptr, uint64_t *v) {
   return ptr + 4;
 }
 
-uint32_t mach_parse_compressed(byte *&ptr, const byte *end_ptr) {
+uint32_t varint::parse(byte *&ptr, const byte *end_ptr) {
   ulint val;
 
   if (ptr >= end_ptr) {

@@ -160,7 +160,9 @@ class FspOps {
 
     mtr.start();
 
-    auto block = m_s->m_fsp->fseg_create(space, 0, seg.m_offset, &mtr);
+    m_s->m_fsp->latch(space, &mtr);
+
+    auto block = m_s->m_fsp->fseg_create(space, nullptr, seg.m_offset, &mtr);
 
     if (block != nullptr) {
       seg.m_page_no = block->get_page_no();
@@ -180,7 +182,10 @@ class FspOps {
 
     mtr.start();
 
-    const auto page_no = m_s->m_fsp->fseg_alloc_free_page(header(seg, mtr), hint, dir, &mtr);
+    m_s->m_fsp->latch(seg.m_space, &mtr);
+
+    const auto block = m_s->m_fsp->fseg_alloc_free_page(header(seg, mtr), hint, dir, &mtr);
+    const auto page_no = block != nullptr ? block->get_page_no() : FIL_NULL;
 
     mtr.commit(*m_s);
 
@@ -192,6 +197,7 @@ class FspOps {
     Mtr mtr;
 
     mtr.start();
+    m_s->m_fsp->latch(seg.m_space, &mtr);
     m_s->m_fsp->fseg_free_page(header(seg, mtr), seg.m_space, page_no, &mtr);
     mtr.commit(*m_s);
   }
@@ -202,6 +208,8 @@ class FspOps {
     ulint used{};
 
     mtr.start();
+
+    m_s->m_fsp->latch(seg.m_space, &mtr);
 
     const auto n = m_s->m_fsp->fseg_n_reserved_pages(header(seg, mtr), &used, &mtr);
 
@@ -216,6 +224,8 @@ class FspOps {
       Mtr mtr;
 
       mtr.start();
+
+      m_s->m_fsp->latch(seg.m_space, &mtr);
 
       const auto done = m_s->m_fsp->fseg_free_step(header(seg, mtr), &mtr);
 
@@ -495,7 +505,9 @@ TEST_F(FspSegTest, SegCreateOnPage) {
 
   mtr.start();
 
-  auto block = fsp().fseg_create(space, a.m_page_no, FSEG_PAGE_DATA + FSEG_HEADER_SIZE, &mtr);
+  fsp().latch(space, &mtr);
+
+  auto block = fsp().fseg_create(space, get(space, a.m_page_no, mtr), FSEG_PAGE_DATA + FSEG_HEADER_SIZE, &mtr);
 
   ASSERT_NE(block, nullptr);
   EXPECT_EQ(block->get_page_no(), a.m_page_no);
@@ -809,6 +821,8 @@ TEST_F(FspSegTest, FreeStepNotHeader) {
 
     mtr.start();
 
+    fsp().latch(seg.m_space, &mtr);
+
     const auto done = fsp().fseg_free_step_not_header(header(seg, mtr), &mtr);
 
     mtr.commit(*m_sys);
@@ -929,6 +943,7 @@ TEST_F(FspSegTest, ReserveFreeExtents) {
     Mtr mtr;
 
     mtr.start();
+    fsp().latch(space, &mtr);
     EXPECT_TRUE(fsp().reserve_free_extents(&n, space, 2, FSP_NORMAL, &mtr));
     mtr.commit(*m_sys);
 
@@ -947,6 +962,7 @@ TEST_F(FspSegTest, ReserveFreeExtents) {
     Mtr mtr;
 
     mtr.start();
+    fsp().latch(space, &mtr);
     EXPECT_TRUE(fsp().reserve_free_extents(&n, space, 3, type, &mtr)) << type;
     mtr.commit(*m_sys);
 
@@ -956,6 +972,40 @@ TEST_F(FspSegTest, ReserveFreeExtents) {
     m_sys->m_fil->space_release_free_extents(space, n);
     EXPECT_EQ(m_sys->m_fil->space_get_n_reserved_extents(space), 0UL);
   }
+
+  EXPECT_TRUE(fsp().validate(space));
+}
+
+/** A page allocation and a free latch the header, the inode and the new page once each. */
+TEST_F(FspSegTest, OneLatch) {
+  const auto space = new_space();
+  const auto seg = create_seg(space);
+  const auto p = alloc(seg);
+
+  Mtr mtr;
+
+  mtr.start();
+  fsp().latch(space, &mtr);
+
+  const auto h = header(seg, mtr);
+  const auto inode_page = mach_read_from_4(h + FSEG_HDR_PAGE_NO);
+  auto block = fsp().fseg_alloc_free_page(h, 0, FSP_NO_DIR, &mtr);
+
+  ASSERT_NE(block, nullptr);
+
+  fsp().fseg_free_page(h, space, p, &mtr);
+
+  ulint used{};
+
+  (void)fsp().fseg_n_reserved_pages(h, &used, &mtr);
+
+  /* The test's own fetch of the segment header page isn't one of the tablespace code's. */
+  EXPECT_EQ(rw_lock_get_x_lock_count(&block->m_rw_lock), 1UL);
+  EXPECT_EQ(rw_lock_get_x_lock_count(&mtr.m_fsp_inode->m_rw_lock), 1UL);
+  EXPECT_EQ(mtr.m_fsp_inode->get_page_no(), inode_page);
+  EXPECT_EQ(rw_lock_get_x_lock_count(&get(space, 0, mtr)->m_rw_lock), 2UL) << "latch() and this get()";
+
+  mtr.commit(*m_sys);
 
   EXPECT_TRUE(fsp().validate(space));
 }
@@ -974,6 +1024,7 @@ TEST_F(FspSegTest, ReserveExtends) {
   Mtr mtr;
 
   mtr.start();
+  fsp().latch(space, &mtr);
   EXPECT_TRUE(fsp().reserve_free_extents(&n, space, 20, FSP_NORMAL, &mtr));
   mtr.commit(*m_sys);
 

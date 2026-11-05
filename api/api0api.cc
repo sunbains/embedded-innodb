@@ -155,7 +155,7 @@ static ulint get_max_row_len(Index *index) {
     auto col = index->get_nth_col(i);
 
     /* Use the maximum output size of
-    mach_write_compressed(), although the encoded
+    varint::encode(), although the encoded
     length should always fit in 2 bytes. */
     max_len += col_get_max_size(col);
   }
@@ -668,30 +668,6 @@ void TableSchema::destroy(System &sys, TableSchema *table_def) noexcept {
   mem_heap_free(table_def->m_heap);
 }
 
-static DbErr table_schema_check(TableFormat tbl_fmt, ulint *page_size) {
-  DbErr err = DB_SUCCESS;
-
-  *page_size = 0;
-
-  switch (*page_size) {
-    case 0:
-      /* The page size value will be ignored for uncompressed tables. */
-      /* Set to the system default of 8K page size.  Better to be conservative
-     * here. */
-      *page_size = 8;
-      break;
-    case 4:
-    case 8:
-    case 16:
-    default:
-      /* Unknown page size. */
-      err = DB_UNSUPPORTED;
-      break;
-  }
-
-  return err;
-}
-
 /**
  * Normalizes a table name string. A normalized name consists of the
  * database name catenated to '/' and table name. An example:
@@ -768,15 +744,9 @@ static DbErr table_name_check(const char *name) noexcept {
   return slash ? DB_SUCCESS : DB_DATA_MISMATCH;
 }
 
-DbErr TableSchema::create(const char *name, TableSchema **tbl_sch, TableFormat tbl_fmt, ulint page_size) noexcept {
+DbErr TableSchema::create(const char *name, TableSchema **tbl_sch, TableFormat tbl_fmt) noexcept {
 
   auto err = table_name_check(name);
-
-  if (err != DB_SUCCESS) {
-    return err;
-  }
-
-  err = table_schema_check(tbl_fmt, &page_size);
 
   if (err != DB_SUCCESS) {
     return err;
@@ -801,8 +771,6 @@ DbErr TableSchema::create(const char *name, TableSchema **tbl_sch, TableFormat t
       normalize_table_name(normalized_name, name);
 
       table_def->m_name = normalized_name;
-
-      table_def->m_page_size = page_size;
 
       table_def->m_tbl_fmt = tbl_fmt;
 

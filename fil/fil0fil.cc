@@ -583,6 +583,7 @@ try_again:
   space->m_magic_n = FIL_SPACE_MAGIC_N;
 
   rw_lock_create(&space->m_latch, SYNC_FSP);
+  ut_d(space->m_latch.m_no_recursion = true);
 
   {
     auto r{m_space_by_id.emplace(id, space)};

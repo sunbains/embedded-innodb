@@ -646,14 +646,14 @@ bool Dict::index_too_big_for_undo(const Table *table, const Index *new_index) no
     const auto col = clust_index->get_nth_col(i);
 
     /* Use the maximum output size of
-    mach_write_compressed(), although the encoded
+    varint::encode(), although the encoded
     length should always fit in 2 bytes. */
     undo_page_len += 5 + col->get_max_size();
   }
 
   /* Add the old values of the columns to be updated.
   First, the amount and the numbers of the columns.
-  These are written by mach_write_compressed() whose
+  These are written by varint::encode() whose
   maximum output length is 5 bytes.  However, given that
   the quantities are below REC_MAX_N_FIELDS (10 bits),
   the maximum length is 2 bytes per item. */
@@ -893,6 +893,7 @@ DbErr Dict::index_add_to_cache(Index *index, ulint page_no, bool strict) noexcep
   new_index->m_page_id.m_page_no = page_no;
 
   rw_lock_create(&new_index->m_lock, SYNC_INDEX_TREE);
+  ut_d(new_index->m_lock.m_no_recursion = true);
 
   {
     const auto sz = (1 + new_index->get_n_unique()) * sizeof(int64_t);

@@ -69,11 +69,11 @@ byte *TrxUndoRecord::get_pars(trx_undo_rec_t undo_rec, TrxUndoRecord::Parsed &un
   undo_rec_pars.m_type = type_cmpl & (TRX_UNDO_CMPL_INFO_MULT - 1);
   undo_rec_pars.m_cmpl_info = type_cmpl / TRX_UNDO_CMPL_INFO_MULT;
 
-  undo_rec_pars.m_undo_no = mach_uint64_read_much_compressed(ptr);
-  ptr += mach_uint64_get_much_compressed_size(undo_rec_pars.m_undo_no);
+  undo_rec_pars.m_undo_no = varint::decode_id(ptr);
+  ptr += varint::size_id(undo_rec_pars.m_undo_no);
 
-  undo_rec_pars.m_table_id = mach_uint64_read_much_compressed(ptr);
-  ptr += mach_uint64_get_much_compressed_size(undo_rec_pars.m_table_id);
+  undo_rec_pars.m_table_id = varint::decode_id(ptr);
+  ptr += varint::size_id(undo_rec_pars.m_table_id);
 
   return ptr;
 }
@@ -89,8 +89,8 @@ byte *TrxUndoRecord::get_pars(trx_undo_rec_t undo_rec, TrxUndoRecord::Parsed &un
  * @return Remaining part of undo log record after reading these values.
  */
 static byte *trx_undo_rec_get_col_val(byte *ptr, byte **field, ulint *len, ulint *orig_len) {
-  *len = mach_read_compressed(ptr);
-  ptr += mach_get_compressed_size(*len);
+  *len = varint::decode(ptr);
+  ptr += varint::size(*len);
 
   *orig_len = 0;
 
@@ -99,10 +99,10 @@ static byte *trx_undo_rec_get_col_val(byte *ptr, byte **field, ulint *len, ulint
       *field = nullptr;
       break;
     case UNIV_EXTERN_STORAGE_FIELD:
-      *orig_len = mach_read_compressed(ptr);
-      ptr += mach_get_compressed_size(*orig_len);
-      *len = mach_read_compressed(ptr);
-      ptr += mach_get_compressed_size(*len);
+      *orig_len = varint::decode(ptr);
+      ptr += varint::size(*orig_len);
+      *len = varint::decode(ptr);
+      ptr += varint::size(*len);
       *field = ptr;
       ptr += *len;
 
@@ -186,11 +186,11 @@ byte *TrxUndoRecord::update_rec_get_sys_cols(byte *ptr, trx_id_t *trx_id, roll_p
 
   /* Read the values of the system columns */
 
-  *trx_id = mach_uint64_read_compressed(ptr);
-  ptr += mach_uint64_get_compressed_size(*trx_id);
+  *trx_id = varint::decode64(ptr);
+  ptr += varint::size64(*trx_id);
 
-  *roll_ptr = mach_uint64_read_compressed(ptr);
-  ptr += mach_uint64_get_compressed_size(*roll_ptr);
+  *roll_ptr = varint::decode64(ptr);
+  ptr += varint::size64(*roll_ptr);
 
   return ptr;
 }
@@ -205,8 +205,8 @@ byte *TrxUndoRecord::update_rec_get_sys_cols(byte *ptr, trx_id_t *trx_id, roll_p
  */
 inline byte *trx_undo_update_rec_get_n_upd_fields(byte *ptr, ulint *n) /*!< out: number of fields */
 {
-  *n = mach_read_compressed(ptr);
-  ptr += mach_get_compressed_size(*n);
+  *n = varint::decode(ptr);
+  ptr += varint::size(*n);
 
   return ptr;
 }
@@ -224,8 +224,8 @@ inline byte *trx_undo_update_rec_get_field_no(
   ulint *field_no
 ) /*!< out: field number */
 {
-  *field_no = mach_read_compressed(ptr);
-  ptr += mach_get_compressed_size(*field_no);
+  *field_no = varint::decode(ptr);
+  ptr += varint::size(*field_no);
 
   return ptr;
 }

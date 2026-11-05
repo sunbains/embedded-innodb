@@ -294,18 +294,18 @@ byte *RowUpdate::write_sys_vals_to_log(
 ) noexcept {
   ut_ad(index->is_clustered());
 
-  log_ptr += mach_write_compressed(log_ptr, index->get_sys_col_field_pos(DATA_TRX_ID));
+  log_ptr += varint::encode(log_ptr, index->get_sys_col_field_pos(DATA_TRX_ID));
 
   trx_write_roll_ptr(log_ptr, roll_ptr);
   log_ptr += DATA_ROLL_PTR_LEN;
 
-  log_ptr += mach_uint64_write_compressed(log_ptr, trx->m_id);
+  log_ptr += varint::encode64(log_ptr, trx->m_id);
 
   return log_ptr;
 }
 
 byte *RowUpdate::parse_sys_vals(byte *ptr, byte *end_ptr, ulint *pos, trx_id_t *trx_id, roll_ptr_t *roll_ptr) noexcept {
-  *pos = static_cast<ulint>(mach_parse_compressed(ptr, end_ptr));
+  *pos = static_cast<ulint>(varint::parse(ptr, end_ptr));
 
   if (ptr == nullptr) {
 
@@ -320,7 +320,7 @@ byte *RowUpdate::parse_sys_vals(byte *ptr, byte *end_ptr, ulint *pos, trx_id_t *
   *roll_ptr = trx_read_roll_ptr(ptr);
   ptr += DATA_ROLL_PTR_LEN;
 
-  ptr = mach_uint64_parse_compressed(ptr, end_ptr, trx_id);
+  ptr = varint::parse64(ptr, end_ptr, trx_id);
 
   return ptr;
 }
@@ -331,7 +331,7 @@ void RowUpdate::index_write_log(const Upd *update, byte *log_ptr, Mtr *mtr) noex
 
   mach_write_to_1(log_ptr, update->m_info_bits);
   log_ptr++;
-  log_ptr += mach_write_compressed(log_ptr, n_fields);
+  log_ptr += varint::encode(log_ptr, n_fields);
 
   for (ulint i{}; i < n_fields; i++) {
 
@@ -348,8 +348,8 @@ void RowUpdate::index_write_log(const Upd *update, byte *log_ptr, Mtr *mtr) noex
     auto new_val = &(upd_field->m_new_val);
     auto len = dfield_get_len(new_val);
 
-    log_ptr += mach_write_compressed(log_ptr, upd_field->m_field_no);
-    log_ptr += mach_write_compressed((byte *)log_ptr, len);
+    log_ptr += varint::encode(log_ptr, upd_field->m_field_no);
+    log_ptr += varint::encode((byte *)log_ptr, len);
 
     if (len != UNIV_SQL_NULL) {
       if (log_ptr + len < buf_end) {
@@ -380,7 +380,7 @@ byte *RowUpdate::index_parse(byte *ptr, byte *end_ptr, MemHeap *heap, Upd **upda
 
   ptr++;
 
-  auto n_fields = mach_parse_compressed(ptr, end_ptr);
+  auto n_fields = varint::parse(ptr, end_ptr);
 
   if (ptr == nullptr) {
 
@@ -393,7 +393,7 @@ byte *RowUpdate::index_parse(byte *ptr, byte *end_ptr, MemHeap *heap, Upd **upda
   for (ulint i{}; i < n_fields; ++i) {
     auto upd_field = update->get_nth_field(i);
     auto new_val = &upd_field->m_new_val;
-    auto field_no = mach_parse_compressed(ptr, end_ptr);
+    auto field_no = varint::parse(ptr, end_ptr);
 
     if (ptr == nullptr) {
 
@@ -402,7 +402,7 @@ byte *RowUpdate::index_parse(byte *ptr, byte *end_ptr, MemHeap *heap, Upd **upda
 
     upd_field->m_field_no = field_no;
 
-    auto len = mach_parse_compressed(ptr, end_ptr);
+    auto len = varint::parse(ptr, end_ptr);
 
     if (ptr == nullptr) {
 

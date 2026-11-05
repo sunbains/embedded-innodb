@@ -248,7 +248,7 @@ class ParsDb : public ::testing::Test {
     api::TableSchema *sch{};
     api::IndexSchema *idx{};
 
-    EXPECT_EQ(api::TableSchema::create(name.c_str(), &sch, IB_TBL_V1, 0), DB_SUCCESS);
+    EXPECT_EQ(api::TableSchema::create(name.c_str(), &sch, IB_TBL_V1), DB_SUCCESS);
     EXPECT_EQ(sch->add_col("k", IB_INT, IB_COL_UNSIGNED, 0, 4), DB_SUCCESS);
     EXPECT_EQ(sch->add_col("v", IB_INT, IB_COL_UNSIGNED, 0, 4), DB_SUCCESS);
     EXPECT_EQ(sch->add_index("PRIMARY", &idx), DB_SUCCESS);
@@ -332,7 +332,7 @@ TEST_F(ParsDb, SignedColumns) {
   api::TableSchema *sch{};
   api::IndexSchema *idx{};
 
-  ASSERT_EQ(api::TableSchema::create(m_name.c_str(), &sch, IB_TBL_V1, 0), DB_SUCCESS);
+  ASSERT_EQ(api::TableSchema::create(m_name.c_str(), &sch, IB_TBL_V1), DB_SUCCESS);
   ASSERT_EQ(sch->add_col("k", IB_INT, IB_COL_UNSIGNED, 0, 4), DB_SUCCESS);
   ASSERT_EQ(sch->add_col("s", IB_INT, IB_COL_NONE, 0, 4), DB_SUCCESS);
   ASSERT_EQ(sch->add_col("u", IB_INT, IB_COL_UNSIGNED, 0, 4), DB_SUCCESS);

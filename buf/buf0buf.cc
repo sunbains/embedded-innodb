@@ -1447,7 +1447,6 @@ void BufPool::io_complete(BufPage *bpage) {
     }
 
     if (m_sys.m_recv->m_recovery_on) {
-      /* Pages must be uncompressed for crash recovery. */
       recv_recover_page(m_sys, true, (BufBlock *)bpage);
     }
   }
@@ -1554,7 +1553,7 @@ bool BufPool::validate() {
 
   auto chunk = m_chunks;
 
-  /* Check the uncompressed blocks. */
+  /* Check the blocks. */
 
   for (ulint i = m_n_chunks; i--; chunk++) {
     ulint j;

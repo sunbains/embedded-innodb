@@ -58,7 +58,6 @@ endif()
 if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
   file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/examples" TYPE FILE FILES
     "/home/sunny/dev/embedded-innodb/tests/ib_cfg.cc"
-    "/home/sunny/dev/embedded-innodb/tests/ib_compressed.cc"
     "/home/sunny/dev/embedded-innodb/tests/ib_cursor.cc"
     "/home/sunny/dev/embedded-innodb/tests/ib_index.cc"
     "/home/sunny/dev/embedded-innodb/tests/ib_logger.cc"

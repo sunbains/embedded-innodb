@@ -60,7 +60,7 @@ void create_test_table(System &sys) {
   api::TableSchema *tbl_sch{};
   api::IndexSchema *idx_sch{};
 
-  check(api::TableSchema::create(TABLE, &tbl_sch, IB_TBL_V1, 0), "TableSchema::create");
+  check(api::TableSchema::create(TABLE, &tbl_sch, IB_TBL_V1), "TableSchema::create");
   check(tbl_sch->add_col("k", IB_INT, IB_COL_UNSIGNED, 0, 4), "add_col k");
   check(tbl_sch->add_col("a", IB_INT, IB_COL_UNSIGNED, 0, 4), "add_col a");
   check(tbl_sch->add_col("b", IB_BLOB, IB_COL_NONE, 0, 0), "add_col b");

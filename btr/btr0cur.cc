@@ -793,6 +793,8 @@ DbErr BtreeCursor::pessimistic_insert(System &sys,
 
     n_extents = m_tree_height / 16 + 3;
 
+    sys.m_fsp->latch(index->get_space_id(), mtr);
+
     success = sys.m_fsp->reserve_free_extents(&n_reserved, index->get_space_id(), n_extents, FSP_NORMAL, mtr);
 
     if (!success) {
@@ -1273,6 +1275,9 @@ DbErr BtreeCursor::pessimistic_update(System &sys,
     return err;
   }
 
+  /* Past here the tree can change, in either direction: pages are allocated or freed. */
+  sys.m_fsp->latch(index->get_space_id(), mtr);
+
   if (optim_err == DB_OVERFLOW) {
     /* First reserve enough free space for the file segments
     of the index tree, so that the update will not fail because
@@ -1401,8 +1406,8 @@ DbErr BtreeCursor::pessimistic_update(System &sys,
     }
 
     /* The record was deleted and inserted again: the page may be too empty now. */
-    if (compress_recommendation(mtr)) {
-      (void)sys.m_btree->compress(this, mtr);
+    if (merge_recommendation(mtr)) {
+      (void)sys.m_btree->merge(this, mtr);
     }
 
     err = DB_SUCCESS;
@@ -1756,6 +1761,8 @@ DbErr BtreeCursor::pessimistic_delete(System &sys, bool has_reserved_extents, Tr
 
     n_extents = m_tree_height / 32 + 1;
 
+    sys.m_fsp->latch(index->get_space_id(), mtr);
+
     auto success = sys.m_fsp->reserve_free_extents(&n_reserved, index->get_space_id(), n_extents, FSP_CLEANING, mtr);
 
     if (!success) {
@@ -1828,8 +1835,8 @@ DbErr BtreeCursor::pessimistic_delete(System &sys, bool has_reserved_extents, Tr
     err = DB_SUCCESS;
 
     /* Merge the page with a neighbour if it became too empty. */
-    if (compress_recommendation(mtr)) {
-      (void)sys.m_btree->compress(this, mtr);
+    if (merge_recommendation(mtr)) {
+      (void)sys.m_btree->merge(this, mtr);
     }
   }
 
