@@ -780,6 +780,7 @@ inline void RowUpdate::copy_columns(Rec rec, const ulint *offsets, SymNode *colu
     auto data = rec + col_offset;
 
     eval_node_copy_and_alloc_val(column, data, len);
+    eval_int_from_page(que_node_get_val(column));
 
     column = UT_LIST_GET_NEXT(col_var_list, column);
   }
@@ -795,6 +796,7 @@ inline void RowUpdate::eval_new_vals(Upd *update) noexcept {
     eval_exp(exp);
 
     dfield_copy_data(&upd_field->m_new_val, que_node_get_val(exp));
+    eval_int_to_page(&upd_field->m_new_val, upd_field->m_int_buf);
   }
 }
 

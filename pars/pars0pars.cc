@@ -198,6 +198,14 @@ static void pars_resolve_func_data_type(FuncNode *node) {
     dtype_copy(que_node_get_data_type(node), que_node_get_data_type(arg));
 
     ut_a(dtype_get_mtype(que_node_get_data_type(node)) == DATA_INT);
+
+    /* An operand of 8 bytes: the result can be negative and needs the room. */
+    for (auto a = arg; a != nullptr; a = que_node_get_next(a)) {
+      if (dtype_get_len(que_node_get_data_type(a)) == 8) {
+        dtype_set(que_node_get_data_type(node), DATA_INT, 0, 8);
+        break;
+      }
+    }
     break;
 
   case PARS_COUNT_TOKEN:

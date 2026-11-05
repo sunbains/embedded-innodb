@@ -545,6 +545,7 @@ static void opt_search_plan_for_table(System &sys, SelNode *sel_node, ulint i,
     plan->m_n_exact_match = 0;
   } else {
     plan->m_tuple = dtuple_create(sys.m_parser->m_sym_tab->heap, n_fields);
+    plan->m_tuple_ints = static_cast<byte *>(mem_heap_alloc(sys.m_parser->m_sym_tab->heap, n_fields * DATA_INT_MAX_LEN));
     plan->m_index->copy_types(plan->m_tuple, n_fields);
 
     plan->m_tuple_exps = reinterpret_cast<que_node_t **>(

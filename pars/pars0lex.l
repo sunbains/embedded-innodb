@@ -101,7 +101,7 @@ BOUND_ID  \$[a-z_A-Z0-9]+
 %%
 
 {DIGIT}+  {
-      *m_lval = sym_tab_add_int_lit(m_sys.m_parser->m_sym_tab, atoi(YYText()));
+      *m_lval = sym_tab_add_int_lit(m_sys.m_parser->m_sym_tab, strtoull(YYText(), nullptr, 10));
       return(PARS_INT_LIT);
 }
 

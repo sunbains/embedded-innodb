@@ -1041,11 +1041,10 @@ TEST_F(BufPoolTest, LruFlush) {
   EXPECT_TRUE(valid());
 }
 
-/* Not a bug: the pages of a deleted or truncated space are evicted lazily,
-when the flush or the LRU meets them (buf0flu.cc free_page_if_truncated(),
-commit d235211), not by Fil::delete_tablespace(). Kept disabled as a record
-of the eager behaviour of upstream. */
-TEST_F(BufPoolTest, DISABLED_DeleteSpaceDropsPages) {
+/** The pages of a deleted space are evicted lazily, when the flush or the LRU meets them
+(buf0flu.cc free_page_if_truncated()), not by Fil::delete_tablespace(): filling the pool
+with another space leaves none of them, and the pool is consistent. */
+TEST_F(BufPoolTest, DeleteSpaceEvictsLazily) {
   const auto space = new_space(16);
 
   for (page_no_t p = 0; p < 16; ++p) {
@@ -1056,6 +1055,13 @@ TEST_F(BufPoolTest, DISABLED_DeleteSpaceDropsPages) {
 
   ASSERT_TRUE(m_sys->m_fil->delete_tablespace(space));
 
+  const page_no_t n = page_no_t(2 * pool().m_curr_size);
+  const auto other = new_space(n, "other");
+
+  for (page_no_t p = 0; p < n; ++p) {
+    put(PageId(other, p), p);
+  }
+
   ulint cached{};
 
   for (page_no_t p = 0; p < 16; ++p) {
@@ -1063,6 +1069,7 @@ TEST_F(BufPoolTest, DISABLED_DeleteSpaceDropsPages) {
   }
 
   EXPECT_EQ(cached, 0UL);
+  EXPECT_TRUE(valid());
 }
 
 }  // namespace

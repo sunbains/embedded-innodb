@@ -112,6 +112,9 @@ struct UpdField {
    * constants in the symbol table of the query graph */
   que_node_t *m_exp{};
 
+  /** The new value of a signed column of an SQL update, as on a page. */
+  byte m_int_buf[DATA_INT_MAX_LEN]{};
+
   /** New value for the column */
   Dfield m_new_val;
 };

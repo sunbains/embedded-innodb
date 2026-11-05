@@ -135,13 +135,19 @@ inline void eval_node_set_int_val(
   auto dfield = que_node_get_val(node);
   auto data = (byte *)dfield_get_data(dfield);
 
+  const ulint len = dtype_get_len(dfield_get_type(dfield)) == 8 ? 8 : 4;
+
   if (data == nullptr) {
-    data = eval_node_alloc_val_buf(node, 4);
+    data = eval_node_alloc_val_buf(node, len);
   }
 
-  ut_ad(dfield_get_len(dfield) == 4);
+  ut_ad(dfield_get_len(dfield) == len);
 
-  mach_write_to_4(data, (ulint)val);
+  if (len == 8) {
+    mach_write_to_8(data, uint64_t(val));
+  } else {
+    mach_write_to_4(data, (ulint)val);
+  }
 }
 
 /** Gets an integer non-SQL null value from an expression node.
@@ -150,9 +156,55 @@ inline lint eval_node_get_int_val(que_node_t *node) /*!< in: expression node */
 {
   auto dfield = que_node_get_val(node);
 
+  /* A literal above the signed 32 bits. */
+  if (dfield_get_len(dfield) == 8) {
+    return lint(mach_read_from_8((byte *)dfield_get_data(dfield)));
+  }
+
   ut_ad(dfield_get_len(dfield) == 4);
 
-  return lint(int32_t(mach_read_from_4((byte *)dfield_get_data(dfield))));
+  const auto val = mach_read_from_4((byte *)dfield_get_data(dfield));
+
+  /* An unsigned column above the range of a signed one keeps its value. */
+  if ((dtype_get_prtype(dfield_get_type(dfield)) & DATA_UNSIGNED) != 0) {
+    return lint(val);
+  }
+
+  return lint(int32_t(val));
+}
+
+/** On a page a signed integer has its sign bit flipped, so that its bytes sort as numbers
+(mach_write_int_type()); in the evaluator it is plain two's complement. Unsigned ones are the
+same in both. These two are the only crossings: a value read from a page, and a value that
+goes to a page or is compared with one in a search.
+
+@param[in] type   The type of the column.
+@param[in] len    The length of the value.
+@return true if a value of this type differs between a page and the evaluator. */
+[[nodiscard]] inline bool eval_int_differs(const Dtype *type, ulint len) noexcept {
+  return dtype_get_mtype(type) == DATA_INT && (dtype_get_prtype(type) & DATA_UNSIGNED) == 0 && len != UNIV_SQL_NULL && len > 0 && len <= 8;
+}
+
+/** A value read from a page of a signed column, in a buffer of its own, for the evaluator.
+@param[in,out] val  The value. */
+inline void eval_int_from_page(Dfield *val) noexcept {
+  if (eval_int_differs(dfield_get_type(val), dfield_get_len(val))) {
+    *static_cast<byte *>(dfield_get_data(val)) ^= 0x80;
+  }
+}
+
+/** A value of the evaluator for a column of a page: it isn't changed, an expression can be
+evaluated again and a literal stays what it is.
+@param[in,out] field  Refers to the value, and has the type of the column: refers to buf after.
+@param[out] buf       Where the converted value goes: at least 8 bytes, to outlive the use. */
+inline void eval_int_to_page(Dfield *field, byte *buf) noexcept {
+  const auto len = dfield_get_len(field);
+
+  if (eval_int_differs(dfield_get_type(field), len)) {
+    memcpy(buf, dfield_get_data(field), len);
+    buf[0] ^= 0x80;
+    dfield_set_data(field, buf, len);
+  }
 }
 
 /** Gets a boolean value from a query node.

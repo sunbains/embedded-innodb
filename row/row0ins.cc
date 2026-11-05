@@ -1715,6 +1715,7 @@ void RowInsert::get_row_from_values(InsertNode *node) noexcept {
 
     auto dfield = dtuple_get_nth_field(row, i);
     dfield_copy_data(dfield, que_node_get_val(list_node));
+    eval_int_to_page(dfield, static_cast<byte *>(mem_heap_alloc(node->m_entry_sys_heap, DATA_INT_MAX_LEN)));
 
     ++i;
 
@@ -1736,6 +1737,7 @@ inline void RowInsert::get_row_from_select(InsertNode *node) noexcept {
     auto dfield = dtuple_get_nth_field(row, i);
 
     dfield_copy_data(dfield, que_node_get_val(list_node));
+    eval_int_to_page(dfield, static_cast<byte *>(mem_heap_alloc(node->m_entry_sys_heap, DATA_INT_MAX_LEN)));
 
     ++i;
 

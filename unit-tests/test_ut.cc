@@ -159,7 +159,7 @@ TEST(Crc32Test, SingleBytes) {
     std::set<uint32_t> seen;
 
     for (int b = 0; b < 256; ++b) {
-      /* Aligned: a 1 byte buffer at an odd address hits DISABLED_ShortUnaligned. */
+      /* Aligned: a 1 byte buffer at an odd address is ShortUnaligned. */
       alignas(8) const byte v = byte(b);
 
       EXPECT_EQ(impl.m_fn(&v, 1), crc32::software(&v, 1)) << impl.m_name << " " << b;
@@ -172,7 +172,7 @@ TEST(Crc32Test, SingleBytes) {
 
 /** Every implementation gives the software value on random buffers of
 every length 0..4096 at the 8 alignments mod 8, where the buffer is not
-shorter than the unaligned prefix (see DISABLED_ShortUnaligned). */
+shorter than the unaligned prefix (see ShortUnaligned). */
 TEST(Crc32Test, ImplsAgreeAllLengths) {
   const auto data = random_bytes(4096 + 64, 1);
 
@@ -260,20 +260,10 @@ TEST(Crc32Test, NoReadOutsideBuffer) {
   }
 }
 
-/* BUG: calculate_with() (include/ut0crc32.h:461) consumes the unaligned
-prefix (8 - addr % 8) & 7 without bounding it by len: a buffer shorter
-than its prefix (e.g. 3 bytes at an address = 1 mod 8) reads up to 7 bytes,
-past its end, and then "len -= prefix_len" wraps to ~2^64, so
-consume_chunks() runs off the end of memory (SIGSEGV), or returns a
-wrong value. Only the hardware versions are affected; the page checksum
-calls them at page + 4 (22 bytes) and page + 38, both longer than their
-prefix, so pages are fine, but any short unaligned caller is not.
-MySQL has: prefix_len = std::min(ut_calc_align(data, 8) - data, len).
-Fix:
--  const size_t prefix_len = (8 - reinterpret_cast<uintptr_t>(data)) & 7;
-+  const size_t prefix_len = std::min<size_t>((8 - reinterpret_cast<uintptr_t>(data)) & 7, len);
-Each case runs in a child: the wrap-around crashes. */
-TEST(Crc32Test, DISABLED_ShortUnaligned) {
+/* A buffer shorter than its unaligned prefix: calculate_with() must stop at its
+end, or len wraps and consume_chunks() runs off the end of memory. Each case runs in a
+child: the wrap around crashes. */
+TEST(Crc32Test, ShortUnaligned) {
   const auto data = random_bytes(64, 4);
   const auto base = static_cast<const byte *>(ut_align(data.data(), 8));
 

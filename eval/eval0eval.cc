@@ -76,12 +76,58 @@ void eval_node_free_val_buf(que_node_t *node) {
   }
 }
 
+/**
+ * The value of an integer of the evaluator: big endian two's complement, signed
+ * unless the type says DATA_UNSIGNED. 128 bits hold both kinds of 64 bit value, so a
+ * signed and an unsigned one compare by value too.
+ *
+ * @param[in] dfield  The value.
+ * @param[out] val    Its value.
+ *
+ * @return false if it isn't an integer that is present.
+ */
+[[nodiscard]] static bool eval_int_val(const Dfield *dfield, __int128 *val) noexcept {
+  const auto type = dfield_get_type(dfield);
+  const auto len = dfield_get_len(dfield);
+
+  if (dtype_get_mtype(type) != DATA_INT || dfield_is_null(dfield) || len == 0 || len > 8) {
+    return false;
+  }
+
+  const auto data = static_cast<const byte *>(dfield_get_data(dfield));
+  uint64_t v{};
+
+  for (ulint i{}; i < len; ++i) {
+    v = (v << 8) | data[i];
+  }
+
+  if ((dtype_get_prtype(type) & DATA_UNSIGNED) != 0) {
+    *val = v;
+  } else if (len == 8) {
+    *val = int64_t(v);
+  } else {
+    const auto shift = 64 - 8 * len;
+
+    *val = int64_t(v << shift) >> shift;
+  }
+
+  return true;
+}
+
 bool eval_cmp(FuncNode *cmp_node) {
   ut_ad(que_node_get_type(cmp_node) == QUE_NODE_FUNC);
 
   auto arg1 = cmp_node->args;
   auto arg2 = que_node_get_next(arg1);
-  auto res = cmp_dfield_dfield(nullptr, que_node_get_val(arg1), que_node_get_val(arg2));
+  const auto val1 = que_node_get_val(arg1);
+  const auto val2 = que_node_get_val(arg2);
+
+  __int128 int1{};
+  __int128 int2{};
+
+  /* cmp_dfield_dfield() is the order of stored columns, bytes. */
+  const auto res = eval_int_val(val1, &int1) && eval_int_val(val2, &int2) ? (int1 < int2 ? -1 : (int1 > int2 ? 1 : 0))
+                                                                          : cmp_dfield_dfield(nullptr, val1, val2);
   auto val = true;
   auto func = cmp_node->func;
 

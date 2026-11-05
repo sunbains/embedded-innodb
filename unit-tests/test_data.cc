@@ -1823,7 +1823,7 @@ TEST_F(RowRefTest, FromPrefixIndex) {
 
 /** Through the API: a search on SP with access to the clustered record finds
 the row (the clustered lookup builds the reference with
-row_build_row_ref_in_tuple(), see DISABLED_FromPrefixIndex). */
+row_build_row_ref_in_tuple(), see FromPrefixIndex). */
 TEST_F(RowRefTest, PrefixIndexClusterAccess) {
   auto trx = begin();
   api::Cursor *crsr{};
@@ -1861,7 +1861,7 @@ TEST_F(RowRefTest, PrefixIndexClusterAccess) {
 /** A clustered key that is a column prefix, PRIMARY(s(4)), and a secondary
 index on the whole column, SS(s): the secondary record holds s once, whole;
 the reference must cut it to the 4 bytes of the clustered key (the same
-divergence as DISABLED_FromPrefixIndex, the other way around). */
+divergence as FromPrefixIndex, the other way around). */
 TEST_F(RowTest, RefOfPrefixPrimaryKey) {
   const auto t = name();
   const auto err = create_table(
@@ -3391,14 +3391,8 @@ TEST_F(EvalTest, CmpSameSign) {
   }
 }
 
-/** Comparisons of a negative and a non-negative integer.
-BUG: eval/eval0eval.cc:83 eval_cmp() compares with cmp_dfield_dfield(), the
-order of stored columns. The evaluator's integers (literals, bound int4
-literals, results) are plain two's complement big endian (DATA_INT, prtype
-0), compared as unsigned bytes: -1 (0xFFFFFFFF) > 0. "-1 < 0" is false,
-"-1 > 0" true, a FOR to a negative end ... The same in upstream 7c21eac0.
-Fix: compare DATA_INT values of 4 bytes numerically in eval_cmp(). */
-TEST_F(EvalTest, DISABLED_CmpAcrossZero) {
+/** Comparisons of a negative and a non-negative integer: by value, not by bytes. */
+TEST_F(EvalTest, CmpAcrossZero) {
   struct C {
     const char *m_exp;
     bool m_val;
@@ -3414,6 +3408,9 @@ TEST_F(EvalTest, DISABLED_CmpAcrossZero) {
     {"-5 < 3", true},
     {":neg < :pos", true},
     {":neg - :pos < 0", true},
+    {"3000000000 > 2147483647", true},
+    {"-3000000000 < 0", true},
+    {"-2147483648 < 0", true},
   };
 
   std::string body;

@@ -822,12 +822,10 @@ DbErr Cursor::read_row(System &sys, Tuple *tpl) noexcept {
     auto rec = cursor->m_prebuilt->m_row_cache.cache_get_row();
     ut_a(!rec.is_null());
 
-    if (!rec.get_deleted_flag()) {
-      read_tuple(sys, Rec(rec), tuple);
-      err = DB_SUCCESS;
-    } else {
-      err = DB_RECORD_NOT_FOUND;
-    }
+    /* The search put it here because the view sees it: a secondary record delete
+    marked by a transaction the view doesn't see is visible, as of its older state. */
+    read_tuple(sys, Rec(rec), tuple);
+    err = DB_SUCCESS;
   } else {
     Mtr mtr;
     BtreePcursor *pcur;

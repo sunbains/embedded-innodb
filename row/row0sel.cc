@@ -272,12 +272,20 @@ void RowSel::fetch_columns(Index *index, const Rec rec, const ulint *offsets, Sy
 
         data = rec.get_nth_field(offsets, field_no, &len);
 
+        /* A value that is converted can't stay on the page. By its type, and for good,
+        from the first row on: the prefetch stack goes by copy_val, and a column that
+        isn't copied must have no buffer. */
+        if (eval_int_differs(dfield_get_type(que_node_get_val(column)), DATA_INT_MAX_LEN)) {
+          column->copy_val = true;
+        }
+
         needs_copy = column->copy_val;
       }
 
       if (likely(needs_copy)) {
 
         eval_node_copy_and_alloc_val(column, data, len);
+        eval_int_from_page(que_node_get_val(column));
 
       } else {
 
@@ -616,7 +624,10 @@ void Plan::open_pcur(System &sys, bool search_latch_locked, Mtr *mtr) noexcept {
     for (ulint i{}; i < n_fields; ++i) {
       auto exp = m_tuple_exps[i];
 
-      dfield_copy_data(dtuple_get_nth_field(m_tuple, i), que_node_get_val(exp));
+      const auto field = dtuple_get_nth_field(m_tuple, i);
+
+      dfield_copy_data(field, que_node_get_val(exp));
+      eval_int_to_page(field, m_tuple_ints + i * DATA_INT_MAX_LEN);
     }
 
     /* Open pcur to the index */

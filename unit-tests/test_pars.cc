@@ -324,6 +324,121 @@ TEST_F(ParsDb, Arithmetic) {
 }
 
 /** Comparisons and logic: = <> < <= > >=, AND OR NOT, on integers and strings. */
+/** Signed columns are signed and unsigned ones unsigned, wherever a value crosses between
+the evaluator and the table: read, compared, searched, inserted, updated. On a page a signed
+integer has its sign bit flipped, so that bytes sort as numbers; in the evaluator it is a
+plain two's complement integer. */
+TEST_F(ParsDb, SignedColumns) {
+  api::TableSchema *sch{};
+  api::IndexSchema *idx{};
+
+  ASSERT_EQ(api::TableSchema::create(m_name.c_str(), &sch, IB_TBL_V1, 0), DB_SUCCESS);
+  ASSERT_EQ(sch->add_col("k", IB_INT, IB_COL_UNSIGNED, 0, 4), DB_SUCCESS);
+  ASSERT_EQ(sch->add_col("s", IB_INT, IB_COL_NONE, 0, 4), DB_SUCCESS);
+  ASSERT_EQ(sch->add_col("u", IB_INT, IB_COL_UNSIGNED, 0, 4), DB_SUCCESS);
+  ASSERT_EQ(sch->add_index("PRIMARY", &idx), DB_SUCCESS);
+  ASSERT_EQ(idx->add_col("k", 0), DB_SUCCESS);
+  ASSERT_EQ(idx->set_clustered(), DB_SUCCESS);
+  ASSERT_EQ(sch->add_index("S", &idx), DB_SUCCESS);
+  ASSERT_EQ(idx->add_col("s", 0), DB_SUCCESS);
+
+  auto trx = locked();
+  uint64_t id{};
+
+  ASSERT_EQ(api::table_create(m_sys, trx, sch, &id), DB_SUCCESS);
+  ASSERT_EQ(api::trx_commit(m_sys, trx), DB_SUCCESS);
+  api::TableSchema::destroy(m_sys, sch);
+
+  trx = api::trx_begin(m_sys, IB_TRX_REPEATABLE_READ);
+
+  api::Cursor *crsr{};
+
+  ASSERT_EQ(api::cursor_open_table(m_sys, m_name.c_str(), trx, &crsr), DB_SUCCESS);
+  ASSERT_EQ(crsr->lock(m_sys, IB_LOCK_IX), DB_SUCCESS);
+
+  /* (k, s, u): the signed values around 0, the unsigned one above the int32 range. */
+  const std::vector<std::tuple<uint32_t, int32_t, uint32_t>> rows{{0, -5, 1}, {1, 0, 2}, {2, 5, 4000000000U}};
+
+  for (const auto &[k, sv, u] : rows) {
+    auto tpl = crsr->clust_read_tuple_create();
+
+    ASSERT_EQ(tpl->write_u32(0, k), DB_SUCCESS);
+    ASSERT_EQ(tpl->write_i32(1, sv), DB_SUCCESS);
+    ASSERT_EQ(tpl->write_u32(2, u), DB_SUCCESS);
+    ASSERT_EQ(crsr->insert_row(m_sys, tpl), DB_SUCCESS);
+    api::Tuple::destroy(tpl);
+  }
+
+  ASSERT_EQ(api::Cursor::close(m_sys, crsr), DB_SUCCESS);
+  ASSERT_EQ(api::trx_commit(m_sys, trx), DB_SUCCESS);
+
+  auto bind = [&] {
+    auto pinfo = info();
+
+    pars_info_add_id(pinfo, "t", m_name.c_str());
+
+    return pinfo;
+  };
+
+  ASSERT_EQ(
+    run(std::string("PROCEDURE P () IS\n"
+                    "x INT;\n"
+                    "neg INT;\n"
+                    "nonneg INT;\n"
+                    "total INT;\n"
+                    "ranged INT;\n"
+                    "ubig INT;\n"
+                    "after INT;\n") +
+        emitter("emit", "x, neg, nonneg, total, ranged, ubig, after") +
+        "BEGIN\n"
+        "  SELECT s INTO x FROM $t WHERE k >= 0 AND k <= 0;\n"
+        "  SELECT COUNT(*) INTO neg FROM $t WHERE s < 0;\n"
+        "  SELECT COUNT(*) INTO nonneg FROM $t WHERE s >= 0;\n"
+        "  SELECT SUM(s) INTO total FROM $t;\n"
+        "  SELECT COUNT(*) INTO ranged FROM $t WHERE s >= -6 AND s <= 0;\n"
+        "  SELECT COUNT(*) INTO ubig FROM $t WHERE u > 3000000000;\n"
+        "  INSERT INTO $t VALUES (3, -7, 9);\n"
+        "  UPDATE $t SET s = -8 WHERE k = 1;\n"
+        "  SELECT COUNT(*) INTO after FROM $t WHERE s < 0;\n" +
+        EMIT + "END;\n",
+      bind()),
+    DB_SUCCESS
+  );
+
+  ASSERT_EQ(m_rows.size(), 1UL);
+  EXPECT_EQ(m_rows[0][0], i4(-5)) << "a signed column read";
+  EXPECT_EQ(m_rows[0][1], i4(1)) << "s < 0";
+  EXPECT_EQ(m_rows[0][2], i4(2)) << "s >= 0";
+  EXPECT_EQ(m_rows[0][3], i4(0)) << "SUM(s)";
+  EXPECT_EQ(m_rows[0][4], i4(2)) << "a range on the signed index";
+  EXPECT_EQ(m_rows[0][5], i4(1)) << "u above int32";
+  EXPECT_EQ(m_rows[0][6], i4(3)) << "after the insert and the update";
+
+  /* What the SQL wrote, through the API. */
+  trx = api::trx_begin(m_sys, IB_TRX_REPEATABLE_READ);
+  ASSERT_EQ(api::cursor_open_table(m_sys, m_name.c_str(), trx, &crsr), DB_SUCCESS);
+
+  std::map<uint32_t, int32_t> got;
+  auto tpl = crsr->clust_read_tuple_create();
+
+  for (auto err = crsr->first(m_sys); err == DB_SUCCESS; err = crsr->next(m_sys)) {
+    uint32_t k{};
+    int32_t sv{};
+
+    ASSERT_EQ(crsr->read_row(m_sys, tpl), DB_SUCCESS);
+    ASSERT_EQ(tpl->read_u32(0, &k), DB_SUCCESS);
+    ASSERT_EQ(tpl->read_i32(1, &sv), DB_SUCCESS);
+    got[k] = sv;
+    tpl = tpl->clear();
+  }
+
+  api::Tuple::destroy(tpl);
+  EXPECT_EQ(api::Cursor::close(m_sys, crsr), DB_SUCCESS);
+  EXPECT_EQ(api::trx_commit(m_sys, trx), DB_SUCCESS);
+
+  EXPECT_EQ(got, (std::map<uint32_t, int32_t>{{0, -5}, {1, -8}, {2, 5}, {3, -7}}));
+}
+
 TEST_F(ParsDb, Comparisons) {
   ASSERT_EQ(
     run(std::string("PROCEDURE P () IS\n"

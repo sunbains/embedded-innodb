@@ -526,6 +526,9 @@ struct Plan {
   /** search tuple */
   DTuple *m_tuple{};
 
+  /** The integers of m_tuple that are signed, as on a page. */
+  byte *m_tuple_ints{};
+
   /** search mode: PAGE_CUR_G, ... */
   SearchMode m_mode{};
 

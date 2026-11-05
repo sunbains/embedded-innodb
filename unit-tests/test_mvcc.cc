@@ -245,6 +245,32 @@ TEST_F(Mvcc, SecOnePage) {
   commit(r);
 }
 
+/** An index only read through the API: a record delete marked by a transaction the view
+doesn't see is read, and the scan goes on to the records after it. */
+TEST_F(Mvcc, SecOnlyDeleted) {
+  load({{1, row(1)}, {2, row(2)}, {3, row(3)}});
+
+  auto r = begin();
+
+  ASSERT_NE(r->assign_read_view(*m_sys), nullptr);
+
+  auto w = begin();
+
+  ASSERT_EQ(remove(w, 1), DB_SUCCESS);
+  ASSERT_EQ(update(w, 2, ut::Row{2, 9, "x"}), DB_SUCCESS);
+  commit(w);
+
+  const std::vector<std::pair<uint32_t, uint32_t>> all{{1, 1}, {2, 2}, {3, 3}};
+
+  EXPECT_EQ(scan_sec_only(r), all);
+  commit(r);
+
+  auto later = begin();
+
+  EXPECT_EQ(scan_sec_only(later), (std::vector<std::pair<uint32_t, uint32_t>>{{3, 3}, {9, 2}}));
+  commit(later);
+}
+
 /** The reference: from random histories, with views held across them, the index alone
 gives what the table gives, in every view, with purge running in between. */
 TEST_F(Mvcc, SecModel) {
@@ -258,7 +284,7 @@ TEST_F(Mvcc, SecModel) {
 
   std::vector<View> views;
 
-  /* Through the index: the record decides, the row comes from the table. */
+  /* Through the index, with the row from the table, and from the index alone: they agree. */
   const auto by_sec = [&](Trx *t) {
     std::vector<std::pair<uint32_t, uint32_t>> v;
 
@@ -266,6 +292,7 @@ TEST_F(Mvcc, SecModel) {
       v.emplace_back(r.m_a, r.m_k);
     }
 
+    EXPECT_EQ(v, scan_sec_only(t));
     return v;
   };
 

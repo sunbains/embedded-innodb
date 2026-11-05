@@ -136,6 +136,9 @@ const ulint DATA_ROW_ID = 0;
 const ulint DATA_ROW_ID_LEN = 6;
 
 /** Transaction id: 6 bytes */
+/** The longest integer column. */
+const ulint DATA_INT_MAX_LEN = 8;
+
 const ulint DATA_TRX_ID = 1;
 const ulint DATA_TRX_ID_LEN = 8;
 

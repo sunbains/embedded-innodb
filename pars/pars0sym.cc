@@ -73,6 +73,10 @@ void sym_tab_free_private(SymTab *sym_tab) {
 }
 
 SymNode *sym_tab_add_int_lit(SymTab *sym_tab, ulint val) {
+  /* Above the signed 32 bits: 8 bytes unsigned, not a value that wrapped. */
+  const bool fits = val <= ulint(INT32_MAX);
+  const ulint len = fits ? 4 : 8;
+
   auto node = reinterpret_cast<SymNode *>(
       mem_heap_alloc(sym_tab->heap, sizeof(SymNode)));
 
@@ -83,12 +87,17 @@ SymNode *sym_tab_add_int_lit(SymTab *sym_tab, ulint val) {
 
   node->indirection = nullptr;
 
-  dtype_set(dfield_get_type(&node->common.val), DATA_INT, 0, 4);
+  dtype_set(dfield_get_type(&node->common.val), DATA_INT, fits ? 0 : DATA_UNSIGNED, len);
 
-  auto data = mem_heap_alloc(sym_tab->heap, 4);
-  mach_write_to_4(data, val);
+  auto data = mem_heap_alloc(sym_tab->heap, len);
+  if (fits) {
+    mach_write_to_4(data, val);
+  } else {
+    mach_write_to_8(data, val);
+  }
 
-  dfield_set_data(&(node->common.val), data, 4);
+
+  dfield_set_data(&(node->common.val), data, len);
 
   node->common.val_buf_size = 0;
   node->prefetch_buf = nullptr;

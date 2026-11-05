@@ -124,7 +124,7 @@ constexpr uint64_t TRX_SYS_FORMAT_MAGIC_N = 0x4942484C43464D54ULL;
 
 /** The format: 1 for trx ids and numbers that are clock values (ut0hlc.h,
 row0sysf.h). The files before it have no magic, and counters for ids. */
-constexpr uint32_t TRX_SYS_FORMAT_VERSION_N = 2;
+constexpr uint32_t TRX_SYS_FORMAT_VERSION_N = 3;
 
 /** How far above the stored high water the clock may issue, in microseconds
 (10 s). A thread that issues a value more than half of it above the store writes

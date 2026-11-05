@@ -1168,19 +1168,19 @@ DbErr DictLoad::load_system_tables() noexcept {
   table->add_col("ID", DATA_BINARY, 0, 0);
 
   /* ROW_FORMAT = (N_COLS >> 31) ? COMPACT : REDUNDANT */
-  table->add_col("N_COLS", DATA_INT, 0, 4);
+  table->add_col("N_COLS", DATA_INT, DATA_UNSIGNED, 4);
 
   /* TYPE is either DICT_TABLE_ORDINARY, or (TYPE & DICT_TF_COMPACT)
   and (TYPE & DICT_TF_FORMAT_MASK) are nonzero and TYPE = table->flags */
-  table->add_col("TYPE", DATA_INT, 0, 4);
+  table->add_col("TYPE", DATA_INT, DATA_UNSIGNED, 4);
   table->add_col("MIX_ID", DATA_BINARY, 0, 0);
 
   /* MIX_LEN may contain additional table flags when
   ROW_FORMAT!=REDUNDANT.  Currently, these flags include
   DICT_TF2_TEMPORARY. */
-  table->add_col("MIX_LEN", DATA_INT, 0, 4);
+  table->add_col("MIX_LEN", DATA_INT, DATA_UNSIGNED, 4);
   table->add_col("CLUSTER_NAME", DATA_BINARY, 0, 0);
-  table->add_col("SPACE", DATA_INT, 0, 4);
+  table->add_col("SPACE", DATA_INT, DATA_UNSIGNED, 4);
 
   table->m_id = DICT_TABLES_ID;
 
@@ -1211,12 +1211,12 @@ DbErr DictLoad::load_system_tables() noexcept {
   table = Table::create("SYS_COLUMNS", DICT_HDR_SPACE, 7, 0, false, Current_location());
 
   table->add_col("TABLE_ID", DATA_BINARY, 0, 0);
-  table->add_col("POS", DATA_INT, 0, 4);
+  table->add_col("POS", DATA_INT, DATA_UNSIGNED, 4);
   table->add_col("NAME", DATA_BINARY, 0, 0);
-  table->add_col("MTYPE", DATA_INT, 0, 4);
-  table->add_col("PRTYPE", DATA_INT, 0, 4);
-  table->add_col("LEN", DATA_INT, 0, 4);
-  table->add_col("PREC", DATA_INT, 0, 4);
+  table->add_col("MTYPE", DATA_INT, DATA_UNSIGNED, 4);
+  table->add_col("PRTYPE", DATA_INT, DATA_UNSIGNED, 4);
+  table->add_col("LEN", DATA_INT, DATA_UNSIGNED, 4);
+  table->add_col("PREC", DATA_INT, DATA_UNSIGNED, 4);
 
   table->m_id = DICT_COLUMNS_ID;
 
@@ -1240,10 +1240,10 @@ DbErr DictLoad::load_system_tables() noexcept {
   table->add_col("TABLE_ID", DATA_BINARY, 0, 0);
   table->add_col("ID", DATA_BINARY, 0, 0);
   table->add_col("NAME", DATA_BINARY, 0, 0);
-  table->add_col("N_FIELDS", DATA_INT, 0, 4);
-  table->add_col("TYPE", DATA_INT, 0, 4);
-  table->add_col("SPACE", DATA_INT, 0, 4);
-  table->add_col("PAGE_NO", DATA_INT, 0, 4);
+  table->add_col("N_FIELDS", DATA_INT, DATA_UNSIGNED, 4);
+  table->add_col("TYPE", DATA_INT, DATA_UNSIGNED, 4);
+  table->add_col("SPACE", DATA_INT, DATA_UNSIGNED, 4);
+  table->add_col("PAGE_NO", DATA_INT, DATA_UNSIGNED, 4);
 
   /* The '+ 2' below comes from the fields DB_TRX_ID, DB_ROLL_PTR */
 
@@ -1275,7 +1275,7 @@ DbErr DictLoad::load_system_tables() noexcept {
   table = Table::create("SYS_FIELDS", DICT_HDR_SPACE, 3, 0, false, Current_location());
 
   table->add_col("INDEX_ID", DATA_BINARY, 0, 0);
-  table->add_col("POS", DATA_INT, 0, 4);
+  table->add_col("POS", DATA_INT, DATA_UNSIGNED, 4);
   table->add_col("COL_NAME", DATA_BINARY, 0, 0);
 
   table->m_id = DICT_FIELDS_ID;
