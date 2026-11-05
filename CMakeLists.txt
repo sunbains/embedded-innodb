@@ -31,6 +31,26 @@ SET (IB_OUTPUT_DIR ${CMAKE_SOURCE_DIR} CACHE PATH "Where bin/ and lib/ are creat
 SET (LIBRARY_OUTPUT_PATH ${IB_OUTPUT_DIR}/lib)
 SET (EXECUTABLE_OUTPUT_PATH ${IB_OUTPUT_DIR}/bin)
 
+# Link with mold if it is there and the compiler can use it. Before any target: wal-cpp,
+# the library, the tests and the programs all get it. -DIB_USE_MOLD=OFF for the default.
+OPTION(IB_USE_MOLD "Link with mold if it is available" ON)
+
+IF(IB_USE_MOLD)
+  FIND_PROGRAM(IB_MOLD mold)
+
+  IF(IB_MOLD)
+    INCLUDE(CheckCXXSourceCompiles)
+    SET(CMAKE_REQUIRED_LINK_OPTIONS -fuse-ld=mold)
+    CHECK_CXX_SOURCE_COMPILES("int main() { return 0; }" IB_MOLD_WORKS)
+    UNSET(CMAKE_REQUIRED_LINK_OPTIONS)
+
+    IF(IB_MOLD_WORKS)
+      ADD_LINK_OPTIONS(-fuse-ld=mold)
+      MESSAGE(STATUS "Linking with ${IB_MOLD}")
+    ENDIF()
+  ENDIF()
+ENDIF()
+
 # Include required modules before git-submodule-init.cmake
 INCLUDE(ExternalProject)
 INCLUDE(FetchContent)
