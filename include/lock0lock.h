@@ -987,7 +987,7 @@ struct LockSys {
    * @param[in] page_no The page number within the space to validate.
    * @return true if the record lock queues on the page are valid, false otherwise.
    */
-  [[nodiscard]] bool rec_validate_page(PageId page_id) noexcept;
+  [[nodiscard]] bool rec_validate_page(PageId page_id, bool held = false) noexcept;
 
   /**
    * @brief Checks if some other transaction has a lock request in the queue.

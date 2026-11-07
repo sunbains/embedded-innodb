@@ -30,6 +30,7 @@ Created 4/20/1996 Heikki Tuuri
 #include "buf0types.h"
 #include "data0data.h"
 #include "dict0types.h"
+#include "idx0am.h"
 #include "mem0types.h"
 #include "mtr0types.h"
 #include "que0types.h"
@@ -41,8 +42,6 @@ const ulint INS_NODE_MAGIC_N = 15849075;
 
 struct RowUpdate;
 struct LockSys;
-struct BtreeCursor;
-struct BtreePcursor;
 struct Mtr;
 struct BufBlock;
 struct BigRec;
@@ -166,16 +165,15 @@ struct RowInsert {
    * in the index. This situation can occur if the delete-marked record is
    * kept in the index for consistent reads.
    *
-   * @param[in] mode              BTR_MODIFY_LEAF or BTR_MODIFY_TREE, depending on whether mtr holds just a leaf
-   *                              latch or also a tree latch
-   * @param[in] btr_cur           B-tree cursor
+   * @param[in] intent            Write or Restructure, what the cursor was positioned with
+   * @param[in] cur               Cursor on the record
    * @param[in] entry             Index entry to insert
    * @param[in] thr               Query thread
    * @param[in] mtr               Must be committed before latching any further pages
    * @return DB_SUCCESS or error code
    */
   [[nodiscard]] DbErr sec_index_entry_by_modify(
-    ulint mode, BtreeCursor *btr_cur, const DTuple *entry, QueThr *thr, Mtr *mtr
+    Intent intent, IndexCursor *cur, const DTuple *entry, QueThr *thr, Mtr *mtr
   ) noexcept;
 
   /**
@@ -183,8 +181,8 @@ struct RowInsert {
    * existing record in the index. This situation can occur if the delete marked
    * record is kept in the index for consistent reads.
    *
-   * @param[in] mode BTR_MODIFY_LEAF or BTR_MODIFY_TREE, depending on whether mtr holds just a leaf latch or also a tree latch
-   * @param[in] btr_cur B-tree cursor
+   * @param[in] intent Write or Restructure, what the cursor was positioned with
+   * @param[in] cur Cursor on the record
    * @param[in,out] heap Pointer to memory heap, or NULL
    * @param[out] big_rec Possible big rec vector of fields which have to be stored externally by the caller
    * @param[in] entry Index entry to insert
@@ -194,7 +192,7 @@ struct RowInsert {
    * @return DB_SUCCESS, DB_FAIL, or error code
    */
   [[nodiscard]] DbErr clust_index_entry_by_modify(
-    ulint mode, BtreeCursor *btr_cur, MemHeap **heap, BigRec *big_rec, const DTuple *entry, QueThr *thr, Mtr *mtr
+    Intent intent, IndexCursor *cur, MemHeap **heap, BigRec *big_rec, const DTuple *entry, QueThr *thr, Mtr *mtr
   ) noexcept;
 
   /**
@@ -287,14 +285,14 @@ struct RowInsert {
    *
    * @param[in] thr     in: query thread whose run_node is an update node
    * @param[in] foreign in: foreign key constraint whose type is != 0
-   * @param[in] pcur    in: btr_cur placed on a matching index record in the child table
+   * @param[in] pcur    in: cursor on a matching index record in the child table
    * @param[in] entry   in: index entry in the parent table
-   * @param[in] mtr     in: mtr holding the latch of pcur page
+   * @param[in] mtr     in: mtr of the position of pcur
    *
    * @return DB_SUCCESS, DB_LOCK_WAIT, or error code
    */
   [[nodiscard]] DbErr foreign_check_on_constraint(
-    QueThr *thr, const Foreign *foreign, BtreePcursor *pcur, DTuple *entry, Mtr *mtr
+    QueThr *thr, const Foreign *foreign, IndexCursor *pcur, DTuple *entry, Mtr *mtr
   ) noexcept;
 
   /**
@@ -378,14 +376,14 @@ struct RowInsert {
    *
    * This function sets shared locks on possible duplicate records. It works only for a clustered index.
    *
-   * @param[in] btr_cur B-tree cursor.
+   * @param[in] cur Cursor from seek_insert().
    * @param[in] entry Entry to insert.
    * @param[in] thr Query thread.
    * @param[in] mtr Mini-transaction.
    *
    * @return DB_SUCCESS if no error, DB_DUPLICATE_KEY if error, DB_LOCK_WAIT if we have to wait for a lock on a possible duplicate record.
    */
-  [[nodiscard]] DbErr duplicate_error_in_clust(BtreeCursor *btr_cur, DTuple *entry, QueThr *thr, Mtr *mtr) noexcept;
+  [[nodiscard]] DbErr duplicate_error_in_clust(IndexCursor *cur, DTuple *entry, QueThr *thr, Mtr *mtr) noexcept;
 
   /**
    * @brief Checks if an index entry has a long enough common prefix with an existing record.
@@ -394,11 +392,11 @@ struct RowInsert {
    * of the existing record. In the case of a clustered index, the prefix must be n_unique
    * fields long, and in the case of a secondary index, all fields must be equal.
    *
-   * @param[in] btr_cur B-tree cursor.
+   * @param[in] cur Cursor from seek_insert().
    *
-   * @return 0 if no update is needed, ROW_INS_PREV if the previous record should be updated.
+   * @return true if the record under the cursor should be updated.
    */
-  [[nodiscard]] ulint must_modify(BtreeCursor *btr_cur) noexcept;
+  [[nodiscard]] bool must_modify(IndexCursor *cur) noexcept;
 
   /**
    * @brief Tries to insert an index entry to an index.
@@ -411,8 +409,7 @@ struct RowInsert {
    * the same fields is found, the other record is necessarily marked deleted.
    * It is then unmarked. Otherwise, the entry is just inserted to the index.
    *
-   * @param[in] mode BTR_MODIFY_LEAF or BTR_MODIFY_TREE, depending on whether
-   *                 we wish optimistic or pessimistic descent down the index tree.
+   * @param[in] intent Write, or Restructure when the change may take that.
    * @param[in] index Index to insert the entry into.
    * @param[in] entry Index entry to insert.
    * @param[in] n_ext Number of externally stored columns.
@@ -420,7 +417,7 @@ struct RowInsert {
    *
    * @return DB_SUCCESS, DB_LOCK_WAIT, DB_FAIL if pessimistic retry needed, or error code.
    */
-  [[nodiscard]] DbErr index_entry_low(ulint mode, const Index *index, DTuple *entry, ulint n_ext, QueThr *thr) noexcept;
+  [[nodiscard]] DbErr index_entry_low(Intent intent, const Index *index, DTuple *entry, ulint n_ext, QueThr *thr) noexcept;
 
   /**
    * @brief Sets the values of the dtuple fields in entry from the values of appropriate columns in row.

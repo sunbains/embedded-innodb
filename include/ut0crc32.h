@@ -430,7 +430,12 @@ static inline void consume_chunks(uint32_t &crc, const byte *&data, size_t &len)
 template <typename Chunk, typename algo_to_use>
 static inline void consume_pow2(uint32_t &crc, const byte *&data, size_t len) noexcept {
   if (len & sizeof(Chunk)) {
-    crc = algo_to_use::update(crc, *(Chunk *)data);
+    /* A short buffer stops the prefix before the address is aligned. */
+    Chunk chunk;
+
+    memcpy(&chunk, data, sizeof(chunk));
+
+    crc = algo_to_use::update(crc, chunk);
     data += sizeof(Chunk);
   }
 }

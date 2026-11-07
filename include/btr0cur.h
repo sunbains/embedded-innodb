@@ -31,6 +31,8 @@ class System;
 #include "innodb0types.h"
 #include "page0cur.h"
 
+#include <functional>
+
 struct Fsp;
 struct Btree;
 struct BufPool;
@@ -69,7 +71,42 @@ constexpr ulint BTR_CUR_RETRY_SLEEP_TIME = 50000;
 /** Size of path array (in slots) */
 constexpr ulint BTR_PATH_ARRAY_N_SLOTS = 250;
 
+namespace blink {
+struct Smo;
+}
+
 struct BtreeCursor {
+  /**
+   * What restructuring an index asks of the tree, for the record level code of insert and
+   * update to be the same whichever tree does it.
+   */
+  struct TreeOps {
+    virtual ~TreeOps() = default;
+
+    /** @return true if a reservation is needed also where the caller is said to have one. */
+    [[nodiscard]] virtual bool always_reserve() const noexcept = 0;
+
+    /** The tree is going to change. */
+    virtual void prepare(const Index *index, Mtr *mtr) noexcept = 0;
+
+    /** Reserve the file space it takes.
+    @return false if there isn't enough. */
+    [[nodiscard]] virtual bool reserve(const Index *index, ulint tree_height, ulint alloc_type, Mtr *mtr) noexcept = 0;
+
+    /** Give back what reserve() got, if it's done with it. */
+    virtual void release(const Index *index) noexcept = 0;
+
+    /** Free the externally stored fields of rec that update changes. */
+    virtual void free_updated(const Index *index, Rec rec, const RecOffs &offsets, const Upd *update, TrxRbCtx rb_ctx, Mtr *mtr) noexcept = 0;
+
+    /** The page has no room for entry, even after a reorganize: make some and insert it.
+    @return the record. */
+    [[nodiscard]] virtual Rec split_and_insert(BtreeCursor *cur, const DTuple *entry, ulint n_ext, Mtr *mtr) noexcept = 0;
+
+    /** An update replaced the record on the page. */
+    virtual void after_reinsert(BtreeCursor *cur, Mtr *mtr) noexcept = 0;
+  };
+
   /**
    * A slot in the path array. We store here info on a search path down the tree.
    * Each slot contains data on a single level of the tree.
@@ -209,6 +246,22 @@ struct BtreeCursor {
    */
   [[nodiscard]] DbErr pessimistic_insert(System &sys, 
     ulint flags, DTuple *entry, Rec *rec, BigRec *big_rec, ulint n_ext, QueThr *thr, Mtr *mtr
+  ) noexcept;
+
+  /**
+   * pessimistic_insert() for any tree: what is the same is here, the tree part in ops. The
+   * cursor is on the page of the insert point, X-latched in mtr.
+   */
+  [[nodiscard]] DbErr insert_restructure(System &sys, 
+    TreeOps &ops, ulint flags, DTuple *entry, Rec *rec, BigRec *big_rec, ulint n_ext, QueThr *thr, Mtr *mtr
+  ) noexcept;
+
+  /**
+   * pessimistic_update() for any tree: what is the same is here, the tree part in ops. The
+   * cursor is on the record, its page X-latched in mtr.
+   */
+  [[nodiscard]] DbErr update_restructure(System &sys, 
+    TreeOps &ops, ulint flags, MemHeap **heap, BigRec *big_rec, const Upd *update, ulint cmpl_info, QueThr *thr, Mtr *mtr
   ) noexcept;
 
   /**
@@ -381,6 +434,14 @@ struct BtreeCursor {
   void estimate_number_of_different_key_vals(System &sys, const Index *index) noexcept;
 
   /**
+   * estimate_number_of_different_key_vals() for any tree.
+   *
+   * @param[in] index           Index
+   * @param[in] open_rnd        Positions this cursor on a random leaf page, in the mini-transaction.
+   */
+  void estimate_n_diff(System &sys, const Index *index, const std::function<void(Mtr *)> &open_rnd) noexcept;
+
+  /**
    * Returns the page cursor component of a tree cursor.
    *
    * @return Pointer to the page cursor component.
@@ -454,7 +515,7 @@ struct BtreeCursor {
 
     auto page = get_page_no();
 
-    if (page_get_data_size(page) < BTR_CUR_PAGE_LOW_FILL_LIMIT ||
+    if (page_get_rec_data_size(page) < BTR_CUR_PAGE_LOW_FILL_LIMIT ||
         (Btree::page_get_next(page, mtr) == FIL_NULL && Btree::page_get_prev(page, mtr) == FIL_NULL)) {
 
       // The page fillfactor has dropped below a predefined minimum value
@@ -481,7 +542,7 @@ struct BtreeCursor {
 
     auto page = get_page_no();
 
-    if ((page_get_data_size(page) - rec_size < BTR_CUR_PAGE_LOW_FILL_LIMIT) ||
+    if ((page_get_rec_data_size(page) - rec_size < BTR_CUR_PAGE_LOW_FILL_LIMIT) ||
         (Btree::page_get_next(page, mtr) == FIL_NULL && Btree::page_get_prev(page, mtr) == FIL_NULL) || page_get_n_recs(page) < 2) {
 
       /* The page fillfactor will drop below a predefined minimum value, OR the level in the B-tree contains just one page,
@@ -495,6 +556,7 @@ struct BtreeCursor {
 #ifndef UNIT_TESTING
  private:
 #endif /* UNIT_TESTING */
+  friend struct blink::Smo;
 
   /**
    * Adds path information to the cursor for the current page, for which

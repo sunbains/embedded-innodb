@@ -29,6 +29,7 @@ Mtr: the mini-transaction handle, its log and its memo. */
 #include "ut0perf.h"
 
 #include <random>
+#include <thread>
 #include <vector>
 
 namespace {
@@ -858,6 +859,56 @@ TEST_F(MtrMemoTest, MemoRelease) {
 #endif /* UNIV_DEBUG */
 
   mtr.commit(*m_sys);
+}
+
+/** RwLatch and RwLock in one memo: each slot is released through its own type. */
+TEST_F(MtrMemoTest, Latches) {
+  RwLatch s;
+  RwLatch x;
+
+  s.create();
+  x.create();
+
+  Mtr mtr;
+
+  mtr.start();
+  mtr_s_lock(&s, &mtr);
+  mtr_x_lock(&x, &mtr);
+  mtr_s_lock(&m_locks[0], &mtr);
+  mtr_x_lock(&m_locks[1], &mtr);
+
+#ifdef UNIV_DEBUG
+  EXPECT_TRUE(mtr.memo_contains(&s, MTR_MEMO_S_LATCH));
+  EXPECT_FALSE(mtr.memo_contains(&s, MTR_MEMO_X_LATCH));
+  EXPECT_FALSE(mtr.memo_contains(&s, MTR_MEMO_S_LOCK));
+  EXPECT_TRUE(mtr.memo_contains(&x, MTR_MEMO_X_LATCH));
+  EXPECT_TRUE(mtr.memo_contains(&m_locks[0], MTR_MEMO_S_LOCK));
+  EXPECT_FALSE(mtr.memo_contains(&m_locks[0], MTR_MEMO_S_LATCH));
+#endif /* UNIV_DEBUG */
+
+  mtr.memo_release(*m_sys, &x, MTR_MEMO_S_LATCH);
+  ut_d(EXPECT_TRUE(mtr.memo_contains(&x, MTR_MEMO_X_LATCH)) << "not an S slot");
+
+  mtr.memo_release(*m_sys, &x, MTR_MEMO_X_LATCH);
+  ut_d(EXPECT_FALSE(mtr.memo_contains(&x, MTR_MEMO_X_LATCH)));
+
+  std::thread([&] {
+    EXPECT_TRUE(x.try_x_lock());
+    x.x_unlock();
+  }).join();
+
+  mtr.commit(*m_sys);
+
+  std::thread([&] {
+    EXPECT_TRUE(s.try_x_lock());
+    s.x_unlock();
+  }).join();
+
+  EXPECT_EQ(rw_lock_get_reader_count(&m_locks[0]), 0UL);
+  EXPECT_EQ(rw_lock_get_writer(&m_locks[1]), RW_LOCK_NOT_LOCKED);
+
+  s.destroy();
+  x.destroy();
 }
 
 /** A restarted mtr has an empty memo. */

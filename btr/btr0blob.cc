@@ -232,7 +232,7 @@ DbErr Blob::store_big_rec_extern_fields(System &sys,
 ) noexcept {
 
   ut_ad(rec.offs_validate(index, offsets));
-  ut_ad(local_mtr->memo_contains(index->get_lock(), MTR_MEMO_X_LOCK));
+  ut_ad(sys.m_btree->tree_x_latched(index, local_mtr));
   ut_ad(local_mtr->memo_contains(rec_block, MTR_MEMO_PAGE_X_FIX));
   ut_ad(rec_block->get_frame() == rec.page_align());
   ut_a(index->is_clustered());
@@ -341,7 +341,7 @@ DbErr Blob::store_big_rec_extern_fields(System &sys,
       extern_len -= store_len;
 
       BufPool::Request req{
-        .m_rw_latch = RW_X_LATCH,
+        .m_rw_latch = sys.am(index).page_held_latch(),
         .m_page_id = {space_id, rec_page_no},
         .m_mode = BUF_GET,
         .m_file = __FILE__,
@@ -407,7 +407,7 @@ void Blob::free_externally_stored_field(System &sys,
 ) noexcept {
 
 #ifdef UNIV_DEBUG
-  ut_ad(local_mtr->memo_contains(index->get_lock(), MTR_MEMO_X_LOCK));
+  ut_ad(sys.m_btree->tree_x_latched(index, local_mtr));
   ut_ad(local_mtr->memo_contains_page(field_ref, MTR_MEMO_PAGE_X_FIX));
   ut_ad(!rec || rec.offs_validate(index, offsets));
 
@@ -454,8 +454,9 @@ void Blob::free_externally_stored_field(System &sys,
 
     auto ptr{Rec(field_ref).page_align()};
 
+    /* The page of the record is held by the caller. Without a record the reference is on an undo page. */
     BufPool::Request req{
-      .m_rw_latch = RW_X_LATCH,
+      .m_rw_latch = rec.is_null() ? ulint(RW_X_LATCH) : sys.am(index).page_held_latch(),
       .m_page_id = {page_get_space_id(ptr), page_get_page_no(ptr)},
       .m_mode = BUF_GET,
       .m_file = __FILE__,
@@ -463,8 +464,7 @@ void Blob::free_externally_stored_field(System &sys,
       .m_mtr = &mtr
     };
 
-    /* X-latch the page of the record in this mini-transaction: field_ref
-    is written below. */
+    /* The page of the record in this mini-transaction: field_ref is written below. */
     (void)sys.m_buf_pool->get(req, nullptr);
     buf_block_dbg_add_level();
 

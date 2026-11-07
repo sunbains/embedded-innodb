@@ -124,18 +124,30 @@ size_t ParallelReader::available_threads(System &sys, size_t n_required, bool us
 }
 
 void ParallelReader::ScanCtx::index_s_lock() {
+  /* Across the wait: nobody gets on before the latch is held. A second thread that went on while
+  the first waits for a writer would go down the tree that writer is changing, and they deadlock. */
+  std::lock_guard lock{m_s_mutex};
+
   if (m_s_locks.fetch_add(1, std::memory_order_acquire) == 0) {
     auto index = m_config.m_index;
-    /* The latch can be unlocked by a thread that didn't originally lock it. */
-    rw_lock_s_lock_gen(index->get_lock(), true);
+
+    if (m_uses_index_latch) {
+      /* The latch can be unlocked by a thread that didn't originally lock it. */
+      rw_lock_s_lock_gen(index->get_lock(), true);
+    }
   }
 }
 
 void ParallelReader::ScanCtx::index_s_unlock() {
+  std::lock_guard lock{m_s_mutex};
+
   if (m_s_locks.fetch_sub(1, std::memory_order_acquire) == 1) {
     auto index = m_config.m_index;
-    /* The latch can be unlocked by a thread that didn't originally lock it. */
-    rw_lock_s_unlock_gen(index->get_lock(), true);
+
+    if (m_uses_index_latch) {
+      /* The latch can be unlocked by a thread that didn't originally lock it. */
+      rw_lock_s_unlock_gen(index->get_lock(), true);
+    }
   }
 }
 
@@ -214,7 +226,7 @@ class PCursor {
   void restore_position(System &sys) noexcept {
     constexpr auto MODE = BTR_SEARCH_LEAF;
     const auto relative = m_pcur->m_rel_pos;
-    auto equal = m_pcur->restore_position(sys, MODE, m_mtr, Current_location());
+    auto equal = sys.am(m_pcur->get_btr_cur()->m_index).restore_tree_cursor(*m_pcur, MODE, m_mtr, Current_location());
 
     switch (relative) {
       case BtreeCursorPos::ON:
@@ -287,7 +299,7 @@ class PCursor {
 BufBlock *ParallelReader::ScanCtx::block_get_s_latched(System &sys, const PageId &page_id, Mtr *mtr, ulint line) const {
   /* We never scan undo tablespaces. */
   BufPool::Request req{
-    .m_rw_latch = RW_S_LATCH, .m_page_id = page_id, .m_mode = BUF_GET, .m_file = __FILE__, .m_line = ulint(line), .m_mtr = mtr
+    .m_rw_latch = sys.am(m_config.m_index).page_read_latch(), .m_page_id = page_id, .m_mode = BUF_GET, .m_file = __FILE__, .m_line = ulint(line), .m_mtr = mtr
   };
 
   auto block = sys.m_buf_pool->get(req, nullptr);
@@ -301,7 +313,7 @@ void PCursor::savepoint(System &sys) noexcept {
   /* Store the cursor position on the previous user record on the page. */
   m_pcur->move_to_prev_on_page(sys);
 
-  m_pcur->store_position(sys, m_mtr);
+  sys.am(m_pcur->get_btr_cur()->m_index).save_tree_cursor(*m_pcur, m_mtr);
 
   m_mtr->commit(sys);
 }
@@ -324,40 +336,41 @@ void PCursor::resume(System &sys) noexcept {
 
 DbErr PCursor::move_to_user_rec(System &sys) noexcept {
   auto cur = m_pcur->get_page_cur();
-  const auto next_page_no = Btree::page_get_next(cur->get_page(), m_mtr);
 
-  if (next_page_no == FIL_NULL) {
-    m_mtr->commit(sys);
-    return DB_END_OF_INDEX;
-  }
+  /* Until a page with a record: in a B-link tree a leaf can be empty. */
+  do {
+    const auto next_page_no = Btree::page_get_next(cur->get_page(), m_mtr);
 
-  auto block = cur->get_block();
-  const PageId page_id{block->get_space(), block->get_page_no()};
+    if (next_page_no == FIL_NULL) {
+      m_mtr->commit(sys);
+      return DB_END_OF_INDEX;
+    }
 
-  BufPool::Request req{
-    .m_rw_latch = RW_S_LATCH,
-    .m_page_id = {page_id.m_space_id, next_page_no},
-    .m_mode = BUF_GET,
-    .m_file = __FILE__,
-    .m_line = __LINE__,
-    .m_mtr = m_mtr
-  };
+    auto block = cur->get_block();
+    const PageId page_id{block->get_space(), block->get_page_no()};
 
-  block = sys.m_buf_pool->get(req, nullptr);
+    BufPool::Request req{
+      .m_rw_latch = sys.am(cur->m_index).page_read_latch(),
+      .m_page_id = {page_id.m_space_id, next_page_no},
+      .m_mode = BUF_GET,
+      .m_file = __FILE__,
+      .m_line = __LINE__,
+      .m_mtr = m_mtr
+    };
 
-  buf_block_dbg_add_level();
+    block = sys.m_buf_pool->get(req, nullptr);
 
-  if (page_is_leaf(block->get_frame())) {
-    sys.m_btree->leaf_page_release(cur->get_block(), RW_S_LATCH, m_mtr);
-  }
+    buf_block_dbg_add_level();
 
-  cur->set_before_first(block);
+    if (page_is_leaf(block->get_frame())) {
+      sys.m_btree->leaf_page_release(cur->get_block(), RW_S_LATCH, m_mtr);
+    }
 
-  /* Skip the infimum record. */
-  cur->move_to_next();
+    cur->set_before_first(block);
 
-  /* Page can't be empty unless it is a root page. */
-  ut_ad(!cur->is_after_last());
+    /* Skip the infimum record. */
+    cur->move_to_next();
+  } while (cur->is_after_last());
 
   return DB_SUCCESS;
 }
@@ -462,7 +475,7 @@ bool ParallelReader::ScanCtx::sec_rec_visible(System &sys, const Rec rec, MemHea
   page stays latched in mtr while the reference is used. */
   auto ref = row_build_row_ref(ROW_COPY_POINTERS, sec_index, rec, heap);
 
-  BtreePcursor pcur{};
+  IndexCursor cur{sys};
 
   /* The clustered index page is latched in a mini-transaction of its own,
   released before the next record: kept in mtr until the scan leaves the
@@ -472,17 +485,16 @@ bool ParallelReader::ScanCtx::sec_rec_visible(System &sys, const Rec rec, MemHea
 
   clust_mtr.start();
 
-  pcur.open(sys, clust_index, ref, PAGE_CUR_LE, BTR_SEARCH_LEAF, &clust_mtr, Current_location());
-
-  Rec clust_rec = pcur.get_rec();
-
-  if (!page_rec_is_user_rec(clust_rec) || pcur.get_low_match() < clust_index->get_n_unique()) {
+  /* Through the index interface: a tree has its own way down, and the writers of the
+  B-link tree don't take the index latch that a B-tree descent counts on. */
+  if (!cur.find(clust_index, ref, Intent::Read, &clust_mtr)) {
     /* The row is gone (a rolled back insert, purge is removing rec): it
     did not exist in the view. */
-    pcur.close();
-    clust_mtr.commit(sys);
+    cur.commit(&clust_mtr);
     return false;
   }
+
+  Rec clust_rec = cur.rec();
 
   RecOffs clust_offsets{};
 
@@ -519,8 +531,7 @@ bool ParallelReader::ScanCtx::sec_rec_visible(System &sys, const Rec rec, MemHea
   const auto visible =
     !clust_rec.is_null() && !clust_rec.get_deleted_flag() && sys.m_row_sel->sec_rec_is_for_clust_rec(rec, sec_index, clust_rec, clust_index);
 
-  pcur.close();
-  clust_mtr.commit(sys);
+  cur.commit(&clust_mtr);
 
   return visible;
 }
@@ -950,81 +961,95 @@ void ParallelReader::worker(System &sys, ParallelReader::ThreadCtx *thread_ctx) 
   ut_a(is_error_set() || (m_n_completed == m_ctx_id && is_queue_empty()));
 }
 
-page_no_t ParallelReader::ScanCtx::search(System &sys, const BufBlock *block, const DTuple *key) const {
+PageCursor ParallelReader::ScanCtx::start_on_level(System &sys, BufBlock *block, const DTuple *key, Mtr *mtr, Savepoints &savepoints) {
   ut_ad(index_s_own());
 
-  PageCursor page_cursor;
   const auto index = m_config.m_index;
+  PageCursor page_cursor;
 
-  if (key != nullptr) {
-    page_cursor.search(sys, block, index, key, PAGE_CUR_L);
-  } else {
-    page_cursor.set_before_first(block);
-  }
-
-  if (page_rec_is_infimum(page_cursor.get_rec())) {
-    page_cursor.move_to_next();
-  }
-
-  const auto rec = page_cursor.get_rec();
-
-  MemHeap *heap = nullptr;
-
-  std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
-  auto offsets = offsets_.data();
-
-  rec_offs_init(offsets_);
-
-  {
-    PhyRec record{index, rec};
-
-    offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
-  }
-
-  auto page_no = sys.m_btree->node_ptr_get_child_page_no(rec, offsets);
-
-  if (heap != nullptr) {
-    mem_heap_free(heap);
-  }
-
-  return page_no;
-}
-
-PageCursor ParallelReader::ScanCtx::start_range(System &sys, page_no_t page_no, Mtr *mtr, const DTuple *key, Savepoints &savepoints) const {
-  ut_ad(index_s_own());
-
-  ulint height{};
-  auto index = m_config.m_index;
-  PageId page_id(index->m_page_id.m_space_id, page_no);
-
-  /* Follow the left most pointer down on each page. */
-  for (;;) {
-    auto savepoint = mtr->get_savepoint();
-
-    auto block = block_get_s_latched(sys, page_id, mtr, __LINE__);
-
-    height = sys.m_btree->page_get_level(block->get_frame(), mtr);
-
-    savepoints.push_back({savepoint, block});
-
-    if (height != 0 && height != m_config.m_read_level) {
-      page_id.m_page_no = search(sys, block, key);
-      continue;
-    }
-
-    PageCursor page_cursor;
-
+  const auto position = [&](BufBlock *on) {
     if (key != nullptr) {
-      page_cursor.search(sys, block, index, key, PAGE_CUR_GE);
+      page_cursor.search(sys, on, index, key, PAGE_CUR_GE);
     } else {
-      page_cursor.set_before_first(block);
+      page_cursor.set_before_first(on);
     }
 
     if (page_rec_is_infimum(page_cursor.get_rec())) {
       page_cursor.move_to_next();
     }
+  };
 
-    return page_cursor;
+  position(block);
+
+  /* What the range has can start on a later page: a leaf can be empty, or the page has split since
+  its parent was read and the key went with the upper half. The search is for each page: what's first
+  on the next one can still be below the key. */
+  while (page_rec_is_supremum(page_cursor.get_rec())) {
+    const auto next_no = Btree::page_get_next(block->get_frame(), mtr);
+
+    if (next_no == FIL_NULL) {
+      break;
+    }
+
+    const auto savepoint = mtr->get_savepoint();
+
+    block = block_get_s_latched(sys, PageId(index->m_page_id.m_space_id, next_no), mtr, __LINE__);
+    savepoints.push_back({savepoint, block});
+
+    position(block);
+  }
+
+  return page_cursor;
+}
+
+PageCursor ParallelReader::ScanCtx::start_range(System &sys, page_no_t page_no, Mtr *mtr, const DTuple *key, Savepoints &savepoints, size_t &n_levels) {
+  ut_ad(index_s_own());
+
+  const auto index = m_config.m_index;
+  const auto read_level = m_config.m_read_level;
+  auto &am = sys.am(index);
+  IndexAm::ScanNode node;
+
+  /* Follow the left most pointer down on each page. No latch on a page while it goes down: the
+  writers of a B-link tree go up, holding the child. */
+  for (;;) {
+    am.read_scan_node(index, page_no, key, nullptr, read_level, 1, node);
+
+    if (node.m_dead) {
+      /* A merge took it off the tree: see the caller. */
+      return PageCursor{};
+    }
+
+    if (node.m_level > read_level) {
+      ++n_levels;
+
+      ut_a(!node.m_children.empty());
+
+      page_no = node.m_children[0];
+
+      continue;
+    }
+
+    const auto savepoint = mtr->get_savepoint();
+    const auto block = block_get_s_latched(sys, PageId(index->m_page_id.m_space_id, page_no), mtr, __LINE__);
+    const auto level = sys.m_btree->page_get_level(block->get_frame(), mtr);
+
+    if (sys.m_btree->page_get_index_id(block->get_frame()) != index->m_id || level != read_level) {
+      mtr->release_block_at_savepoint(savepoint, block);
+
+      /* The root went up: look again. Dead, or the level is gone, is for the caller. */
+      if (level > read_level) {
+        continue;
+      }
+
+      return PageCursor{};
+    }
+
+    ++n_levels;
+
+    savepoints.push_back({savepoint, block});
+
+    return start_on_level(sys, block, key, mtr, savepoints);
   }
 }
 
@@ -1042,122 +1067,121 @@ void ParallelReader::ScanCtx::create_range(System &sys, Ranges &ranges, PageCurs
   ranges.push_back(Range(iter, std::make_shared<Iter>()));
 }
 
-DbErr ParallelReader::ScanCtx::create_ranges(System &sys, 
+DbErr ParallelReader::ScanCtx::create_ranges(System &sys,
   const ScanRange &scan_range, page_no_t page_no, size_t depth, const size_t split_level, Ranges &ranges, Mtr *mtr
 ) {
 
   ut_ad(index_s_own());
   ut_a(page_no != FIL_NULL);
 
-  /* Do a breadth first traversal of the B+Tree using recursion. We want to
-  set up the scan ranges in one pass. This guarantees that the tree structure
-  cannot change while we are creating the scan sub-ranges.
+  auto index = m_config.m_index;
+  const auto read_level = m_config.m_read_level;
+  const auto start = scan_range.m_start;
+  const auto end = scan_range.m_end;
 
-  Once we create the persistent cursor (Range) for a sub-tree we can release
-  the latches on all blocks traversed for that sub-tree. */
+  /* In a B-link tree a merge can have taken it since its parent was read. The range before this one
+  goes on over what it had. If there's none the scan would start too late: start again, the caller
+  does, the tree doesn't lead here any more. */
+  const auto dead = [&]() { return ranges.empty() ? DB_FAIL : DB_SUCCESS; };
 
-  const auto index = m_config.m_index;
+  IndexAm::ScanNode node;
 
-  PageId page_id(index->m_page_id.m_space_id, page_no);
+  for (;;) {
+    sys.am(index).read_scan_node(index, page_no, start, end, read_level, SIZE_MAX, node);
 
-  Savepoint savepoint({mtr->get_savepoint(), nullptr});
-
-  auto block = block_get_s_latched(sys, page_id, mtr, __LINE__);
-
-  /* read_level requested should be less than the tree height. */
-  ut_ad(m_config.m_read_level < sys.m_btree->page_get_level(block->get_frame(), mtr) + 1);
-
-  savepoint.second = block;
-
-  std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
-  auto offsets = offsets_.data();
-
-  rec_offs_init(offsets_);
-
-  PageCursor page_cursor;
-
-  page_cursor.m_index = index;
-
-  auto start = scan_range.m_start;
-
-  if (start != nullptr) {
-    /* Above the leaves, the child of the first entry >= start: the node
-    pointer before the first one >= start (several can equal a prefix). */
-    const auto level = sys.m_btree->page_get_level(block->get_frame(), mtr);
-
-    page_cursor.search(sys, block, index, start, level > m_config.m_read_level ? PAGE_CUR_L : PAGE_CUR_LE);
-
-    if (page_cursor.is_after_last()) {
-      return DB_SUCCESS;
-    } else if (page_cursor.is_before_first()) {
-      page_cursor.move_to_next();
-    }
-  } else {
-    page_cursor.set_before_first(block);
-    /* Skip the infimum record. */
-    page_cursor.move_to_next();
-  }
-
-  MemHeap *heap{};
-
-  const auto at_level = sys.m_btree->page_get_level(block->get_frame(), mtr);
-
-  Savepoints savepoints{};
-
-  while (!page_cursor.is_after_last()) {
-    const auto rec = page_cursor.get_rec();
-
-    if (heap == nullptr) {
-      heap = mem_heap_create(UNIV_PAGE_SIZE / 4);
+    if (node.m_dead) {
+      return dead();
     }
 
-    {
-      PhyRec record{index, rec};
-
-      offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
-    }
-
-    const auto end = scan_range.m_end;
-
-    if (end != nullptr && end->compare(rec, index, offsets) <= 0) {
+    if (node.m_level > read_level) {
       break;
     }
 
-    PageCursor level_page_cursor;
+    /* This page has the first of the range, or a later one has. */
+    const auto savepoint = mtr->get_savepoint();
+    const auto block = block_get_s_latched(sys, PageId(index->m_page_id.m_space_id, page_no), mtr, __LINE__);
+    const auto level = sys.m_btree->page_get_level(block->get_frame(), mtr);
+    const auto gone = sys.m_btree->page_get_index_id(block->get_frame()) != index->m_id;
 
-    /* Split the tree one level below the root if read_level requested is below the root level. */
-    if (at_level > m_config.m_read_level) {
-      auto page_no = sys.m_btree->node_ptr_get_child_page_no(rec, offsets);
+    if (gone || level != read_level) {
+      mtr->release_block_at_savepoint(savepoint, block);
 
-      if (depth < split_level) {
-        /* Need to create a range starting at a lower level in the tree. */
-        create_ranges(sys, scan_range, page_no, depth + 1, split_level, ranges, mtr);
+      if (gone) {
+        return dead();
+      }
 
-        page_cursor.move_to_next();
+      /* The root went up: look again. If it's below the level there is nothing to read. */
+      if (level > read_level) {
         continue;
       }
 
-      /* Find the range start in the leaf node. */
-      level_page_cursor = start_range(sys, page_no, mtr, start, savepoints);
-    } else {
-      /* In case of root node being the leaf node or in case we've been asked to
-      read the root node (via read_level) place the cursor on the root node and
-      proceed. */
+      return DB_SUCCESS;
+    }
 
-      if (start != nullptr) {
-        page_cursor.search(sys, block, index, start, PAGE_CUR_GE);
-        ut_a(!page_rec_is_infimum(page_cursor.get_rec()));
-      } else {
-        page_cursor.set_before_first(block);
+    Savepoints savepoints{{savepoint, block}};
 
-        /* Skip the infimum record. */
-        page_cursor.move_to_next();
-        ut_a(!page_cursor.is_after_last());
+    auto page_cursor = start_on_level(sys, block, start, mtr, savepoints);
+
+    page_cursor.m_index = index;
+
+    if (const auto rec = page_cursor.get_rec(); !page_rec_is_supremum(rec)) {
+      bool in_range{true};
+
+      if (end != nullptr) {
+        MemHeap *heap{};
+        std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
+
+        rec_offs_init(offsets_);
+
+        const RecOffs offsets = PhyRec(index, rec).get_all_col_offsets(offsets_.data(), &heap, Current_location());
+
+        in_range = end->compare(rec, index, offsets) > 0;
+
+        if (heap != nullptr) {
+          mem_heap_free(heap);
+        }
       }
 
-      /* Since we are already at the requested level use the current page
-       cursor. */
-      level_page_cursor = page_cursor;
+      if (in_range) {
+        create_range(sys, ranges, page_cursor, mtr);
+      }
+    }
+
+    for (auto &held : savepoints) {
+      mtr->release_block_at_savepoint(held.first, held.second);
+    }
+
+    return DB_SUCCESS;
+  }
+
+  const auto &children = node.m_children;
+
+  /* Split the tree one level below the root if read_level requested is below the root level. */
+  auto range_start = start;
+
+  for (const auto child : children) {
+    if (depth < split_level) {
+      /* Need to create a range starting at a lower level in the tree. */
+      if (const auto err = create_ranges(sys, scan_range, child, depth + 1, split_level, ranges, mtr); err != DB_SUCCESS) {
+        return err;
+      }
+
+      continue;
+    }
+
+    /* Find the range start in the leaf node. */
+    Savepoints savepoints{};
+    size_t n_levels{};
+
+    auto level_page_cursor = start_range(sys, child, mtr, range_start, savepoints, n_levels);
+
+    if (level_page_cursor.m_block == nullptr) {
+      /* See above: the same, for the page a level down. */
+      if (ranges.empty()) {
+        return DB_FAIL;
+      }
+
+      continue;
     }
 
     if (!page_rec_is_supremum(level_page_cursor.get_rec())) {
@@ -1166,33 +1190,15 @@ DbErr ParallelReader::ScanCtx::create_ranges(System &sys,
 
     /* We've created the persistent cursor, safe to release S latches on
     the blocks that are in this range (sub-tree). */
-    for (auto &savepoint : savepoints) {
-      mtr->release_block_at_savepoint(savepoint.first, savepoint.second);
+    for (auto &held : savepoints) {
+      mtr->release_block_at_savepoint(held.first, held.second);
     }
 
     if (m_depth == 0 && depth == 0) {
-      m_depth = savepoints.size();
+      m_depth = n_levels;
     }
 
-    savepoints.clear();
-
-    if (at_level == m_config.m_read_level) {
-      break;
-    }
-
-    start = nullptr;
-
-    page_cursor.move_to_next();
-  }
-
-  savepoints.push_back(savepoint);
-
-  for (auto &savepoint : savepoints) {
-    mtr->release_block_at_savepoint(savepoint.first, savepoint.second);
-  }
-
-  if (heap != nullptr) {
-    mem_heap_free(heap);
+    range_start = nullptr;
   }
 
   return DB_SUCCESS;
@@ -1211,7 +1217,12 @@ DbErr ParallelReader::ScanCtx::partition(System &sys,
 
   DbErr err{DB_SUCCESS};
 
-  err = create_ranges(sys, scan_range, m_config.m_index->m_page_id.m_page_no, 0, split_level, ranges, &mtr);
+  /* The page numbers read from a parent stay pages of this tree for as long as it takes. */
+  const auto pin = sys.am(m_config.m_index).pin_pages();
+
+  do {
+    err = create_ranges(sys, scan_range, m_config.m_index->m_page_id.m_page_no, 0, split_level, ranges, &mtr);
+  } while (err == DB_FAIL);
 
   if (err == DB_SUCCESS && scan_range.m_end != nullptr && !ranges.empty()) {
     auto &iter = ranges.back().second;
@@ -1415,6 +1426,8 @@ DbErr ParallelReader::add_scan(System &sys, Trx *trx, const ParallelReader::Conf
   m_scan_ctxs.push_back(scan_ctx);
 
   ++m_scan_ctx_id;
+
+  scan_ctx->m_uses_index_latch = sys.am(config.m_index).uses_index_latch();
 
   scan_ctx->index_s_lock();
 

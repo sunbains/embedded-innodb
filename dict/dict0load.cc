@@ -25,6 +25,7 @@ Created 4/24/1996 Heikki Tuuri
 
 #include "btr0btr.h"
 #include "btr0pcur.h"
+#include "idx0am.h"
 #include "dict0dict.h"
 #include "mach0data.h"
 #include "page0page.h"
@@ -40,7 +41,7 @@ bool DictLoad::name_of_col_is(const Table *table, const Index *index, ulint i, c
 
 char *DictLoad::get_first_table_name_in_db(const char *name) noexcept {
   ut_ad(mutex_own(&m_sys.m_dict->m_mutex));
-  BtreePcursor pcur{};
+  IndexCursor pcur{m_sys};
 
   auto heap = mem_heap_create(1000);
 
@@ -57,12 +58,12 @@ char *DictLoad::get_first_table_name_in_db(const char *name) noexcept {
   dfield_set_data(dfield, name, strlen(name));
   sys_index->copy_types(tuple, 1);
 
-  pcur.open_on_user_rec(m_sys, sys_index, tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF, &mtr, Current_location());
+  pcur.seek(sys_index, tuple, PAGE_CUR_GE, Intent::Read, &mtr);
 
   for (;;) {
-    const auto rec = pcur.get_rec();
+    const auto rec = pcur.rec();
 
-    if (!pcur.is_on_user_rec()) {
+    if (!pcur.on_rec()) {
       /* Not found */
 
       pcur.close();
@@ -104,13 +105,13 @@ char *DictLoad::get_first_table_name_in_db(const char *name) noexcept {
       return table_name;
     }
 
-    (void)pcur.move_to_next_user_rec(m_sys, &mtr);
+    (void)pcur.next(&mtr);
   }
 }
 
 std::string DictLoad::to_string() noexcept {
   std::string str;
-  BtreePcursor pcur{};
+  IndexCursor pcur{m_sys};
 
 
   m_sys.m_dict->mutex_acquire();
@@ -123,14 +124,14 @@ std::string DictLoad::to_string() noexcept {
   auto sys_tables = m_sys.m_dict->table_get("SYS_TABLES");
   auto sys_index = sys_tables->m_indexes.front();
 
-  pcur.open_at_index_side(m_sys, true, sys_index, BTR_SEARCH_LEAF, true, 0, &mtr);
+  pcur.seek_first(sys_index, Intent::Read, &mtr);
 
   for (;;) {
-    (void)pcur.move_to_next_user_rec(m_sys, &mtr);
+    (void)pcur.next(&mtr);
 
-    const auto rec = pcur.get_rec();
+    const auto rec = pcur.rec();
 
-    if (!pcur.is_on_user_rec()) {
+    if (!pcur.on_rec()) {
       /* end of index */
 
       pcur.close();
@@ -152,7 +153,7 @@ std::string DictLoad::to_string() noexcept {
       /* We found one */
       auto table_name = mem_strdupl(const_cast<char *>(reinterpret_cast<const char *>(field.get())), len);
 
-      pcur.store_position(m_sys, &mtr);
+      pcur.save(&mtr);
 
       mtr.commit(m_sys);
 
@@ -175,7 +176,7 @@ std::string DictLoad::to_string() noexcept {
 
       mtr.start();
 
-      (void)pcur.restore_position(m_sys, BTR_SEARCH_LEAF, &mtr, Current_location());
+      (void)pcur.restore(Intent::Read, &mtr);
     }
   }
 
@@ -214,7 +215,7 @@ ulint DictLoad::sys_tables_get_flags(const Rec rec, const ulint *offsets) const 
 
 DbErr DictLoad::open(bool in_crash_recovery) noexcept {
   space_id_t max_space_id{};
-  BtreePcursor pcur{};
+  IndexCursor pcur{m_sys};
 
   m_sys.m_dict->mutex_acquire();
 
@@ -228,16 +229,16 @@ DbErr DictLoad::open(bool in_crash_recovery) noexcept {
   auto sys_tables = m_sys.m_dict->table_get("SYS_TABLES");
   auto sys_index = sys_tables->m_indexes.front();
 
-  pcur.open_at_index_side(m_sys, true, sys_index, BTR_SEARCH_LEAF, true, 0, &mtr);
+  pcur.seek_first(sys_index, Intent::Read, &mtr);
 
   auto fil = m_sys.m_fil.get();
 
   for (;;) {
-    (void)pcur.move_to_next_user_rec(m_sys, &mtr);
+    (void)pcur.next(&mtr);
 
-    const auto rec = pcur.get_rec();
+    const auto rec = pcur.rec();
 
-    if (!pcur.is_on_user_rec()) {
+    if (!pcur.on_rec()) {
       /* End of index */
       pcur.close();
 
@@ -284,7 +285,7 @@ DbErr DictLoad::open(bool in_crash_recovery) noexcept {
 
         const auto is_temp = (mach_read_from_4(field) & DICT_TF2_TEMPORARY) != 0;
 
-        pcur.store_position(m_sys, &mtr);
+        pcur.save(&mtr);
 
         mtr.commit(m_sys);
 
@@ -310,14 +311,14 @@ DbErr DictLoad::open(bool in_crash_recovery) noexcept {
 
         mtr.start();
 
-        (void)pcur.restore_position(m_sys, BTR_SEARCH_LEAF, &mtr, Current_location());
+        (void)pcur.restore(Intent::Read, &mtr);
       }
     }
   }
 }
 
 DbErr DictLoad::load_columns(Table *table, MemHeap *heap) noexcept {
-  BtreePcursor pcur{};
+  IndexCursor pcur{m_sys};
 
   ut_ad(mutex_own(&m_sys.m_dict->m_mutex));
 
@@ -338,13 +339,13 @@ DbErr DictLoad::load_columns(Table *table, MemHeap *heap) noexcept {
 
   sys_index->copy_types(tuple, 1);
 
-  pcur.open_on_user_rec(m_sys, sys_index, tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF, &mtr, Current_location());
+  pcur.seek(sys_index, tuple, PAGE_CUR_GE, Intent::Read, &mtr);
 
   for (ulint i{}; i + DATA_N_SYS_COLS < ulint(table->m_n_cols); i++) {
 
-    const auto rec = pcur.get_rec();
+    const auto rec = pcur.rec();
 
-    ut_a(pcur.is_on_user_rec());
+    ut_a(pcur.on_rec());
 
     ut_a(!rec.get_deleted_flag());
 
@@ -393,7 +394,7 @@ DbErr DictLoad::load_columns(Table *table, MemHeap *heap) noexcept {
 
     table->add_col(name, mtype, prtype, col_len);
 
-    (void)pcur.move_to_next_user_rec(m_sys, &mtr);
+    (void)pcur.next(&mtr);
   }
 
   pcur.close();
@@ -405,7 +406,7 @@ DbErr DictLoad::load_columns(Table *table, MemHeap *heap) noexcept {
 
 DbErr DictLoad::load_fields(Index *index, MemHeap *heap) noexcept {
   ulint len;
-  BtreePcursor pcur{};
+  IndexCursor pcur{m_sys};
 
   ut_ad(mutex_own(&m_sys.m_dict->m_mutex));
 
@@ -425,20 +426,20 @@ DbErr DictLoad::load_fields(Index *index, MemHeap *heap) noexcept {
   dfield_set_data(dfield, buf, 8);
   sys_index->copy_types(tuple, 1);
 
-  pcur.open_on_user_rec(m_sys, sys_index, tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF, &mtr, Current_location());
+  pcur.seek(sys_index, tuple, PAGE_CUR_GE, Intent::Read, &mtr);
 
   for (ulint i{}; i < index->m_n_fields; ++i) {
 
-    const auto rec = pcur.get_rec();
+    const auto rec = pcur.rec();
 
-    ut_a(pcur.is_on_user_rec());
+    ut_a(pcur.on_rec());
 
     /* There could be delete marked records in SYS_FIELDS
     because SYS_FIELDS.INDEX_ID can be updated
     by ALTER TABLE ADD INDEX. */
 
     if (rec.get_deleted_flag()) {
-      (void)pcur.move_to_next_user_rec(m_sys, &mtr);
+      (void)pcur.next(&mtr);
       continue;
     }
 
@@ -476,7 +477,7 @@ DbErr DictLoad::load_fields(Index *index, MemHeap *heap) noexcept {
 
     (void)index->add_field(mem_heap_strdupl(heap, reinterpret_cast<char *>(field.get()), len), prefix_len);
 
-    (void)pcur.move_to_next_user_rec(m_sys, &mtr);
+    (void)pcur.next(&mtr);
   }
 
   pcur.close();
@@ -488,7 +489,7 @@ DbErr DictLoad::load_fields(Index *index, MemHeap *heap) noexcept {
 
 DbErr DictLoad::load_indexes(Table *table, MemHeap *heap) noexcept {
   auto err{DB_SUCCESS};
-  BtreePcursor pcur{};
+  IndexCursor pcur{m_sys};
 
   ut_ad(mutex_own(&m_sys.m_dict->m_mutex));
 
@@ -510,7 +511,7 @@ DbErr DictLoad::load_indexes(Table *table, MemHeap *heap) noexcept {
   dfield_set_data(dfield, buf, 8);
   sys_index->copy_types(tuple, 1);
 
-  pcur.open_on_user_rec(m_sys, sys_index, tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF, &mtr, Current_location());
+  pcur.seek(sys_index, tuple, PAGE_CUR_GE, Intent::Read, &mtr);
 
   auto cleanup = [&]() noexcept {
     pcur.close();
@@ -518,11 +519,11 @@ DbErr DictLoad::load_indexes(Table *table, MemHeap *heap) noexcept {
   };
 
   for (;;) {
-    if (!pcur.is_on_user_rec()) {
+    if (!pcur.on_rec()) {
       break;
     }
 
-    const auto rec = pcur.get_rec();
+    const auto rec = pcur.rec();
 
     ulint len;
     PhyRec record(sys_index, rec);
@@ -534,7 +535,7 @@ DbErr DictLoad::load_indexes(Table *table, MemHeap *heap) noexcept {
       break;
     } else if (rec.get_deleted_flag()) {
       /* Skip delete marked records */
-      (void)pcur.move_to_next_user_rec(m_sys, &mtr);
+      (void)pcur.next(&mtr);
       continue;
     }
 
@@ -565,7 +566,7 @@ DbErr DictLoad::load_indexes(Table *table, MemHeap *heap) noexcept {
 
     /* We check for unsupported types first, so that the
     subsequent checks are relevant for the supported types. */
-    if (type & ~(DICT_CLUSTERED | DICT_UNIQUE)) {
+    if (type & ~(DICT_CLUSTERED | DICT_UNIQUE | DICT_BLINK)) {
 
       log_err(std::format("Unknown type {} of index %s of table {}", type, name_buf, table->m_name));
 
@@ -618,7 +619,7 @@ DbErr DictLoad::load_indexes(Table *table, MemHeap *heap) noexcept {
       }
     }
 
-    (void)pcur.move_to_next_user_rec(m_sys, &mtr);
+    (void)pcur.next(&mtr);
   }
 
   cleanup();
@@ -644,11 +645,11 @@ Table *DictLoad::load_table(IbRecovery recovery, const char *name) noexcept {
   dfield_set_data(dfield, name, strlen(name));
   sys_index->copy_types(tuple, 1);
 
-  BtreePcursor pcur{};
+  IndexCursor pcur{m_sys};
 
-  pcur.open_on_user_rec(m_sys, sys_index, tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF, &mtr, Current_location());
+  pcur.seek(sys_index, tuple, PAGE_CUR_GE, Intent::Read, &mtr);
 
-  const auto rec = pcur.get_rec();
+  const auto rec = pcur.rec();
 
   auto cleanup = [&]() noexcept {
     pcur.close();
@@ -656,7 +657,7 @@ Table *DictLoad::load_table(IbRecovery recovery, const char *name) noexcept {
     mem_heap_free(heap);
   };
 
-  if (!pcur.is_on_user_rec() || rec.get_deleted_flag()) {
+  if (!pcur.on_rec() || rec.get_deleted_flag()) {
     /* Not found */
     cleanup();
     return nullptr;
@@ -783,7 +784,7 @@ Table *DictLoad::load_table(IbRecovery recovery, const char *name) noexcept {
 Table *DictLoad::load_table_on_id(IbRecovery recovery, Dict_id table_id) noexcept {
   ut_ad(mutex_own(&m_sys.m_dict->m_mutex));
 
-  BtreePcursor pcur{};
+  IndexCursor pcur{m_sys};
 
   /* NOTE that the operation of this function is protected by
   the dictionary mutex, and therefore no deadlocks can occur
@@ -809,9 +810,9 @@ Table *DictLoad::load_table_on_id(IbRecovery recovery, Dict_id table_id) noexcep
   dfield_set_data(dfield, id_buf, 8);
   sys_table_ids->copy_types(tuple, 1);
 
-  pcur.open_on_user_rec(m_sys, sys_table_ids, tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF, &mtr, Current_location());
+  pcur.seek(sys_table_ids, tuple, PAGE_CUR_GE, Intent::Read, &mtr);
 
-  auto rec = pcur.get_rec();
+  auto rec = pcur.rec();
 
   auto cleanup = [&]() noexcept {
     pcur.close();
@@ -819,7 +820,7 @@ Table *DictLoad::load_table_on_id(IbRecovery recovery, Dict_id table_id) noexcep
     mem_heap_free(heap);
   };
 
-  if (!pcur.is_on_user_rec() || rec.get_deleted_flag()) {
+  if (!pcur.on_rec() || rec.get_deleted_flag()) {
     /* Not found */
     cleanup();
     return nullptr;
@@ -828,7 +829,7 @@ Table *DictLoad::load_table_on_id(IbRecovery recovery, Dict_id table_id) noexcep
   /* Now we have the record in the secondary index containing the
   table ID and NAME */
 
-  rec = pcur.get_rec();
+  rec = pcur.rec();
 
   ulint len;
   PhyRec record(sys_table_ids, rec);
@@ -874,7 +875,7 @@ DbErr DictLoad::load_system_table(Table *table) noexcept {
 DbErr DictLoad::load_foreign_cols(const char *id, Foreign *foreign) noexcept {
   ut_ad(mutex_own(&m_sys.m_dict->m_mutex));
 
-  BtreePcursor pcur{};
+  IndexCursor pcur{m_sys};
 
   foreign->m_foreign_col_names =
     reinterpret_cast<const char **>(mem_heap_alloc(foreign->m_heap, foreign->m_n_fields * sizeof(void *)));
@@ -894,12 +895,12 @@ DbErr DictLoad::load_foreign_cols(const char *id, Foreign *foreign) noexcept {
   dfield_set_data(dfield, id, strlen(id));
   sys_index->copy_types(tuple, 1);
 
-  pcur.open_on_user_rec(m_sys, sys_index, tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF, &mtr, Current_location());
+  pcur.seek(sys_index, tuple, PAGE_CUR_GE, Intent::Read, &mtr);
 
   for (ulint i{}; i < foreign->m_n_fields; ++i) {
-    auto rec = pcur.get_rec();
+    auto rec = pcur.rec();
 
-    ut_a(pcur.is_on_user_rec());
+    ut_a(pcur.on_rec());
     ut_a(!rec.get_deleted_flag());
 
     ulint len;
@@ -920,7 +921,7 @@ DbErr DictLoad::load_foreign_cols(const char *id, Foreign *foreign) noexcept {
     field = rec.get_nth_field(offsets, 5, &len);
     foreign->m_referenced_col_names[i] = mem_heap_strdupl(foreign->m_heap, (char *)field.get(), len);
 
-    (void)pcur.move_to_next_user_rec(m_sys, &mtr);
+    (void)pcur.next(&mtr);
   }
 
   pcur.close();
@@ -934,7 +935,7 @@ DbErr DictLoad::load_foreign(const char *id, bool check_charsets) noexcept {
   ut_ad(mutex_own(&m_sys.m_dict->m_mutex));
 
   auto heap2 = mem_heap_create(1000);
-  BtreePcursor pcur{};
+  IndexCursor pcur{m_sys};
 
   Mtr mtr;
 
@@ -949,8 +950,8 @@ DbErr DictLoad::load_foreign(const char *id, bool check_charsets) noexcept {
   dfield_set_data(dfield, id, strlen(id));
   sys_index->copy_types(tuple, 1);
 
-  pcur.open_on_user_rec(m_sys, sys_index, tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF, &mtr, Current_location());
-  auto rec = pcur.get_rec();
+  pcur.seek(sys_index, tuple, PAGE_CUR_GE, Intent::Read, &mtr);
+  auto rec = pcur.rec();
 
   auto cleanup = [&]() noexcept {
     pcur.close();
@@ -958,7 +959,7 @@ DbErr DictLoad::load_foreign(const char *id, bool check_charsets) noexcept {
     mem_heap_free(heap2);
   };
 
-  if (!pcur.is_on_user_rec() || rec.get_deleted_flag()) {
+  if (!pcur.on_rec() || rec.get_deleted_flag()) {
     /* Not found */
 
     log_err("A: cannot load foreign constraint ", id);
@@ -1036,7 +1037,7 @@ DbErr DictLoad::load_foreign(const char *id, bool check_charsets) noexcept {
 DbErr DictLoad::load_foreigns(const char *table_name, bool check_charsets) noexcept {
   ut_ad(mutex_own(&m_sys.m_dict->m_mutex));
 
-  BtreePcursor pcur{};
+  IndexCursor pcur{m_sys};
 
   auto sys_foreign = m_sys.m_dict->table_get("SYS_FOREIGN");
 
@@ -1067,11 +1068,11 @@ DbErr DictLoad::load_foreigns(const char *table_name, bool check_charsets) noexc
 
     mtr.start();
 
-    pcur.open_on_user_rec(m_sys, sec_index, tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF, &mtr, Current_location());
+    pcur.seek(sec_index, tuple, PAGE_CUR_GE, Intent::Read, &mtr);
 
-    while (pcur.is_on_user_rec()) {
+    while (pcur.on_rec()) {
       /* A record of the secondary index: a table name and a constraint ID. */
-      const auto rec = pcur.get_rec();
+      const auto rec = pcur.rec();
 
       PhyRec record(sec_index, rec);
       auto offsets = record.get_col_offsets(nullptr, sec_index->get_n_fields(), &heap, Current_location());
@@ -1098,7 +1099,7 @@ DbErr DictLoad::load_foreigns(const char *table_name, bool check_charsets) noexc
       /* FIXME: On Unix, allow table names that only differ in character case. */
 
       if (len != data_len || memcmp(field.get(), table_name, len) != 0 || rec.get_deleted_flag()) {
-        (void)pcur.move_to_next_user_rec(m_sys, &mtr);
+        (void)pcur.next(&mtr);
         continue;
       }
 
@@ -1107,7 +1108,7 @@ DbErr DictLoad::load_foreigns(const char *table_name, bool check_charsets) noexc
 
       auto id = mem_heap_strdupl(heap, (char *)field.get(), len);
 
-      pcur.store_position(m_sys, &mtr);
+      pcur.save(&mtr);
 
       mtr.commit(m_sys);
 
@@ -1124,8 +1125,8 @@ DbErr DictLoad::load_foreigns(const char *table_name, bool check_charsets) noexc
 
       mtr.start();
 
-      (void)pcur.restore_position(m_sys, BTR_SEARCH_LEAF, &mtr, Current_location());
-      (void)pcur.move_to_next_user_rec(m_sys, &mtr);
+      (void)pcur.restore(Intent::Read, &mtr);
+      (void)pcur.next(&mtr);
     }
 
     mem_heap_free(heap);
@@ -1156,6 +1157,8 @@ DbErr DictLoad::load_system_tables() noexcept {
   startup to avoid overlapping values. Note that when a user after database startup first
   time asks for a new row id, then because the counter is now divisible by ..._MARGIN,
   it will immediately be updated to the disk-based header. */
+
+  const auto am = mtr.read_ulint(hdr + DICT_HDR_SYS_AM, MLOG_4BYTES);
 
   store.m_row_id =
     ut_uint64_align_up(mtr.read_uint64(hdr + DICT_HDR_ROW_ID), DICT_HDR_ROW_ID_WRITE_MARGIN) + DICT_HDR_ROW_ID_WRITE_MARGIN;
@@ -1188,7 +1191,7 @@ DbErr DictLoad::load_system_tables() noexcept {
 
   m_sys.m_dict->m_sys_tables = table;
 
-  auto index = Index::create(table, "CLUST_IND", PageId{DICT_HDR_SPACE, NULL_PAGE_NO}, DICT_UNIQUE | DICT_CLUSTERED, 1);
+  auto index = Index::create(table, "CLUST_IND", PageId{DICT_HDR_SPACE, NULL_PAGE_NO}, DICT_UNIQUE | DICT_CLUSTERED | am, 1);
 
   (void)index->add_field("NAME", 0);
 
@@ -1198,7 +1201,7 @@ DbErr DictLoad::load_system_tables() noexcept {
   ut_a(err == DB_SUCCESS);
 
   /*-------------------------*/
-  index = Index::create(table, "ID_IND", PageId{DICT_HDR_SPACE, NULL_PAGE_NO}, DICT_UNIQUE, 1);
+  index = Index::create(table, "ID_IND", PageId{DICT_HDR_SPACE, NULL_PAGE_NO}, DICT_UNIQUE | am, 1);
 
   (void)index->add_field("ID", 0);
 
@@ -1224,7 +1227,7 @@ DbErr DictLoad::load_system_tables() noexcept {
 
   m_sys.m_dict->m_sys_columns = table;
 
-  index = Index::create(table, "CLUST_IND", PageId{DICT_HDR_SPACE, NULL_PAGE_NO}, DICT_UNIQUE | DICT_CLUSTERED, 2);
+  index = Index::create(table, "CLUST_IND", PageId{DICT_HDR_SPACE, NULL_PAGE_NO}, DICT_UNIQUE | DICT_CLUSTERED | am, 2);
 
   (void)index->add_field("TABLE_ID", 0);
   (void)index->add_field("POS", 0);
@@ -1261,7 +1264,7 @@ DbErr DictLoad::load_system_tables() noexcept {
 
   m_sys.m_dict->m_sys_indexes = table;
 
-  index = Index::create(table, "CLUST_IND", PageId{DICT_HDR_SPACE, NULL_PAGE_NO}, DICT_UNIQUE | DICT_CLUSTERED, 2);
+  index = Index::create(table, "CLUST_IND", PageId{DICT_HDR_SPACE, NULL_PAGE_NO}, DICT_UNIQUE | DICT_CLUSTERED | am, 2);
 
   (void)index->add_field("TABLE_ID", 0);
   (void)index->add_field("ID", 0);
@@ -1284,7 +1287,7 @@ DbErr DictLoad::load_system_tables() noexcept {
 
   m_sys.m_dict->m_sys_fields = table;
 
-  index = Index::create(table, "CLUST_IND", PageId{DICT_HDR_SPACE, NULL_PAGE_NO}, DICT_UNIQUE | DICT_CLUSTERED, 2);
+  index = Index::create(table, "CLUST_IND", PageId{DICT_HDR_SPACE, NULL_PAGE_NO}, DICT_UNIQUE | DICT_CLUSTERED | am, 2);
 
   (void)index->add_field("INDEX_ID", 0);
   (void)index->add_field("POS", 0);

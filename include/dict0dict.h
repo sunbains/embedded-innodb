@@ -33,6 +33,7 @@ Created 1/8/1996 Heikki Tuuri
 #include "mem0mem.h"
 #include "rem0types.h"
 #include "srv0srv.h"
+#include "sync0latch.h"
 #include "sync0rw.h"
 #include "sync0sync.h"
 #include "trx0types.h"
@@ -922,7 +923,7 @@ struct Dict {
    * operations a table drop since the client does not know about them; therefore
    * we need this; NOTE: a transaction which reserves this must keep book
    * on the mode in trx_t::m_dict_operation_lock_mode */
-  mutable RwLock m_lock{};
+  mutable RwLatch m_lock;
 
   /** Mutex protecting the foreign and unique error buffers */
   mutable Mutex m_foreign_err_mutex{};

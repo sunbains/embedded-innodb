@@ -117,7 +117,7 @@ bool RowUpdate::index_is_referenced(const Index *index, Trx *trx) noexcept {
 }
 
 DbErr RowUpdate::check_references_constraints(
-  UpdNode *node, BtreePcursor *pcur, Table *table, const Index *index, ulint *offsets, QueThr *thr, Mtr *mtr
+  UpdNode *node, IndexCursor *pcur, Table *table, const Index *index, ulint *offsets, QueThr *thr, Mtr *mtr
 ) noexcept {
   DbErr err;
   ulint n_ext;
@@ -129,7 +129,7 @@ DbErr RowUpdate::check_references_constraints(
   }
 
   auto trx = thr_get_trx(thr);
-  auto rec = pcur->get_rec();
+  auto rec = pcur->rec();
   ut_ad(rec.offs_validate(index, offsets));
 
   auto heap = mem_heap_create(500);
@@ -803,15 +803,13 @@ inline void RowUpdate::eval_new_vals(Upd *update) noexcept {
 void RowUpdate::store_row(UpdNode *node) noexcept {
   MemHeap *heap{};
 
-  ut_ad(node->m_pcur->m_latch_mode != BTR_NO_LATCHES);
-
   if (node->m_row != nullptr) {
     mem_heap_empty(node->m_heap);
   }
 
   const auto clust_index = node->m_table->get_clustered_index();
 
-  auto rec = node->m_pcur->get_rec();
+  auto rec = node->m_pcur->rec();
 
   std::array<ulint, REC_OFFS_NORMAL_SIZE> rec_offsets;
 
@@ -845,7 +843,7 @@ void RowUpdate::store_row(UpdNode *node) noexcept {
 DbErr RowUpdate::sec_index_entry(UpdNode *node, QueThr *thr) noexcept {
   DbErr err = DB_SUCCESS;
   auto trx = thr_get_trx(thr);
-  BtreePcursor pcur{};
+  IndexCursor pcur{m_sys};
 
   auto index = node->m_index;
   auto heap = mem_heap_create(1024);
@@ -857,11 +855,10 @@ DbErr RowUpdate::sec_index_entry(UpdNode *node, QueThr *thr) noexcept {
 
   mtr.start();
 
-  auto found = row_search_index_entry(m_sys, index, entry, BTR_MODIFY_LEAF, &pcur, &mtr);
+  /* All the fields of the key: the DB_TRX_ID of a secondary record is not one of them. */
+  auto found = pcur.find(index, entry, Intent::Write, &mtr);
 
-  auto btr_cur = pcur.get_btr_cur();
-
-  auto rec = btr_cur->get_rec();
+  auto rec = pcur.rec();
 
   if (unlikely(!found)) {
     log_err("Sec index entry update in ");
@@ -879,7 +876,7 @@ DbErr RowUpdate::sec_index_entry(UpdNode *node, QueThr *thr) noexcept {
 
     if (!rec.get_deleted_flag()) {
 
-      err = btr_cur->del_mark_set_sec_rec(m_sys, 0, true, thr, &mtr);
+      err = pcur.set_delete_mark(0, true, thr, &mtr);
 
       if (err == DB_SUCCESS && check_ref) {
         PhyRec record{index, rec};
@@ -935,7 +932,6 @@ DbErr RowUpdate::clust_rec_by_insert(
   auto trx = thr_get_trx(thr);
   auto table = upd_node->m_table;
   auto pcur = upd_node->m_pcur;
-  auto btr_cur = pcur->get_btr_cur();
 
   Blob blob{};
 
@@ -943,7 +939,7 @@ DbErr RowUpdate::clust_rec_by_insert(
     Rec rec;
     Index *index;
 
-    err = btr_cur->del_mark_set_clust_rec(m_sys, BTR_NO_LOCKING_FLAG, true, thr, mtr);
+    err = pcur->set_delete_mark(BTR_NO_LOCKING_FLAG, true, thr, mtr);
 
     if (err != DB_SUCCESS) {
       mtr->commit(m_sys);
@@ -955,7 +951,7 @@ DbErr RowUpdate::clust_rec_by_insert(
     free those externally stored fields even if the delete marked
     record is removed from the index tree, or updated. */
 
-    rec = btr_cur->get_rec();
+    rec = pcur->rec();
     index = table->get_first_index();
 
     ulint *offsets;
@@ -1026,18 +1022,17 @@ DbErr RowUpdate::clust_rec(UpdNode *upd_node, const Index *index, QueThr *thr, M
   ut_ad(index->is_clustered());
 
   auto pcur = upd_node->m_pcur;
-  auto btr_cur = pcur->get_btr_cur();
 
-  ut_ad(!pcur->get_rec().get_deleted_flag());
+  ut_ad(!pcur->rec().get_deleted_flag());
 
   /* Try optimistic updating of the record, keeping changes within
   the page; we do not check locks because we assume the x-lock on the
   record to update */
 
   if (upd_node->m_cmpl_info & UPD_NODE_NO_SIZE_CHANGE) {
-    err = btr_cur->update_in_place(m_sys, BTR_NO_LOCKING_FLAG, upd_node->m_update, upd_node->m_cmpl_info, thr, mtr);
+    err = pcur->update_in_place(BTR_NO_LOCKING_FLAG, upd_node->m_update, upd_node->m_cmpl_info, thr, mtr);
   } else {
-    err = btr_cur->optimistic_update(m_sys, BTR_NO_LOCKING_FLAG, upd_node->m_update, upd_node->m_cmpl_info, thr, mtr);
+    err = pcur->update(Intent::Write, BTR_NO_LOCKING_FLAG, nullptr, nullptr, upd_node->m_update, upd_node->m_cmpl_info, thr, mtr);
   }
 
   mtr->commit(m_sys);
@@ -1062,11 +1057,11 @@ DbErr RowUpdate::clust_rec(UpdNode *upd_node, const Index *index, QueThr *thr, M
   the same transaction do not modify the record in the meantime.
   Therefore we can assert that the restoration of the cursor succeeds. */
 
-  ut_a(pcur->restore_position(m_sys, BTR_MODIFY_TREE, mtr, Current_location()));
+  ut_a(pcur->restore(Intent::Restructure, mtr));
 
-  ut_ad(!pcur->get_rec().get_deleted_flag());
+  ut_ad(!pcur->rec().get_deleted_flag());
 
-  err = btr_cur->pessimistic_update(m_sys, BTR_NO_LOCKING_FLAG, &heap, &big_rec, upd_node->m_update, upd_node->m_cmpl_info, thr, mtr);
+  err = pcur->update(Intent::Restructure, BTR_NO_LOCKING_FLAG, &heap, &big_rec, upd_node->m_update, upd_node->m_cmpl_info, thr, mtr);
 
   mtr->commit(m_sys);
 
@@ -1075,9 +1070,9 @@ DbErr RowUpdate::clust_rec(UpdNode *upd_node, const Index *index, QueThr *thr, M
 
     mtr->start();
 
-    ut_a(pcur->restore_position(m_sys, BTR_MODIFY_TREE, mtr, Current_location()));
+    ut_a(pcur->restore(Intent::Restructure, mtr));
 
-    rec = btr_cur->get_rec();
+    rec = pcur->rec();
 
     ulint *offsets{};
     std::array<ulint, REC_OFFS_NORMAL_SIZE> rec_offsets;
@@ -1091,9 +1086,7 @@ DbErr RowUpdate::clust_rec(UpdNode *upd_node, const Index *index, QueThr *thr, M
       offsets = record.get_col_offsets(rec_offsets.data(), ULINT_UNDEFINED, &heap, Current_location());
     }
 
-    Blob blob{};
-
-    err = blob.store_big_rec_extern_fields(m_sys, index, btr_cur->get_block(), rec, offsets, big_rec, mtr);
+    err = pcur->store_big_rec(offsets, big_rec, mtr);
 
     mtr->commit(m_sys);
   }
@@ -1118,7 +1111,6 @@ DbErr RowUpdate::del_mark_clust_rec(
   ut_ad(index->is_clustered());
 
   auto pcur = node->m_pcur;
-  auto btr_cur = pcur->get_btr_cur();
 
   /* Store row because we have to build also the secondary index
   entries */
@@ -1128,7 +1120,7 @@ DbErr RowUpdate::del_mark_clust_rec(
   /* Mark the clustered index record deleted; we do not have to check
   locks, because we assume that we have an x-lock on the record */
 
-  err = btr_cur->del_mark_set_clust_rec(m_sys, BTR_NO_LOCKING_FLAG, true, thr, mtr);
+  err = pcur->set_delete_mark(BTR_NO_LOCKING_FLAG, true, thr, mtr);
 
   if (err == DB_SUCCESS && check_ref) {
     /* NOTE that the following call loses the position of pcur ! */
@@ -1167,9 +1159,12 @@ DbErr RowUpdate::clust_step(UpdNode *node, QueThr *thr) noexcept {
   that case we know that the transaction has at least an
   implicit x-lock on the record. */
 
-  ut_a(pcur->m_rel_pos == BtreeCursorPos::ON);
+  ut_a(pcur->saved_at() == SavedAt::On);
 
-  auto success = pcur->restore_position(m_sys, BTR_MODIFY_LEAF, mtr, Current_location());
+  /* All that can come of these is a change in place, see below. Dropping an index isn't that. */
+  const auto intent = (node->m_is_delete || (node->m_cmpl_info & UPD_NODE_NO_SIZE_CHANGE) != 0) && node->m_table->m_id != DICT_INDEXES_ID ? Intent::Mark : Intent::Write;
+
+  auto success = pcur->restore(intent, mtr);
 
   if (!success) {
     mtr->commit(m_sys);
@@ -1182,13 +1177,13 @@ DbErr RowUpdate::clust_step(UpdNode *node, QueThr *thr) noexcept {
 
   if (node->m_is_delete && node->m_table->m_id == DICT_INDEXES_ID) {
 
-    m_sys.m_dict->m_store.drop_index_tree(pcur->get_rec(), mtr);
+    m_sys.m_dict->m_store.drop_index_tree(pcur->rec(), mtr);
 
     mtr->commit(m_sys);
 
     mtr->start();
 
-    success = pcur->restore_position(m_sys, BTR_MODIFY_LEAF, mtr, Current_location());
+    success = pcur->restore(Intent::Write, mtr);
 
     if (!success) {
       mtr->commit(m_sys);
@@ -1196,7 +1191,7 @@ DbErr RowUpdate::clust_step(UpdNode *node, QueThr *thr) noexcept {
     }
   }
 
-  rec = pcur->get_rec();
+  rec = pcur->rec();
 
   ulint *offsets;
 
@@ -1210,7 +1205,7 @@ DbErr RowUpdate::clust_step(UpdNode *node, QueThr *thr) noexcept {
 
   if (!node->m_has_clust_rec_x_lock) {
 
-    err = m_sys.m_lock_sys->clust_rec_modify_check_and_lock(0, pcur->get_block(), rec, index, offsets, thr);
+    err = m_sys.m_lock_sys->clust_rec_modify_check_and_lock(0, pcur->block(), rec, index, offsets, thr);
 
     if (err != DB_SUCCESS) {
       mtr->commit(m_sys);
@@ -1457,7 +1452,7 @@ UpdNode *RowUpdate::create_update_node(Table *table, MemHeap *heap) noexcept {
 
   node->m_table = table;
   node->m_in_client_interface = true;
-  node->m_pcur = new BtreePcursor();
+  node->m_pcur = new IndexCursor(m_sys);
 
   node->m_has_clust_rec_x_lock = true;
   node->m_update_n_fields = table->get_n_cols();

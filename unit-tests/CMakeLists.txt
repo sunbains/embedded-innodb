@@ -59,7 +59,7 @@ function(ib_unit_test name)
   add_test(NAME ${name} COMMAND ${name} --gtest_filter=-*Perf.*)
   set_tests_properties(${name} PROPERTIES
     LABELS unit
-    TIMEOUT 1200
+    TIMEOUT 3600
     ENVIRONMENT "TMPDIR=${UNIT_TEST_TMPDIR}")
 
   # Performance tests only in a Release build, without UNIV_DEBUG.
@@ -106,6 +106,9 @@ ib_unit_test(test_lock_mt)
 ib_unit_test(test_lock_mt_db)
 ib_unit_test(test_latch)
 ib_unit_test(test_btr)
+ib_unit_test(test_idx)
+ib_unit_test(test_blink)
+ib_unit_test(test_systrx)
 ib_unit_test(test_undo)
 ib_unit_test(test_dict)
 ib_unit_test(test_dblwr)

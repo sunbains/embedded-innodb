@@ -97,6 +97,19 @@ struct BtreePcursor {
   ~BtreePcursor() noexcept;
 
   /**
+   * Goes back to the stored position if the page hasn't changed since, by its modify clock.
+   * It doesn't look at the tree, what an implementation does otherwise is its own.
+   *
+   * @param[in] latch_mode      BTR_SEARCH_LEAF or BTR_MODIFY_LEAF.
+   * @param[in,out] mtr         Mini-transaction.
+   * @param[in] loc             Source location.
+   * @param[out] on_rec         If restored: true if on the stored record.
+   *
+   * @return true if restored.
+   */
+  [[nodiscard]] bool restore_optimistic(System &sys, ulint latch_mode, Mtr *mtr, SourceLocation loc, bool &on_rec, ulint rw_latch = 0) noexcept;
+
+  /**
    * @brief Copies the stored position of a persistent cursor to this persistent cursor.
    *
    * This function copies the stored position information from one persistent cursor to another.

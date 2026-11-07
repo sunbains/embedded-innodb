@@ -160,50 +160,10 @@ bool BtreePcursor::restore_position(System &sys, ulint latch_mode, Mtr *mtr, Sou
   ut_a(m_old_n_fields > 0);
 
   if (likely(latch_mode == BTR_SEARCH_LEAF) || likely(latch_mode == BTR_MODIFY_LEAF)) {
+    bool on_rec;
 
-    /* Try optimistic restoration */
-
-    BufPool::Request req{
-      .m_rw_latch = latch_mode,
-      .m_guess = m_block_when_stored,
-      .m_modify_clock = m_modify_clock,
-      .m_file = loc.m_from.file_name(),
-      .m_line = loc.m_from.line(),
-      .m_mtr = mtr
-    };
-
-    if (likely(sys.m_buf_pool->try_get(req))) {
-      m_pos_state = BtrPcurPositioned::IS_POSITIONED;
-      m_latch_mode = latch_mode;
-
-      buf_block_dbg_add_level();
-
-      if (m_rel_pos == BtreeCursorPos::ON) {
-        m_latch_mode = latch_mode;
-
-#ifdef UNIV_DEBUG
-        auto rec = get_rec();
-        PhyRec record(index, rec);
-        PhyRec old_record(index, m_old_rec);
-        auto heap = mem_heap_create(256);
-        auto offsets2 = record.get_col_offsets(nullptr, m_old_n_fields, &heap, Current_location());
-        auto offsets1 = old_record.get_col_offsets(nullptr, m_old_n_fields, &heap, Current_location());
-        ut_ad(!cmp_rec_rec(m_old_rec, rec, offsets1, offsets2, index));
-        mem_heap_free(heap);
-#endif /* UNIV_DEBUG */
-
-        return true;
-
-      } else {
-
-        /* This is the same record as stored, may need to be adjusted
-        for BTR_PCUR_BEFORE/AFTER, depending on search mode and direction. */
-        if (is_on_user_rec()) {
-          m_pos_state = BtrPcurPositioned::IS_POSITIONED_OPTIMISTIC;
-        }
-
-        return false;
-      }
+    if (likely(restore_optimistic(sys, latch_mode, mtr, loc, on_rec))) {
+      return on_rec;
     }
   }
 
@@ -265,6 +225,59 @@ bool BtreePcursor::restore_position(System &sys, ulint latch_mode, Mtr *mtr, Sou
   mem_heap_free(heap);
 
   return ret;
+}
+
+bool BtreePcursor::restore_optimistic(System &sys, ulint latch_mode, Mtr *mtr, SourceLocation loc, bool &on_rec, ulint rw_latch) noexcept {
+  [[maybe_unused]] auto index = m_btr_cur.m_index;
+
+  /* Try optimistic restoration */
+
+  BufPool::Request req{
+    .m_rw_latch = rw_latch != 0 ? rw_latch : latch_mode,
+    .m_guess = m_block_when_stored,
+    .m_modify_clock = m_modify_clock,
+    .m_file = loc.m_from.file_name(),
+    .m_line = loc.m_from.line(),
+    .m_mtr = mtr
+  };
+
+  if (unlikely(!sys.m_buf_pool->try_get(req))) {
+    return false;
+  }
+
+  m_pos_state = BtrPcurPositioned::IS_POSITIONED;
+  m_latch_mode = latch_mode;
+
+  buf_block_dbg_add_level();
+
+  if (m_rel_pos == BtreeCursorPos::ON) {
+    m_latch_mode = latch_mode;
+
+#ifdef UNIV_DEBUG
+    auto rec = get_rec();
+    PhyRec record(index, rec);
+    PhyRec old_record(index, m_old_rec);
+    auto heap = mem_heap_create(256);
+    auto offsets2 = record.get_col_offsets(nullptr, m_old_n_fields, &heap, Current_location());
+    auto offsets1 = old_record.get_col_offsets(nullptr, m_old_n_fields, &heap, Current_location());
+    ut_ad(!cmp_rec_rec(m_old_rec, rec, offsets1, offsets2, index));
+    mem_heap_free(heap);
+#endif /* UNIV_DEBUG */
+
+    on_rec = true;
+
+  } else {
+
+    /* This is the same record as stored, may need to be adjusted
+    for BTR_PCUR_BEFORE/AFTER, depending on search mode and direction. */
+    if (is_on_user_rec()) {
+      m_pos_state = BtrPcurPositioned::IS_POSITIONED_OPTIMISTIC;
+    }
+
+    on_rec = false;
+  }
+
+  return true;
 }
 
 void BtreePcursor::release_leaf(System &sys, Mtr *mtr) noexcept {

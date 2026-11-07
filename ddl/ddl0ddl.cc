@@ -10,6 +10,7 @@ Created 12 Oct 2008.
 #include "ddl0ddl.h"
 #include "row0misc.h"
 #include "btr0pcur.h"
+#include "idx0am.h"
 #include "dict0dict.h"
 #include "fil0fil.h"
 #include "fsp0fsp.h"
@@ -727,15 +728,15 @@ DbErr Ddl::truncate_table(Table *table, Trx *trx) noexcept {
 
   mtr.start();
 
-  BtreePcursor pcur{};
+  IndexCursor pcur{m_sys};
 
   /* Scan SYS_INDEXES for all indexes of the table */
-  pcur.open_on_user_rec(m_sys, sys_index, tuple, PAGE_CUR_GE, BTR_MODIFY_LEAF, &mtr, Current_location());
+  pcur.seek(sys_index, tuple, PAGE_CUR_GE, Intent::Write, &mtr);
 
-  while (pcur.is_on_user_rec()) {
+  while (pcur.on_rec()) {
 
     ulint len{ULINT_UNDEFINED};
-    auto rec = pcur.get_rec();
+    auto rec = pcur.rec();
     PhyRec record(sys_index, rec);
     auto offsets = record.get_col_offsets(nullptr, 1, &heap, Current_location());
     const auto field = rec.get_nth_field(offsets, 0, &len);
@@ -750,7 +751,7 @@ DbErr Ddl::truncate_table(Table *table, Trx *trx) noexcept {
       /* This call may commit and restart mtr and reposition pcur. */
       const auto root_page_no = m_sys.m_dict->m_store.truncate_index_tree(table, recreate_space, &pcur, &mtr);
 
-      rec = pcur.get_rec();
+      rec = pcur.rec();
 
       if (root_page_no != FIL_NULL) {
         page_rec_write_index_page_no(rec, DICT_SYS_INDEXES_PAGE_NO_FIELD, root_page_no, &mtr);
@@ -762,11 +763,11 @@ DbErr Ddl::truncate_table(Table *table, Trx *trx) noexcept {
 
         mtr.start();
 
-        (void)pcur.restore_position(m_sys, BTR_MODIFY_LEAF, &mtr, Current_location());
+        (void)pcur.restore(Intent::Write, &mtr);
       }
     }
 
-    (void)pcur.move_to_next_user_rec(m_sys, &mtr);
+    (void)pcur.next(&mtr);
   }
 
   pcur.close();
@@ -1255,7 +1256,7 @@ DbErr Ddl::drop_database(const char *name, Trx *trx) noexcept {
 }
 
 void Ddl::drop_all_temp_indexes(IbRecovery recovery) noexcept {
-  BtreePcursor pcur{};
+  IndexCursor pcur{m_sys};
 
   /* Load the table definitions that contain partially defined indexes, so that the data dictionary
   information can be checked * when accessing the tablename.ibd files. */
@@ -1274,17 +1275,17 @@ void Ddl::drop_all_temp_indexes(IbRecovery recovery) noexcept {
   /* The records of SYS_INDEXES: (TABLE_ID, ID, ..., NAME, ...). */
   auto sys_clustered_index = m_sys.m_dict->m_sys_indexes->get_clustered_index();
 
-  pcur.open_at_index_side(m_sys, true, sys_clustered_index, BTR_SEARCH_LEAF, true, 0, &mtr);
+  pcur.seek_first(sys_clustered_index, Intent::Read, &mtr);
 
   for (;;) {
-    (void)pcur.move_to_next_user_rec(m_sys, &mtr);
+    (void)pcur.next(&mtr);
 
-    if (!pcur.is_on_user_rec()) {
+    if (!pcur.on_rec()) {
       break;
     }
 
     ulint len;
-    const auto rec = pcur.get_rec();
+    const auto rec = pcur.rec();
     PhyRec record(sys_clustered_index, rec);
     auto offsets = record.get_col_offsets(nullptr, sys_clustered_index->get_n_fields(), &heap, Current_location());
     {
@@ -1310,9 +1311,9 @@ void Ddl::drop_all_temp_indexes(IbRecovery recovery) noexcept {
       table_id = mach_read_from_8(field);
     }
 
-    pcur.store_position(m_sys, &mtr);
+    pcur.save(&mtr);
 
-    pcur.commit_specify_mtr(m_sys, &mtr);
+    pcur.commit(&mtr);
 
     auto table = m_sys.m_dict->m_loader.load_table_on_id(recovery, table_id);
 
@@ -1337,7 +1338,7 @@ void Ddl::drop_all_temp_indexes(IbRecovery recovery) noexcept {
 
     mtr.start();
 
-    (void)pcur.restore_position(m_sys, BTR_SEARCH_LEAF, &mtr, Current_location());
+    (void)pcur.restore(Intent::Read, &mtr);
   }
 
   pcur.close();
@@ -1371,21 +1372,21 @@ void Ddl::drop_all_temp_tables(IbRecovery recovery) noexcept {
 
   mtr.start();
 
-  BtreePcursor pcur{};
+  IndexCursor pcur{m_sys};
 
   auto sys_clustered_index = m_sys.m_dict->m_sys_tables->get_clustered_index();
-  pcur.open_at_index_side(m_sys, true, sys_clustered_index, BTR_SEARCH_LEAF, true, 0, &mtr);
+  pcur.seek_first(sys_clustered_index, Intent::Read, &mtr);
 
   for (;;) {
 
-    (void)pcur.move_to_next_user_rec(m_sys, &mtr);
+    (void)pcur.next(&mtr);
 
-    if (!pcur.is_on_user_rec()) {
+    if (!pcur.on_rec()) {
       break;
     }
 
     ulint len;
-    const auto rec = pcur.get_rec();
+    const auto rec = pcur.rec();
     PhyRec record(sys_clustered_index, rec);
     auto offsets = record.get_col_offsets(nullptr, sys_clustered_index->get_n_fields(), &heap, Current_location());
 
@@ -1420,8 +1421,8 @@ void Ddl::drop_all_temp_tables(IbRecovery recovery) noexcept {
       table_name = mem_heap_strdupl(heap, reinterpret_cast<const char *>(field.get()), len);
     }
 
-    pcur.store_position(m_sys, &mtr);
-    pcur.commit_specify_mtr(m_sys, &mtr);
+    pcur.save(&mtr);
+    pcur.commit(&mtr);
 
     auto table = m_sys.m_dict->m_loader.load_table(recovery, table_name);
 
@@ -1435,7 +1436,7 @@ void Ddl::drop_all_temp_tables(IbRecovery recovery) noexcept {
 
     mtr.start();
 
-    (void)pcur.restore_position(m_sys, BTR_SEARCH_LEAF, &mtr, Current_location());
+    (void)pcur.restore(Intent::Read, &mtr);
   }
 
   pcur.close();

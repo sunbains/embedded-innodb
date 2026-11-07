@@ -230,8 +230,31 @@ void Btree::page_create(BufBlock *block, Index *index, ulint level, Mtr *mtr) no
   page_set_index_id(page, index->m_id, mtr);
 }
 
+page_t *Btree::seg_root(const Index *index, Mtr *mtr) noexcept {
+  if (!index->is_blink()) {
+    return root_get(index->m_page_id, mtr);
+  }
+
+  /* The segment headers on a root don't change after its creation, a root raise keeps them
+  (see PAGE_HIGH_KEY): a fix is enough to read them. And a latch is what mustn't be taken:
+  the callers hold the tablespace latch, a B-link split holds the root and waits for that
+  latch, see the proof in idx0blink.h. */
+  BufPool::Request req{
+    .m_rw_latch = RW_NO_LATCH, .m_page_id = index->m_page_id, .m_mode = BUF_GET, .m_file = __FILE__, .m_line = __LINE__, .m_mtr = mtr
+  };
+
+  return m_sys.m_buf_pool->get(req, nullptr)->get_frame();
+}
+
+#ifdef UNIV_DEBUG
+bool Btree::tree_x_latched(const Index *index, const Mtr *mtr) const noexcept {
+  /* A B-link tree has no index latch to hold. */
+  return index->is_blink() || mtr->memo_contains(index->get_lock(), MTR_MEMO_X_LOCK);
+}
+#endif /* UNIV_DEBUG */
+
 BufBlock *Btree::page_alloc(const Index *index, page_no_t hint_page_no, byte file_direction, ulint level, Mtr *mtr) noexcept {
-  auto root = root_get(index->m_page_id, mtr);
+  auto root = seg_root(index, mtr);
 
   fseg_header_t *seg_header;
 
@@ -255,9 +278,11 @@ ulint Btree::get_size(const Index *index, ulint flag) noexcept {
 
   mtr.start();
 
-  mtr_s_lock(index->get_lock(), &mtr);
+  if (!index->is_blink()) {
+    mtr_s_lock(index->get_lock(), &mtr);
+  }
 
-  auto root = root_get(index->m_page_id, &mtr);
+  auto root = seg_root(index, &mtr);
 
   m_sys.m_fsp->latch(index->get_space_id(), &mtr);
 
@@ -292,7 +317,7 @@ void Btree::page_free_low(const Index *index, BufBlock *block, ulint level, Mtr 
 
   buf_block_modify_clock_inc(block);
 
-  const auto root = root_get(index->m_page_id, mtr);
+  const auto root = seg_root(index, mtr);
 
   fseg_header_t *seg_header;
 
@@ -554,6 +579,14 @@ bool Btree::page_reorganize_low(bool recovery, BufBlock *block, const Index *ind
     ut_ad(max_trx_id > 0 || recovery);
   }
 
+  /* After the records, in the same place at replay, which runs this function: logging is
+  off, MLOG_PAGE_REORGANIZE stands for the key too. The key of an old replace isn't copied. */
+  if (const auto key = page_get_high_key(temp_page); !key.is_null()) {
+    const auto installed = page_set_high_key(block, key, page_high_key_size(key), mtr);
+
+    ut_a(installed);
+  }
+
   if (likely(!recovery)) {
     /* Update the record lock bitmaps */
     m_sys.m_lock_sys->move_reorganize_page(block, temp_block);
@@ -606,11 +639,37 @@ void Btree::page_empty(BufBlock *block, Index *index, ulint level, Mtr *mtr) noe
 
   ut_ad(mtr->memo_contains(block, MTR_MEMO_PAGE_X_FIX));
 
+  /* An emptied page keeps its boundary. page_create() wipes the heap, take a copy. */
+  const auto key = page_get_high_key(page);
+  MemHeap *heap{};
+  Rec key_copy{};
+  ulint key_size{};
+
+  if (!key.is_null()) {
+    const auto extra = page_rec_extra_size(key);
+
+    key_size = page_high_key_size(key);
+    heap = mem_heap_create(key_size);
+
+    auto buf = static_cast<byte *>(mem_heap_alloc(heap, key_size));
+
+    memcpy(buf, key.get() - extra, key_size);
+    key_copy = Rec(buf + extra);
+  }
+
   /* Recreate the page: note that global data on page (possible
   segment headers, next page-field, etc.) is preserved intact */
 
   [[maybe_unused]] auto new_page = ::page_create(index, block, mtr);
   ut_ad(new_page != nullptr);
+
+  /* Logged: the replay of MLOG_PAGE_CREATE alone has no key to keep. */
+  if (heap != nullptr) {
+    const auto installed = page_set_high_key(block, key_copy, key_size, mtr);
+
+    ut_a(installed);
+    mem_heap_free(heap);
+  }
 
   page_set_level(page, level, mtr);
 
@@ -619,7 +678,7 @@ void Btree::page_empty(BufBlock *block, Index *index, ulint level, Mtr *mtr) noe
 
 Rec Btree::root_raise_and_insert(BtreeCursor *btr_cur, const DTuple *tuple, ulint n_ext, Mtr *mtr) noexcept {
   const auto root = btr_cur->get_page_no();
-  const auto root_block = btr_cur->get_block();
+  [[maybe_unused]] const auto root_block = btr_cur->get_block();
   const auto index = btr_cur->get_index();
 
 #ifdef UNIV_BTR_DEBUG
@@ -638,8 +697,17 @@ Rec Btree::root_raise_and_insert(BtreeCursor *btr_cur, const DTuple *tuple, ulin
   moving the root records to the new page, emptying the root, putting
   a node pointer to the new page, and then splitting the new page. */
 
+  root_raise(btr_cur, page_alloc(index, 0, FSP_NO_DIR, page_get_level(root, mtr), mtr), tuple, mtr);
+
+  /* Split the child and insert tuple */
+  return page_split_and_insert(btr_cur, tuple, n_ext, mtr);
+}
+
+void Btree::root_raise(BtreeCursor *btr_cur, BufBlock *new_block, const DTuple *tuple, Mtr *mtr) noexcept {
+  const auto root = btr_cur->get_page_no();
+  const auto root_block = btr_cur->get_block();
+  const auto index = btr_cur->get_index();
   const auto level = page_get_level(root, mtr);
-  const auto new_block = page_alloc(index, 0, FSP_NO_DIR, level, mtr);
   const auto new_page = new_block->get_frame();
 
   page_create(new_block, index, level, mtr);
@@ -695,9 +763,6 @@ Rec Btree::root_raise_and_insert(BtreeCursor *btr_cur, const DTuple *tuple, ulin
 
   /* Reposition the cursor to the child node */
   page_cursor->search(m_sys, new_block, index, tuple, PAGE_CUR_LE);
-
-  /* Split the child and insert tuple */
-  return page_split_and_insert(btr_cur, tuple, n_ext, mtr);
 }
 
 bool Btree::page_get_split_rec_left(BtreeCursor *btr_cur, Rec &split_rec) noexcept {
@@ -776,7 +841,8 @@ Rec Btree::page_get_split_rec(BtreeCursor *btr_cur, const DTuple *tuple, ulint n
 
   /* free_space is now the free space of a created new page */
 
-  const auto total_data = page_get_data_size(page) + insert_size;
+  /* The records to divide: a high key is not one of them. */
+  const auto total_data = page_get_rec_data_size(page) + insert_size;
   const auto total_n_recs = page_get_n_recs(page) + 1;
   ut_ad(total_n_recs >= 2);
 
@@ -868,7 +934,8 @@ bool Btree::page_insert_fits(
 
   /* free_space is now the free space of a created new page */
 
-  auto total_data = page_get_data_size(page) + insert_size;
+  /* The records to divide: a high key is not one of them. */
+  auto total_data = page_get_rec_data_size(page) + insert_size;
   auto total_n_recs = page_get_n_recs(page) + 1;
 
   /* We determine which records (from rec to end_rec, not including
@@ -1478,7 +1545,8 @@ bool Btree::merge(BtreeCursor *cursor, Mtr *mtr) noexcept {
   }
 
   const auto n_recs = page_get_n_recs(page);
-  const auto data_size = page_get_data_size(page);
+  /* What moves: the records, a high key of this page doesn't. */
+  const auto data_size = page_get_rec_data_size(page);
   const auto max_ins_size_reorg = page_get_max_insert_size_after_reorganize(merge_page, n_recs);
 
   auto err_clean_up = [&]() {

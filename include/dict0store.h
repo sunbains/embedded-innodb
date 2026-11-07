@@ -35,7 +35,7 @@ Created 4/18/1996 Heikki Tuuri
 
 struct QueThr;
 struct TableNode;
-struct BtreePcursor;
+class IndexCursor;
 
 /** Responsible for data dictionary persistence. */
 struct DictStore {
@@ -345,7 +345,7 @@ struct DictStore {
    * 
    * @return New root page number, or FIL_NULL on failure.
    */
-  [[nodiscard]] page_no_t truncate_index_tree(Table *table, space_id_t space_id, BtreePcursor *pcur, Mtr *mtr) noexcept;
+  [[nodiscard]] page_no_t truncate_index_tree(Table *table, space_id_t space_id, IndexCursor *pcur, Mtr *mtr) noexcept;
 
   /**
    * Drops the index tree associated with a row in the SYS_INDEXES table.

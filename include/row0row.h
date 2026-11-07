@@ -30,6 +30,7 @@ class System;
 #include "data0data.h"
 #include "dict0dict.h"
 #include "dict0types.h"
+#include "idx0am.h"
 #include "innodb0types.h"
 #include "mtr0mtr.h"
 #include "que0types.h"
@@ -225,23 +226,23 @@ void row_build_row_ref_in_tuple(DTuple *ref, Rec rec, const Index *index, const 
 inline void row_build_row_ref_fast(DTuple *ref, const ulint *map, const Rec rec, const ulint *offsets);
 
 /**
- * @brief Searches the clustered index record for a row, if we have the row reference.
+ * Fetches the clustered index record for a row reference, through the index interface.
  *
- * @param[out] pcur Persistent cursor, which must be closed by the caller.
- * @param[in] mode BTR_MODIFY_LEAF, ...
+ * @param[out] cur Cursor on the record.
+ * @param[in] intent What the caller does at the record.
  * @param[in] table Table.
  * @param[in] ref Row reference.
  * @param[in,out] mtr Mini-transaction.
  *
  * @return true if found.
  */
-bool row_search_on_row_ref(System &sys, BtreePcursor *pcur, ulint mode, const Table *table, const DTuple *ref, Mtr *mtr);
+bool row_search_on_row_ref(IndexCursor *cur, Intent intent, const Table *table, const DTuple *ref, Mtr *mtr);
 
 /**
  * @brief Fetches the clustered index record for a secondary index record.
  * The latches on the secondary index record are preserved.
  *
- * @param[in] mode BTR_MODIFY_LEAF, ...
+ * @param[in] intent What the caller does at the record.
  * @param[in] rec Record in a secondary index
  * @param[in] index Secondary index
  * @param[out] clust_index Clustered index
@@ -249,20 +250,7 @@ bool row_search_on_row_ref(System &sys, BtreePcursor *pcur, ulint mode, const Ta
  *
  * @return Rec  Record or NULL, if no record found
  */
-Rec row_get_clust_rec(System &sys, ulint mode, const Rec rec, const Index *index, Index **clust_index, Mtr *mtr);
-
-/**
- * @brief Searches an index record.
- *
- * @param[in] index Index
- * @param[in] entry Index entry
- * @param[in] mode BTR_MODIFY_LEAF, ...
- * @param[in,out] pcur Persistent cursor, which must be closed by the caller
- * @param[in] mtr Mini-transaction
- *
- * @return true if found
- */
-bool row_search_index_entry(System &sys, Index *index, const DTuple *entry, ulint mode, BtreePcursor *pcur, Mtr *mtr);
+Rec row_get_clust_rec(System &sys, Intent intent, const Rec rec, const Index *index, Index **clust_index, Mtr *mtr);
 
 /**
  * @brief The allowed latching order of index records is the following:

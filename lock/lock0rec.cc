@@ -838,7 +838,7 @@ void LockSys::move_reorganize_page(const BufBlock *block, const BufBlock *oblock
 
   deadlock_check_moved();
 
-  ut_ad(rec_validate_page(block->get_page_id()));
+  ut_ad(rec_validate_page(block->get_page_id(), true));
 }
 
 void LockSys::move_rec_list_end(const BufBlock *new_block, const BufBlock *block, const Rec rec) noexcept {
@@ -896,8 +896,8 @@ void LockSys::move_rec_list_end(const BufBlock *new_block, const BufBlock *block
 
   deadlock_check_moved();
 
-  ut_ad(rec_validate_page(block->get_page_id()));
-  ut_ad(rec_validate_page(new_block->get_page_id()));
+  ut_ad(rec_validate_page(block->get_page_id(), true));
+  ut_ad(rec_validate_page(new_block->get_page_id(), true));
 }
 
 void LockSys::move_rec_list_start(const BufBlock *new_block, const BufBlock *block, const Rec rec, const Rec old_end) noexcept {
@@ -957,7 +957,7 @@ void LockSys::move_rec_list_start(const BufBlock *new_block, const BufBlock *blo
 
   deadlock_check_moved();
 
-  ut_ad(rec_validate_page(block->get_page_id()));
+  ut_ad(rec_validate_page(block->get_page_id(), true));
 }
 
 void LockSys::update_split_right(const BufBlock *right_block, const BufBlock *left_block) noexcept {

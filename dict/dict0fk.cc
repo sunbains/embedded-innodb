@@ -25,6 +25,8 @@ Created 2024-Oct-15 by Sunny Bains
 #include "ut0ucode.h"
 #include "btr0btr.h"
 #include "btr0cur.h"
+#include "idx0am.h"
+#include "srv0sys.h"
 #include "buf0buf.h"
 #include "data0type.h"
 #include "dict0dict.h"
@@ -1294,16 +1296,16 @@ void Dict::update_statistics(Table *table) noexcept {
 
   auto &stats = table->m_stats;
   ulint sum_of_index_sizes{};
-  BtreeCursor btr_cur{};
 
   for (auto index : table->m_indexes) {
-    auto size = m_sys.m_btree->get_size(index, BTR_TOTAL_SIZE);
+    auto &am = m_sys.am(index);
+    auto size = am.n_pages(index);
 
     index->m_stats.m_index_size = size;
 
     sum_of_index_sizes += size;
 
-    size = m_sys.m_btree->get_size(index, BTR_N_LEAF_PAGES);
+    size = am.n_data_pages(index);
 
     if (size == 0) {
       /* The root node of the tree is a leaf */
@@ -1312,7 +1314,7 @@ void Dict::update_statistics(Table *table) noexcept {
 
     index->m_stats.m_n_leaf_pages = size;
 
-    btr_cur.estimate_number_of_different_key_vals(m_sys, index);
+    am.estimate_distinct(index);
   }
 
   auto index = table->m_indexes.front();
@@ -1470,8 +1472,7 @@ void Dict::index_print(Index *index) noexcept {
   log_err("");
 
 #ifdef UNIV_BTR_PRINT
-  m_store.m_btree->print_size(index);
-  m_store.m_btree->print_index(index, 7);
+  m_store.m_sys.am(index).print(index);
 #endif /* UNIV_BTR_PRINT */
 }
 

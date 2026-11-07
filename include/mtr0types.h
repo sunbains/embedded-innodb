@@ -37,14 +37,30 @@ enum MtrMemoType : byte {
   /** Page is fixed in no latch */
   MTR_MEMO_BUF_FIX = RW_NO_LATCH,
 
+  /** All of the page is owned by its bits */
+  MTR_MEMO_PAGE_B_FIX = RW_B_LATCH,
+
+  /** Page is fixed, and owned by its bits in an outer mini-transaction */
+  MTR_MEMO_PAGE_B_HELD = RW_B_HELD,
+
   /** Page is modified */
   MTR_MEMO_MODIFY = 54,
+
+  /** A group of records of the page is owned by its bit: this, plus the number of the bit. All of
+  the values from here to the end are that. */
+  MTR_MEMO_PAGE_G0 = 128,
 
   /** Page is locked in S-mode */
   MTR_MEMO_S_LOCK = 55,
 
   /** Page is locked in X-mode */
   MTR_MEMO_X_LOCK = 56,
+
+  /** An RwLatch is held in S-mode. MTR_MEMO_S_LOCK and MTR_MEMO_X_LOCK hold an RwLock. */
+  MTR_MEMO_S_LATCH = 57,
+
+  /** An RwLatch is held in X-mode */
+  MTR_MEMO_X_LATCH = 58,
 };
 
 /** @name Log item types
@@ -150,6 +166,18 @@ enum MlogType : byte {
   it, before any page of the new part is read: the extension is not synced
   when it is done, the checkpoint flush makes it durable. */
   MLOG_FILE_EXTEND = 36,
+
+  /** A step of a system transaction and how to compensate for it, see mtr0systrx.h. */
+  MLOG_SYSTRX_STEP = 37,
+
+  /** A compensation of a system transaction is done. */
+  MLOG_SYSTRX_UNDONE = 38,
+
+  /** A system transaction is finished, committed or compensated for. */
+  MLOG_SYSTRX_END = 39,
+
+  /** Set or clear the high key of an index page. */
+  MLOG_PAGE_HIGH_KEY = 40,
 
   /** Biggest value (used in assertions) */
   MLOG_BIGGEST_TYPE = 47,
@@ -261,6 +289,14 @@ inline const char *mlog_type_str(MlogType type) noexcept {
       return "MLOG_FILE_DELETE";
     case MLOG_FILE_EXTEND:
       return "MLOG_FILE_EXTEND";
+    case MLOG_SYSTRX_STEP:
+      return "MLOG_SYSTRX_STEP";
+    case MLOG_SYSTRX_UNDONE:
+      return "MLOG_SYSTRX_UNDONE";
+    case MLOG_SYSTRX_END:
+      return "MLOG_SYSTRX_END";
+    case MLOG_PAGE_HIGH_KEY:
+      return "MLOG_PAGE_HIGH_KEY";
     default:
       log_fatal("Unknown MlogType: ", (ulint)type);
       return "UNKNOWN";

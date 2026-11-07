@@ -108,6 +108,32 @@ in a B-tree: defined only on the root page of
 a B-tree tree */
 constexpr ulint PAGE_BTR_SEG_TOP = 36 + FSEG_HEADER_SIZE;
 
+/** Page offset of the origin of the page's high key, or 0 if it has none: the
+first 2 bytes of the PAGE_BTR_SEG_LEAF area, relative to PAGE_HEADER.
+
+The high key is the fixed upper boundary of the page in a Lehman & Yao B-link
+tree: the first key of the right sibling at the time of the split. It is a
+physical record in the heap, not in the record list nor on the free list, and
+has no heap number: page walks, the directory and record locks never see it.
+Its bytes count in page_get_data_size().
+
+This overlaps a segment header, but those are defined only on a root page, and
+a root is rightmost on its level, so it never has a high key. On a root these
+bytes are the top of the space id, so they must not be read: every access goes
+through page_has_right(), and a page without a right sibling has no high key.
+A root can't be told from a sole page of a level here, and needn't be. For the
+caller, this means: link the right sibling first (FIL_PAGE_NEXT), then set the
+high key, and clear the high key before the page becomes rightmost.
+
+All other pages read 0: fsp_init_file_page() zeroes the page when it is
+allocated (a redo logged page init, also for a page that was a root once). */
+constexpr ulint PAGE_HIGH_KEY = PAGE_BTR_SEG_LEAF;
+
+/** Not 0: the right sibling of this page has no node pointer yet, its split went only as far as this
+level. The same rules as PAGE_HIGH_KEY for reading it, and a page create leaves it: it says something
+about the links, which that leaves too. See the B-link protocol, idx0blink.h. */
+constexpr ulint PAGE_RIGHT_UNLINKED = PAGE_HIGH_KEY + 2;
+
 /** Start of data on the page */
 constexpr ulint PAGE_DATA = PAGE_HEADER + 36 + 2 * FSEG_HEADER_SIZE;
 
@@ -1094,6 +1120,122 @@ inline ulint page_get_data_size(const page_t *page) {
 
   return ret;
 }
+
+/**
+ * @return true if the page has a right sibling: only then can it have a high
+ * key, and PAGE_HIGH_KEY is not a part of a segment header. FIL_PAGE_NEXT is
+ * FIL_NULL on the rightmost page of a level and 0 on a page not yet linked, for
+ * a root also between the creation of its segments and its links; page 0 of a
+ * space is never an index page.
+ *
+ * @param[in] page index page
+ */
+inline bool page_has_right(const page_t *page) {
+  const auto next = mach_read_from_4(page + FIL_PAGE_NEXT);
+
+  return next != FIL_NULL && next != 0;
+}
+
+/**
+ * Returns the high key of the page.
+ *
+ * @param[in] page index page
+ *
+ * @return the record, null if the page has none. Never reads PAGE_HIGH_KEY of a
+ * root, see PAGE_HIGH_KEY.
+ */
+inline Rec page_get_high_key(const page_t *page) {
+  if (!page_has_right(page)) {
+    return Rec{};
+  }
+
+  const auto offs = mach_read_from_2(page + PAGE_HEADER + PAGE_HIGH_KEY);
+
+  return offs == 0 ? Rec{} : Rec(page + offs);
+}
+
+/**
+ * @return the bytes of the record in front of its origin, read from the record:
+ * a page holds no index to tell it for the high key.
+ *
+ * @param[in] rec physical record
+ */
+inline ulint page_rec_extra_size(const Rec rec) {
+  return REC_N_EXTRA_BYTES + rec.get_n_fields() * (rec.get_1byte_offs_flag() ? 1 : 2);
+}
+
+/**
+ * @return the size of a high key, what page_set_high_key() was given.
+ *
+ * @param[in] key high key of a page
+ */
+inline ulint page_high_key_size(const Rec key) {
+  return page_rec_extra_size(key) + key.get_data_size();
+}
+
+/**
+ * Returns the sum of the sizes of the records in the record list, without the
+ * high key: what moves if the records of the page move, as in a split or merge,
+ * and how full the page is with records.
+ *
+ * @param[in] page index page
+ *
+ * @return	data in bytes
+ */
+inline ulint page_get_rec_data_size(const page_t *page) {
+  const auto key = page_get_high_key(page);
+
+  return page_get_data_size(page) - (key.is_null() ? 0 : page_high_key_size(key));
+}
+
+/**
+ * Sets the high key of a page with a right sibling, by a copy of the bytes. If
+ * the page has a high key it's replaced: its bytes are garbage until the next
+ * reorganize, counted in PAGE_GARBAGE, not on the free list. The page's records
+ * and n_heap don't change.
+ *
+ * @param[in,out] block page, X-latched in mtr
+ * @param[in] rec origin of a physical record, not in the record list of this
+ *   page, in practice a copy of the order prefix of a node pointer. The current
+ *   high key may be given: it's copied before it's garbage.
+ * @param[in] size size in bytes of rec with its extra bytes
+ * @param[in,out] mtr mini-transaction
+ *
+ * @return false if it doesn't fit, the page is unchanged and nothing is logged.
+ */
+[[nodiscard]] bool page_set_high_key(BufBlock *block, const Rec rec, ulint size, Mtr *mtr);
+
+/** @return true if the right sibling of the page has no node pointer yet. */
+[[nodiscard]] inline bool page_right_unlinked(const page_t *page) {
+  return page_has_right(page) && mach_read_from_2(page + PAGE_HEADER + PAGE_RIGHT_UNLINKED) != 0;
+}
+
+/** Say whether the right sibling of a page that has one has a node pointer. */
+void page_set_right_unlinked(BufBlock *block, bool unlinked, Mtr *mtr);
+
+/**
+ * Removes the high key, if any: its bytes are garbage as in a replace. Nothing
+ * is logged without a high key.
+ *
+ * @param[in,out] block page, X-latched in mtr
+ * @param[in,out] mtr mini-transaction
+ */
+void page_clear_high_key(BufBlock *block, Mtr *mtr);
+
+/**
+ * Parses and applies a redo log record of MLOG_PAGE_HIGH_KEY. The body: a 2 byte
+ * length, 0 to clear, else that many bytes: the 2 byte offset of the record's
+ * origin in its bytes (the record can't tell it before its origin is known),
+ * then the bytes of the record.
+ *
+ * @param[in,out] sys system, to flag a corrupt log
+ * @param[in] ptr buffer
+ * @param[in] end_ptr buffer end
+ * @param[in,out] block buffer block, or null to only parse
+ *
+ * @return	end of log record or NULL
+ */
+byte *page_parse_high_key(System &sys, byte *ptr, byte *end_ptr, BufBlock *block);
 
 /**
  * Allocates a block of memory from the free list of an index page.

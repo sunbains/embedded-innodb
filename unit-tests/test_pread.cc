@@ -35,12 +35,15 @@ contexts disjoint.
 #include "btr0btr.h"
 #include "data0data.h"
 #include "dict0dict.h"
+#include "idx0blink.h"
 #include "row0pread.h"
 #include "srv0srv.h"
 #include "trx0purge.h"
 #include "trx0sys.h"
 #include "trx0trx.h"
 
+#include <cstdlib>
+#include <string_view>
 #include <atomic>
 #include <future>
 #include <map>
@@ -1113,6 +1116,226 @@ TEST_F(PreadTest, ConcurrentWriters) {
   });
 
   EXPECT_EQ(n_scans.load(), 6UL);
+}
+
+namespace {
+
+/** Stops the next split with its page latched, half done, until told to go on. */
+struct PausedSplit {
+  static inline std::atomic<bool> s_armed{};
+  static inline std::atomic<bool> s_paused{};
+  static inline std::atomic<bool> s_go{};
+
+  static void hook(System &, blink::TestPoint point) {
+    if (point == blink::TestPoint::SPLIT && s_armed.exchange(false)) {
+      s_paused = true;
+
+      while (!s_go.load()) {
+        std::this_thread::sleep_for(1ms);
+      }
+    }
+  }
+};
+
+}  // namespace
+
+/** A scan of a secondary index that has to look up a row in the clustered index, on the page being
+split, when the row is about to move to the new right sibling. The scan waits for the page, then
+gets it without the row: it has to go right for it. A descent of the old tree doesn't, and the row
+would look like it never existed. The secondary keys are in the reverse order of the primary keys
+so that the highest key of the page, the one that moves, is the first one the scan wants from it. */
+TEST_F(PreadTest, RowMovedBySplit) {
+  if (m_config.m_dict.m_index_am != IndexAmKind::BLINK) {
+    GTEST_SKIP() << "A B-link tree's split";
+  }
+
+  constexpr uint32_t N_ROWS = 300;
+  constexpr uint32_t STEP = 1000;
+
+  ut::Rows rows;
+
+  for (uint32_t i{}; i < N_ROWS; ++i) {
+    const auto k = i * STEP;
+
+    rows[k] = ut::Row{k, N_ROWS * STEP - k, ut::blob(k, 400)};
+  }
+
+  load(rows);
+
+  auto trx = begin();
+
+  ASSERT_NE(trx->assign_read_view(*m_sys), nullptr);
+
+  /* The view doesn't see who delete marked the records: for each one it needs the row. */
+  {
+    auto d = begin();
+
+    for (const auto &[k, row] : rows) {
+      ASSERT_EQ(remove(d, k), DB_SUCCESS);
+    }
+
+    commit(d);
+  }
+
+  PausedSplit::s_paused = false;
+  PausedSplit::s_go = false;
+  PausedSplit::s_armed = true;
+  blink::set_test_hook(*m_sys, PausedSplit::hook);
+
+  with_timeout("RowMovedBySplit", 170s, [&] {
+    std::thread writer([&] {
+      auto w = begin();
+
+      /* All into one page, among the first the scan looks at: a lookup that builds a version
+      takes milliseconds. What the page had moves right when it's full. */
+      for (uint32_t i = 1; PausedSplit::s_armed.load(); ++i) {
+        const auto k = (N_ROWS - 5) * STEP + i;
+
+        ASSERT_EQ(insert(w, ut::Row{k, N_ROWS * STEP - k, ut::blob(k, 400)}), DB_SUCCESS);
+      }
+
+      commit(w);
+    });
+
+    while (!PausedSplit::s_paused.load()) {
+      std::this_thread::sleep_for(1ms);
+    }
+
+    std::vector<uint32_t> keys;
+
+    std::thread scan([&] {
+      auto r = pscan(trx, sec(), 1);
+
+      EXPECT_EQ(r.m_err, DB_SUCCESS);
+
+      keys = r.keys();
+    });
+
+    /* Long enough for the scan to be at the page. If it isn't it finds the row after the split,
+    and this passes for nothing. */
+    std::this_thread::sleep_for(1s);
+
+    PausedSplit::s_go = true;
+
+    scan.join();
+    writer.join();
+
+    std::vector<uint32_t> expected;
+
+    for (const auto &[k, row] : rows) {
+      expected.push_back(k);
+    }
+
+    std::ranges::sort(keys);
+
+    EXPECT_EQ(keys, expected);
+  });
+
+  blink::set_test_hook(*m_sys, nullptr);
+
+  commit(trx);
+  clear();
+}
+
+/** A scan that starts at a key, on a page that splits after its parent was read: the key goes with
+the upper half, the scan waits for the page and finds it without it. It has to find the key on the
+new page, not start from the first thing there. Several keys, since the place of the split isn't
+known here: each one can only be wrong by having rows below it. */
+TEST_F(PreadTest, StartMovedBySplit) {
+  if (m_config.m_dict.m_index_am != IndexAmKind::BLINK) {
+    GTEST_SKIP() << "A B-link tree's split";
+  }
+
+  constexpr uint32_t N_ROWS = 300;
+  constexpr uint32_t STEP = 1000;
+  constexpr uint32_t BASE = N_ROWS / 2 * STEP;
+  constexpr size_t N_SCANS = 12;
+
+  ut::Rows rows;
+
+  for (uint32_t i{}; i < N_ROWS; ++i) {
+    const auto k = i * STEP;
+
+    rows[k] = ut::Row{k, i, ut::blob(k, 400)};
+  }
+
+  load(rows);
+
+  auto trx = begin();
+
+  ASSERT_NE(trx->assign_read_view(*m_sys), nullptr);
+
+  PausedSplit::s_paused = false;
+  PausedSplit::s_go = false;
+  PausedSplit::s_armed = true;
+  blink::set_test_hook(*m_sys, PausedSplit::hook);
+
+  with_timeout("StartMovedBySplit", 170s, [&] {
+    std::thread writer([&] {
+      auto w = begin();
+
+      for (uint32_t i = 1; PausedSplit::s_armed.load(); ++i) {
+        const auto k = BASE + i;
+
+        ASSERT_EQ(insert(w, ut::Row{k, k, ut::blob(k, 400)}), DB_SUCCESS);
+      }
+
+      commit(w);
+    });
+
+    while (!PausedSplit::s_paused.load()) {
+      std::this_thread::sleep_for(1ms);
+    }
+
+    std::array<std::vector<uint32_t>, N_SCANS> keys;
+    std::vector<std::thread> scans;
+    std::vector<DTuple *> starts;
+
+    for (size_t s{}; s < N_SCANS; ++s) {
+      starts.push_back(key(clust(), BASE + uint32_t(s + 1) * STEP));
+    }
+
+    for (size_t s{}; s < N_SCANS; ++s) {
+      scans.emplace_back([&, s] {
+        auto r = pscan(trx, clust(), 1, ParallelReader::ScanRange(starts[s], nullptr));
+
+        EXPECT_EQ(r.m_err, DB_SUCCESS);
+
+        keys[s] = r.keys();
+      });
+    }
+
+    /* Long enough for them to be at the page. If not they find it after the split: this passes for
+    nothing. */
+    std::this_thread::sleep_for(1s);
+
+    PausedSplit::s_go = true;
+
+    for (auto &scan : scans) {
+      scan.join();
+    }
+
+    writer.join();
+
+    for (size_t s{}; s < N_SCANS; ++s) {
+      std::vector<uint32_t> expected;
+
+      for (const auto &[k, row] : rows) {
+        if (k >= BASE + uint32_t(s + 1) * STEP) {
+          expected.push_back(k);
+        }
+      }
+
+      std::ranges::sort(keys[s]);
+
+      EXPECT_EQ(keys[s], expected) << "from the key of scan " << s;
+    }
+  });
+
+  blink::set_test_hook(*m_sys, nullptr);
+
+  commit(trx);
+  clear();
 }
 
 /** BUG: a parallel scan of a clustered index whose rows have externally

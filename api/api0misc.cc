@@ -219,7 +219,7 @@ bool Cursor::is_positioned() const noexcept {
   auto cursor = this;
   const Prebuilt *prebuilt = cursor->m_prebuilt;
 
-  return btr_cursor_is_positioned(prebuilt->m_pcur);
+  return prebuilt->m_pcur->has_saved();
 }
 
 DbErr schema_lock_shared(System &sys, Trx *trx) noexcept {

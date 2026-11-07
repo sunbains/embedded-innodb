@@ -36,6 +36,11 @@ Created 6/2/1994 Heikki Tuuri
 #include "mtr0mtr.h"
 #include "page0cur.h"
 
+namespace blink {
+struct Smo;
+class Merge;
+}
+
 struct Btree {
   /** The instance this sub-system belongs to. */
   System &m_sys;
@@ -137,6 +142,34 @@ struct Btree {
    * @return	inserted record
    */
   [[nodiscard]] Rec root_raise_and_insert(BtreeCursor *cursor, const DTuple *tuple, ulint n_ext, Mtr *mtr) noexcept;
+
+  /**
+   * Moves the records of the root to a page just allocated, and makes the root the parent of
+   * that page, its only child: the root keeps its page number. The cursor ends up on new_block
+   * where tuple goes. What's left for the caller is to split new_block.
+   *
+   * @param[in,out] cursor      On the root, which is X-latched in mtr.
+   * @param[in,out] new_block   The new page, X-latched in mtr.
+   * @param[in] tuple           The tuple to insert, positions the cursor.
+   * @param[in,out] mtr         Mini-transaction.
+   */
+  void root_raise(BtreeCursor *cursor, BufBlock *new_block, const DTuple *tuple, Mtr *mtr) noexcept;
+
+  /** @return true if this instance's indexes are B-link trees. */
+
+  /**
+   * @return the root as far as a segment header is read from it: X-latched in mtr for the
+   * B-tree, only fixed for a B-link tree.
+   *
+   * @param[in] index           The index.
+   * @param[in,out] mtr         Mini-transaction.
+   */
+  [[nodiscard]] page_t *seg_root(const Index *index, Mtr *mtr) noexcept;
+
+#ifdef UNIV_DEBUG
+  /** @return true if mtr has what restructuring index requires of it. */
+  [[nodiscard]] bool tree_x_latched(const Index *index, const Mtr *mtr) const noexcept;
+#endif /* UNIV_DEBUG */
 
   /**
    * Reorganizes an index page.
@@ -482,6 +515,9 @@ struct Btree {
    * @param[in,out]                  Mini-transaction.
    */
   inline void static page_set_next(page_t *page, page_no_t next, Mtr *mtr) noexcept {
+    /* A rightmost page has no high key, see PAGE_HIGH_KEY: clear it first. */
+    ut_ad(next != FIL_NULL || page_get_high_key(page).is_null());
+
     mlog_write_ulint(page + FIL_PAGE_NEXT, next, MLOG_4BYTES, mtr);
   }
 
@@ -565,6 +601,9 @@ struct Btree {
    */
 #ifdef UNIT_TEST
  private:
+  friend struct blink::Smo;
+  friend class blink::Merge;
+
 #endif /* UNIT_TEST */
 
 #ifdef UNIV_BTR_DEBUG

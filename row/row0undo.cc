@@ -130,17 +130,16 @@ some of its fields were changed. Now, it is possible that the delete marked
 version has become obsolete at the time the undo is started. */
 
 
-DbErr UndoNode::remove_secondary_index_entry(System &sys, ulint mode, Index *index, DTuple *entry) noexcept {
-  ut_ad(mode == BTR_MODIFY_LEAF || mode == BTR_MODIFY_TREE);
+DbErr UndoNode::remove_secondary_index_entry(System &sys, Intent intent, Index *index, DTuple *entry) noexcept {
+  ut_ad(intent != Intent::Read);
 
-  BtreePcursor pcur{};
+  IndexCursor pcur{sys};
 
   Mtr mtr;
 
   mtr.start();
 
-  auto found = row_search_index_entry(sys, index, entry, mode, &pcur, &mtr);
-  auto btr_cur = pcur.get_btr_cur();
+  auto found = pcur.find(index, entry, intent, &mtr);
 
   if (unlikely(!found)) {
     /* Not found */
@@ -151,18 +150,12 @@ DbErr UndoNode::remove_secondary_index_entry(System &sys, ulint mode, Index *ind
     return DB_SUCCESS;
   }
 
-  DbErr err;
+  /* No need to distinguish RB_RECOVERY here, because we are deleting a secondary index record:
+  the distinction between RB_NORMAL and RB_RECOVERY only matters when deleting a record that
+  contains externally stored columns. */
+  ut_ad(!index->is_clustered());
 
-  if (mode == BTR_MODIFY_LEAF) {
-    auto success = btr_cur->optimistic_delete(sys, &mtr);
-    err = success ? DB_SUCCESS : DB_FAIL;
-  } else {
-    /* No need to distinguish RB_RECOVERY here, because we are deleting a secondary index record:
-    the distinction between RB_NORMAL and RB_RECOVERY only matters when deleting a record that
-    contains externally stored columns. */
-    ut_ad(!index->is_clustered());
-    err = btr_cur->pessimistic_delete(sys, false, RB_NORMAL, &mtr);
-  }
+  const auto err = pcur.remove(intent, RB_NORMAL, &mtr);
 
   pcur.close();
   mtr.commit(sys);
@@ -172,7 +165,7 @@ DbErr UndoNode::remove_secondary_index_entry(System &sys, ulint mode, Index *ind
 
 DbErr UndoNode::remove_secondary_index_entry(System &sys, Index *index, DTuple *entry) noexcept {
   /* Try first optimistic descent to the B-tree */
-  auto err = remove_secondary_index_entry(sys, BTR_MODIFY_LEAF, index, entry);
+  auto err = remove_secondary_index_entry(sys, Intent::Write, index, entry);
 
   if (err == DB_SUCCESS) {
 
@@ -183,7 +176,7 @@ DbErr UndoNode::remove_secondary_index_entry(System &sys, Index *index, DTuple *
 
   /* Try then pessimistic descent to the B-tree */
   for (;; ++n_tries) {
-    err = remove_secondary_index_entry(sys, BTR_MODIFY_TREE, index, entry);
+    err = remove_secondary_index_entry(sys, Intent::Restructure, index, entry);
 
     /* The delete operation may fail if we have little
     file space left: TODO: easiest to crash the database
@@ -205,8 +198,6 @@ UndoNode::UndoNode(Trx *trx, QueThr *parent) noexcept : m_trx{} {
   m_trx = trx;
   m_state = UNDO_NODE_FETCH_NEXT;
 
-  m_pcur.init(0);
-
   m_heap = mem_heap_create(256);
 }
 
@@ -225,44 +216,47 @@ bool UndoNode::search_cluster_index_and_persist_position(System &sys) noexcept {
   mtr.start();
 
   auto clust_index = m_table->get_clustered_index();
-  const auto found = row_search_on_row_ref(sys, &m_pcur, BTR_MODIFY_LEAF, m_table, m_ref, &mtr);
-  auto rec = m_pcur.get_rec();
+
+  m_pcur.attach(sys);
+
+  const auto found = row_search_on_row_ref(&m_pcur, Intent::Write, m_table, m_ref, &mtr);
 
   ulint *offsets{};
   MemHeap *offs_heap{};
-
-  {
-    PhyRec record{clust_index, rec};
-
-    offsets = record.get_col_offsets(rec_offsets.get(), ULINT_UNDEFINED, &offs_heap, Current_location());
-  }
-
   bool success{};
 
-  if (!found || m_roll_ptr != row_get_rec_roll_ptr(rec, clust_index, offsets)) {
+  if (found) {
+    auto rec = m_pcur.rec();
+
+    {
+      PhyRec record{clust_index, rec};
+
+      offsets = record.get_col_offsets(rec_offsets.get(), ULINT_UNDEFINED, &offs_heap, Current_location());
+    }
 
     /* We must remove the reservation on the undo log record BEFORE releasing the latch on
     the clustered index page: this is to make sure that some thread will eventually undo the
     modification corresponding to node->roll_ptr. */
 
-  } else {
+    if (m_roll_ptr == row_get_rec_roll_ptr(rec, clust_index, offsets)) {
 
-    m_row = row_build(sys, ROW_COPY_DATA, clust_index, rec, offsets, nullptr, &m_ext, m_heap);
+      m_row = row_build(sys, ROW_COPY_DATA, clust_index, rec, offsets, nullptr, &m_ext, m_heap);
 
-    if (m_update != nullptr) {
-      m_undo_row = dtuple_copy(m_row, m_heap);
-      RowUpdate::replace(sys, m_undo_row, &m_undo_ext, clust_index, m_update, m_heap);
-    } else {
-      m_undo_row = nullptr;
-      m_undo_ext = nullptr;
+      if (m_update != nullptr) {
+        m_undo_row = dtuple_copy(m_row, m_heap);
+        RowUpdate::replace(sys, m_undo_row, &m_undo_ext, clust_index, m_update, m_heap);
+      } else {
+        m_undo_row = nullptr;
+        m_undo_ext = nullptr;
+      }
+
+      m_pcur.save(&mtr);
+
+      success = true;
     }
-
-    m_pcur.store_position(sys, &mtr);
-
-    success = true;
   }
 
-  m_pcur.commit_specify_mtr(sys, &mtr);
+  m_pcur.commit(&mtr);
 
   if (unlikely(offs_heap != nullptr)) {
     mem_heap_free(offs_heap);
@@ -276,7 +270,7 @@ DbErr UndoNode::remove_cluster_rec(System &sys) noexcept {
   mtr.start();
 
   {
-    const auto success = m_pcur.restore_position(sys, BTR_MODIFY_LEAF, &mtr, Current_location());
+    const auto success = m_pcur.restore(Intent::Write, &mtr);
     ut_a(success);
   }
 
@@ -285,24 +279,24 @@ DbErr UndoNode::remove_cluster_rec(System &sys) noexcept {
 
     /* Drop the index tree associated with the row in SYS_INDEXES table: */
 
-    sys.m_dict->m_store.drop_index_tree(m_pcur.get_rec(), &mtr);
+    sys.m_dict->m_store.drop_index_tree(m_pcur.rec(), &mtr);
 
     mtr.commit(sys);
 
     mtr.start();
 
-    const auto success = m_pcur.restore_position(sys, BTR_MODIFY_LEAF, &mtr, Current_location());
+    const auto success = m_pcur.restore(Intent::Write, &mtr);
     ut_a(success);
   }
 
-  auto btr_cur = m_pcur.get_btr_cur();
-
   {
-    const auto success = btr_cur->optimistic_delete(sys, &mtr);
+    /* What may be freed depends on the context: an implementation can do it all here. */
+    const auto rb_ctx = trx_is_recv(sys, m_trx) ? RB_RECOVERY : RB_NORMAL;
+    const auto done = m_pcur.remove(Intent::Write, rb_ctx, &mtr) == DB_SUCCESS;
 
-    m_pcur.commit_specify_mtr(sys, &mtr);
+    m_pcur.commit(&mtr);
 
-    if (success) {
+    if (done) {
       trx_undo_rec_release(m_trx, m_undo_no);
 
       return DB_SUCCESS;
@@ -316,13 +310,13 @@ DbErr UndoNode::remove_cluster_rec(System &sys) noexcept {
     mtr.start();
 
     {
-      const auto success = m_pcur.restore_position(sys, BTR_MODIFY_TREE, &mtr, Current_location());
+      const auto success = m_pcur.restore(Intent::Restructure, &mtr);
       ut_a(success);
     }
 
     {
       const auto rb_ctx = trx_is_recv(sys, m_trx) ? RB_RECOVERY : RB_NORMAL;
-      err = btr_cur->pessimistic_delete(sys, false, rb_ctx, &mtr);
+      err = m_pcur.remove(Intent::Restructure, rb_ctx, &mtr);
     }
 
     /* The delete operation may fail if we have little file space left:
@@ -332,12 +326,12 @@ DbErr UndoNode::remove_cluster_rec(System &sys) noexcept {
       break;
     }
 
-    m_pcur.commit_specify_mtr(sys, &mtr);
+    m_pcur.commit(&mtr);
 
     os_thread_sleep(BTR_CUR_RETRY_SLEEP_TIME);
   }
 
-  m_pcur.commit_specify_mtr(sys, &mtr);
+  m_pcur.commit(&mtr);
 
   trx_undo_rec_release(m_trx, m_undo_no);
 
@@ -410,8 +404,8 @@ DbErr UndoNode::fetch_undo_log_and_undo(System &sys, QueThr *thr) noexcept {
     sys.m_dict->unlock_data_dictionary(trx);
   }
 
-  /* Do some cleanup */
-  m_pcur.close();
+  /* Do some cleanup. The node lives in a memory heap, its destructor never runs. */
+  m_pcur.release();
 
   mem_heap_empty(m_heap);
 
@@ -480,112 +474,44 @@ inline bool UndoNode::undo_previous_version(System &sys, undo_no_t *undo_no) noe
   }
 }
 
-DbErr UndoNode::undo_clustered_index_modification(System &sys, QueThr *thr, Mtr *mtr, ulint mode) noexcept {
-  auto btr_cur = m_pcur.get_btr_cur();
-  auto success = m_pcur.restore_position(sys, mode, mtr, Current_location());
+DbErr UndoNode::undo_clustered_index_modification(System &sys, QueThr *thr, Mtr *mtr, Intent intent) noexcept {
+  auto success = m_pcur.restore(intent, mtr);
 
   ut_a(success);
 
-  DbErr err;
+  MemHeap *heap{};
+  BigRec dummy_big_rec{};
   const auto flags = BTR_NO_LOCKING_FLAG | BTR_NO_UNDO_LOG_FLAG | BTR_KEEP_SYS_FLAG;
+  const auto err = m_pcur.update(intent, flags, &heap, &dummy_big_rec, m_update, m_cmpl_info, thr, mtr);
 
-  if (mode == BTR_MODIFY_LEAF) {
+  ut_a(dummy_big_rec.n_fields == 0);
 
-    err = btr_cur->optimistic_update(sys, flags, m_update, m_cmpl_info, thr, mtr);
-
-  } else {
-
-    MemHeap *heap{};
-    BigRec dummy_big_rec;
-
-    ut_ad(mode == BTR_MODIFY_TREE);
-
-    err = btr_cur->pessimistic_update(sys, flags, &heap, &dummy_big_rec, m_update, m_cmpl_info, thr, mtr);
-
-    ut_a(dummy_big_rec.n_fields == 0);
-
-    if (likely_null(heap)) {
-      mem_heap_free(heap);
-    }
+  if (likely_null(heap)) {
+    mem_heap_free(heap);
   }
 
   return err;
 }
 
-DbErr UndoNode::remove_clustered_index_record(System &sys, QueThr *thr, Mtr *mtr, ulint mode) noexcept {
+DbErr UndoNode::remove_clustered_index_record(System &sys, QueThr *thr, Mtr *mtr, Intent intent) noexcept {
   ut_ad(m_rec_type == TRX_UNDO_UPD_DEL_REC);
+  ut_ad(intent != Intent::Read);
 
-  auto btr_cur = m_pcur.get_btr_cur();
-  auto success = m_pcur.restore_position(sys, mode, mtr, Current_location());
-
-  if (!success) {
-
-    return DB_SUCCESS;
-  }
-
-  /* Find out if we can remove the whole clustered index record */
-
-  if (m_rec_type == TRX_UNDO_UPD_DEL_REC && !sys.m_row_vers->must_preserve_del_marked(m_new_trx_id, mtr)) {
-
-    /* Ok, we can remove */
-
-  } else {
-
-    return DB_SUCCESS;
-  }
-
-  if (mode == BTR_MODIFY_LEAF) {
-
-    return btr_cur->optimistic_delete(sys, mtr) ? DB_SUCCESS : DB_FAIL;
-
-  } else {
-
-    DbErr err;
-
-    ut_ad(mode == BTR_MODIFY_TREE);
-
-    /* This operation is analogous to purge, we can free also inherited externally stored fields */
-
-    const auto rb_ctx = thr_is_recv(sys, thr) ? RB_RECOVERY_PURGE_REC : RB_NONE;
-
-    err = btr_cur->pessimistic_delete(sys, false, rb_ctx, mtr);
-
-    /* The delete operation may fail if we have little file space left:
-    TODO: easiest to crash the database and restart with more file space */
-    return err;
-  }
-}
-
-DbErr UndoNode::remove_clustered_index_record_low(System &sys, QueThr *thr, Mtr *mtr, ulint mode) noexcept {
-  ut_ad(m_rec_type == TRX_UNDO_UPD_DEL_REC);
-  ut_ad(mode == BTR_MODIFY_LEAF || mode == BTR_MODIFY_TREE);
-
-  auto btr_cur = m_pcur.get_btr_cur();
-  auto success = m_pcur.restore_position(sys, mode, mtr, Current_location());
-
-  if (!success) {
+  if (!m_pcur.restore(intent, mtr)) {
 
     return DB_SUCCESS;
 
-  } else if (m_rec_type != TRX_UNDO_UPD_DEL_REC || sys.m_row_vers->must_preserve_del_marked(m_new_trx_id, mtr)) {
+  } else if (sys.m_row_vers->must_preserve_del_marked(m_new_trx_id, mtr)) {
 
     /* We cannot remove the whole clustered index record */
 
     return DB_SUCCESS;
-
-  } else if (mode == BTR_MODIFY_LEAF) {
-
-    return btr_cur->optimistic_delete(sys, mtr) ? DB_SUCCESS : DB_FAIL;
-
-  } else {
-
-    /* This operation is analogous to purge, we can free also inherited externally stored fields */
-
-    return btr_cur->pessimistic_delete(sys, false, thr_is_recv(sys, thr) ? RB_RECOVERY_PURGE_REC : RB_NONE, mtr);
-
-    /* The delete operation may fail if we have little file space left: TODO: easiest to crash the database
-    and restart with more file space */
   }
+
+  /* This operation is analogous to purge, we can free also inherited externally stored fields.
+  It may fail if we have little file space left: TODO: easiest to crash the database and restart
+  with more file space */
+  return m_pcur.remove(intent, thr_is_recv(sys, thr) ? RB_RECOVERY_PURGE_REC : RB_NONE, mtr);
 }
 
 DbErr UndoNode::undo_clustered_index_modification(System &sys, QueThr *thr) noexcept {
@@ -603,38 +529,38 @@ DbErr UndoNode::undo_clustered_index_modification(System &sys, QueThr *thr) noex
 
   /* Try optimistic processing of the record, keeping changes within the index page */
 
-  auto err = undo_clustered_index_modification(sys, thr, &mtr, BTR_MODIFY_LEAF);
+  auto err = undo_clustered_index_modification(sys, thr, &mtr, Intent::Write);
 
   if (err != DB_SUCCESS) {
-    m_pcur.commit_specify_mtr(sys, &mtr);
+    m_pcur.commit(&mtr);
 
     /* We may have to modify tree structure: do a pessimistic descent down the index tree */
 
     mtr.start();
 
-    err = undo_clustered_index_modification(sys, thr, &mtr, BTR_MODIFY_TREE);
+    err = undo_clustered_index_modification(sys, thr, &mtr, Intent::Restructure);
   }
 
-  m_pcur.commit_specify_mtr(sys, &mtr);
+  m_pcur.commit(&mtr);
 
   if (err == DB_SUCCESS && m_rec_type == TRX_UNDO_UPD_DEL_REC) {
 
     mtr.start();
 
-    err = remove_clustered_index_record_low(sys, thr, &mtr, BTR_MODIFY_LEAF);
+    err = remove_clustered_index_record(sys, thr, &mtr, Intent::Write);
 
     if (err != DB_SUCCESS) {
 
-      m_pcur.commit_specify_mtr(sys, &mtr);
+      m_pcur.commit(&mtr);
 
       /* We may have to modify tree structure: do a pessimistic descent down the index tree */
 
       mtr.start();
 
-      err = remove_clustered_index_record(sys, thr, &mtr, BTR_MODIFY_TREE);
+      err = remove_clustered_index_record(sys, thr, &mtr, Intent::Restructure);
     }
 
-    m_pcur.commit_specify_mtr(sys, &mtr);
+    m_pcur.commit(&mtr);
   }
 
   m_state = UNDO_NODE_FETCH_NEXT;
@@ -655,54 +581,49 @@ DbErr UndoNode::undo_clustered_index_modification(System &sys, QueThr *thr) noex
   return err;
 }
 
-DbErr UndoNode::delete_mark_or_remove_secondary_index_entry(System &sys, QueThr *thr, Index *index, DTuple *entry, ulint mode) noexcept {
-  ut_ad(mode == BTR_MODIFY_LEAF || mode == BTR_MODIFY_TREE);
+DbErr UndoNode::delete_mark_or_remove_secondary_index_entry(System &sys, QueThr *thr, Index *index, DTuple *entry, Intent intent) noexcept {
+  ut_ad(intent != Intent::Read);
 
-  BtreePcursor pcur{};
+  IndexCursor pcur{sys};
 
   Mtr mtr;
   DbErr err;
 
   mtr.start();
 
-  if (likely(row_search_index_entry(sys, index, entry, mode, &pcur, &mtr))) {
+  if (likely(pcur.find(index, entry, intent, &mtr))) {
     /* We should remove the index record if no prior version of the row, which cannot be purged yet, requires
     its existence. If some requires, we should delete mark the record. */
 
     Mtr mtr_vers;
-    auto btr_cur = pcur.get_btr_cur();
 
     mtr_vers.start();
 
     {
-      auto success = m_pcur.restore_position(sys, BTR_SEARCH_LEAF, &mtr_vers, Current_location());
+      auto success = m_pcur.restore(Intent::Read, &mtr_vers);
       ut_a(success);
     }
 
-    if (sys.m_row_vers->old_has_index_entry(false, m_pcur.get_rec(), &mtr_vers, index, entry)) {
+    if (sys.m_row_vers->old_has_index_entry(false, m_pcur.rec(), &mtr_vers, index, entry)) {
 
-      err = btr_cur->del_mark_set_sec_rec(sys, BTR_NO_LOCKING_FLAG, true, thr, &mtr);
+      err = pcur.set_delete_mark(BTR_NO_LOCKING_FLAG, true, thr, &mtr);
       ut_ad(err == DB_SUCCESS);
 
     } else {
       /* Remove the index record */
 
-      if (mode == BTR_MODIFY_LEAF) {
-        err = btr_cur->optimistic_delete(sys, &mtr) ? DB_SUCCESS : DB_FAIL;
-      } else {
-        /* No need to distinguish RB_RECOVERY_PURGE here, because we are deleting a secondary index record:
-        the distinction between RB_NORMAL and RB_RECOVERY_PURGE only matters when deleting a record that
-        contains externally stored columns. */
+      /* No need to distinguish RB_RECOVERY_PURGE here, because we are deleting a secondary index record:
+      the distinction between RB_NORMAL and RB_RECOVERY_PURGE only matters when deleting a record that
+      contains externally stored columns.
 
-        ut_ad(!index->is_clustered());
-        err = btr_cur->pessimistic_delete(sys, false, RB_NORMAL, &mtr);
+      The delete operation may fail if we have little file space left: TODO: easiest to crash the database
+      and restart with more file space */
+      ut_ad(!index->is_clustered());
 
-        /* The delete operation may fail if we have little file space left: TODO: easiest to crash the database
-        and restart with more file space */
-      }
+      err = pcur.remove(intent, RB_NORMAL, &mtr);
     }
 
-    m_pcur.commit_specify_mtr(sys, &mtr_vers);
+    m_pcur.commit(&mtr_vers);
 
   } else {
 
@@ -724,20 +645,20 @@ DbErr UndoNode::delete_mark_or_remove_secondary_index_entry(System &sys, QueThr 
 }
 
 DbErr UndoNode::delete_mark_or_remove_secondary_index_entry(System &sys, QueThr *thr, Index *index, DTuple *entry) noexcept {
-  if (auto err = delete_mark_or_remove_secondary_index_entry(sys, thr, index, entry, BTR_MODIFY_LEAF); err == DB_SUCCESS) {
+  if (auto err = delete_mark_or_remove_secondary_index_entry(sys, thr, index, entry, Intent::Write); err == DB_SUCCESS) {
     return err;
   } else {
-    return delete_mark_or_remove_secondary_index_entry(sys, thr, index, entry, BTR_MODIFY_TREE);
+    return delete_mark_or_remove_secondary_index_entry(sys, thr, index, entry, Intent::Restructure);
   }
 }
 
 DbErr UndoNode::del_unmark_secondary_index_and_undo_update(System &sys, 
-  ulint mode, QueThr *thr, Index *index, const DTuple *entry
+  Intent intent, QueThr *thr, Index *index, const DTuple *entry
 ) noexcept {
-  ut_ad(mode == BTR_MODIFY_LEAF || mode == BTR_MODIFY_TREE);
+  ut_ad(intent != Intent::Read);
 
   auto trx = thr_get_trx(thr);
-  BtreePcursor pcur{};
+  IndexCursor pcur{sys};
 
   /* Ignore indexes that are being created. */
   if (unlikely(*index->m_name == TEMP_INDEX_PREFIX)) {
@@ -750,21 +671,18 @@ DbErr UndoNode::del_unmark_secondary_index_and_undo_update(System &sys,
 
   mtr.start();
 
-  if (unlikely(!row_search_index_entry(sys, index, entry, mode, &pcur, &mtr))) {
+  if (unlikely(!pcur.find(index, entry, intent, &mtr))) {
     log_err("Sec index del undo failed in ", index->m_name, " tuple: ");
     dtuple_print(stderr, entry);
-    log_err("\nrecord ");
-    log_err("\nrec: ", pcur.get_rec().to_string());
     log_err("\ntrx: ", trx->to_string(0));
     log_err("\nSubmit a detailed bug report, check the Embedded InnoDB website for details");
 
     err = DB_ERROR;
 
   } else {
-    auto btr_cur = pcur.get_btr_cur();
     const auto flags{BTR_KEEP_SYS_FLAG | BTR_NO_LOCKING_FLAG};
 
-    err = btr_cur->del_mark_set_sec_rec(sys, BTR_NO_LOCKING_FLAG, false, thr, &mtr);
+    err = pcur.set_delete_mark(BTR_NO_LOCKING_FLAG, false, thr, &mtr);
 
     ut_a(err == DB_SUCCESS);
 
@@ -776,30 +694,17 @@ DbErr UndoNode::del_unmark_secondary_index_and_undo_update(System &sys,
 
     row_sec_entry_set_trx_id(stamped, index, id, trx->m_id);
 
-    auto update = RowUpdate::build_sec_rec_difference_binary(index, stamped, btr_cur->get_rec(), trx, heap);
+    auto update = RowUpdate::build_sec_rec_difference_binary(index, stamped, pcur.rec(), trx, heap);
 
     if (RowUpdate::upd_get_n_fields(update) == 0) {
 
       /* Do nothing */
 
-    } else if (mode == BTR_MODIFY_LEAF) {
-      /* Try an optimistic updating of the record, keeping changes within the page */
-
-      err = btr_cur->optimistic_update(sys, flags, update, 0, thr, &mtr);
-
-      switch (err) {
-        case DB_OVERFLOW:
-        case DB_UNDERFLOW:
-          err = DB_FAIL;
-          break;
-
-        default:
-          break;
-      }
     } else {
       BigRec dummy_big_rec{};
 
-      err = btr_cur->pessimistic_update(sys, flags, &heap, &dummy_big_rec, update, 0, thr, &mtr);
+      err = pcur.update(intent, flags, &heap, &dummy_big_rec, update, 0, thr, &mtr);
+
       ut_a(dummy_big_rec.n_fields == 0);
     }
 
@@ -857,10 +762,10 @@ DbErr UndoNode::undo_del_mark_secondary_indexes(System &sys, QueThr *thr) noexce
     auto entry = row_build_index_entry(m_row, m_ext, index, heap);
     ut_a(entry != nullptr);
 
-    auto err = del_unmark_secondary_index_and_undo_update(sys, BTR_MODIFY_LEAF, thr, index, entry);
+    auto err = del_unmark_secondary_index_and_undo_update(sys, Intent::Write, thr, index, entry);
 
     if (err == DB_FAIL) {
-      err = del_unmark_secondary_index_and_undo_update(sys, BTR_MODIFY_TREE, thr, index, entry);
+      err = del_unmark_secondary_index_and_undo_update(sys, Intent::Restructure, thr, index, entry);
     }
 
     if (err != DB_SUCCESS) {
@@ -917,10 +822,10 @@ DbErr UndoNode::undo_update_of_secondary_indexes(System &sys, QueThr *thr) noexc
 
       ut_a(entry != nullptr);
 
-      err = del_unmark_secondary_index_and_undo_update(sys, BTR_MODIFY_LEAF, thr, index, entry);
+      err = del_unmark_secondary_index_and_undo_update(sys, Intent::Write, thr, index, entry);
 
       if (err == DB_FAIL) {
-        err = del_unmark_secondary_index_and_undo_update(sys, BTR_MODIFY_TREE, thr, index, entry);
+        err = del_unmark_secondary_index_and_undo_update(sys, Intent::Restructure, thr, index, entry);
       }
 
       if (err != DB_SUCCESS) {

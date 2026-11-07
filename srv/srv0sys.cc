@@ -47,11 +47,13 @@ Created 2/16/1996 Heikki Tuuri
 #include "dict0store.h"
 #include "fil0fil.h"
 #include "fsp0fsp.h"
+#include "idx0am.h"
 #include "lock0lock.h"
 #include "log0log.h"
 #include "log0recv.h"
 #include "log0wal.h"
 #include "mtr0mtr.h"
+#include "mtr0systrx.h"
 #include "os0aio.h"
 #include "os0file.h"
 #include "os0sync.h"
@@ -197,9 +199,12 @@ DbErr System::init(const Config &config) noexcept {
 
   m_recv = std::make_unique<RecvSys>(*this);
   m_fsp = std::make_unique<Fsp>(*this);
+  m_systrx = std::make_unique<SysTrxSys>(*this);
   m_trx_sys = std::make_unique<TrxSys>(*this);
   m_lock_sys = std::make_unique<LockSys>(*this);
   m_btree = std::make_unique<Btree>(*this);
+  m_btree_am = index_am_btree(*this);
+  m_blink_am = index_am_blink(*this);
   m_undo = std::make_unique<Undo>(*this);
   m_dict = std::make_unique<Dict>(*this);
   m_dblwr = std::make_unique<Dblwr>(*this);
@@ -224,6 +229,12 @@ static void destroy_subsystem(std::unique_ptr<T> &ptr) noexcept {
     (void)ptr.release();
   }
 }
+
+IndexAm &System::am(const Index *index) noexcept { return am_of_type(index->m_type); }
+
+IndexAm &System::am_of_type(ulint type) noexcept { return (type & DICT_BLINK) != 0 ? *m_blink_am : *m_btree_am; }
+
+ulint System::new_index_am() const noexcept { return m_config.m_dict.m_index_am == IndexAmKind::BLINK ? DICT_BLINK : 0; }
 
 void System::destroy() noexcept {
   if (m_srv == nullptr && m_aio == nullptr) {
@@ -451,6 +462,10 @@ static void prepare_for_shutdown(System &sys, ShutdownMode shutdown) noexcept {
 
   for (;;) {
     os_thread_sleep(1000);
+
+    /* Before what the loop waits for: it logs and dirties pages. */
+    sys.am_of_type(0).quiesce();
+    sys.am_of_type(DICT_BLINK).quiesce();
 
     mutex_enter(&trx_sys.m_mutex);
 

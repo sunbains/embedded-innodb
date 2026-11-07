@@ -4,3 +4,6 @@
 [submodule "deps/thread-pool"]
 	path = deps/thread-pool
 	url = https://github.com/bshoshany/thread-pool.git
+[submodule "deps/latch-rwlock"]
+	path = deps/latch-rwlock
+	url = https://github.com/sunbains/latch-rwlock

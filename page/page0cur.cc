@@ -992,6 +992,8 @@ void PageCursor::copy_rec_list_end_to_created_page(page_t *new_page, Rec rec, co
   rec_offs_init(offsets_);
 
   ut_ad(page_dir_get_n_heap(new_page) == PAGE_HEAP_NO_USER_LOW);
+  /* This writes from the end of the supremum: nothing, not a high key, is in the heap. */
+  ut_ad(page_header_get_field(new_page, PAGE_HEAP_TOP) == PAGE_SUPREMUM_END);
   ut_ad(rec.page_align() != new_page);
 
   if (page_rec_is_infimum(rec)) {

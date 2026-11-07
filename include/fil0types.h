@@ -4,6 +4,7 @@
 
 #include "innodb0types.h"
 
+#include "sync0latch.h"
 #include "sync0rw.h"
 #include "ut0lst.h"
 
@@ -234,7 +235,7 @@ struct FilSpace {
   uint32_t m_n_pending_flushes;
 
   /** latch protecting the file space storage allocation */
-  RwLock m_latch;
+  RwLatch m_latch;
 
   /** list of spaces with at least one unflushed file we have written to */
   UT_LIST_NODE_T(FilSpace) m_unflushed_spaces;

@@ -256,7 +256,9 @@ inline void eval_node_copy_and_alloc_val(
 
   auto data = (byte *)eval_node_ensure_val_buf(node, len);
 
-  memcpy(data, str, len);
+  if (len > 0) {
+    memcpy(data, str, len);
+  }
 }
 
 /** Copies a query node value to another node. */

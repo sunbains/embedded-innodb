@@ -315,7 +315,8 @@ inline void buf_page_set_io_fix(BufPage *bpage, BufIoFix io_fix) {
   // ut_ad(mutex_own(&m_mutex));
   ut_ad(mutex_own(buf_page_get_mutex(bpage)));
 
-  ut::stat_store(bpage->m_io_fix, io_fix);
+  /* Release: a write of the page ends here, for who owns the page next. See bits_try_lock(). */
+  std::atomic_ref<uint8_t>(bpage->m_io_fix).store(static_cast<uint8_t>(io_fix), std::memory_order_release);
   ut_ad(buf_page_get_io_fix(bpage) == io_fix);
 }
 
@@ -627,7 +628,12 @@ inline void buf_page_release_latch(BufBlock *block, ulint rw_latch) {
   if (rw_latch == RW_S_LATCH) {
     rw_lock_s_unlock(&block->m_rw_lock);
   } else if (rw_latch == RW_X_LATCH) {
+    block->x_unlocking();
     rw_lock_x_unlock(&block->m_rw_lock);
+  } else if (rw_latch == RW_B_LATCH) {
+    block->bits_unlock();
+  } else if (rw_latch >= MTR_MEMO_PAGE_G0) {
+    block->group_unlock(rw_latch - MTR_MEMO_PAGE_G0);
   }
 }
 

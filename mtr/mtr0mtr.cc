@@ -43,10 +43,14 @@ inline void mtr_memo_slot_release(System &sys, Mtr *mtr, MtrMemoSlot *slot) noex
   auto type = slot->m_type;
 
   if (likely(object != nullptr)) {
-    if (type <= MTR_MEMO_BUF_FIX) {
+    if (type <= MTR_MEMO_PAGE_B_HELD || type >= MTR_MEMO_PAGE_G0) {
       sys.m_buf_pool->release(static_cast<BufBlock *>(object), type, mtr);
     } else if (type == MTR_MEMO_S_LOCK) {
       rw_lock_s_unlock(static_cast<RwLock *>(object));
+    } else if (type == MTR_MEMO_S_LATCH) {
+      static_cast<RwLatch *>(object)->s_unlock();
+    } else if (type == MTR_MEMO_X_LATCH) {
+      static_cast<RwLatch *>(object)->x_unlock();
 #ifndef UNIV_DEBUG
     } else {
       rw_lock_x_unlock(static_cast<RwLock *>(object));
@@ -166,6 +170,8 @@ void Mtr::commit(System &sys) noexcept {
   }
 
   m_state = MTR_COMMITTED;
+
+  ut_d(m_reads_copies = false);
 }
 
 void Mtr::rollback_to_savepoint(System &sys, ulint savepoint) noexcept {
@@ -196,7 +202,7 @@ void Mtr::memo_release(System &sys, void *object, ulint type) noexcept {
 
     auto slot = static_cast<MtrMemoSlot *>(m_memo.get_element(offset));
 
-    if (object == slot->m_object && type == slot->m_type) {
+    if (object == slot->m_object && memo_covers(slot->m_type, type)) {
 
       mtr_memo_slot_release(sys, this, slot);
 
@@ -233,8 +239,14 @@ BufBlock *Mtr::memo_find_block(const byte *ptr) const noexcept {
 
     auto slot = static_cast<const MtrMemoSlot *>(m_memo.get_element(offset));
 
-    if (slot->m_type == MTR_MEMO_PAGE_S_FIX || slot->m_type == MTR_MEMO_PAGE_X_FIX || slot->m_type == MTR_MEMO_BUF_FIX) {
+    if (slot->m_type >= MTR_MEMO_PAGE_G0 || slot->m_type == MTR_MEMO_PAGE_B_FIX || slot->m_type == MTR_MEMO_PAGE_B_HELD || slot->m_type == MTR_MEMO_PAGE_S_FIX || slot->m_type == MTR_MEMO_PAGE_X_FIX || slot->m_type == MTR_MEMO_BUF_FIX) {
       auto block = static_cast<BufBlock *>(slot->m_object);
+
+      /* A slot that was released, by release_block_at_savepoint(), has none. */
+      if (block == nullptr) {
+        continue;
+      }
+
       auto frame = block->get_frame();
 
       if (ptr >= frame && ptr < frame + UNIV_PAGE_SIZE) {
@@ -249,7 +261,11 @@ BufBlock *Mtr::memo_find_block(const byte *ptr) const noexcept {
 bool Mtr::memo_contains_page(const byte *ptr, ulint type) const noexcept {
   auto block = memo_find_block(ptr);
 
-  return block != nullptr && memo_contains(block, type);
+  if (block == nullptr) {
+    return m_reads_copies;
+  }
+
+  return memo_contains(block, type);
 }
 
 std::string Mtr::to_string() const noexcept {

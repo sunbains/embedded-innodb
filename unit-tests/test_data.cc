@@ -1299,16 +1299,16 @@ TEST_F(RowTest, IndexEntries) {
       }
 
       Mtr mtr;
-      BtreePcursor pcur;
+      IndexCursor pcur{*m_sys};
 
       mtr.start();
 
-      const auto found = row_search_index_entry(*m_sys, idx, entry, BTR_SEARCH_LEAF, &pcur, &mtr);
+      const auto found = pcur.find(idx, entry, Intent::Read, &mtr);
 
       EXPECT_TRUE(found) << idx->m_name << " row " << r;
 
       if (found) {
-        auto rec = pcur.get_rec();
+        auto rec = pcur.rec();
         MemHeap *heap{};
         RecOffs offs = PhyRec(idx, rec).get_all_col_offsets(nullptr, &heap, Current_location());
 
@@ -1731,14 +1731,14 @@ TEST_F(RowRefTest, FromSecondary) {
 
   for (const auto &[ref, k] : refs) {
     Mtr mtr;
-    BtreePcursor pcur;
+    IndexCursor pcur{*m_sys};
 
     mtr.start();
-    ASSERT_TRUE(row_search_on_row_ref(*m_sys, &pcur, BTR_SEARCH_LEAF, clust->m_table, ref, &mtr)) << k;
+    ASSERT_TRUE(row_search_on_row_ref(&pcur, Intent::Read, clust->m_table, ref, &mtr)) << k;
 
     ulint len;
 
-    EXPECT_EQ(mach_read_from_4(pcur.get_rec().get_nth_field(0, &len).get()), k);
+    EXPECT_EQ(mach_read_from_4(pcur.rec().get_nth_field(0, &len).get()), k);
     pcur.close();
     mtr.commit(*m_sys);
   }
@@ -1750,17 +1750,17 @@ TEST_F(RowRefTest, FromSecondary) {
   set(m_heap, missing, 0, DATA_INT, DATA_UNSIGNED, 4, be4(8));
 
   Mtr mtr;
-  BtreePcursor pcur;
+  IndexCursor pcur{*m_sys};
 
   mtr.start();
-  EXPECT_FALSE(row_search_on_row_ref(*m_sys, &pcur, BTR_SEARCH_LEAF, clust->m_table, missing, &mtr));
+  EXPECT_FALSE(row_search_on_row_ref(&pcur, Intent::Read, clust->m_table, missing, &mtr));
   pcur.close();
   mtr.commit(*m_sys);
 
   /* Smaller than all: on the infimum. */
   set(m_heap, missing, 0, DATA_INT, DATA_UNSIGNED, 4, be4(0));
   mtr.start();
-  EXPECT_FALSE(row_search_on_row_ref(*m_sys, &pcur, BTR_SEARCH_LEAF, clust->m_table, missing, &mtr));
+  EXPECT_FALSE(row_search_on_row_ref(&pcur, Intent::Read, clust->m_table, missing, &mtr));
   pcur.close();
   mtr.commit(*m_sys);
 
@@ -1771,7 +1771,7 @@ TEST_F(RowRefTest, FromSecondary) {
 
     mtr2.start();
 
-    auto crec = row_get_clust_rec(*m_sys, BTR_SEARCH_LEAF, rec, si, &ci, &mtr2);
+    auto crec = row_get_clust_rec(*m_sys, Intent::Read, rec, si, &ci, &mtr2);
 
     EXPECT_EQ(ci, clust);
     ASSERT_FALSE(crec.is_null());
@@ -1812,10 +1812,10 @@ TEST_F(RowRefTest, FromPrefixIndex) {
 
   for (const auto &[ref, k] : refs) {
     Mtr mtr;
-    BtreePcursor pcur;
+    IndexCursor pcur{*m_sys};
 
     mtr.start();
-    EXPECT_TRUE(row_search_on_row_ref(*m_sys, &pcur, BTR_SEARCH_LEAF, clust->m_table, ref, &mtr)) << k;
+    EXPECT_TRUE(row_search_on_row_ref(&pcur, Intent::Read, clust->m_table, ref, &mtr)) << k;
     pcur.close();
     mtr.commit(*m_sys);
   }
@@ -1890,16 +1890,16 @@ TEST_F(RowTest, RefOfPrefixPrimaryKey) {
     EXPECT_EQ(bytes(dtuple_get_nth_field(ref, 0)), "abcd") << idx_name;
 
     Mtr mtr;
-    BtreePcursor pcur;
+    IndexCursor pcur{*m_sys};
 
     mtr.start();
-    EXPECT_TRUE(row_search_on_row_ref(*m_sys, &pcur, BTR_SEARCH_LEAF, index(t)->m_table, ref, &mtr)) << idx_name;
+    EXPECT_TRUE(row_search_on_row_ref(&pcur, Intent::Read, index(t)->m_table, ref, &mtr)) << idx_name;
     pcur.close();
     mtr.commit(*m_sys);
   }
 }
 
-/** row_search_index_entry(): an entry that is not in the index, and an
+/** IndexCursor::find(): an entry that is not in the index, and an
 empty index (positioned on the infimum). */
 TEST_F(RowRefTest, SearchIndexEntryMissing) {
   auto si = index(m_t, "SI");
@@ -1911,10 +1911,10 @@ TEST_F(RowRefTest, SearchIndexEntryMissing) {
 
   for (int i = 0; i < 2; ++i) {
     Mtr mtr;
-    BtreePcursor pcur;
+    IndexCursor pcur{*m_sys};
 
     mtr.start();
-    EXPECT_FALSE(row_search_index_entry(*m_sys, si, entry, BTR_SEARCH_LEAF, &pcur, &mtr));
+    EXPECT_FALSE(pcur.find(si, entry, Intent::Read, &mtr));
     pcur.close();
     mtr.commit(*m_sys);
 
@@ -1934,10 +1934,10 @@ TEST_F(RowRefTest, SearchIndexEntryMissing) {
   set(m_heap, e, 0, DATA_INT, DATA_UNSIGNED, 4, be4(1));
 
   Mtr mtr;
-  BtreePcursor pcur;
+  IndexCursor pcur{*m_sys};
 
   mtr.start();
-  EXPECT_FALSE(row_search_index_entry(*m_sys, index(t), e, BTR_SEARCH_LEAF, &pcur, &mtr));
+  EXPECT_FALSE(pcur.find(index(t), e, Intent::Read, &mtr));
   pcur.close();
   mtr.commit(*m_sys);
 }

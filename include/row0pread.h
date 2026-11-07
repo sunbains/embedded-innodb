@@ -34,6 +34,7 @@ Created 2018-01-27 by Sunny Bains. */
 #include <functional>
 #include <list>
 #include <memory>
+#include <mutex>
 #include <vector>
 
 #include "os0thread-create.h"
@@ -523,12 +524,13 @@ class ParallelReader::ScanCtx {
   @return the partition scan ranges. */
   DbErr partition(System &sys, const ScanRange &scan_range, Ranges &ranges, size_t split_level);
 
-  /** Find the page number of the node that contains the search key. If the
-  key is null then we assume -infinity.
-  @param[in]  block             Page to look in.
-  @param[in] key                Key of the first record in the range.
-  @return the left child page number. */
-  [[nodiscard]] page_no_t search(System &sys, const BufBlock *block, const DTuple *key) const;
+  /** Where a range starts on a page at the level of the scan, or on one to the right of it.
+  @param[in]      block         The page, S latched.
+  @param[in]      key           Key of the first record in the range, null if it's the first there is.
+  @param[in,out]  mtr           Mini-transaction.
+  @param[in,out]  savepoints    Pages S latched on the way are added.
+  @return the page cursor, on the supremum of the last page if there is nothing to the right. */
+  [[nodiscard]] PageCursor start_on_level(System &sys, BufBlock *block, const DTuple *key, Mtr *mtr, Savepoints &savepoints);
 
   /** Traverse from given sub-tree page number to start of the scan range
   from the given page number.
@@ -537,7 +539,7 @@ class ParallelReader::ScanCtx {
   @param[in]      key           Key of the first record in the range.
   @param[in,out]  savepoints    Blocks S latched and accessed.
   @return the leaf node page cursor. */
-  [[nodiscard]] PageCursor start_range(System &sys, page_no_t page_no, Mtr *mtr, const DTuple *key, Savepoints &savepoints) const;
+  [[nodiscard]] PageCursor start_range(System &sys, page_no_t page_no, Mtr *mtr, const DTuple *key, Savepoints &savepoints, size_t &n_levels);
 
   /** Create and add the range to the scan ranges.
   @param[in,out]  ranges        Ranges to scan.
@@ -648,6 +650,12 @@ class ParallelReader::ScanCtx {
 
   /** Number of threads that have S locked the index. */
   std::atomic_size_t m_s_locks{};
+
+  /** False if the index doesn't use Index::m_lock: then the above only counts. */
+  bool m_uses_index_latch{true};
+
+  /** For a change of m_s_locks and the latch to be one step. */
+  std::mutex m_s_mutex;
 
   friend class ParallelReader;
 

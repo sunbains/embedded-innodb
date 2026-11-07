@@ -1071,7 +1071,7 @@ bool LockSys::rec_queue_validate(const BufBlock *block, const Rec rec, const Ind
   return true;
 }
 
-bool LockSys::rec_validate_page(PageId page_id) noexcept {
+bool LockSys::rec_validate_page(PageId page_id, bool held) noexcept {
   ut_ad(nothing_latched());
 
   Mtr mtr;
@@ -1079,7 +1079,8 @@ bool LockSys::rec_validate_page(PageId page_id) noexcept {
   mtr.start();
 
   BufPool::Request req{
-    .m_rw_latch = RW_X_LATCH, .m_page_id = page_id, .m_mode = BUF_GET, .m_file = __FILE__, .m_line = __LINE__, .m_mtr = &mtr
+    /* The caller's hold on it is what makes it stay: a page isn't taken twice. */
+    .m_rw_latch = held ? ulint(RW_NO_LATCH) : ulint(RW_X_LATCH), .m_page_id = page_id, .m_mode = BUF_GET, .m_file = __FILE__, .m_line = __LINE__, .m_mtr = &mtr
   };
 
   auto block = m_sys.m_buf_pool->get(req, nullptr);

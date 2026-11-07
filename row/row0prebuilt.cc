@@ -40,13 +40,14 @@ Prebuilt::Prebuilt(Table *table, MemHeap *heap) noexcept : m_table(table) {
   m_heap = heap;
 
   {
-    auto ptr = ut_new(sizeof(BtreePcursor));
-    m_pcur = new (ptr) BtreePcursor();
+    /* Attached by RowSel::mvcc_fetch(). */
+    auto ptr = ut_new(sizeof(IndexCursor));
+    m_pcur = new (ptr) IndexCursor();
   }
 
   {
-    auto ptr = ut_new(sizeof(BtreePcursor));
-    m_clust_pcur = new (ptr) BtreePcursor();
+    auto ptr = ut_new(sizeof(IndexCursor));
+    m_clust_pcur = new (ptr) IndexCursor();
   }
 
   m_search_tuple = dtuple_create(m_heap, 2 * m_table->get_n_cols());
@@ -90,8 +91,8 @@ Prebuilt::~Prebuilt() noexcept {
 
   /* Placement new'ed: run the destructors, which free the buffer of the
   stored position, before giving back the memory. */
-  m_pcur->~BtreePcursor();
-  m_clust_pcur->~BtreePcursor();
+  m_pcur->~IndexCursor();
+  m_clust_pcur->~IndexCursor();
 
   ut_delete(m_pcur);
   ut_delete(m_clust_pcur);

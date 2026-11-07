@@ -42,9 +42,6 @@ Created 4/20/1996 Heikki Tuuri
 #include "trx0undo.h"
 #include "usr0sess.h"
 
-constexpr ulint ROW_INS_PREV = 1;
-constexpr ulint ROW_INS_NEXT = 2;
-
 
 
 InsertNode *RowInsert::node_create(IbInsMode ins_type, Table *table, MemHeap *heap) noexcept {
@@ -154,21 +151,20 @@ void RowInsert::set_new_row(InsertNode *node, DTuple *row) noexcept {
  * in the index. This situation can occur if the delete-marked record is
  * kept in the index for consistent reads.
  *
- * @param[in] mode              BTR_MODIFY_LEAF or BTR_MODIFY_TREE, depending on whether mtr holds just a leaf
- *                              latch or also a tree latch
- * @param[in] btr_cur           B-tree cursor
+ * @param[in] intent            Write or Restructure, what the cursor was positioned with
+ * @param[in] cur               Cursor on the record
  * @param[in] entry             Index entry to insert
  * @param[in] thr               Query thread
  * @param[in] mtr               Must be committed before latching any further pages
  * @return DB_SUCCESS or error code
  */
 DbErr RowInsert::sec_index_entry_by_modify(
-  ulint mode, BtreeCursor *btr_cur, const DTuple *entry, QueThr *thr, Mtr *mtr
+  Intent intent, IndexCursor *cur, const DTuple *entry, QueThr *thr, Mtr *mtr
 ) noexcept {
   DbErr err;
-  auto rec = btr_cur->get_rec();
+  auto rec = cur->rec();
 
-  ut_ad(!btr_cur->m_index->is_clustered());
+  ut_ad(!cur->index()->is_clustered());
   ut_ad(rec.get_deleted_flag());
 
   /* We know that in the alphabetical ordering, entry and rec are
@@ -177,24 +173,15 @@ DbErr RowInsert::sec_index_entry_by_modify(
   difference. */
 
   auto heap = mem_heap_create(1024);
-  auto update = RowUpdate::build_sec_rec_difference_binary(btr_cur->m_index, entry, rec, thr_get_trx(thr), heap);
+  auto update = RowUpdate::build_sec_rec_difference_binary(cur->index(), entry, rec, thr_get_trx(thr), heap);
 
-  if (likely(mode == BTR_MODIFY_LEAF)) {
+  if (likely(intent == Intent::Write)) {
     /* Try an optimistic updating of the record, keeping changes
     within the page */
 
-    err = btr_cur->optimistic_update(m_sys, BTR_KEEP_SYS_FLAG, update, 0, thr, mtr);
-
-    switch (err) {
-      case DB_OVERFLOW:
-      case DB_UNDERFLOW:
-        err = DB_FAIL;
-        break;
-      default:
-        break;
-    }
+    err = cur->update(Intent::Write, BTR_KEEP_SYS_FLAG, nullptr, nullptr, update, 0, thr, mtr);
   } else {
-    ut_a(mode == BTR_MODIFY_TREE);
+    ut_a(intent == Intent::Restructure);
 
     auto buf_pool = m_sys.m_buf_pool.get();
 
@@ -203,7 +190,7 @@ DbErr RowInsert::sec_index_entry_by_modify(
     } else {
       BigRec dummy_big_rec;
 
-      err = btr_cur->pessimistic_update(m_sys, BTR_KEEP_SYS_FLAG, &heap, &dummy_big_rec, update, 0, thr, mtr);
+      err = cur->update(Intent::Restructure, BTR_KEEP_SYS_FLAG, &heap, &dummy_big_rec, update, 0, thr, mtr);
       ut_ad(dummy_big_rec.n_fields == 0);
     }
   }
@@ -214,13 +201,13 @@ DbErr RowInsert::sec_index_entry_by_modify(
 }
 
 DbErr RowInsert::clust_index_entry_by_modify(
-  ulint mode, BtreeCursor *btr_cur, MemHeap **heap, BigRec *big_rec, const DTuple *entry, QueThr *thr, Mtr *mtr
+  Intent intent, IndexCursor *cur, MemHeap **heap, BigRec *big_rec, const DTuple *entry, QueThr *thr, Mtr *mtr
 ) noexcept {
-  ut_ad(btr_cur->m_index->is_clustered());
+  ut_ad(cur->index()->is_clustered());
 
   *big_rec = BigRec{};
 
-  auto rec = btr_cur->get_rec();
+  auto rec = cur->rec();
 
   ut_ad(rec.get_deleted_flag());
 
@@ -232,25 +219,17 @@ DbErr RowInsert::clust_index_entry_by_modify(
   NOTE that this vector may NOT contain system columns trx_id or
   roll_ptr */
 
-  auto update = m_sys.m_row_upd->build_difference_binary(btr_cur->m_index, entry, rec, thr_get_trx(thr), *heap);
+  auto update = m_sys.m_row_upd->build_difference_binary(cur->index(), entry, rec, thr_get_trx(thr), *heap);
 
-  if (mode == BTR_MODIFY_LEAF) {
+  if (intent == Intent::Write) {
     /* Try optimistic updating of the record, keeping changes
     within the page */
 
-    const auto err = btr_cur->optimistic_update(m_sys, 0, update, 0, thr, mtr);
-
-    switch (err) {
-      case DB_OVERFLOW:
-      case DB_UNDERFLOW:
-        return DB_FAIL;
-      default:
-        return err;
-    }
+    return cur->update(Intent::Write, 0, nullptr, nullptr, update, 0, thr, mtr);
 
   } else {
 
-    ut_a(mode == BTR_MODIFY_TREE);
+    ut_a(intent == Intent::Restructure);
 
     auto buf_pool = m_sys.m_buf_pool.get();
 
@@ -260,7 +239,7 @@ DbErr RowInsert::clust_index_entry_by_modify(
 
     } else {
 
-      return btr_cur->pessimistic_update(m_sys, 0, heap, big_rec, update, 0, thr, mtr);
+      return cur->update(Intent::Restructure, 0, heap, big_rec, update, 0, thr, mtr);
     }
   }
 }
@@ -499,7 +478,7 @@ void RowInsert::foreign_report_add_err(Trx *trx, const Foreign *foreign, Rec rec
   log_err(", the closest match we can find is record:");
 
   if (!rec.is_null() && page_rec_is_supremum(rec)) {
-    /* If the btr_cur ended on a supremum record, it is better
+    /* If the cursor ended on a supremum record, it is better
     to report the previous record in the error message, so that
     the user gets a more descriptive error message. */
     rec = page_rec_get_prev_const(rec);
@@ -569,7 +548,7 @@ DbErr RowInsert::update_cascade_client(QueThr *thr, UpdNode *node, Table *table)
 }
 
 DbErr RowInsert::foreign_check_on_constraint(
-  QueThr *thr, const Foreign *foreign, BtreePcursor *pcur, DTuple *entry, Mtr *mtr
+  QueThr *thr, const Foreign *foreign, IndexCursor *pcur, DTuple *entry, Mtr *mtr
 ) noexcept {
   Table *table = foreign->m_foreign_table;
   const Index *index;
@@ -594,7 +573,7 @@ DbErr RowInsert::foreign_check_on_constraint(
 
   if (node->m_is_delete && 0 == (foreign->m_type & (DICT_FOREIGN_ON_DELETE_CASCADE | DICT_FOREIGN_ON_DELETE_SET_NULL))) {
 
-    foreign_report_err("Trying to delete", thr, foreign, pcur->get_rec(), entry);
+    foreign_report_err("Trying to delete", thr, foreign, pcur->rec(), entry);
 
     return DB_ROW_IS_REFERENCED;
   }
@@ -602,7 +581,7 @@ DbErr RowInsert::foreign_check_on_constraint(
   if (!node->m_is_delete && 0 == (foreign->m_type & (DICT_FOREIGN_ON_UPDATE_CASCADE | DICT_FOREIGN_ON_UPDATE_SET_NULL))) {
     /* This is an UPDATE */
 
-    foreign_report_err("Trying to update", thr, foreign, pcur->get_rec(), entry);
+    foreign_report_err("Trying to update", thr, foreign, pcur->rec(), entry);
 
     return DB_ROW_IS_REFERENCED;
   }
@@ -656,7 +635,7 @@ DbErr RowInsert::foreign_check_on_constraint(
     err = DB_ROW_IS_REFERENCED;
 
     foreign_report_err(
-      "Trying an update, possibly causing a cyclic cascaded update in the child table,", thr, foreign, pcur->get_rec(), entry
+      "Trying an update, possibly causing a cyclic cascaded update in the child table,", thr, foreign, pcur->rec(), entry
     );
 
     goto nonstandard_exit_func;
@@ -665,16 +644,16 @@ DbErr RowInsert::foreign_check_on_constraint(
   if (cascade_n_ancestors(cascade) >= 15) {
     err = DB_ROW_IS_REFERENCED;
 
-    foreign_report_err("Trying a too deep cascaded delete or update\n", thr, foreign, pcur->get_rec(), entry);
+    foreign_report_err("Trying a too deep cascaded delete or update\n", thr, foreign, pcur->rec(), entry);
 
     goto nonstandard_exit_func;
   }
 
-  index = pcur->get_index();
+  index = pcur->index();
 
   ut_a(index == foreign->m_foreign_index);
 
-  rec = pcur->get_rec();
+  rec = pcur->rec();
 
   if (index->is_clustered()) {
     /* pcur is already positioned in the clustered index of
@@ -682,7 +661,7 @@ DbErr RowInsert::foreign_check_on_constraint(
 
     clust_index = index;
     clust_rec = rec;
-    clust_block = pcur->get_block();
+    clust_block = pcur->block();
   } else {
     /* We have to look for the record in the clustered index
     in the child table */
@@ -693,12 +672,12 @@ DbErr RowInsert::foreign_check_on_constraint(
 
     ref = row_build_row_ref(ROW_COPY_POINTERS, index, rec, tmp_heap);
 
-    cascade->m_pcur->open_with_no_init(m_sys, clust_index, ref, PAGE_CUR_LE, BTR_SEARCH_LEAF, false, mtr, Current_location());
+    const auto found = cascade->m_pcur->find(clust_index, ref, Intent::Read, mtr);
 
-    clust_rec = cascade->m_pcur->get_rec();
-    clust_block = cascade->m_pcur->get_block();
+    clust_rec = cascade->m_pcur->rec();
+    clust_block = cascade->m_pcur->block();
 
-    if (!page_rec_is_user_rec(clust_rec) || cascade->m_pcur->get_low_match() < clust_index->get_n_unique()) {
+    if (!found) {
 
       log_err("error in cascade of a foreign key op");
       m_sys.m_dict->index_name_print(trx, index);
@@ -779,7 +758,7 @@ DbErr RowInsert::foreign_check_on_constraint(
         " of the column, or the value would be NULL and the column is declared as not NULL in the child table.",
         thr,
         foreign,
-        pcur->get_rec(),
+        pcur->rec(),
         entry
       );
 
@@ -801,17 +780,17 @@ DbErr RowInsert::foreign_check_on_constraint(
   /* Store pcur position and initialize or store the cascade node
   pcur stored position */
 
-  pcur->store_position(m_sys, mtr);
+  pcur->save(mtr);
 
   if (index == clust_index) {
-    cascade->m_pcur->copy_stored_position(pcur);
+    cascade->m_pcur->copy_saved(*pcur);
   } else {
-    cascade->m_pcur->store_position(m_sys, mtr);
+    cascade->m_pcur->save(mtr);
   }
 
   mtr->commit(m_sys);
 
-  ut_a(cascade->m_pcur->get_rel_pos() == BtreeCursorPos::ON);
+  ut_a(cascade->m_pcur->saved_at() == SavedAt::On);
 
   cascade->m_state = UPD_NODE_UPDATE_CLUSTERED;
 
@@ -836,7 +815,7 @@ DbErr RowInsert::foreign_check_on_constraint(
 
   /* Restore pcur position */
 
-  (void)pcur->restore_position(m_sys, BTR_SEARCH_LEAF, mtr, Current_location());
+  (void)pcur->restore(Intent::Read, mtr);
 
   if (tmp_heap != nullptr) {
     mem_heap_free(tmp_heap);
@@ -857,13 +836,13 @@ nonstandard_exit_func:
     mem_heap_free(upd_vec_heap);
   }
 
-  pcur->store_position(m_sys, mtr);
+  pcur->save(mtr);
 
   mtr->commit(m_sys);
 
   mtr->start();
 
-  (void)pcur->restore_position(m_sys, BTR_SEARCH_LEAF, mtr, Current_location());
+  (void)pcur->restore(Intent::Read, mtr);
 
   return err;
 }
@@ -908,7 +887,7 @@ DbErr RowInsert::check_foreign_constraint(
   MemHeap *heap = nullptr;
   std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
   auto offsets = rec_offs_from_array(offsets_);
-  BtreePcursor pcur{};
+  IndexCursor pcur{m_sys};
 
 run_again:
 
@@ -1002,13 +981,13 @@ run_again:
 
   dtuple_set_n_fields_cmp(entry, foreign->m_n_fields);
 
-  pcur.open(m_sys, check_index, entry, PAGE_CUR_GE, BTR_SEARCH_LEAF, &mtr, Current_location());
+  pcur.position(check_index, entry, PAGE_CUR_GE, Intent::Read, &mtr);
 
   /* Scan index records and check if there is a matching record */
 
   for (;;) {
-    Rec rec = pcur.get_rec();
-    const BufBlock *block = pcur.get_block();
+    Rec rec = pcur.rec();
+    const BufBlock *block = pcur.block();
 
     if (page_rec_is_infimum(rec)) {
 
@@ -1075,7 +1054,7 @@ run_again:
           }
 
           /* foreign_check_on_constraint may have repositioned pcur on a different block */
-          block = pcur.get_block();
+          block = pcur.block();
         } else {
           foreign_report_err("Trying to delete or update", thr, foreign, rec, entry);
 
@@ -1104,11 +1083,11 @@ run_again:
 
     ut_a(cmp == 0);
   next_rec:
-    moved = pcur.move_to_next(m_sys, &mtr);
+    moved = pcur.next_pos(&mtr);
 
     if (!moved) {
       if (check_ref) {
-        rec = pcur.get_rec();
+        rec = pcur.rec();
         foreign_report_add_err(trx, foreign, rec, entry);
         err = DB_NO_REFERENCED_ROW;
       } else {
@@ -1236,7 +1215,7 @@ bool RowInsert::dupl_error_with_rec(const Rec rec, const DTuple *entry, const In
 
 DbErr RowInsert::scan_sec_index_for_duplicate(const Index *index, DTuple *entry, QueThr *thr) noexcept {
   int cmp;
-  BtreePcursor pcur{};
+  IndexCursor pcur{m_sys};
   DbErr err = DB_SUCCESS;
   unsigned allow_duplicates;
   Mtr mtr;
@@ -1264,15 +1243,15 @@ DbErr RowInsert::scan_sec_index_for_duplicate(const Index *index, DTuple *entry,
 
   dtuple_set_n_fields_cmp(entry, index->get_n_unique());
 
-  pcur.open(m_sys, index, entry, PAGE_CUR_GE, BTR_SEARCH_LEAF, &mtr, Current_location());
+  pcur.position(index, entry, PAGE_CUR_GE, Intent::Read, &mtr);
 
   allow_duplicates = thr_get_trx(thr)->m_duplicates & TRX_DUP_IGNORE;
 
   /* Scan index records and check if there is a duplicate */
 
   do {
-    Rec rec = pcur.get_rec();
-    const BufBlock *block = pcur.get_block();
+    Rec rec = pcur.rec();
+    const BufBlock *block = pcur.block();
 
     if (page_rec_is_infimum(rec)) {
 
@@ -1325,7 +1304,7 @@ DbErr RowInsert::scan_sec_index_for_duplicate(const Index *index, DTuple *entry,
     }
 
     ut_a(cmp == 0);
-  } while (pcur.move_to_next(m_sys, &mtr));
+  } while (pcur.next_pos(&mtr));
 
   if (likely_null(heap)) {
     mem_heap_free(heap);
@@ -1339,7 +1318,7 @@ DbErr RowInsert::scan_sec_index_for_duplicate(const Index *index, DTuple *entry,
   return err;
 }
 
-DbErr RowInsert::duplicate_error_in_clust(BtreeCursor *btr_cur, DTuple *entry, QueThr *thr, Mtr *mtr) noexcept {
+DbErr RowInsert::duplicate_error_in_clust(IndexCursor *cur, DTuple *entry, QueThr *thr, Mtr *mtr) noexcept {
   DbErr err;
   Rec rec;
   Trx *trx = thr_get_trx(thr);
@@ -1349,8 +1328,10 @@ DbErr RowInsert::duplicate_error_in_clust(BtreeCursor *btr_cur, DTuple *entry, Q
 
   UT_NOT_USED(mtr);
 
-  ut_a(btr_cur->m_index->is_clustered());
-  ut_ad(btr_cur->m_index->is_unique());
+  const auto index = cur->index();
+
+  ut_a(index->is_clustered());
+  ut_ad(index->is_unique());
 
   /* NOTE: For unique non-clustered indexes there may be any number
   of delete marked records with the same value for the non-clustered
@@ -1365,15 +1346,15 @@ DbErr RowInsert::duplicate_error_in_clust(BtreeCursor *btr_cur, DTuple *entry, Q
   user records on the leaf level. So, even if low_match would suggest
   that a duplicate key violation may occur, this may not be the case. */
 
-  const auto n_unique = btr_cur->m_index->get_n_unique();
+  const auto n_unique = index->get_n_unique();
 
-  if (btr_cur->m_low_match >= n_unique) {
+  if (cur->low_match() >= n_unique) {
 
-    rec = btr_cur->get_rec();
+    rec = cur->rec();
 
     if (!page_rec_is_infimum(rec)) {
       {
-        PhyRec record{btr_cur->m_index, rec};
+        PhyRec record{index, rec};
 
         offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
       }
@@ -1390,31 +1371,31 @@ DbErr RowInsert::duplicate_error_in_clust(BtreeCursor *btr_cur, DTuple *entry, Q
         duplicates ( REPLACE, LOAD DATAFILE REPLACE,
         INSERT ON DUPLICATE KEY UPDATE). */
 
-        err = set_exclusive_rec_lock(LOCK_REC_NOT_GAP, btr_cur->get_block(), rec, btr_cur->m_index, offsets, thr);
+        err = set_exclusive_rec_lock(LOCK_REC_NOT_GAP, cur->block(), rec, index, offsets, thr);
       } else {
 
-        err = set_shared_rec_lock(LOCK_REC_NOT_GAP, btr_cur->get_block(), rec, btr_cur->m_index, offsets, thr);
+        err = set_shared_rec_lock(LOCK_REC_NOT_GAP, cur->block(), rec, index, offsets, thr);
       }
 
       if (err != DB_SUCCESS) {
         goto func_exit;
       }
 
-      if (dupl_error_with_rec(rec, entry, btr_cur->m_index, offsets)) {
-        trx->m_error_info = btr_cur->m_index;
+      if (dupl_error_with_rec(rec, entry, index, offsets)) {
+        trx->m_error_info = index;
         err = DB_DUPLICATE_KEY;
         goto func_exit;
       }
     }
   }
 
-  if (btr_cur->m_up_match >= n_unique) {
+  if (cur->up_match() >= n_unique) {
 
-    rec = page_rec_get_next(btr_cur->get_rec());
+    rec = page_rec_get_next(cur->rec());
 
     if (!page_rec_is_supremum(rec)) {
       {
-        PhyRec record{btr_cur->m_index, rec};
+        PhyRec record{index, rec};
 
         offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
       }
@@ -1424,24 +1405,24 @@ DbErr RowInsert::duplicate_error_in_clust(BtreeCursor *btr_cur, DTuple *entry, Q
         /* If the SQL-query will update or replace duplicate key we will take X-lock for
         duplicates ( REPLACE, LOAD DATAFILE REPLACE, INSERT ON DUPLICATE KEY UPDATE). */
 
-        err = set_exclusive_rec_lock(LOCK_REC_NOT_GAP, btr_cur->get_block(), rec, btr_cur->m_index, offsets, thr);
+        err = set_exclusive_rec_lock(LOCK_REC_NOT_GAP, cur->block(), rec, index, offsets, thr);
       } else {
 
-        err = set_shared_rec_lock(LOCK_REC_NOT_GAP, btr_cur->get_block(), rec, btr_cur->m_index, offsets, thr);
+        err = set_shared_rec_lock(LOCK_REC_NOT_GAP, cur->block(), rec, index, offsets, thr);
       }
 
       if (err != DB_SUCCESS) {
         goto func_exit;
       }
 
-      if (dupl_error_with_rec(rec, entry, btr_cur->m_index, offsets)) {
-        trx->m_error_info = btr_cur->m_index;
+      if (dupl_error_with_rec(rec, entry, index, offsets)) {
+        trx->m_error_info = index;
         err = DB_DUPLICATE_KEY;
         goto func_exit;
       }
     }
 
-    ut_a(!btr_cur->m_index->is_clustered());
+    ut_a(!index->is_clustered());
     /* This should never happen */
   }
 
@@ -1454,7 +1435,7 @@ func_exit:
   return err;
 }
 
-inline ulint RowInsert::must_modify(BtreeCursor *btr_cur) noexcept {
+inline bool RowInsert::must_modify(IndexCursor *cur) noexcept {
   /* NOTE: (compare to the note in duplicate_error) Because node
   pointers on upper levels of the B-tree may match more to entry than
   to actual user records on the leaf level, we have to check if the
@@ -1462,40 +1443,45 @@ inline ulint RowInsert::must_modify(BtreeCursor *btr_cur) noexcept {
   node pointers contain index->n_unique first fields, and in the case
   of a secondary index, all fields of the index. */
 
-  const auto enough_match = btr_cur->m_index->get_n_unique_in_tree();
+  const auto enough_match = cur->index()->get_n_unique_in_tree();
 
-  if (btr_cur->m_low_match >= enough_match) {
+  if (cur->low_match() >= enough_match) {
 
-    const auto rec = btr_cur->get_rec();
+    const auto rec = cur->rec();
 
     if (!page_rec_is_infimum(rec)) {
-      return ROW_INS_PREV;
+      return true;
     }
   }
 
-  return 0;
+  return false;
 }
 
-DbErr RowInsert::index_entry_low(ulint mode, const Index *index, DTuple *entry, ulint n_ext, QueThr *thr) noexcept {
-  ulint modify{};
-  Rec insert_rec;
-  Rec rec;
+DbErr RowInsert::index_entry_low(Intent intent, const Index *index, DTuple *entry, ulint n_ext, QueThr *thr) noexcept {
+  bool modify{};
   DbErr err;
   MemHeap *heap = nullptr;
   BigRec big_rec{};
-  BtreeCursor btr_cur{};
+  IndexCursor cur{m_sys};
+
+  /* What takes no structure change, and no decision about what's on the page. */
+  if (intent == Intent::Write && n_ext == 0) {
+    err = cur.insert_batched(index, entry, 0, thr);
+
+    if (err != DB_FAIL) {
+      return err;
+    }
+  }
 
   Mtr mtr;
 
   mtr.start();
 
-  btr_cur.m_thr = thr;
-
-  btr_cur.search_to_nth_level(m_sys, nullptr, index, 0, entry, PAGE_CUR_LE, mode | BTR_INSERT, &mtr, Current_location());
+  cur.seek_insert(index, entry, intent, thr, &mtr);
 
 #ifdef UNIV_DEBUG
   {
-    auto page = btr_cur.get_page_no();
+    auto page = cur.rec().page_align();
     auto first_rec = page_rec_get_next(page_get_infimum_rec(page));
 
     ut_ad(page_rec_is_supremum(first_rec) || first_rec.get_n_fields() == dtuple_get_n_fields(entry));
@@ -1504,13 +1490,13 @@ DbErr RowInsert::index_entry_low(ulint mode, const Index *index, DTuple *entry, 
 
   const auto n_unique = index->get_n_unique();
 
-  if (index->is_unique() && (btr_cur.m_up_match >= n_unique || btr_cur.m_low_match >= n_unique)) {
+  if (index->is_unique() && (cur.up_match() >= n_unique || cur.low_match() >= n_unique)) {
 
     if (index->is_clustered()) {
       /* Note that the following may return also
       DB_LOCK_WAIT */
 
-      err = duplicate_error_in_clust(&btr_cur, entry, thr, &mtr);
+      err = duplicate_error_in_clust(&cur, entry, thr, &mtr);
 
       if (err != DB_SUCCESS) {
 
@@ -1532,37 +1518,31 @@ DbErr RowInsert::index_entry_low(ulint mode, const Index *index, DTuple *entry, 
       transaction. Let us now reposition the cursor and
       continue the insertion. */
 
-      btr_cur.search_to_nth_level(m_sys, nullptr, index, 0, entry, PAGE_CUR_LE, mode | BTR_INSERT, &mtr, Current_location());
+      cur.seek_insert(index, entry, intent, thr, &mtr);
     }
   }
 
-  modify = must_modify(&btr_cur);
+  modify = must_modify(&cur);
 
-  if (modify != 0) {
+  if (modify) {
     /* There is already an index entry with a long enough common
     prefix, we must convert the insert into a modify of an
     existing record */
 
-    if (modify == ROW_INS_NEXT) {
-      rec = page_rec_get_next(btr_cur.get_rec());
-
-      btr_cur.position(index, rec, btr_cur.get_block());
-    }
-
     if (index->is_clustered()) {
-      err = clust_index_entry_by_modify(mode, &btr_cur, &heap, &big_rec, entry, thr, &mtr);
+      err = clust_index_entry_by_modify(intent, &cur, &heap, &big_rec, entry, thr, &mtr);
     } else {
       ut_ad(!n_ext);
-      err = sec_index_entry_by_modify(mode, &btr_cur, entry, thr, &mtr);
+      err = sec_index_entry_by_modify(intent, &cur, entry, thr, &mtr);
     }
   } else {
 
-    if (mode == BTR_MODIFY_LEAF) {
+    if (intent == Intent::Write) {
 
-      err = btr_cur.optimistic_insert(m_sys, 0, entry, &insert_rec, &big_rec, n_ext, thr, &mtr);
+      err = cur.insert(Intent::Write, 0, entry, &big_rec, n_ext, thr, &mtr);
 
     } else {
-      ut_a(mode == BTR_MODIFY_TREE);
+      ut_a(intent == Intent::Restructure);
 
       auto buf_pool = m_sys.m_buf_pool.get();
 
@@ -1573,7 +1553,7 @@ DbErr RowInsert::index_entry_low(ulint mode, const Index *index, DTuple *entry, 
         goto function_exit;
       }
 
-      err = btr_cur.pessimistic_insert(m_sys, 0, entry, &insert_rec, &big_rec, n_ext, thr, &mtr);
+      err = cur.insert(Intent::Restructure, 0, entry, &big_rec, n_ext, thr, &mtr);
     }
   }
 
@@ -1583,10 +1563,10 @@ function_exit:
   if (big_rec.n_fields != 0) {
     mtr.start();
 
-    btr_cur.search_to_nth_level(m_sys, nullptr, index, 0, entry, PAGE_CUR_LE, BTR_MODIFY_TREE, &mtr, Current_location());
+    cur.position(index, entry, PAGE_CUR_LE, Intent::Restructure, &mtr);
 
     ulint *offsets;
-    auto rec = btr_cur.get_rec();
+    auto rec = cur.rec();
 
     {
       PhyRec record{index, rec};
@@ -1594,9 +1574,7 @@ function_exit:
       offsets = record.get_all_col_offsets(nullptr, &heap, Current_location());
     }
 
-    Blob blob{};
-
-    err = blob.store_big_rec_extern_fields(m_sys, index, btr_cur.get_block(), rec, offsets, big_rec, &mtr);
+    err = cur.store_big_rec(offsets, big_rec, &mtr);
 
     if (modify) {
       dtuple_big_rec_free(big_rec);
@@ -1632,11 +1610,11 @@ DbErr RowInsert::index_entry(const Index *index, DTuple *entry, ulint n_ext, boo
   }
 
   /* Try first optimistic descent to the B-tree */
-  auto err = index_entry_low(BTR_MODIFY_LEAF, index, entry, n_ext, thr);
+  auto err = index_entry_low(Intent::Write, index, entry, n_ext, thr);
 
   if (err == DB_FAIL) {
     /* Try then pessimistic descent to the B-tree */
-    err = index_entry_low(BTR_MODIFY_TREE, index, entry, n_ext, thr);
+    err = index_entry_low(Intent::Restructure, index, entry, n_ext, thr);
   }
 
   if (!index->is_clustered()) {

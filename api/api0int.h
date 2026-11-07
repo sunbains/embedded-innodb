@@ -23,7 +23,7 @@ parallel reads, status). Not part of the public api. */
 #include <vector>
 #include "api0api.h"
 #include "btr0blob.h"
-#include "btr0pcur.h"
+#include "idx0am.h"
 #include "ddl0ddl.h"
 #include "dict0dict.h"
 #include "innodb0types.h"
@@ -58,8 +58,6 @@ about server activity: in selects it is not sensible to call
 srv_active_wake_master_thread after each fetch or search, we only do
 it every INNOBASE_WAKE_INTERVAL'th step. */
 constexpr ulint INNOBASE_WAKE_INTERVAL = 32;
-
-bool btr_cursor_is_positioned(const BtreePcursor *pcur) noexcept;
 
 void delay_dml_if_needed(System &sys);
 

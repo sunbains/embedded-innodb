@@ -64,7 +64,12 @@ constexpr ulint UNIV_MEM_ALIGNMENT = 8;
 constexpr ulint UNIV_WORD_ALIGNMENT = UNIV_WORD_SIZE;
 
 /** The 2-logarithm of UNIV_PAGE_SIZE: */
-constexpr ulint UNIV_PAGE_SIZE_SHIFT = 14;
+#ifndef IB_PAGE_SIZE_SHIFT
+/* A build for tests can have smaller pages, for deep trees from few rows. */
+#define IB_PAGE_SIZE_SHIFT 14
+#endif /* !IB_PAGE_SIZE_SHIFT */
+
+constexpr ulint UNIV_PAGE_SIZE_SHIFT = IB_PAGE_SIZE_SHIFT;
 
 /** The universal page size of the database */
 constexpr ulint UNIV_PAGE_SIZE = 1UL << UNIV_PAGE_SIZE_SHIFT;

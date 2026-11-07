@@ -24,7 +24,9 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 *****************************************************************************/
 
 /** @file include/sync0rw.h
-The read-write lock (for threads, not for database transactions)
+The read-write lock (for threads, not for database transactions). It stays for the
+locks that another thread may release, buffer pool blocks and Index::m_lock: the
+others are on RwLatch, in sync0latch.h.
 
 Created 9/11/1995 Heikki Tuuri
 *******************************************************/
@@ -45,6 +47,14 @@ smaller than 30 and the order of the numerical values like below! */
 constexpr int RW_S_LATCH = 1;
 constexpr int RW_X_LATCH = 2;
 constexpr int RW_NO_LATCH = 3;
+
+/** Own all of a page by its bits, BufBlock::bits_lock(), with no RW latch. */
+constexpr int RW_B_LATCH = 4;
+
+/** All of the page is owned by this thread already, in the caller's mini-transaction: a buffer
+fix only, for a nested mini-transaction to log a change to it. A statement by the caller, there's no
+check. */
+constexpr int RW_B_HELD = 5;
 
 /** We decrement m_lock_word by this amount for each x_lock. It is also the
 start value for the m_lock_word, meaning that it limits the maximum number

@@ -652,6 +652,10 @@ void BufFlush::page(BufPage *bpage, BufFlushType flush_type) {
         buffered_writes();
 
         rw_lock_s_lock_gen(&((BufBlock *)bpage)->m_rw_lock, BUF_IO_WRITE);
+
+        /* What the frame has to stay still for, from whoever changes it with no RW latch. With
+        no buffer fix nobody owns it, and to do so they see BUF_IO_WRITE. */
+        reinterpret_cast<BufBlock *>(bpage)->bits_wait_free();
       }
 
       break;

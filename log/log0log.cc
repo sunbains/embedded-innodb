@@ -30,6 +30,7 @@ Created 12/9/1995 Heikki Tuuri
 *******************************************************/
 
 #include "log0log.h"
+#include "mtr0systrx.h"
 #include "buf0buf.h"
 #include "buf0flu.h"
 #include "fil0fil.h"
@@ -107,12 +108,15 @@ bool Log::checkpoint(bool write_always) noexcept {
 
   std::lock_guard<std::mutex> guard(m_checkpoint_mutex);
 
+  /* System transactions don't hold it back: their state is written again after it. */
+  const auto carried = m_sys.m_systrx->carry_forward();
+
   /* Every page modified below the oldest modification in the buffer pool
   has been written: the checkpoint can move there. Pages that are being
   written are still in the flush list. */
   acquire();
 
-  const auto oldest = buf_pool_get_oldest_modification();
+  const auto oldest = std::min(buf_pool_get_oldest_modification(), carried);
   const auto last = m_last_checkpoint_lsn;
 
   release();

@@ -38,7 +38,7 @@ TrxRseg *TrxRseg::get_on_id(System &sys, ulint id) {
 
 page_no_t TrxRseg::header_create(System &sys, space_id_t space, ulint max_size, ulint *slot_no, Mtr *mtr) {
   ut_ad(mutex_own(&sys.m_trx_sys->m_mutex));
-  ut_ad(mtr->memo_contains(sys.m_fil->space_get_latch(space), MTR_MEMO_X_LOCK));
+  ut_ad(mtr->memo_contains(sys.m_fil->space_get_latch(space), MTR_MEMO_X_LATCH));
 
   auto sys_header = sys.m_trx_sys->read_header(mtr);
 

@@ -472,7 +472,7 @@ DbErr Plan::get_clust_rec(System &sys, SelNode *sel_node, const Rec rec, QueThr 
   RecOffs offsets;
 
   {
-    PhyRec record{m_pcur.get_btr_cur()->m_index, rec};
+    PhyRec record{m_pcur.index(), rec};
 
     offsets = record.get_all_col_offsets(rec_offsets.data(), &heap, Current_location());
   }
@@ -481,14 +481,11 @@ DbErr Plan::get_clust_rec(System &sys, SelNode *sel_node, const Rec rec, QueThr 
 
   auto index = m_table->get_clustered_index();
 
-  m_clust_pcur.open_with_no_init(sys, index, m_clust_ref, PAGE_CUR_LE, BTR_SEARCH_LEAF, 0, mtr, Current_location());
+  const auto found = m_clust_pcur.find(index, m_clust_ref, Intent::Read, mtr);
 
-  Rec clust_rec = m_clust_pcur.get_rec();
+  Rec clust_rec = m_clust_pcur.rec();
 
-  /* Note: only if the search ends up on a non-infimum record is the
-  low_match value the real match to the search tuple */
-
-  if (!page_rec_is_user_rec(clust_rec) || m_clust_pcur.get_low_match() < index->get_n_unique()) {
+  if (!found) {
 
     ut_a(rec.get_deleted_flag());
     ut_a(sel_node->m_read_view);
@@ -514,7 +511,7 @@ DbErr Plan::get_clust_rec(System &sys, SelNode *sel_node, const Rec rec, QueThr 
 
     /* If this session is using READ COMMITTED isolation level we lock only the record, i.e., next-key locking is not used. */
     auto trx = thr_get_trx(thr);
-    auto block = m_clust_pcur.get_block();
+    auto block = m_clust_pcur.block();
     const auto lock_mode = sel_node->m_row_lock_mode;
     const auto lock_type = trx->m_isolation_level == TRX_ISO_READ_COMMITTED ? LOCK_REC_NOT_GAP : LOCK_ORDINARY;
     const auto err = sys.m_lock_sys->clust_rec_read_check_and_lock(0, block, clust_rec, index, offsets, lock_mode, lock_type, thr);
@@ -597,12 +594,6 @@ inline DbErr RowSel::set_rec_lock(
 }
 
 void Plan::open_pcur(System &sys, bool search_latch_locked, Mtr *mtr) noexcept {
-  ulint has_search_latch{}; /* RW_S_LATCH or 0 */
-
-  if (search_latch_locked) {
-    has_search_latch = RW_S_LATCH;
-  }
-
   /* Calculate the value of the search tuple: the exact match columns
   get their expressions evaluated when we evaluate the right sides of
   end_conds */
@@ -632,11 +623,13 @@ void Plan::open_pcur(System &sys, bool search_latch_locked, Mtr *mtr) noexcept {
 
     /* Open pcur to the index */
 
-    m_pcur.open_with_no_init(sys, m_index, m_tuple, m_mode, BTR_SEARCH_LEAF, has_search_latch, mtr, Current_location());
+    m_pcur.position(m_index, m_tuple, m_mode, Intent::Read, mtr);
 
+  } else if (m_asc) {
+    /* Open the cursor to the start or the end of the index */
+    m_pcur.seek_first(m_index, Intent::Read, mtr);
   } else {
-    /* Open the cursor to the start or the end of the index (false: no init) */
-    m_pcur.open_at_index_side(sys, m_asc, m_index, BTR_SEARCH_LEAF, false, 0, mtr);
+    m_pcur.seek_last(m_index, Intent::Read, mtr);
   }
 
   ut_ad(!m_cursor_at_end);
@@ -649,18 +642,18 @@ void Plan::open_pcur(System &sys, bool search_latch_locked, Mtr *mtr) noexcept {
 bool Plan::restore_pcur_pos(System &sys, Mtr *mtr) noexcept {
   ut_ad(!m_cursor_at_end);
 
-  auto relative_position = m_pcur.get_rel_pos();
-  auto equal_position = m_pcur.restore_position(sys, BTR_SEARCH_LEAF, mtr, Current_location());
+  const auto relative_position = m_pcur.saved_at();
+  auto equal_position = m_pcur.restore(Intent::Read, mtr);
 
   /* If the cursor is traveling upwards, and relative_position is
 
-  (1) BtreeCursorPos::BEFORE: this is not allowed, as we did not have a lock
+  (1) SavedAt::Before: this is not allowed, as we did not have a lock
   yet on the successor of the page infimum;
-  (2) BtreeCursorPos::AFTER: btr_pcur_t::restore_position placed the cursor on the
+  (2) SavedAt::After: restore() placed the cursor on the
   first record GREATER than the predecessor of a page supremum; we have
   not yet processed the cursor record: no need to move the cursor to the
   next record;
-  (3) BtreeCursorPos::ON: btr_pcur_t::restore_position placed the cursor on the
+  (3) SavedAt::On: restore() placed the cursor on the
   last record LESS or EQUAL to the old stored user record; (a) if
   equal_position is false, this means that the cursor is now on a record
   less than the old user record, and we must move to the next record;
@@ -669,25 +662,25 @@ bool Plan::restore_pcur_pos(System &sys, Mtr *mtr) noexcept {
   record, else there is no need to move the cursor. */
 
   if (m_asc) {
-    if (relative_position == BtreeCursorPos::ON) {
+    if (relative_position == SavedAt::On) {
       return equal_position ? m_stored_cursor_rec_processed : true;
     }
 
-    ut_ad(relative_position == BtreeCursorPos::AFTER || relative_position == BtreeCursorPos::AFTER_LAST_IN_TREE);
+    ut_ad(relative_position == SavedAt::After);
 
     return false;
   }
 
   /* If the cursor is traveling downwards, and relative_position is
 
-  (1) BtreeCursorPos::BEFORE: btr_pcur_t::restore_position placed the cursor on
+  (1) SavedAt::Before: restore() placed the cursor on
   the last record LESS than the successor of a page infimum; we have not
   processed the cursor record: no need to move the cursor;
-  (2) BtreeCursorPos::AFTER: btr_pcur_t::restore_position placed the cursor on the
+  (2) SavedAt::After: restore() placed the cursor on the
   first record GREATER than the predecessor of a page supremum; we have
   processed the cursor record: we should move the cursor to the previous
   record;
-  (3) BtreeCursorPos::ON: btr_pcur_t::restore_position placed the cursor on the
+  (3) SavedAt::On: restore() placed the cursor on the
   last record LESS or EQUAL to the old stored user record; (a) if
   equal_position is false, this means that the cursor is now on a record
   less than the old user record, and we need not move to the previous
@@ -695,17 +688,17 @@ bool Plan::restore_pcur_pos(System &sys, Mtr *mtr) noexcept {
   plan->stored_cursor_rec_processed is true, we must move to the previous
   record, else there is no need to move the cursor. */
 
-  if (relative_position == BtreeCursorPos::BEFORE || relative_position == BtreeCursorPos::BEFORE_FIRST_IN_TREE) {
+  if (relative_position == SavedAt::Before) {
 
     return false;
   }
 
-  if (relative_position == BtreeCursorPos::ON) {
+  if (relative_position == SavedAt::On) {
 
     return equal_position ? m_stored_cursor_rec_processed : false;
   }
 
-  ut_ad(relative_position == BtreeCursorPos::AFTER || relative_position == BtreeCursorPos::AFTER_LAST_IN_TREE);
+  ut_ad(relative_position == SavedAt::After);
 
   return true;
 }
@@ -730,7 +723,7 @@ SearchStatus Plan::try_search_shortcut(System &sys, SelNode *sel_node, Mtr *mtr)
 
   open_pcur(sys, true, mtr);
 
-  auto rec = m_pcur.get_rec();
+  auto rec = m_pcur.rec();
 
   if (!page_rec_is_user_rec(rec)) {
 
@@ -743,7 +736,7 @@ SearchStatus Plan::try_search_shortcut(System &sys, SelNode *sel_node, Mtr *mtr)
   the mode PAGE_CUR_GE, the up_match field in the cursor tells how many
   fields in the user record matched to the search tuple */
 
-  if (m_pcur.get_up_match() < m_n_exact_match) {
+  if (m_pcur.up_match() < m_n_exact_match) {
 
     return SearchStatus::EXHAUSTED;
   }
@@ -786,8 +779,6 @@ SearchStatus Plan::try_search_shortcut(System &sys, SelNode *sel_node, Mtr *mtr)
   if (!test_other_conds()) {
     return func_exit(SearchStatus::EXHAUSTED);
   }
-
-  ut_ad(m_pcur.m_latch_mode == BTR_SEARCH_LEAF);
 
   ++m_n_rows_fetched;
 
@@ -924,7 +915,7 @@ rec_loop:
 
   ut_ad(mtr_has_extra_clust_latch == false);
 
-  rec = plan->m_pcur.get_rec();
+  rec = plan->m_pcur.rec();
 
   /* PHASE 1: Set a lock if specified */
 
@@ -966,7 +957,7 @@ rec_loop:
       }
 
       {
-        auto block = plan->m_pcur.get_block();
+        auto block = plan->m_pcur.block();
         const auto lock_mode = sel_node->m_row_lock_mode;
 
         err = set_rec_lock(block, next_rec, index, offsets, lock_mode, lock_type, thr);
@@ -1023,7 +1014,7 @@ skip_lock:
     }
 
     {
-      auto block = plan->m_pcur.get_block();
+      auto block = plan->m_pcur.block();
       const auto lock_mode = sel_node->m_row_lock_mode;
 
       err = set_rec_lock(block, rec, index, offsets, lock_mode, lock_type, thr);
@@ -1068,7 +1059,7 @@ skip_lock:
     tells how many fields in the user record matched to the search
     tuple */
 
-    if (plan->m_pcur.get_up_match() < plan->m_n_exact_match) {
+    if (plan->m_pcur.up_match() < plan->m_n_exact_match) {
       goto table_exhausted;
     }
 
@@ -1212,7 +1203,7 @@ skip_lock:
 
     if (sel_node->m_can_get_updated) {
 
-      plan->m_clust_pcur.store_position(m_sys, &mtr);
+      plan->m_clust_pcur.save(&mtr);
     }
   }
 
@@ -1232,8 +1223,6 @@ skip_lock:
   the row if prefetch is on, or move to the next table in the join */
 
   ++plan->m_n_rows_fetched;
-
-  ut_ad(plan->m_pcur.m_latch_mode == BTR_SEARCH_LEAF);
 
   if ((plan->m_n_rows_fetched <= SEL_PREFETCH_LIMIT) || plan->m_unique_search || plan->m_no_prefetch ||
       plan->m_table->m_big_rows > 0) {
@@ -1268,9 +1257,9 @@ next_rec:
   }
 
   if (sel_node->m_asc) {
-    moved = plan->m_pcur.move_to_next(m_sys, &mtr);
+    moved = plan->m_pcur.next_pos(&mtr);
   } else {
-    moved = plan->m_pcur.move_to_prev(m_sys, &mtr);
+    moved = plan->m_pcur.prev_pos(&mtr);
   }
 
   if (!moved) {
@@ -1288,7 +1277,7 @@ next_table:
   /* We found a record which satisfies the conditions: we can move to
   the next table or return a row in the result set */
 
-  ut_ad(plan->m_pcur.is_on_user_rec());
+  ut_ad(plan->m_pcur.on_rec());
 
   if (plan->m_unique_search && !sel_node->m_can_get_updated) {
 
@@ -1299,7 +1288,7 @@ next_table:
 
     plan->m_stored_cursor_rec_processed = true;
 
-    plan->m_pcur.store_position(m_sys, &mtr);
+    plan->m_pcur.save(&mtr);
   }
 
   mtr.commit(m_sys);
@@ -1394,7 +1383,7 @@ stop_for_a_while:
   ut_ad(!search_latch_locked);
 
   plan->m_stored_cursor_rec_processed = false;
-  plan->m_pcur.store_position(m_sys, &mtr);
+  plan->m_pcur.save(&mtr);
 
   mtr.commit(m_sys);
 
@@ -1409,7 +1398,7 @@ commit_mtr_for_a_while:
   plan->m_stored_cursor_rec_processed = true;
 
   ut_ad(!search_latch_locked);
-  plan->m_pcur.store_position(m_sys, &mtr);
+  plan->m_pcur.save(&mtr);
 
   mtr.commit(m_sys);
 
@@ -1421,11 +1410,11 @@ commit_mtr_for_a_while:
 lock_wait_or_error:
   /* See the note at stop_for_a_while: the same holds for this case */
 
-  ut_ad(!plan->m_pcur.is_before_first_on_page() || !sel_node->m_asc);
+  ut_ad(!page_rec_is_infimum(plan->m_pcur.rec()) || !sel_node->m_asc);
   ut_ad(!search_latch_locked);
 
   plan->m_stored_cursor_rec_processed = false;
-  plan->m_pcur.store_position(m_sys, &mtr);
+  plan->m_pcur.save(&mtr);
 
   mtr.commit(m_sys);
 
@@ -1686,7 +1675,7 @@ DbErr RowSel::get_clust_rec_with_prebuilt(
     if (prebuilt->m_select_lock_type != LOCK_NONE) {
       /* We may use the cursor in update or in unlock_row(): store its position */
 
-      prebuilt->m_clust_pcur->store_position(m_sys, mtr);
+      prebuilt->m_clust_pcur->save(mtr);
     }
 
     return DB_SUCCESS;
@@ -1698,18 +1687,13 @@ DbErr RowSel::get_clust_rec_with_prebuilt(
 
   auto clust_index = sec_index->m_table->get_clustered_index();
 
-  prebuilt->m_clust_pcur->open_with_no_init(m_sys, 
-    clust_index, prebuilt->m_clust_ref, PAGE_CUR_LE, BTR_SEARCH_LEAF, 0, mtr, Current_location()
-  );
+  /* Nothing has to stay for a read with no lock, the snapshot looks after the rest. Reading the latest
+  version it doesn't: what keeps its BLOBs from being freed by a rollback is the page held. */
+  const auto found = prebuilt->m_clust_pcur->find(clust_index, prebuilt->m_clust_ref, prebuilt->m_select_lock_type == LOCK_NONE && prebuilt->m_trx->m_isolation_level != TRX_ISO_READ_UNCOMMITTED ? Intent::Snapshot : Intent::Read, mtr);
 
-  Rec clust_rec = prebuilt->m_clust_pcur->get_rec();
+  Rec clust_rec = prebuilt->m_clust_pcur->rec();
 
-  prebuilt->m_clust_pcur->m_trx_if_known = trx;
-
-  /* Note: only if the search ends up on a non-infimum record is the
-  low_match value the real match to the search tuple */
-
-  if (!page_rec_is_user_rec(clust_rec) || prebuilt->m_clust_pcur->get_low_match() < clust_index->get_n_unique()) {
+  if (!found) {
 
     /* In a rare case it is possible that no clust rec is found
     for a delete-marked secondary index record: if in row0umod.c
@@ -1747,7 +1731,7 @@ DbErr RowSel::get_clust_rec_with_prebuilt(
     /* Try to place a lock on the index record; we are searching the clust rec with a unique condition, hence
     we set a LOCK_REC_NOT_GAP type lock */
 
-    auto block = prebuilt->m_clust_pcur->get_block();
+    auto block = prebuilt->m_clust_pcur->block();
     const auto lock_type = prebuilt->m_select_lock_type;
 
     const auto err =
@@ -1810,37 +1794,37 @@ DbErr RowSel::get_clust_rec_with_prebuilt(
   return func_exit(prebuilt, out_rec, clust_rec, mtr);
 }
 
-bool RowSel::restore_position(bool *same_user_rec, ulint latch_mode, BtreePcursor *pcur, bool moves_up, Mtr *mtr) noexcept {
-  const auto relative_position = pcur->get_rel_pos();
-  const auto success = pcur->restore_position(m_sys, latch_mode, mtr, Current_location());
+bool RowSel::restore_position(bool *same_user_rec, Intent intent, IndexCursor *pcur, bool moves_up, Mtr *mtr) noexcept {
+  const auto relative_position = pcur->saved_at();
+  const auto success = pcur->restore(intent, mtr);
 
   *same_user_rec = success;
 
-  if (relative_position == BtreeCursorPos::ON) {
+  if (relative_position == SavedAt::On) {
     if (success) {
       return false;
     }
 
     if (moves_up) {
-      (void)pcur->move_to_next(m_sys, mtr);
+      (void)pcur->next_pos(mtr);
     }
 
-  } else if (relative_position == BtreeCursorPos::AFTER || relative_position == BtreeCursorPos::AFTER_LAST_IN_TREE) {
+  } else if (relative_position == SavedAt::After) {
 
     if (moves_up) {
       return true;
     }
 
-    if (pcur->is_on_user_rec()) {
-      (void)pcur->move_to_prev(m_sys, mtr);
+    if (pcur->on_rec()) {
+      (void)pcur->prev_pos(mtr);
     }
 
   } else {
 
-    ut_ad(relative_position == BtreeCursorPos::BEFORE || relative_position == BtreeCursorPos::BEFORE_FIRST_IN_TREE);
+    ut_ad(relative_position == SavedAt::Before);
 
-    if (moves_up && pcur->is_on_user_rec()) {
-      (void)pcur->move_to_next(m_sys, mtr);
+    if (moves_up && pcur->on_rec()) {
+      (void)pcur->next_pos(mtr);
     }
   }
 
@@ -1880,9 +1864,9 @@ SearchStatus RowSel::try_search_shortcut_for_prebuilt(
 
   ut_ad(index->is_clustered());
 
-  pcur->open_with_no_init(m_sys, index, search_tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF, RW_S_LATCH, mtr, Current_location());
+  pcur->position(index, search_tuple, PAGE_CUR_GE, Intent::Read, mtr);
 
-  Rec rec = pcur->get_rec();
+  Rec rec = pcur->rec();
 
   if (!page_rec_is_user_rec(rec)) {
 
@@ -1893,7 +1877,7 @@ SearchStatus RowSel::try_search_shortcut_for_prebuilt(
   the mode PAGE_CUR_GE, the up_match field in the cursor tells how many
   fields in the user record matched to the search tuple */
 
-  if (pcur->get_up_match() < dtuple_get_n_fields(search_tuple)) {
+  if (pcur->up_match() < dtuple_get_n_fields(search_tuple)) {
 
     return SearchStatus::EXHAUSTED;
   }
@@ -1943,12 +1927,12 @@ DbErr RowSel::unlock_for_client(Prebuilt *prebuilt, bool has_latches_on_recs) no
     /* Restore the cursor position and find the record */
 
     if (!has_latches_on_recs) {
-      (void)pcur->restore_position(m_sys, BTR_SEARCH_LEAF, &mtr, Current_location());
+      (void)pcur->restore(Intent::Read, &mtr);
     }
 
-    auto rec = pcur->get_rec();
+    auto rec = pcur->rec();
 
-    m_sys.m_lock_sys->rec_unlock(trx, pcur->get_block(), rec, prebuilt->m_select_lock_type);
+    m_sys.m_lock_sys->rec_unlock(trx, pcur->block(), rec, prebuilt->m_select_lock_type);
 
     mtr.commit(m_sys);
 
@@ -1974,12 +1958,12 @@ DbErr RowSel::unlock_for_client(Prebuilt *prebuilt, bool has_latches_on_recs) no
     /* Restore the cursor position and find the record */
 
     if (!has_latches_on_recs) {
-      (void)clust_pcur->restore_position(m_sys, BTR_SEARCH_LEAF, &mtr, Current_location());
+      (void)clust_pcur->restore(Intent::Read, &mtr);
     }
 
-    auto rec = clust_pcur->get_rec();
+    auto rec = clust_pcur->rec();
 
-    m_sys.m_lock_sys->rec_unlock(trx, clust_pcur->get_block(), rec, prebuilt->m_select_lock_type);
+    m_sys.m_lock_sys->rec_unlock(trx, clust_pcur->block(), rec, prebuilt->m_select_lock_type);
 
     mtr.commit(m_sys);
   }
@@ -2007,6 +1991,10 @@ DbErr RowSel::mvcc_fetch(
   bool unique_search{};
   bool mtr_has_extra_clust_latch{};
   bool unique_search_from_clust_index{};
+  /* Nothing has to stay for a read with no lock, the snapshot looks after the rest. Reading the latest
+  version it doesn't: what keeps its BLOBs from being freed by a rollback is the page held. */
+  const auto read_intent = prebuilt->m_select_lock_type == LOCK_NONE && prebuilt->m_trx->m_isolation_level != TRX_ISO_READ_UNCOMMITTED ? Intent::Snapshot : Intent::Read;
+
   bool set_also_gap_locks = true;
 
   /* if the returned record was locked and we did a semi-consistent read (fetch the newest committed version), then this is set to true */
@@ -2023,6 +2011,10 @@ DbErr RowSel::mvcc_fetch(
   prebuilt->m_result = -1;
 
   ut_ad(index && pcur && search_tuple);
+
+  /* A prebuilt is created where there's no instance. */
+  pcur->attach(m_sys);
+  prebuilt->m_clust_pcur->attach(m_sys);
 
   if (unlikely(prebuilt->m_table->m_ibd_file_missing)) {
     log_err(std::format(
@@ -2115,7 +2107,7 @@ DbErr RowSel::mvcc_fetch(
       goto func_exit;
     }
 
-    mode = pcur->m_search_mode;
+    mode = pcur->search_mode();
   }
 
   /* In a search where at most one record in the index may match, we can use a LOCK_REC_NOT_GAP type record lock when locking a
@@ -2235,18 +2227,16 @@ DbErr RowSel::mvcc_fetch(
 
   if (likely(direction != ROW_SEL_MOVETO)) {
 
-    if (!restore_position(&same_user_rec, BTR_SEARCH_LEAF, pcur, moves_up, &mtr)) {
+    if (!restore_position(&same_user_rec, read_intent, pcur, moves_up, &mtr)) {
 
       goto next_rec;
     }
 
   } else if (dtuple_get_n_fields(search_tuple) > 0) {
 
-    pcur->open_with_no_init(m_sys, index, search_tuple, mode, BTR_SEARCH_LEAF, 0, &mtr, Current_location());
+    pcur->position(index, search_tuple, mode, read_intent, &mtr);
 
-    pcur->m_trx_if_known = trx;
-
-    rec = pcur->get_rec();
+    rec = pcur->rec();
 
     if (!moves_up && !page_rec_is_supremum(rec) && set_also_gap_locks && trx->m_isolation_level != TRX_ISO_READ_COMMITTED &&
         prebuilt->m_select_lock_type != LOCK_NONE) {
@@ -2260,7 +2250,7 @@ DbErr RowSel::mvcc_fetch(
         offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
       }
 
-      err = set_rec_lock(pcur->get_block(), next, index, offsets, prebuilt->m_select_lock_type, LOCK_GAP, thr);
+      err = set_rec_lock(pcur->block(), next, index, offsets, prebuilt->m_select_lock_type, LOCK_GAP, thr);
 
       if (err != DB_SUCCESS) {
 
@@ -2268,9 +2258,9 @@ DbErr RowSel::mvcc_fetch(
       }
     }
   } else if (mode == IB_CUR_G) {
-    pcur->open_at_index_side(m_sys, true, index, BTR_SEARCH_LEAF, false, 0, &mtr);
+    pcur->seek_first(index, read_intent, &mtr);
   } else if (mode == IB_CUR_L) {
-    pcur->open_at_index_side(m_sys, false, index, BTR_SEARCH_LEAF, false, 0, &mtr);
+    pcur->seek_last(index, read_intent, &mtr);
   }
 
   if (!prebuilt->m_sql_stat_start) {
@@ -2306,7 +2296,7 @@ rec_loop:
   /*-------------------------------------------------------------*/
   /* PHASE 4: Look for matching records in a loop */
 
-  rec = pcur->get_rec();
+  rec = pcur->rec();
 
   if (page_rec_is_infimum(rec)) {
 
@@ -2333,7 +2323,7 @@ rec_loop:
 
       const auto lock_type = prebuilt->m_select_lock_type;
 
-      err = set_rec_lock(pcur->get_block(), rec, index, offsets, lock_type, LOCK_ORDINARY, thr);
+      err = set_rec_lock(pcur->block(), rec, index, offsets, lock_type, LOCK_ORDINARY, thr);
 
       if (err != DB_SUCCESS) {
 
@@ -2362,7 +2352,7 @@ rec_loop:
 
       buf_page_print(rec.page_align(), 0);
       log_err(
-        std::format("\nrec address {}, buf block with fix count {}", (void *)rec, (int)pcur->get_block()->m_page.get_fix_count())
+        std::format("\nrec address {}, buf block with fix count {}", (void *)rec, (int)pcur->block()->m_page.get_fix_count())
       );
       log_err(std::format(
         "Index corruption: rec offs {} next offs {}, page no {},", page_offset(rec), next_offs, page_get_page_no(rec.page_align())
@@ -2383,7 +2373,7 @@ rec_loop:
       m_sys.m_dict->index_name_print(trx, index);
       log_err(". We try to skip the rest of the page.");
 
-      pcur->move_to_last_on_page(&mtr);
+      pcur->skip_rest(&mtr);
 
       goto next_rec;
     }
@@ -2443,7 +2433,7 @@ rec_loop:
         /* Try to place a gap lock on the index record only if this session is not using a READ COMMITTED isolation level. */
 
         const auto lock_type = prebuilt->m_select_lock_type;
-        err = set_rec_lock(pcur->get_block(), rec, index, offsets, lock_type, LOCK_GAP, thr);
+        err = set_rec_lock(pcur->block(), rec, index, offsets, lock_type, LOCK_GAP, thr);
 
         if (err != DB_SUCCESS) {
 
@@ -2451,7 +2441,7 @@ rec_loop:
         }
       }
 
-      pcur->store_position(m_sys, &mtr);
+      pcur->save(&mtr);
 
       err = DB_RECORD_NOT_FOUND;
 
@@ -2499,7 +2489,7 @@ rec_loop:
     }
 
     {
-      auto block = pcur->get_block();
+      auto block = pcur->block();
 
       err = set_rec_lock(block, rec, index, offsets, prebuilt->m_select_lock_type, lock_type, thr);
     }
@@ -2630,6 +2620,11 @@ rec_loop:
       goto lock_wait_or_error;
     }
 
+    /* A read that copied it holds nothing there, so there's no latch order to keep below. */
+    if (prebuilt->m_clust_pcur->give_up_page(&mtr)) {
+      mtr_has_extra_clust_latch = false;
+    }
+
     if (clust_rec.is_null()) {
       /* The record did not exist in the read view */
       ut_ad(prebuilt->m_select_lock_type == LOCK_NONE);
@@ -2730,7 +2725,7 @@ got_row:
 
     /* Inside an update always store the cursor position */
 
-    pcur->store_position(m_sys, &mtr);
+    pcur->save(&mtr);
   }
 
   err = DB_SUCCESS;
@@ -2747,30 +2742,30 @@ next_rec:
     /* We must commit mtr if we are moving to the next non-clustered index record, because we could break the
     latching order if we would access a different clustered index page right away without releasing the previous. */
 
-    pcur->store_position(m_sys, &mtr);
+    pcur->save(&mtr);
 
     mtr.commit(m_sys);
     mtr_has_extra_clust_latch = false;
 
     mtr.start();
 
-    if (restore_position(&same_user_rec, BTR_SEARCH_LEAF, pcur, moves_up, &mtr)) {
+    if (restore_position(&same_user_rec, read_intent, pcur, moves_up, &mtr)) {
 
       goto rec_loop;
     }
   }
 
   if (moves_up) {
-    if (unlikely(!pcur->move_to_next(m_sys, &mtr))) {
+    if (unlikely(!pcur->next_pos(&mtr))) {
     not_moved:
-      pcur->store_position(m_sys, &mtr);
+      pcur->save(&mtr);
 
       err = match_mode != ROW_SEL_DEFAULT ? DB_RECORD_NOT_FOUND : DB_END_OF_INDEX;
 
       prebuilt->m_result = -1;
       goto normal_return;
     }
-  } else if (unlikely(!pcur->move_to_prev(m_sys, &mtr))) {
+  } else if (unlikely(!pcur->prev_pos(&mtr))) {
     goto not_moved;
   }
 
@@ -2779,7 +2774,7 @@ next_rec:
 lock_wait_or_error:
 
   /*-------------------------------------------------------------*/
-  pcur->store_position(m_sys, &mtr);
+  pcur->save(&mtr);
 
   mtr.commit(m_sys);
   mtr_has_extra_clust_latch = false;
@@ -2797,7 +2792,7 @@ lock_wait_or_error:
     thr->lock_state = QUE_THR_LOCK_NOLOCK;
     mtr.start();
 
-    (void)restore_position(&same_user_rec, BTR_SEARCH_LEAF, pcur, moves_up, &mtr);
+    (void)restore_position(&same_user_rec, read_intent, pcur, moves_up, &mtr);
 
     if (trx->m_isolation_level == TRX_ISO_READ_COMMITTED && !same_user_rec) {
 
@@ -2814,7 +2809,7 @@ lock_wait_or_error:
       prebuilt->m_new_rec_locks = 0;
     }
 
-    mode = static_cast<SearchMode>(pcur->m_search_mode);
+    mode = pcur->search_mode();
 
     goto rec_loop;
   }

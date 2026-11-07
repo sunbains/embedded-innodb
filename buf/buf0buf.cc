@@ -31,6 +31,9 @@ Created 11/5/1995 Heikki Tuuri
 
 #include "buf0buf.h"
 
+#include <chrono>
+#include <thread>
+
 #include "btr0btr.h"
 #include "buf0flu.h"
 #include "buf0lru.h"
@@ -288,17 +291,220 @@ void BufPool::block_free(BufBlock *block) {
   mutex_release();
 }
 
+namespace {
+
+/** @return this thread, for BufBlock::m_bits_owner. */
+#ifdef UNIV_DEBUG
+[[nodiscard]] inline uint64_t bits_self() noexcept {
+  return static_cast<uint64_t>(pthread_self());
+}
+#endif /* UNIV_DEBUG */
+
+}  // namespace
+
+void BufBlock::bits_wait(uint64_t bits) const noexcept {
+  if ((bits & WAITERS_BIT) == 0) {
+    /* If it changed, what this was to wait for has too. */
+    if (!m_bits.compare_exchange_strong(bits, bits | WAITERS_BIT, std::memory_order_relaxed)) {
+      return;
+    }
+
+    bits |= WAITERS_BIT;
+  }
+
+  m_bits.wait(bits, std::memory_order_relaxed);
+}
+
+bool BufBlock::bits_try_lock(bool rw_x) noexcept {
+  auto bits = m_bits.load(std::memory_order_relaxed);
+
+  if ((bits & ALL_BITS) != 0 || !m_bits.compare_exchange_strong(bits, bits | ALL_BITS, std::memory_order_seq_cst)) {
+    return false;
+  }
+
+  /* Acquire: what a write of the page read of the frame is before what the owner changes. */
+  if (!rw_x && std::atomic_ref<uint8_t>(m_page.m_io_fix).load(std::memory_order_acquire) == BUF_IO_WRITE) {
+    /* Nothing was changed, and a read needn't know. */
+    if ((m_bits.exchange(0, std::memory_order_release) & WAITERS_BIT) != 0) {
+      m_bits.notify_all();
+    }
+
+    return false;
+  }
+
+  m_version.store(m_version.load(std::memory_order_relaxed) + 1, std::memory_order_relaxed);
+
+  /* The version goes odd before anything the owner writes. */
+  std::atomic_thread_fence(std::memory_order_release);
+
+  ut_d(m_bits_owner.store(bits_self(), std::memory_order_relaxed));
+
+  return true;
+}
+
+namespace {
+
+/** What's done under the bits is quick: it's worth a look before going to sleep. */
+constexpr int N_BIT_SPINS = 64;
+
+/** The end of a write of the page has no one to wake up, it's not often: this is only reads. */
+[[nodiscard]] inline bool wait_for_page_write(const BufPage &page) noexcept {
+  if (std::atomic_ref<uint8_t>(const_cast<uint8_t &>(page.m_io_fix)).load(std::memory_order_acquire) != BUF_IO_WRITE) {
+    return false;
+  }
+
+  /* Asleep: a page's write takes I/O, and threads looping here take the CPU from the ones that have
+  to finish it. There can be a lot of them on a hot page. */
+  std::this_thread::sleep_for(std::chrono::microseconds(100));
+
+  return true;
+}
+
+}  // namespace
+
+void BufBlock::bits_lock(bool rw_x) noexcept {
+  const auto pause = [this](int i, uint64_t bits) noexcept {
+    if (i < N_BIT_SPINS) {
+      UT_RELAX_CPU();
+    } else {
+      bits_wait(bits);
+    }
+  };
+
+  for (int i{};; ++i) {
+    if (!rw_x && wait_for_page_write(m_page)) {
+      continue;
+    }
+
+    auto bits = m_bits.load(std::memory_order_relaxed);
+
+    if ((bits & HEADER_BIT) != 0) {
+      ut_ad(m_bits_owner.load(std::memory_order_relaxed) != bits_self());
+
+      pause(i, bits);
+
+      continue;
+    }
+
+    if (!m_bits.compare_exchange_weak(bits, bits | HEADER_BIT, std::memory_order_seq_cst)) {
+      continue;
+    }
+
+    /* Nobody new gets a group now: wait for the ones that have one. */
+    for (int k{}; ((bits = m_bits.load(std::memory_order_seq_cst)) & ALL_BITS) != HEADER_BIT; ++k) {
+      pause(k, bits);
+    }
+
+    /* Straight to all of them: nobody can get in, what the wait was for isn't to be given away. */
+    m_bits.fetch_or(ALL_BITS, std::memory_order_seq_cst);
+
+    /* Acquire: what a write of the page read of the frame is before what the owner changes. */
+    if (!rw_x && std::atomic_ref<uint8_t>(m_page.m_io_fix).load(std::memory_order_acquire) == BUF_IO_WRITE) {
+      /* Nothing was changed, and a read needn't know. */
+      if ((m_bits.exchange(0, std::memory_order_release) & WAITERS_BIT) != 0) {
+        m_bits.notify_all();
+      }
+
+      continue;
+    }
+
+    m_version.store(m_version.load(std::memory_order_relaxed) + 1, std::memory_order_relaxed);
+
+    /* The version goes odd before anything the owner writes. */
+    std::atomic_thread_fence(std::memory_order_release);
+
+    ut_d(m_bits_owner.store(bits_self(), std::memory_order_relaxed));
+
+    return;
+  }
+}
+
+void BufBlock::group_lock(ulint bit) noexcept {
+  const auto mask = uint64_t{1} << bit;
+
+  for (int i{};; ++i) {
+    if (wait_for_page_write(m_page)) {
+      continue;
+    }
+
+    auto bits = m_bits.load(std::memory_order_relaxed);
+
+    if ((bits & (HEADER_BIT | mask)) == 0) {
+      if (!m_bits.compare_exchange_weak(bits, bits | mask, std::memory_order_seq_cst)) {
+        continue;
+      }
+
+      if (std::atomic_ref<uint8_t>(m_page.m_io_fix).load(std::memory_order_acquire) != BUF_IO_WRITE) {
+        return;
+      }
+
+      /* Nothing was changed. */
+      group_unlock(bit);
+
+    } else if (i < N_BIT_SPINS) {
+
+      UT_RELAX_CPU();
+
+    } else {
+
+      bits_wait(bits);
+    }
+  }
+}
+
+void BufBlock::group_unlock(ulint bit) noexcept {
+  if ((m_bits.fetch_and(~(uint64_t{1} << bit), std::memory_order_release) & WAITERS_BIT) != 0) {
+    /* Whoever set it after this sees a change of the word first, or has another to notify it. */
+    m_bits.fetch_and(~WAITERS_BIT, std::memory_order_relaxed);
+    m_bits.notify_all();
+  }
+}
+
+void BufBlock::bits_unlock() noexcept {
+  ut_d(m_bits_owner.store(0, std::memory_order_relaxed));
+
+  m_version.store(m_version.load(std::memory_order_relaxed) + 1, std::memory_order_release);
+
+  if ((m_bits.exchange(0, std::memory_order_release) & WAITERS_BIT) != 0) {
+    m_bits.notify_all();
+  }
+}
+
+void BufBlock::bits_wait_free() noexcept {
+  /* With the mark seen by whoever owns it after this, or the owner seen here: see bits_try_lock(). */
+  std::atomic_thread_fence(std::memory_order_seq_cst);
+
+  for (;;) {
+    const auto bits = m_bits.load(std::memory_order_seq_cst);
+
+    if ((bits & ALL_BITS) == 0) {
+      return;
+    }
+
+    bits_wait(bits);
+  }
+}
+
 void BufPool::release(BufBlock *block, ulint rw_latch, Mtr *mtr) {
   ut_a(block->get_state() == BUF_BLOCK_FILE_PAGE);
   /* Unlatched read of our own fix: relaxed, see BufPage::get_fix_count(). */
   ut_a(block->m_page.get_fix_count() > 0);
 
-  if (rw_latch == RW_X_LATCH && mtr->m_modifications) {
+  const auto group_held = rw_latch >= MTR_MEMO_PAGE_G0;
+
+  if ((rw_latch == RW_X_LATCH || rw_latch == RW_B_LATCH || rw_latch == RW_B_HELD || group_held) && mtr->m_modifications) {
     mutex_acquire();
 
     m_flusher->note_modification(block, mtr);
 
     mutex_release();
+  }
+
+  /* While it's fixed: nothing may find it owned and free to be evicted. */
+  if (rw_latch == RW_B_LATCH) {
+    block->bits_unlock();
+  } else if (group_held) {
+    block->group_unlock(rw_latch - MTR_MEMO_PAGE_G0);
   }
 
   mutex_enter(&block->m_mutex);
@@ -310,6 +516,7 @@ void BufPool::release(BufBlock *block, ulint rw_latch, Mtr *mtr) {
   if (rw_latch == RW_S_LATCH) {
     rw_lock_s_unlock(&(block->m_rw_lock));
   } else if (rw_latch == RW_X_LATCH) {
+    block->x_unlocking();
     rw_lock_x_unlock(&(block->m_rw_lock));
   }
 }
@@ -422,6 +629,12 @@ void BufPool::block_init(BufBlock *block, byte *frame) {
   block->m_page.m_io_fix = BUF_IO_NONE;
 
   block->m_modify_clock = 0;
+  block->m_bits.store(0, std::memory_order_relaxed);
+  block->m_queued_ops.store(nullptr, std::memory_order_relaxed);
+  block->m_rec_writes_begun.store(0, std::memory_order_relaxed);
+  block->m_rec_writes_ended.store(0, std::memory_order_relaxed);
+  block->m_version.store(0, std::memory_order_relaxed);
+  ut_d(block->m_bits_owner.store(0, std::memory_order_relaxed));
 
   ut_d(block->m_page.m_file_page_was_freed = false);
 
@@ -467,6 +680,9 @@ BufChunk *BufPool::chunk_init(BufChunk *chunk, ulint mem_size) {
 
   /* Allocate the block descriptors from the start of the memory block. */
   chunk->blocks = (BufBlock *)chunk->mem;
+
+  /* The bits are on a line of their own: see BufBlock. */
+  ut_a(ut_align_offset(chunk->mem, alignof(BufBlock)) == 0);
 
   /* Align a pointer to the first frame.  Note that when os_large_page_size is
   smaller than UNIV_PAGE_SIZE, we may allocate one fewer block than requested.
@@ -769,7 +985,7 @@ BufBlock *BufPool::get(Request &req, BufBlock *guess) {
 
   ut_ad(req.m_mtr != nullptr);
   ut_ad(req.m_mtr->m_state == MTR_ACTIVE);
-  ut_ad(req.m_rw_latch == RW_S_LATCH || req.m_rw_latch == RW_X_LATCH || req.m_rw_latch == RW_NO_LATCH);
+  ut_ad(req.m_rw_latch == RW_B_LATCH || req.m_rw_latch == RW_B_HELD || req.m_rw_latch == RW_S_LATCH || req.m_rw_latch == RW_X_LATCH || req.m_rw_latch == RW_NO_LATCH);
   ut_ad(req.m_mode != BUF_GET_NO_LATCH || req.m_rw_latch == RW_NO_LATCH);
   ut_ad(req.m_mode == BUF_GET || req.m_mode == BUF_GET_IF_IN_POOL || req.m_mode == BUF_GET_NO_LATCH);
 
@@ -903,6 +1119,21 @@ BufBlock *BufPool::get(Request &req, BufBlock *guess) {
       fix_type = MTR_MEMO_BUF_FIX;
       break;
 
+    case RW_B_LATCH:
+      /* The I/O of a read has the RW latch, which isn't taken here. */
+      while (must_read && buf_block_get_io_fix(block) == BUF_IO_READ) {
+        os_thread_sleep(WAIT_FOR_READ);
+      }
+
+      block->bits_lock();
+
+      fix_type = MTR_MEMO_PAGE_B_FIX;
+      break;
+
+    case RW_B_HELD:
+      fix_type = MTR_MEMO_PAGE_B_HELD;
+      break;
+
     case RW_S_LATCH:
       rw_lock_s_lock_func(&block->m_rw_lock, 0, req.m_file, req.m_line);
 
@@ -912,6 +1143,7 @@ BufBlock *BufPool::get(Request &req, BufBlock *guess) {
     default:
       ut_ad(req.m_rw_latch == RW_X_LATCH);
       rw_lock_x_lock_func(&block->m_rw_lock, 0, req.m_file, req.m_line);
+      block->x_locked();
 
       fix_type = MTR_MEMO_PAGE_X_FIX;
       break;
@@ -932,7 +1164,7 @@ bool BufPool::try_get(Request &req) {
   ut_ad(req.m_guess != nullptr);
   ut_ad(req.m_mtr != nullptr);
   ut_ad(req.m_mtr->m_state == MTR_ACTIVE);
-  ut_ad(req.m_rw_latch == RW_S_LATCH || req.m_rw_latch == RW_X_LATCH);
+  ut_ad(req.m_rw_latch == RW_NO_LATCH || req.m_rw_latch == RW_B_LATCH || req.m_rw_latch == RW_S_LATCH || req.m_rw_latch == RW_X_LATCH);
 
   mutex_enter(&req.m_guess->m_mutex);
 
@@ -959,7 +1191,20 @@ bool BufPool::try_get(Request &req) {
   MtrMemoType fix_type;
 
   /* The "try" part. */
-  if (req.m_rw_latch == RW_S_LATCH) {
+  if (req.m_rw_latch == RW_NO_LATCH) {
+
+    /* The fix is all that's asked for. Nothing holds the clock still, the caller validates what it
+    knows of the page some other way, see BufBlock::m_version. */
+    req.m_mtr->memo_push(req.m_guess, MTR_MEMO_BUF_FIX);
+
+    return true;
+
+  } else if (req.m_rw_latch == RW_B_LATCH) {
+
+    success = req.m_guess->bits_try_lock();
+    fix_type = MTR_MEMO_PAGE_B_FIX;
+
+  } else if (req.m_rw_latch == RW_S_LATCH) {
 
     success = rw_lock_s_lock_nowait(&req.m_guess->m_rw_lock, req.m_file, req.m_line);
     fix_type = MTR_MEMO_PAGE_S_FIX;
@@ -969,6 +1214,11 @@ bool BufPool::try_get(Request &req) {
     ut_a(req.m_rw_latch == RW_X_LATCH);
 
     success = rw_lock_x_lock_func_nowait(&req.m_guess->m_rw_lock, req.m_file, req.m_line);
+
+    if (success) {
+      req.m_guess->x_locked();
+    }
+
     fix_type = MTR_MEMO_PAGE_X_FIX;
   }
 
@@ -986,12 +1236,17 @@ bool BufPool::try_get(Request &req) {
 
     buf_block_dbg_add_level();
 
-    if (req.m_rw_latch == RW_S_LATCH) {
+    if (req.m_rw_latch == RW_B_LATCH) {
+
+      req.m_guess->bits_unlock();
+
+    } else if (req.m_rw_latch == RW_S_LATCH) {
 
       rw_lock_s_unlock(&req.m_guess->m_rw_lock);
 
     } else {
 
+      req.m_guess->x_unlocking();
       rw_lock_x_unlock(&req.m_guess->m_rw_lock);
     }
 
@@ -1081,6 +1336,11 @@ bool BufPool::try_get_known_nowait(Request &req) {
     fix_type = MTR_MEMO_PAGE_S_FIX;
   } else {
     success = rw_lock_x_lock_func_nowait(&req.m_guess->m_rw_lock, req.m_file, req.m_line);
+
+    if (success) {
+      req.m_guess->x_locked();
+    }
+
     fix_type = MTR_MEMO_PAGE_X_FIX;
   }
 
@@ -1149,6 +1409,10 @@ const BufBlock *BufPool::try_get_by_page_id(Request &req) {
 
     fix_type = MTR_MEMO_PAGE_X_FIX;
     success = rw_lock_x_lock_func_nowait(&block->m_rw_lock, req.m_file, req.m_line);
+
+    if (success) {
+      block->x_locked();
+    }
   }
 
   if (!success) {
@@ -1189,6 +1453,9 @@ void BufPool::page_init_low(BufPage *bpage) {
 }
 
 void BufPool::page_init(const PageId &page_id, BufBlock *block) {
+  /* What anybody validated against is of the page that was here. */
+  block->m_version.store(block->m_version.load(std::memory_order_relaxed) + 2, std::memory_order_release);
+
   ut_ad(mutex_own(&m_mutex));
   ut_ad(mutex_own(&(block->m_mutex)));
   ut_a(block->get_state() != BUF_BLOCK_FILE_PAGE);

@@ -25,6 +25,7 @@ Modified 2024-Oct-15 Sunny Bains
 
 #include "btr0btr.h"
 #include "btr0pcur.h"
+#include "idx0am.h"
 #include "buf0flu.h"
 #include "ddl0ddl.h"
 #include "dict0dict.h"
@@ -118,7 +119,11 @@ bool DictStore::bootstrap_system_tables(Mtr *mtr) noexcept {
 
   /* Create the B-tree roots for the clustered indexes of the basic system tables */
 
-  auto root_page_no = m_sys.m_btree->create(DICT_CLUSTERED | DICT_UNIQUE, DICT_HDR_SPACE, DICT_TABLES_ID, m_sys.m_dict->m_dummy_index, mtr);
+  const auto am = m_sys.new_index_am();
+
+  mlog_write_ulint(hdr + DICT_HDR_SYS_AM, am, MLOG_4BYTES, mtr);
+
+  auto root_page_no = m_sys.am_of_type(DICT_CLUSTERED | DICT_UNIQUE | am).create(DICT_CLUSTERED | DICT_UNIQUE | am, DICT_HDR_SPACE, DICT_TABLES_ID, m_sys.m_dict->m_dummy_index, mtr);
 
   if (root_page_no == FIL_NULL) {
 
@@ -127,7 +132,7 @@ bool DictStore::bootstrap_system_tables(Mtr *mtr) noexcept {
 
   mlog_write_ulint(hdr + DICT_HDR_TABLES, root_page_no, MLOG_4BYTES, mtr);
 
-  root_page_no = m_sys.m_btree->create(DICT_UNIQUE, DICT_HDR_SPACE, DICT_TABLE_IDS_ID, m_sys.m_dict->m_dummy_index, mtr);
+  root_page_no = m_sys.am_of_type(DICT_UNIQUE | am).create(DICT_UNIQUE | am, DICT_HDR_SPACE, DICT_TABLE_IDS_ID, m_sys.m_dict->m_dummy_index, mtr);
 
   if (root_page_no == FIL_NULL) {
 
@@ -136,7 +141,7 @@ bool DictStore::bootstrap_system_tables(Mtr *mtr) noexcept {
 
   mlog_write_ulint(hdr + DICT_HDR_TABLE_IDS, root_page_no, MLOG_4BYTES, mtr);
 
-  root_page_no = m_sys.m_btree->create(DICT_CLUSTERED | DICT_UNIQUE, DICT_HDR_SPACE, DICT_COLUMNS_ID, m_sys.m_dict->m_dummy_index, mtr);
+  root_page_no = m_sys.am_of_type(DICT_CLUSTERED | DICT_UNIQUE | am).create(DICT_CLUSTERED | DICT_UNIQUE | am, DICT_HDR_SPACE, DICT_COLUMNS_ID, m_sys.m_dict->m_dummy_index, mtr);
 
   if (root_page_no == FIL_NULL) {
 
@@ -145,7 +150,7 @@ bool DictStore::bootstrap_system_tables(Mtr *mtr) noexcept {
 
   mlog_write_ulint(hdr + DICT_HDR_COLUMNS, root_page_no, MLOG_4BYTES, mtr);
 
-  root_page_no = m_sys.m_btree->create(DICT_CLUSTERED | DICT_UNIQUE, DICT_HDR_SPACE, DICT_INDEXES_ID, m_sys.m_dict->m_dummy_index, mtr);
+  root_page_no = m_sys.am_of_type(DICT_CLUSTERED | DICT_UNIQUE | am).create(DICT_CLUSTERED | DICT_UNIQUE | am, DICT_HDR_SPACE, DICT_INDEXES_ID, m_sys.m_dict->m_dummy_index, mtr);
 
   if (root_page_no == FIL_NULL) {
 
@@ -154,7 +159,7 @@ bool DictStore::bootstrap_system_tables(Mtr *mtr) noexcept {
 
   mlog_write_ulint(hdr + DICT_HDR_INDEXES, root_page_no, MLOG_4BYTES, mtr);
 
-  root_page_no = m_sys.m_btree->create(DICT_CLUSTERED | DICT_UNIQUE, DICT_HDR_SPACE, DICT_FIELDS_ID, m_sys.m_dict->m_dummy_index, mtr);
+  root_page_no = m_sys.am_of_type(DICT_CLUSTERED | DICT_UNIQUE | am).create(DICT_CLUSTERED | DICT_UNIQUE | am, DICT_HDR_SPACE, DICT_FIELDS_ID, m_sys.m_dict->m_dummy_index, mtr);
 
   if (root_page_no == FIL_NULL) {
 
@@ -552,6 +557,9 @@ DbErr DictStore::build_index_def_step(QueThr *thr, IndexNode *node) noexcept {
 
   ut_ad(!index->m_table->m_indexes.empty() || index->is_clustered());
 
+  /* Whatever a definition it was made from says, it's a new index of this instance. */
+  index->m_type = unsigned((index->m_type & ~DICT_BLINK) | m_sys.new_index_am());
+
   index->m_id = hdr_get_new_id(DictIdType::INDEX_ID);
 
   /* Inherit the space id from the table; we store all indexes of a
@@ -585,7 +593,7 @@ DbErr DictStore::build_field_def_step(IndexNode *node) noexcept {
 DbErr DictStore::create_index_tree_step(IndexNode *node) noexcept {
   ut_ad(mutex_own(&m_sys.m_dict->m_mutex));
 
-  BtreePcursor pcur{};
+  IndexCursor pcur{m_sys};
 
   auto index = node->m_index;
   auto sys_indexes = m_sys.m_dict->m_sys_indexes;
@@ -600,15 +608,13 @@ DbErr DictStore::create_index_tree_step(IndexNode *node) noexcept {
 
   auto search_tuple = create_search_tuple(node->m_ind_row, node->m_heap);
 
-  pcur.open(m_sys, sys_indexes->m_indexes.front(), search_tuple, PAGE_CUR_L, BTR_MODIFY_LEAF, &mtr, Current_location());
-
-  (void)pcur.move_to_next_user_rec(m_sys, &mtr);
+  pcur.seek(sys_indexes->m_indexes.front(), search_tuple, PAGE_CUR_GE, Intent::Write, &mtr);
 
   m_sys.m_fsp->latch(index->m_page_id.m_space_id, &mtr);
 
-  node->m_page_no = m_sys.m_btree->create(index->m_type, index->m_page_id.m_space_id, index->m_id, index, &mtr);
+  node->m_page_no = m_sys.am(index).create(index->m_type, index->m_page_id.m_space_id, index->m_id, index, &mtr);
 
-  page_rec_write_index_page_no(pcur.get_rec(), DICT_SYS_INDEXES_PAGE_NO_FIELD, node->m_page_no, &mtr);
+  page_rec_write_index_page_no(pcur.rec(), DICT_SYS_INDEXES_PAGE_NO_FIELD, node->m_page_no, &mtr);
 
   pcur.close();
 
@@ -650,6 +656,12 @@ void DictStore::drop_index_tree(Rec rec, Mtr *mtr) noexcept {
 
   auto space_id = static_cast<space_id_t>(mtr->read_ulint(field.get(), MLOG_4BYTES));
 
+  field = rec.get_nth_field(offsets, DICT_SYS_INDEXES_TYPE_FIELD, &len);
+
+  ut_ad(len == 4);
+
+  const auto type = mtr->read_ulint(field.get(), MLOG_4BYTES);
+
   mem_heap_free(heap);
 
   if (m_sys.m_fil->space_get_flags(space_id) == ULINT_UNDEFINED) {
@@ -661,7 +673,9 @@ void DictStore::drop_index_tree(Rec rec, Mtr *mtr) noexcept {
   /* We free all the pages but the root page first; this operation
   may span several mini-transactions */
 
-  m_sys.m_btree->free_but_not_root(space_id, root_page_no);
+  auto &am = m_sys.am_of_type(type);
+
+  am.drop_data(space_id, root_page_no);
 
   /* Then we free the root page in the same mini-transaction where
   we write FIL_NULL to the appropriate field in the SYS_INDEXES
@@ -669,12 +683,12 @@ void DictStore::drop_index_tree(Rec rec, Mtr *mtr) noexcept {
 
   m_sys.m_fsp->latch(space_id, mtr);
 
-  m_sys.m_btree->free_root(space_id, root_page_no, mtr);
+  am.drop_root(space_id, root_page_no, mtr);
 
   page_rec_write_index_page_no(rec, DICT_SYS_INDEXES_PAGE_NO_FIELD, FIL_NULL, mtr);
 }
 
-page_no_t DictStore::truncate_index_tree(Table *table, space_id_t space_id, BtreePcursor *pcur, Mtr *mtr) noexcept {
+page_no_t DictStore::truncate_index_tree(Table *table, space_id_t space_id, IndexCursor *pcur, Mtr *mtr) noexcept {
   ut_ad(mutex_own(&m_sys.m_dict->m_mutex));
 
   /* A space id other than SYS_TABLESPACE is a freshly created single-table
@@ -685,7 +699,7 @@ page_no_t DictStore::truncate_index_tree(Table *table, space_id_t space_id, Btre
   auto sys_indexes = m_sys.m_dict->table_get("SYS_INDEXES");
   auto sys_index = sys_indexes->m_indexes.front();
   auto heap = mem_heap_create(1000);
-  auto rec = pcur->get_rec();
+  auto rec = pcur->rec();
   PhyRec record(sys_index, rec);
   auto offsets = record.get_col_offsets(nullptr, sys_index->get_n_fields(), &heap, Current_location());
   ulint len;
@@ -737,18 +751,16 @@ page_no_t DictStore::truncate_index_tree(Table *table, space_id_t space_id, Btre
     /* We free all the pages but the root page first; this operation
     may span several mini-transactions */
 
-    m_sys.m_btree->free_but_not_root(space_id, root_page_no);
+    m_sys.am_of_type(type).drop_data(space_id, root_page_no);
 
     /* Then we free the root page in the same mini-transaction where
     we create the b-tree and write its new root page number to the
     appropriate field in the SYS_INDEXES record: this mini-transaction
     marks the B-tree totally truncated */
 
-    (void)m_sys.m_btree->page_get(space_id, root_page_no, RW_X_LATCH, mtr);
-
     m_sys.m_fsp->latch(space_id, mtr);
 
-    m_sys.m_btree->free_root(space_id, root_page_no, mtr);
+    m_sys.am_of_type(type).drop_root(space_id, root_page_no, mtr);
   }
 
   /* We will temporarily write FIL_NULL to the PAGE_NO field
@@ -760,20 +772,20 @@ page_no_t DictStore::truncate_index_tree(Table *table, space_id_t space_id, Btre
   /* We will need to commit the mini-transaction in order to avoid
   deadlocks in the btr_create() call, because otherwise we would
   be freeing and allocating pages in the same mini-transaction. */
-  pcur->store_position(m_sys, mtr);
+  pcur->save(mtr);
 
   mtr->commit(m_sys);
 
   mtr->start();
 
-  (void)pcur->restore_position(m_sys, BTR_MODIFY_LEAF, mtr, Current_location());
+  (void)pcur->restore(Intent::Write, mtr);
 
   /* Find the index corresponding to this SYS_INDEXES record. */
   for (auto index : table->m_indexes) {
     if (index->m_id == index_id) {
       m_sys.m_fsp->latch(space_id, mtr);
 
-      root_page_no = m_sys.m_btree->create(type, space_id, index_id, index, mtr);
+      root_page_no = m_sys.am(index).create(type, space_id, index_id, index, mtr);
       index->m_page_id.m_page_no = root_page_no;
 
       return root_page_no;

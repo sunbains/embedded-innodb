@@ -27,7 +27,7 @@ Created 12/19/1997 Heikki Tuuri
 #include "srv0sys.h"
 
 #include "innodb0types.h"
-#include "btr0pcur.h"
+#include "idx0am.h"
 #include "data0data.h"
 #include "dict0types.h"
 #include "innodb0types.h"
@@ -263,7 +263,7 @@ struct RowSel {
    *
    * @param[out] same_user_rec true if we were able to restore the cursor on a user
    * record with the same ordering prefix in the B-tree index
-   * @param[in] latch_mode latch mode wished in restoration
+   * @param[in] intent what the caller does at the position
    * @param[in] pcur cursor whose position has been stored
    * @param[in] moves_up true if the cursor moves up in the index
    * @param[in] mtr mtr; CAUTION: may commit mtr temporarily!
@@ -272,7 +272,7 @@ struct RowSel {
    * (i.e. we should not go to the next record yet)
    */
   [[nodiscard]] bool restore_position(
-    bool *same_user_rec, ulint latch_mode, BtreePcursor *pcur, bool moves_up, Mtr *mtr
+    bool *same_user_rec, Intent intent, IndexCursor *pcur, bool moves_up, Mtr *mtr
   ) noexcept;
 
   /**
@@ -486,8 +486,9 @@ struct Plan {
    * Closes cursor and free the old version heap.
    */
   void close() noexcept {
-    m_pcur.close();
-    m_clust_pcur.close();
+    /* A plan is freed with the heap of the graph, without its destructor. */
+    m_pcur.release();
+    m_clust_pcur.release();
 
     if (likely(m_old_row_heap != nullptr)) {
       mem_heap_free(m_old_row_heap);
@@ -502,7 +503,7 @@ struct Plan {
   Index *m_index{};
 
   /** persistent cursor used to search the index */
-  BtreePcursor m_pcur{};
+  IndexCursor m_pcur{};
 
   /** true if cursor traveling upwards */
   bool m_asc{};
@@ -574,7 +575,7 @@ struct Plan {
   DTuple *m_clust_ref{};
 
   /** if index is non-clustered, we use this pcur to search the clustered index */
-  BtreePcursor m_clust_pcur{};
+  IndexCursor m_clust_pcur{};
 
   /** memory heap used in building an old version of a row, or nullptr */
   MemHeap *m_old_row_heap{};

@@ -24,10 +24,19 @@ SX mode. */
 #include "ut0perf.h"
 
 #include "os0sync.h"
+#include "sync0latch.h"
 #include "sync0rw.h"
 #include "sync0sync.h"
 
+#include <sys/wait.h>
+#include <unistd.h>
+
+#include <algorithm>
+#include <array>
 #include <atomic>
+#include <fstream>
+#include <memory>
+#include <string>
 #include <chrono>
 #include <thread>
 #include <vector>
@@ -590,6 +599,380 @@ TEST_F(RwLockTest, FreeLockedAsserts) {
 }
 #endif /* UNIV_DEBUG */
 
+/** An RwLatch created and destroyed with the test. */
+struct RwLatchTest : public ::testing::Test {
+  void SetUp() override { m_latch.create(); }
+
+  void TearDown() override { m_latch.destroy(); }
+
+  RwLatch m_latch;
+};
+
+/** S holders exclude X, an X holder excludes both. */
+TEST_F(RwLatchTest, Excludes) {
+  m_latch.s_lock();
+
+  in_thread([&] {
+    EXPECT_TRUE(m_latch.try_s_lock());
+    m_latch.s_unlock();
+    EXPECT_FALSE(m_latch.try_x_lock());
+  });
+
+  m_latch.s_unlock();
+  m_latch.x_lock();
+
+  in_thread([&] {
+    EXPECT_FALSE(m_latch.try_s_lock());
+    EXPECT_FALSE(m_latch.try_x_lock());
+  });
+
+  m_latch.x_unlock();
+
+  in_thread([&] {
+    EXPECT_TRUE(m_latch.try_x_lock());
+    m_latch.x_unlock();
+  });
+}
+
+/** Waiters block and get the latch at the release. */
+TEST_F(RwLatchTest, Waits) {
+  std::atomic<int> stage{};
+
+  m_latch.s_lock();
+
+  std::thread writer([&] {
+    m_latch.x_lock();
+    stage = 1;
+    m_latch.x_unlock();
+  });
+
+  std::this_thread::sleep_for(50ms);
+  EXPECT_EQ(stage.load(), 0);
+
+  m_latch.s_unlock();
+  writer.join();
+  EXPECT_EQ(stage.load(), 1);
+
+  m_latch.x_lock();
+
+  std::thread reader([&] {
+    m_latch.s_lock();
+    stage = 2;
+    m_latch.s_unlock();
+  });
+
+  std::this_thread::sleep_for(50ms);
+  EXPECT_EQ(stage.load(), 1);
+
+  m_latch.x_unlock();
+  reader.join();
+  EXPECT_EQ(stage.load(), 2);
+}
+
+/** Plain data under the latch, for the race detector too. */
+TEST_F(RwLatchTest, Stress) {
+  constexpr int n_writers{4};
+  constexpr int n_readers{8};
+  constexpr int n_writes{20000};
+  uint64_t a{};
+  uint64_t b{};
+  std::atomic<bool> done{};
+  std::vector<std::thread> readers;
+
+  for (int i = 0; i < n_readers; ++i) {
+    readers.emplace_back([&] {
+      while (!done.load(std::memory_order_relaxed)) {
+        m_latch.s_lock();
+        EXPECT_EQ(a, b);
+        m_latch.s_unlock();
+      }
+    });
+  }
+
+  std::vector<std::thread> writers;
+
+  for (int i = 0; i < n_writers; ++i) {
+    writers.emplace_back([&] {
+      for (int j = 0; j < n_writes; ++j) {
+        m_latch.x_lock();
+        ++a;
+        ++b;
+        m_latch.x_unlock();
+      }
+    });
+  }
+
+  for (auto &t : writers) {
+    t.join();
+  }
+
+  done = true;
+
+  for (auto &t : readers) {
+    t.join();
+  }
+
+  EXPECT_EQ(a, uint64_t(n_writers * n_writes));
+  EXPECT_EQ(b, a);
+}
+
+/** A nested S doesn't wait for a waiting writer, and the latch is free only after the last release. */
+TEST_F(RwLatchTest, NestedS) {
+  std::atomic<bool> got{};
+
+  m_latch.s_lock();
+
+  std::thread writer([&] {
+    m_latch.x_lock();
+    got = true;
+    m_latch.x_unlock();
+  });
+
+  std::this_thread::sleep_for(50ms);
+
+  m_latch.s_lock();
+  m_latch.s_lock();
+  EXPECT_FALSE(got.load());
+
+  m_latch.s_unlock();
+  m_latch.s_unlock();
+  std::this_thread::sleep_for(50ms);
+  EXPECT_FALSE(got.load());
+
+  m_latch.s_unlock();
+  writer.join();
+  EXPECT_TRUE(got.load());
+}
+
+/** The try forms refuse what lock would die on, and leave the holds as they were. */
+TEST_F(RwLatchTest, Try) {
+  ASSERT_TRUE(m_latch.try_s_lock());
+  EXPECT_TRUE(m_latch.try_s_lock()) << "S nests";
+  EXPECT_FALSE(m_latch.try_x_lock()) << "X in S";
+  m_latch.s_unlock();
+  EXPECT_FALSE(m_latch.try_x_lock()) << "still one S";
+  m_latch.s_unlock();
+
+  ASSERT_TRUE(m_latch.try_x_lock());
+  EXPECT_FALSE(m_latch.try_x_lock()) << "X in X";
+  EXPECT_FALSE(m_latch.try_s_lock()) << "S in X";
+  m_latch.x_unlock();
+
+  in_thread([&] {
+    EXPECT_TRUE(m_latch.try_x_lock());
+    m_latch.x_unlock();
+  });
+}
+
+/** What can't nest ends the process, as it would be a self deadlock. */
+TEST_F(RwLatchTest, NoRecursion) {
+  m_latch.x_lock();
+  EXPECT_DEATH(m_latch.x_lock(), "EDEADLK");
+  EXPECT_DEATH(m_latch.s_lock(), "EDEADLK");
+  m_latch.x_unlock();
+
+  m_latch.s_lock();
+  EXPECT_DEATH(m_latch.x_lock(), "EDEADLK");
+  m_latch.s_unlock();
+}
+
+#ifdef UNIV_DEBUG
+/** The debug checks that replace the owner tracking of the old lock. */
+TEST_F(RwLatchTest, Own) {
+  EXPECT_FALSE(m_latch.s_own());
+  EXPECT_FALSE(m_latch.x_own());
+
+  m_latch.s_lock();
+  EXPECT_TRUE(m_latch.s_own());
+  EXPECT_FALSE(m_latch.x_own());
+  in_thread([&] { EXPECT_FALSE(m_latch.s_own()); });
+  m_latch.s_unlock();
+  EXPECT_FALSE(m_latch.s_own());
+
+  m_latch.x_lock();
+  EXPECT_TRUE(m_latch.x_own());
+  EXPECT_FALSE(m_latch.s_own());
+  in_thread([&] { EXPECT_FALSE(m_latch.x_own()); });
+  m_latch.x_unlock();
+  EXPECT_FALSE(m_latch.x_own());
+}
+
+/** A release in a thread that didn't take the latch is caught, in the debug build. */
+TEST_F(RwLatchTest, OtherThread) {
+  m_latch.s_lock();
+  EXPECT_DEATH(in_thread([&] { m_latch.s_unlock(); }), "s_own");
+  m_latch.s_unlock();
+
+  m_latch.x_lock();
+  EXPECT_DEATH(in_thread([&] { m_latch.x_unlock(); }), "x_own");
+  m_latch.x_unlock();
+}
+#endif /* UNIV_DEBUG */
+
+/** Destroying a taken latch is caught, in every build. */
+TEST_F(RwLatchTest, DestroyLocked) {
+  m_latch.x_lock();
+  EXPECT_DEATH(m_latch.destroy(), "is_quiescent");
+  m_latch.x_unlock();
+
+  m_latch.s_lock();
+  EXPECT_DEATH(m_latch.destroy(), "is_quiescent");
+  m_latch.s_unlock();
+}
+
+/** @return the resident size of this process in KiB. */
+size_t rss_kb() {
+  std::ifstream in("/proc/self/status");
+  std::string word;
+
+  while (in >> word) {
+    if (word == "VmRSS:") {
+      size_t kb{};
+
+      in >> kb;
+      return kb;
+    }
+  }
+
+  return 0;
+}
+
+/** More live latches than a big instance has tablespaces, twice. The pool has no fixed limit, and the
+second round runs on what the first one freed: the pool never returns memory, but it does reuse it. */
+TEST(RwLatch, Many) {
+  constexpr size_t n{300000};
+  [[maybe_unused]] size_t first{};
+
+  std::fprintf(stderr, "latch: object %zu B, in the pool %zu B\n", sizeof(RwLatch), latch::RwLockCore<latch::default_order>::footprint());
+
+  for (int round = 0; round < 2; ++round) {
+    const auto before = rss_kb();
+    auto latches = std::make_unique_for_overwrite<RwLatch[]>(n);
+
+    for (size_t i = 0; i < n; ++i) {
+      latches[i].create();
+    }
+
+    /* Each of them must work, whichever column of the reader table it shares. */
+    for (size_t i = 0; i < n; i += 97) {
+      latches[i].s_lock();
+      latches[i].s_unlock();
+      latches[i].x_lock();
+      latches[i].x_unlock();
+    }
+
+    for (size_t i = 0; i < n; ++i) {
+      latches[i].destroy();
+    }
+
+    const auto grown = rss_kb() - before;
+
+    std::fprintf(stderr, "latch: round %d of %zu latches grew the RSS by %zu KiB\n", round, n, grown);
+
+    if (round == 0) {
+      first = grown;
+    } else {
+#if !defined(__SANITIZE_THREAD__) && !defined(__SANITIZE_ADDRESS__)
+      /* A sanitizer keeps what was freed, and its shadow of it. */
+      EXPECT_LT(grown, first / 4);
+#endif
+    }
+  }
+}
+
+/** Create, use and destroy over and over, in several threads, as tablespaces come and go. */
+TEST(RwLatch, Churn) {
+  constexpr int n_threads{8};
+  constexpr int n{100000};
+  std::vector<std::thread> threads;
+
+  for (int i = 0; i < n_threads; ++i) {
+    threads.emplace_back([&] {
+      RwLatch latch;
+
+      for (int j = 0; j < n; ++j) {
+        latch.create();
+        latch.s_lock();
+        latch.s_unlock();
+        latch.x_lock();
+        latch.x_unlock();
+        latch.destroy();
+      }
+    });
+  }
+
+  for (auto &t : threads) {
+    t.join();
+  }
+}
+
+/** Thread states go back to the pool: more threads over time than there are rows in the reader
+table would otherwise be a problem. Fewer live at once than rows, as a real process has. */
+TEST(RwLatch, Threads) {
+  RwLatch latch;
+
+  latch.create();
+
+  for (int i = 0; i < 2000; ++i) {
+    in_thread([&] {
+      latch.s_lock();
+      latch.s_unlock();
+    });
+  }
+
+  latch.x_lock();
+  latch.x_unlock();
+  latch.destroy();
+}
+
+/** A fork as in DbTest::crash(). The child sees the state of a thread that is gone, here holding an
+S latch on a latch of the parent. New latches work in the child, and taking the old one with the
+try form is refused. It must not wait for it: nothing is left in the child to release it. */
+TEST_F(RwLatchTest, Fork) {
+  std::atomic<bool> held{};
+  std::atomic<bool> stop{};
+
+  std::thread holder([&] {
+    m_latch.s_lock();
+    held = true;
+
+    while (!stop) {
+      std::this_thread::sleep_for(1ms);
+    }
+
+    m_latch.s_unlock();
+  });
+
+  ASSERT_TRUE(eventually([&] { return held.load(); }));
+
+  const auto pid = ::fork();
+
+  ASSERT_NE(pid, -1);
+
+  if (pid == 0) {
+    for (int i = 0; i < 1000; ++i) {
+      RwLatch latch;
+
+      latch.create();
+      latch.s_lock();
+      latch.s_unlock();
+      latch.x_lock();
+      latch.x_unlock();
+      latch.destroy();
+    }
+
+    ::_exit(m_latch.try_x_lock() ? 1 : 0);
+  }
+
+  int status{};
+
+  ASSERT_EQ(::waitpid(pid, &status, 0), pid);
+  EXPECT_TRUE(WIFEXITED(status) && WEXITSTATUS(status) == 0) << status;
+
+  stop = true;
+  holder.join();
+}
+
 /** A CondVar created and destroyed with the test. */
 struct EventTest : public ::testing::Test {
   void SetUp() override { m_event = os_event_create(nullptr); }
@@ -844,6 +1227,118 @@ TEST_F(RwLockPerf, Mixed) {
 
     EXPECT_LT(r.ns_per_op(), 200000.0);
   }
+}
+
+/** Run acquire and release pairs for a while, write_pct percent of them in X, with a short
+critical section over one cache line. @return ns per operation over all the threads, the wall
+clock divided by the operations: lower is better, and it doesn't include any fixed cost per thread. */
+template <typename SLock, typename SUnlock, typename XLock, typename XUnlock>
+double latch_mix(int n_threads, uint32_t write_pct, SLock &&s, SUnlock &&su, XLock &&x, XUnlock &&xu) {
+  struct alignas(128) Count {
+    uint64_t m_ops{};
+  };
+
+  alignas(64) std::array<uint64_t, 8> data{};
+  std::vector<Count> counts(n_threads);
+  std::vector<std::thread> threads;
+  std::atomic<bool> go{};
+  std::atomic<bool> stop{};
+
+  for (int i = 0; i < n_threads; ++i) {
+    threads.emplace_back([&, i] {
+      uint64_t rnd = 0x9E3779B97F4A7C15ULL * uint64_t(i + 1);
+      uint64_t ops{};
+
+      while (!go.load(std::memory_order_acquire)) {
+        std::this_thread::yield();
+      }
+
+      while (!stop.load(std::memory_order_relaxed)) {
+        rnd ^= rnd << 13;
+        rnd ^= rnd >> 7;
+        rnd ^= rnd << 17;
+
+        if (rnd % 100 < write_pct) {
+          x();
+          for (auto &v : data) {
+            ++v;
+          }
+          xu();
+        } else {
+          uint64_t sum{};
+
+          s();
+          for (auto v : data) {
+            sum += v;
+          }
+          su();
+          ut::keep(sum);
+        }
+
+        ++ops;
+      }
+
+      counts[i].m_ops = ops;
+    });
+  }
+
+  const auto start = std::chrono::steady_clock::now();
+
+  go.store(true, std::memory_order_release);
+  std::this_thread::sleep_for(300ms);
+  stop = true;
+
+  for (auto &t : threads) {
+    t.join();
+  }
+
+  const std::chrono::duration<double, std::nano> ns = std::chrono::steady_clock::now() - start;
+  uint64_t total{};
+
+  for (const auto &c : counts) {
+    total += c.m_ops;
+  }
+
+  return ns.count() / double(std::max<uint64_t>(total, 1));
+}
+
+/** RwLock against RwLatch. Each cell is the median of 3 runs. */
+TEST(LatchPerf, Mix) {
+  RwLock old_lock;
+  RwLatch new_lock;
+
+  rw_lock_create(&old_lock, SYNC_NO_ORDER_CHECK);
+  new_lock.create();
+
+  const auto median = [](auto &&run) {
+    std::array<double, 3> v{run(), run(), run()};
+
+    std::sort(v.begin(), v.end());
+    return v[1];
+  };
+
+  std::fprintf(stderr, "threads write%% old_ns new_ns\n");
+
+  for (int n : {1, 8, 48}) {
+    for (uint32_t w : {0U, 5U, 50U}) {
+      const auto old_ns = median([&] {
+        return latch_mix(
+          n, w, [&] { rw_lock_s_lock(&old_lock); }, [&] { rw_lock_s_unlock(&old_lock); }, [&] { rw_lock_x_lock(&old_lock); },
+          [&] { rw_lock_x_unlock(&old_lock); }
+        );
+      });
+      const auto new_ns = median([&] {
+        return latch_mix(
+          n, w, [&] { new_lock.s_lock(); }, [&] { new_lock.s_unlock(); }, [&] { new_lock.x_lock(); }, [&] { new_lock.x_unlock(); }
+        );
+      });
+
+      std::fprintf(stderr, "%d %u %.1f %.1f\n", n, w, old_ns, new_ns);
+    }
+  }
+
+  new_lock.destroy();
+  rw_lock_free(&old_lock);
 }
 
 using EventPerf = EventTest;

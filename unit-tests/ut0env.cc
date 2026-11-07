@@ -28,6 +28,7 @@ Scaffolding shared by the component unit tests, see ut0env.h. */
 #include "trx0sys.h"
 
 #include <cstdlib>
+#include <cstring>
 
 #include <atomic>
 #include <csignal>
@@ -183,6 +184,15 @@ Config make_config(const fs::path &dir) {
   config.m_log.m_log_dir = dir.string();
   config.m_buf_pool.m_size = 32 * 1024 * 1024;
   config.m_lock.m_wait_timeout = 10s;
+
+  /* A run of the suites on another index implementation. */
+  if (const auto batch = std::getenv("IB_INSERT_BATCH"); batch != nullptr && std::strcmp(batch, "off") == 0) {
+    config.m_dict.m_insert_batch = false;
+  }
+
+  if (const auto am = std::getenv("IB_INDEX_AM"); am != nullptr) {
+    config.m_dict.m_index_am = std::strcmp(am, "btree") == 0 ? IndexAmKind::BTREE : IndexAmKind::BLINK;
+  }
 
   /* A run of the DB suites with the clock forced high. */
   if (const auto start = std::getenv("UT_HLC_START"); start != nullptr) {

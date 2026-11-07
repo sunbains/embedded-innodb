@@ -36,7 +36,7 @@ Dict::Dict(System &sys) noexcept : m_sys(sys), m_store(sys), m_loader(sys), m_dd
 
   UT_LIST_INIT(m_table_LRU);
 
-  rw_lock_create(&m_lock, SYNC_DICT_OPERATION);
+  m_lock.create();
 
   mutex_create(&m_foreign_err_mutex, IF_DEBUG("dict_foreign_mutex", )  Current_location());
 
@@ -66,7 +66,7 @@ Dict::~Dict() noexcept {
 
   mutex_free(&m_mutex);
 
-  rw_lock_free(&m_lock);
+  m_lock.destroy();
 
   mutex_free(&m_foreign_err_mutex);
 }
@@ -1434,7 +1434,7 @@ void Dict::destroy_dummy_index(Index *&index) noexcept {
 void Dict::freeze_data_dictionary(Trx *trx) noexcept {
   ut_a(trx->m_dict_operation_lock_mode == 0);
 
-  rw_lock_s_lock(&m_lock);
+  m_lock.s_lock();
 
   trx->m_dict_operation_lock_mode = RW_S_LATCH;
 }
@@ -1442,7 +1442,7 @@ void Dict::freeze_data_dictionary(Trx *trx) noexcept {
 void Dict::unfreeze_data_dictionary(Trx *trx) noexcept {
   ut_a(trx->m_dict_operation_lock_mode == RW_S_LATCH);
 
-  rw_lock_s_unlock(&m_lock);
+  m_lock.s_unlock();
 
   trx->m_dict_operation_lock_mode = 0;
 }
@@ -1453,7 +1453,7 @@ void Dict::lock_data_dictionary(Trx *trx) noexcept {
   /* Serialize data dictionary operations with dictionary mutex:
   no deadlocks or lock waits can occur then in these operations */
 
-  rw_lock_x_lock(&m_lock);
+  m_lock.x_lock();
 
   trx->m_dict_operation_lock_mode = RW_X_LATCH;
 
@@ -1468,7 +1468,7 @@ void Dict::unlock_data_dictionary(Trx *trx) noexcept {
 
   mutex_release();
 
-  rw_lock_x_unlock(&m_lock);
+  m_lock.x_unlock();
 
   trx->m_dict_operation_lock_mode = 0;
 }

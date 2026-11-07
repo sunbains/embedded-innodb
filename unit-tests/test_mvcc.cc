@@ -1275,7 +1275,15 @@ TEST_F(Mvcc, ShutdownView) {
 
   (void)ts().open_read_view_now(0, heap);
 
-  EXPECT_EQ(ts().n_read_views(), 1u);
+  /* Purge takes a slot for the moment it opens its view: the count settles at this one. */
+  size_t n_views{};
+
+  for (int i{}; i < 10000 && (n_views = ts().n_read_views()) != 1; ++i) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  }
+
+  /* What was seen, not another look: that could catch purge again. */
+  EXPECT_EQ(n_views, 1u);
 
   stop();
 

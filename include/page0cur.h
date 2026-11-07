@@ -367,7 +367,11 @@ struct PageCursor {
    *
    * @return Number between 0 and 2^64-1
    */
+ public:
+  /** @return the next random number, for a choice of a record. */
   static uint64_t lcg_prng();
+
+ private:
 
   /**
    * @brief Tries a search shortcut based on the last insert.

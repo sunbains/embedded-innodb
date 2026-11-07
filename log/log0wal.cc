@@ -95,6 +95,9 @@ LogWalBackend::LogWalBackend(const Config &config, lsn_t start_lsn) noexcept
   // Create WAL configuration
   wal::Buffer::Config buffer_config(m_config.m_n_blocks, m_config.m_block_size);
 
+  /* A block's data starts on 8 bytes in the writer's array, whatever block it is. */
+  ut_a(buffer_config.get_data_size_in_block() % 8 == 0);
+
   wal::Pool::Config pool_config;
   pool_config.m_pool_size = m_config.m_pool_size;
 
@@ -297,12 +300,32 @@ lsn_t LogWalBackend::read(const Config &config, lsn_t start_lsn, const Consumer 
   byte order. */
   const wal::Buffer::Config buffer_config(config.m_n_blocks, config.m_block_size);
   const auto data_size = lsn_t(buffer_config.get_data_size_in_block());
-  const auto header_size = sizeof(wal::Block_header::Data);
   const auto wraps = config.m_max_file_size != 0;
   const auto n_file_blocks = wraps ? static_cast<lsn_t>(config.m_max_file_size) / config.m_block_size : LSN_MAX;
   constexpr auto BLOCK_NO_MASK = ~wal::Block_header::FLUSH_BIT_MASK;
 
-  std::vector<byte> block(config.m_block_size);
+  /* A block in the file is a header, data and a checksum. They're read to where they belong, as the
+  writer has them: the data on memory allocated for it, aligned for the checksum, that reads 8 bytes at
+  a time from its start. A block's data is a multiple of 8, so it's the same for the writer's array. */
+  constexpr size_t DATA_ALIGN = 64;
+
+  ut_a(data_size % 8 == 0);
+
+  struct Free {
+    void operator()(byte *ptr) const noexcept { std::free(ptr); }
+  };
+
+  const std::unique_ptr<byte, Free> data_buf(static_cast<byte *>(std::aligned_alloc(DATA_ALIGN, ut_calc_align(size_t(data_size), DATA_ALIGN))));
+
+  ut_a(data_buf != nullptr);
+
+  const auto data = data_buf.get();
+
+  std::array<byte, sizeof(wal::Block_header::Data)> header;
+  wal::crc32_t crc;
+
+  std::array<iovec, 3> iov{{{header.data(), header.size()}, {data, size_t(data_size)}, {&crc, sizeof(crc)}}};
+
   util::Checksum checksum(util::ChecksumAlgorithm::CRC32C);
 
   auto lsn = start_lsn;
@@ -313,27 +336,22 @@ lsn_t LogWalBackend::read(const Config &config, lsn_t start_lsn, const Consumer 
     const auto pos = block_no * config.m_block_size;
     const auto off = off_t(wraps ? pos % lsn_t(config.m_max_file_size) : pos);
 
-    if (::pread(fd, block.data(), block.size(), off) != ssize_t(block.size())) {
+    if (::preadv(fd, iov.data(), int(iov.size()), off) != ssize_t(config.m_block_size)) {
       break;
     }
 
-    const auto header_block_no = wal::block_no_t(mach_read_from_4(block.data()));
+    const auto header_block_no = wal::block_no_t(mach_read_from_4(header.data()));
 
     /* A block of an earlier lap through the file, or one never written. */
     if ((header_block_no & BLOCK_NO_MASK) != (wal::block_no_t(block_no) & BLOCK_NO_MASK)) {
       break;
     }
 
-    const auto len = lsn_t(mach_read_from_2(block.data() + offsetof(wal::Block_header::Data, m_len)));
+    const auto len = lsn_t(mach_read_from_2(header.data() + offsetof(wal::Block_header::Data, m_len)));
 
     if (len > data_size || len < offset) {
       break;
     }
-
-    const auto data = block.data() + header_size;
-    wal::crc32_t crc;
-
-    memcpy(&crc, data + data_size, sizeof(crc));
 
     checksum.reset();
     checksum.update(data, data_size);

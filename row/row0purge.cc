@@ -58,43 +58,41 @@ RowPurge *row_purge_node_create(QueThr *parent, MemHeap *heap) {
   return static_cast<RowPurge *>(RowPurge::node_create(parent, heap));
 }
 
-bool RowPurge::reposition_pcur(System &sys, ulint latch_mode, Mtr *mtr) {
+bool RowPurge::reposition_pcur(System &sys, Intent intent, Mtr *mtr) {
+  m_pcur.attach(sys);
+
   if (m_found_clust) {
-    return m_pcur.restore_position(sys, latch_mode, mtr, Current_location());
+    return m_pcur.restore(intent, mtr);
   } else {
-    m_found_clust = row_search_on_row_ref(sys, &m_pcur, latch_mode, m_table, m_ref, mtr);
+    m_found_clust = row_search_on_row_ref(&m_pcur, intent, m_table, m_ref, mtr);
 
     if (m_found_clust) {
-      m_pcur.store_position(sys, mtr);
+      m_pcur.save(mtr);
     }
 
     return m_found_clust;
   }
 }
 
-bool RowPurge::remove_clust_if_poss_low(System &sys, ulint mode) {
+bool RowPurge::remove_clust_if_poss_low(System &sys, Intent intent) {
   Mtr mtr;
-  DbErr err;
   MemHeap *heap{};
   std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
   auto offsets = rec_offs_from_array(offsets_);
 
-  auto btr_cur = m_pcur.get_btr_cur();
   auto index = m_table->get_first_index();
 
   mtr.start();
 
-  auto success = reposition_pcur(sys, mode, &mtr);
-
-  if (!success) {
+  if (!reposition_pcur(sys, intent, &mtr)) {
     /* The record is already removed */
 
-    m_pcur.commit_specify_mtr(sys, &mtr);
+    m_pcur.commit(&mtr);
 
-    return (true);
+    return true;
   }
 
-  auto rec = m_pcur.get_rec();
+  auto rec = m_pcur.rec();
 
   {
     PhyRec record{index, rec};
@@ -108,33 +106,22 @@ bool RowPurge::remove_clust_if_poss_low(System &sys, ulint mode) {
       mem_heap_free(heap);
     }
     /* Someone else has modified the record later: do not remove */
-    m_pcur.commit_specify_mtr(sys, &mtr);
+    m_pcur.commit(&mtr);
 
-    return (true);
+    return true;
   }
 
   if (likely_null(heap)) {
     mem_heap_free(heap);
   }
 
-  if (mode == BTR_MODIFY_LEAF) {
-    success = btr_cur->optimistic_delete(sys, &mtr);
-  } else {
-    ut_ad(mode == BTR_MODIFY_TREE);
-    err = btr_cur->pessimistic_delete(sys, false, RB_NONE, &mtr);
+  const auto err = m_pcur.remove(intent, RB_NONE, &mtr);
 
-    if (err == DB_SUCCESS) {
-      success = true;
-    } else if (err == DB_OUT_OF_FILE_SPACE) {
-      success = false;
-    } else {
-      ut_error;
-    }
-  }
+  ut_a(err == DB_SUCCESS || err == DB_FAIL || err == DB_OUT_OF_FILE_SPACE);
 
-  m_pcur.commit_specify_mtr(sys, &mtr);
+  m_pcur.commit(&mtr);
 
-  return (success);
+  return err == DB_SUCCESS;
 }
 
 void RowPurge::remove_clust_if_poss(System &sys) {
@@ -142,14 +129,14 @@ void RowPurge::remove_clust_if_poss(System &sys) {
 
   /*	ib_logger(stderr, "Purge: Removing clustered record\n"); */
 
-  auto success = remove_clust_if_poss_low(sys, BTR_MODIFY_LEAF);
+  auto success = remove_clust_if_poss_low(sys, Intent::Write);
 
   if (success) {
 
     return;
   }
 retry:
-  success = remove_clust_if_poss_low(sys, BTR_MODIFY_TREE);
+  success = remove_clust_if_poss_low(sys, Intent::Restructure);
   /* The delete operation may fail if we have little
   file space left: TODO: easiest to crash the database
   and restart with more file space */
@@ -165,18 +152,16 @@ retry:
   ut_a(success);
 }
 
-bool RowPurge::remove_sec_if_poss_low(System &sys, Index *index, const DTuple *entry, ulint mode) {
-  BtreePcursor pcur{};
-  BtreeCursor *btr_cur;
+bool RowPurge::remove_sec_if_poss_low(System &sys, Index *index, const DTuple *entry, Intent intent) {
+  IndexCursor pcur{sys};
   bool success;
   bool old_has{};
-  DbErr err;
   Mtr mtr;
   Mtr mtr_vers;
 
   mtr.start();
 
-  auto found = row_search_index_entry(sys, index, entry, mode, &pcur, &mtr);
+  auto found = pcur.find(index, entry, intent, &mtr);
 
   if (!found) {
     /* Not found.  This is a legitimate condition.  In a
@@ -200,35 +185,30 @@ bool RowPurge::remove_sec_if_poss_low(System &sys, Index *index, const DTuple *e
     return (true);
   }
 
-  btr_cur = pcur.get_btr_cur();
-
   /* We should remove the index record if no later version of the row,
   which cannot be purged yet, requires its existence. If some requires,
   we should do nothing. */
 
   mtr_vers.start();
 
-  success = reposition_pcur(sys, BTR_SEARCH_LEAF, &mtr_vers);
+  success = reposition_pcur(sys, Intent::Read, &mtr_vers);
 
   /* The version check is on the clustered index record of the row, the
   purge node's cursor, not on the secondary index cursor. */
   if (success) {
-    old_has = sys.m_row_vers->old_has_index_entry(true, m_pcur.get_rec(), &mtr_vers, index, entry);
+    old_has = sys.m_row_vers->old_has_index_entry(true, m_pcur.rec(), &mtr_vers, index, entry);
   }
 
-  m_pcur.commit_specify_mtr(sys, &mtr_vers);
+  m_pcur.commit(&mtr_vers);
 
   if (!success || !old_has) {
     /* Remove the index record */
 
-    if (mode == BTR_MODIFY_LEAF) {
-      success = btr_cur->optimistic_delete(sys, &mtr);
-    } else {
-      ut_ad(mode == BTR_MODIFY_TREE);
-      err = btr_cur->pessimistic_delete(sys, false, RB_NONE, &mtr);
-      success = err == DB_SUCCESS;
-      ut_a(success || err == DB_OUT_OF_FILE_SPACE);
-    }
+    const auto err = pcur.remove(intent, RB_NONE, &mtr);
+
+    ut_a(err == DB_SUCCESS || err == DB_FAIL || err == DB_OUT_OF_FILE_SPACE);
+
+    success = err == DB_SUCCESS;
   }
 
   pcur.close();
@@ -242,7 +222,7 @@ void RowPurge::remove_sec_if_poss(System &sys, Index *index, DTuple *entry) {
 
   /* ib_logger(stderr, "Purge: Removing secondary record\n"); */
 
-  auto success = remove_sec_if_poss_low(sys, index, entry, BTR_MODIFY_LEAF);
+  auto success = remove_sec_if_poss_low(sys, index, entry, Intent::Write);
 
   if (success) {
 
@@ -250,7 +230,7 @@ void RowPurge::remove_sec_if_poss(System &sys, Index *index, DTuple *entry) {
   }
 
 retry:
-  success = remove_sec_if_poss_low(sys, index, entry, BTR_MODIFY_TREE);
+  success = remove_sec_if_poss_low(sys, index, entry, Intent::Restructure);
   /* The delete operation may fail if we have little
   file space left: TODO: easiest to crash the database
   and restart with more file space */
@@ -344,7 +324,11 @@ skip_secondaries:
       /* We have to acquire an X-latch to the clustered
       index tree */
 
-      mtr_x_lock(idx->get_lock(), &mtr);
+      const auto latch_tree = sys.am(idx).uses_index_latch();
+
+      if (latch_tree) {
+        mtr_x_lock(idx->get_lock(), &mtr);
+      }
 
       /* NOTE: we must also acquire an X-latch to the
       root page of the tree. We will need it when we
@@ -355,7 +339,9 @@ skip_secondaries:
       latching order if we would only later latch the
       root page of such a tree! */
 
-      (void)sys.m_btree->root_get(idx->m_page_id, &mtr);
+      if (latch_tree) {
+        (void)sys.m_btree->root_get(idx->m_page_id, &mtr);
+      }
 
       /* We assume in purge of externally stored fields
       that the space id of the undo log record is 0! */
@@ -502,9 +488,9 @@ ulint RowPurge::purge(System &sys, QueThr *thr) {
       upd_exist_or_extern(sys);
     }
 
-    if (m_found_clust) {
-      m_pcur.close();
-    }
+    /* The node lives in a memory heap, its destructor never runs: also when the
+    search didn't find the record. */
+    m_pcur.release();
 
     sys.m_dict->unfreeze_data_dictionary(trx);
   }

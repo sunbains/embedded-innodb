@@ -23,6 +23,7 @@ Created 9/20/1997 Heikki Tuuri
 *******************************************************/
 
 #include "log0recv.h"
+#include "mtr0systrx.h"
 
 #include "btr0btr.h"
 #include "btr0cur.h"
@@ -290,6 +291,10 @@ byte *recv_parse_or_apply_log_rec_body(System &sys, MlogType type, byte *ptr, by
         ptr = page_parse_create(ptr, end_ptr, block, index, mtr);
       }
       break;
+    case MLOG_PAGE_HIGH_KEY:
+      ut_ad(page == nullptr || page_type == FIL_PAGE_TYPE_INDEX);
+      ptr = page_parse_high_key(sys, ptr, end_ptr, block);
+      break;
     case MLOG_UNDO_INSERT:
       ut_ad(page == nullptr || page_type == FIL_PAGE_TYPE_UNDO_LOG);
       ptr = TrxUndoRecord::parse_add_undo_rec(ptr, end_ptr, page);
@@ -334,6 +339,12 @@ byte *recv_parse_or_apply_log_rec_body(System &sys, MlogType type, byte *ptr, by
     case MLOG_FILE_RENAME:
     case MLOG_FILE_DELETE:
       ptr = sys.m_fil->op_log_parse_or_replay(ptr, end_ptr, type, 0, 0);
+      break;
+    case MLOG_SYSTRX_STEP:
+    case MLOG_SYSTRX_UNDONE:
+    case MLOG_SYSTRX_END:
+      /* Tracked when parsed: no page to apply it to. */
+      ptr = SysTrxSys::parse(ptr, end_ptr, type);
       break;
     case MLOG_FILE_EXTEND:
       /* The new size; replayed when parsed, see recv_extend(). */
@@ -957,6 +968,8 @@ bool recv_parse_log_recs(System &sys, bool store_to_hash) noexcept {
 
       } else if (type == MLOG_FILE_EXTEND) {
         recv_extend(sys, space, body);
+      } else if (type == MLOG_SYSTRX_STEP || type == MLOG_SYSTRX_UNDONE || type == MLOG_SYSTRX_END) {
+        sys.m_systrx->replay(type, body);
       } else if (type == MLOG_FILE_CREATE || type == MLOG_FILE_RENAME || type == MLOG_FILE_DELETE) {
         ut_a(space != SYS_TABLESPACE);
 
@@ -1035,6 +1048,8 @@ bool recv_parse_log_recs(System &sys, bool store_to_hash) noexcept {
           /* Debug checking only. */
         } else if (type == MLOG_FILE_EXTEND) {
           recv_extend(sys, space, body);
+        } else if (type == MLOG_SYSTRX_STEP || type == MLOG_SYSTRX_UNDONE || type == MLOG_SYSTRX_END) {
+          sys.m_systrx->replay(type, body);
         } else {
           sys.m_recv->add_log_record(type, space, page_no, body, ptr + len, old_lsn, new_recovered_lsn);
         }
@@ -1244,6 +1259,11 @@ void recv_recovery_from_checkpoint_finish(System &sys) noexcept {
 
   /* Free up the flush_rbt. */
   sys.m_buf_pool->m_flusher->free_flush_list();
+
+  /* Before any transaction: their rollback relies on the structures these change. */
+  if (sys.m_config.m_recv.m_force_recovery < IB_RECOVERY_NO_LOG_REDO) {
+    sys.m_systrx->recover();
+  }
 
   /* Roll back any recovered data dictionary transactions, so
   that the data dictionary tables will be free of any locks.

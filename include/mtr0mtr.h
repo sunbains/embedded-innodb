@@ -34,6 +34,7 @@ class System;
 #include "mem0mem.h"
 #include "mtr0types.h"
 #include "page0types.h"
+#include "sync0latch.h"
 #include "sync0rw.h"
 #include "sync0sync.h"
 #include "ut0byte.h"
@@ -130,6 +131,35 @@ struct Mtr {
    */
   void release_block_at_savepoint(ulint savepoint, BufBlock *block) noexcept;
 
+  /** @return true if a slot of this type counts as the type asked for: owning all of a page by its
+  bits is at least an S or an X latch on it. */
+  [[nodiscard]] static bool memo_covers(ulint slot_type, ulint type) noexcept {
+    return slot_type == type || ((slot_type == MTR_MEMO_PAGE_B_FIX || slot_type == MTR_MEMO_PAGE_B_HELD || slot_type >= MTR_MEMO_PAGE_G0) &&
+                                 (type == MTR_MEMO_PAGE_S_FIX || type == MTR_MEMO_PAGE_X_FIX));
+  }
+
+  /** A block buffer fixed in this at savepoint now also has the bit of a group of its records held,
+  to be given up with the fix. */
+  void hold_group_at_savepoint(ulint savepoint, const BufBlock *block, ulint bit) noexcept {
+    auto slot = static_cast<MtrMemoSlot *>(m_memo.get_element(savepoint));
+
+    ut_a(slot->m_object == block);
+    ut_a(slot->m_type == MTR_MEMO_BUF_FIX);
+
+    slot->m_type = MtrMemoType(MTR_MEMO_PAGE_G0 + bit);
+  }
+
+  /** A block buffer fixed in this at savepoint is now also owned by its bits, by this thread: to be
+  given up with the fix. */
+  void hold_bits_at_savepoint(ulint savepoint, const BufBlock *block) noexcept {
+    auto slot = static_cast<MtrMemoSlot *>(m_memo.get_element(savepoint));
+
+    ut_a(slot->m_object == block);
+    ut_a(slot->m_type == MTR_MEMO_BUF_FIX);
+
+    slot->m_type = MTR_MEMO_PAGE_B_FIX;
+  }
+
   /**
    * @brief Releases an object in the memo stack.
    *
@@ -146,7 +176,7 @@ struct Mtr {
    */
   void memo_push(void *object, MtrMemoType type) noexcept {
     ut_ad(type >= MTR_MEMO_PAGE_S_FIX);
-    ut_ad(type <= MTR_MEMO_X_LOCK);
+    ut_ad(type <= MTR_MEMO_X_LATCH);
     ut_ad(m_magic_n == MTR_MAGIC_N);
     ut_ad(m_state == MTR_ACTIVE);
 
@@ -262,6 +292,20 @@ struct Mtr {
     memo_push(lock, MTR_MEMO_X_LOCK);
   }
 
+  /** Takes latch in S mode, the mtr releases it. */
+  void s_lock_func(RwLatch *latch, const char *, ulint) {
+    latch->s_lock();
+
+    memo_push(latch, MTR_MEMO_S_LATCH);
+  }
+
+  /** Takes latch in X mode, the mtr releases it. */
+  void x_lock_func(RwLatch *latch, const char *, ulint) {
+    latch->x_lock();
+
+    memo_push(latch, MTR_MEMO_X_LATCH);
+  }
+
   /* @return true if the mtr is active. */
   [[nodiscard]] inline bool is_active() const noexcept { return m_state == MTR_ACTIVE; }
 
@@ -309,7 +353,7 @@ struct Mtr {
 
       auto slot = static_cast<MtrMemoSlot *>(m_memo.get_element(offset));
 
-      if (object == slot->m_object && type == slot->m_type) {
+      if (object == slot->m_object && memo_covers(slot->m_type, type)) {
         return true;
       }
     }
@@ -368,6 +412,9 @@ struct Mtr {
 
   /** For debugging. */
   ut_d(ulint m_magic_n;)
+
+  /** A cursor read a record into memory of its own in this: it isn't on a page in the memo. */
+  ut_d(bool m_reads_copies{};)
 
   /** The mini-transaction whose latches this one runs under, see start(). */
   ut_d(const Mtr *m_outer{};)

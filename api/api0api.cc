@@ -25,17 +25,6 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 
 namespace api {
 
-/** Check if the Innodb persistent cursor is positioned.
- *
- * @param[in] pcur                 InnoDB persistent cursor
- *
- * @return	true if positioned
- */
-bool btr_cursor_is_positioned(const BtreePcursor *pcur) noexcept {
-  return pcur->m_old_stored &&
-         (pcur->m_pos_state == BtrPcurPositioned::IS_POSITIONED || pcur->m_pos_state == BtrPcurPositioned::WAS_POSITIONED);
-}
-
 /** Delays an INSERT, DELETE or UPDATE operation if the purge is lagging. */
 void delay_dml_if_needed(System &sys) {
   /* Read once (relaxed, the purge thread updates it): checking one value

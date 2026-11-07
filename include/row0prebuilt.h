@@ -313,10 +313,10 @@ struct Prebuilt {
   Trx *m_trx{};
 
   /** Persistent cursor used in selects and updates */
-  BtreePcursor *m_pcur{};
+  IndexCursor *m_pcur{};
 
   /** Persistent cursor used in some selects and updates */
-  BtreePcursor *m_clust_pcur{};
+  IndexCursor *m_clust_pcur{};
 
   /** Dummy query graph used in selects */
   QueFork *m_sel_graph{};

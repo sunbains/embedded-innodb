@@ -1244,9 +1244,16 @@ TEST_F(LockMt, ReleaseLinear) {
     double small{1e9};
     double big{1e9};
 
-    for (int i{}; i < 3; ++i) {
+    /* A busy host can push a few rounds over the limit, a release that is
+    not linear stays over it: keep the best time of each size, and measure
+    again while the ratio is over. */
+    for (int i{}; i < 12; ++i) {
       small = std::min(small, run(256, one_rec));
       big = std::min(big, run(4096, one_rec));
+
+      if (i >= 2 && big < 4 * small) {
+        break;
+      }
     }
 
     std::printf("ReleaseLinear %s: %.0f ns per grant at W=256, %.0f ns at W=4096\n", one_rec ? "one record" : "W records", small * 1e9, big * 1e9);

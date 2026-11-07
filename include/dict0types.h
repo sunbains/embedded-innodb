@@ -101,6 +101,9 @@ constexpr ulint DICT_CLUSTERED = 1;
 /** Unique index */
 constexpr ulint DICT_UNIQUE = 2;
 
+/** A B-link tree, not a B-tree: which implementation has it, see System::am(). */
+constexpr ulint DICT_BLINK = 4;
+
 /* @} */
 
 /** Types for a table object */
@@ -191,6 +194,9 @@ constexpr Dict_id DICT_HDR_INDEXES = 44;
 
 /** Root of the index field index tree */
 constexpr Dict_id DICT_HDR_FIELDS = 48;
+
+/** What the system tables are: 0 or DICT_BLINK. They have to be opened before there's a catalog to say. */
+constexpr Dict_id DICT_HDR_SYS_AM = 52;
 
 /** Segment header for the tablespace segment into which the dictionary header is created */
 constexpr Dict_id DICT_HDR_FSEG_HEADER = 56;
@@ -453,6 +459,9 @@ struct Index {
    * @brief Destructor for an index instance.
    */
   ~Index() = default;
+
+  /** @return true if this is a B-link tree. */
+  [[nodiscard]] bool is_blink() const noexcept { return (m_type & DICT_BLINK) != 0; }
 
   [[nodiscard]] bool is_clustered() const noexcept {
     ut_ad(m_magic_n == DICT_INDEX_MAGIC_N);
@@ -951,7 +960,8 @@ struct Index {
   /** Statistics for query optimization */
   Stats m_stats;
 
-  /** read-write lock protecting the upper levels of the index tree */
+  /** read-write lock protecting the upper levels of the index tree. An RwLock and
+  not an RwLatch: ParallelReader::ScanCtx::index_s_lock() releases it in another thread. */
   mutable RwLock m_lock;
 
   /** Client compare context. For use defined column types and BLOBs

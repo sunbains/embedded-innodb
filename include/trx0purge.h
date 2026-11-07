@@ -33,6 +33,7 @@ Created 3/26/1996 Heikki Tuuri
 #include "mtr0mtr.h"
 #include "page0page.h"
 #include "que0types.h"
+#include "sync0latch.h"
 #include "trx0sys.h"
 #include "trx0types.h"
 #include "trx0undo.h"
@@ -251,7 +252,7 @@ struct PurgeSys {
   /** The latch protecting the purge view. A purge operation must acquire
    * an x-latch here for the instant at which it changes the purge view:
    * an undo log operation can prevent this by obtaining an s-latch here. */
-  mutable RwLock m_latch;
+  mutable RwLatch m_latch;
 
   /** The purge will not remove undo logs which are >= this view (purge view) */
   ReadView *m_view{};

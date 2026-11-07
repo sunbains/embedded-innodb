@@ -26,7 +26,7 @@ Created 12/27/1996 Heikki Tuuri
 
 #include "srv0sys.h"
 
-#include "btr0pcur.h"
+#include "idx0am.h"
 #include "btr0types.h"
 #include "data0data.h"
 #include "dict0types.h"
@@ -210,7 +210,7 @@ struct UpdNode {
    * which should be updated or deleted; the cursor is stored
    * in the graph of 'select' field above, except in the case
    * of the client interface */
-  BtreePcursor *m_pcur{};
+  IndexCursor *m_pcur{};
 
   /** Table where updated */
   Table *m_table{};
@@ -631,7 +631,7 @@ struct RowUpdate {
    * @return DB_SUCCESS or an error code.
    */
   [[nodiscard]] DbErr check_references_constraints(
-    UpdNode *node, BtreePcursor *pcur, Table *table, const Index *index, ulint *offsets, QueThr *thr, Mtr *mtr
+    UpdNode *node, IndexCursor *pcur, Table *table, const Index *index, ulint *offsets, QueThr *thr, Mtr *mtr
   ) noexcept;
 
   /**

@@ -595,7 +595,7 @@ PurgeSys::PurgeSys(System &sys, Trx *trx) noexcept : m_sys(sys), m_trx(trx) {
 
   m_state = PURGE_STATE_OFF;
 
-  rw_lock_create(&m_latch, SYNC_PURGE_LATCH);
+  m_latch.create();
 
   mutex_create(&m_mutex, IF_DEBUG("PurgeSys::m_mutex", )  Current_location());
 
@@ -628,7 +628,7 @@ PurgeSys::~PurgeSys() noexcept {
 
   trx_undo_arr_free(m_arr);
 
-  rw_lock_free(&m_latch);
+  m_latch.destroy();
   mutex_free(&m_mutex);
 
   mem_heap_free(m_heap);
@@ -715,7 +715,7 @@ ulint PurgeSys::run() noexcept {
     return 0;
   }
 
-  rw_lock_x_lock(&m_latch);
+  m_latch.x_lock();
 
   /* Close and free the old purge view */
 
@@ -762,7 +762,7 @@ ulint PurgeSys::run() noexcept {
 
   m_view = m_sys.m_trx_sys->open_purge_view(m_heap);
 
-  rw_lock_x_unlock(&m_latch);
+  m_latch.x_unlock();
 
   m_state = PURGE_STATE_ON;
 

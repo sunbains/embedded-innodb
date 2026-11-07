@@ -78,7 +78,8 @@ struct DynamicArray {
     is set when the block becomes full */
     uint32_t m_used;
 
-    std::array<byte, N> m_buffer;
+    /** Aligned: what a caller pushes can be a struct, such as a memo slot. */
+    alignas(8) std::array<byte, N> m_buffer;
 
     UT_SLIST_NODE_T(Block) m_node;
 

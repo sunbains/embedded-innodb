@@ -20,7 +20,8 @@ Page and PageCursor: index pages of a real tablespace, allocated from the
 segments of the test table's indexes but not linked into their trees.
 Create, insert in every order until full, search, delete, the record heap,
 the free list and the garbage, the directory slots and their n_owned
-bounds, reorganize, and copying, moving and deleting lists of records.
+bounds, reorganize, and copying, moving and deleting lists of records, and the
+high key of a page.
 page_validate() and the directory invariants are checked after each step. */
 
 #include "ut0env.h"
@@ -31,17 +32,23 @@ page_validate() and the directory invariants are checked after each step. */
 #include "data0data.h"
 #include "dict0dict.h"
 #include "fsp0types.h"
+#include "log0log.h"
+#include "log0recv.h"
 #include "mach0data.h"
 #include "mem0mem.h"
+#include "mtr0log.h"
 #include "mtr0mtr.h"
 #include "page0cur.h"
 #include "page0page.h"
 #include "rem0cmp.h"
 #include "rem0rec.h"
 
+#include <sys/mman.h>
+
 #include <algorithm>
 #include <array>
 #include <chrono>
+#include <functional>
 #include <memory>
 #include <numeric>
 #include <random>
@@ -1537,6 +1544,1289 @@ TEST_F(PageTest, MaxTrxId) {
 
   free_page(mtr, m_sec, block);
   mtr.commit(*m_sys);
+}
+
+/* --- The high key ---------------------------------------------------------
+PAGE_HIGH_KEY: a record in the heap that no list has, kept by everything that
+rewrites a page, in the data size, and redo logged. */
+
+/** A record made to be a high key: its origin and size with extra bytes. */
+struct KeyRec {
+  Rec m_rec;
+  ulint m_size{};
+
+  /** @return its bytes, from the extra bytes on. */
+  [[nodiscard]] std::vector<byte> bytes() const {
+    const auto start = m_rec.get() - page_rec_extra_size(m_rec);
+
+    return {start, start + m_size};
+  }
+};
+
+class HighKeyTest : public PageTest {
+ protected:
+  /** @return t as a physical record of index, in m_heap. */
+  KeyRec key_of(Index *index, const DTuple *t) {
+    const auto size = rec_get_converted_size(index, t, 0);
+    auto buf = static_cast<byte *>(mem_heap_alloc(m_heap, size));
+
+    return {Rec::convert_dtuple_to_rec(buf, index, t, 0), size};
+  }
+
+  /** @return the key (a, k) of SEC_A. */
+  KeyRec sec_key(uint32_t a, uint32_t k = 0) { return key_of(m_sec, sec_entry(a, k)); }
+
+  /** @return a new page of index with a right sibling, which a high key needs. */
+  BufBlock *linked(Mtr &mtr, Index *index) {
+    auto block = alloc(mtr, index);
+
+    Btree::page_set_next(block->get_frame(), block->get_page_no() + 1, &mtr);
+
+    return block;
+  }
+
+  /** Set the key, it must fit. */
+  void set(Mtr &mtr, BufBlock *block, const KeyRec &key) { ASSERT_TRUE(page_set_high_key(block, key.m_rec, key.m_size, &mtr)); }
+
+  /** The page has exactly this key. */
+  void expect_key(const page_t *page, const KeyRec &key) {
+    const auto rec = page_get_high_key(page);
+
+    ASSERT_FALSE(rec.is_null());
+    ASSERT_EQ(page_high_key_size(rec), key.m_size);
+    EXPECT_EQ((KeyRec{rec, key.m_size}.bytes()), key.bytes());
+  }
+
+  /** Insert n records (i, 0) of SEC_A from first. */
+  void fill(Mtr &mtr, BufBlock *block, uint32_t first, uint32_t n) {
+    for (auto i = first; i < first + n; ++i) {
+      ASSERT_FALSE(insert(mtr, block, m_sec, sec_entry(i, 0)).is_null());
+    }
+  }
+
+  /** @return the redo log of mtr so far. */
+  static std::vector<byte> log_of(const Mtr &mtr) {
+    std::vector<byte> v;
+
+    for (auto b = mtr.m_log.get_first_block(); b != nullptr; b = mtr.m_log.get_next_block(b)) {
+      v.insert(v.end(), mtr.m_log.get_data(b), mtr.m_log.get_data(b) + mtr.m_log.get_used(b));
+    }
+
+    return v;
+  }
+
+  /** @return the types of the redo records of mtr from pos, only parsing them. */
+  std::vector<MlogType> types(const Mtr &mtr, ulint pos) {
+    auto log = log_of(mtr);
+    std::vector<MlogType> v;
+    auto end = log.data() + log.size();
+
+    for (auto ptr = log.data() + pos; ptr < end;) {
+      MlogType type{};
+      space_id_t space{};
+      page_no_t page_no{};
+
+      ptr = mlog_parse_initial_log_record(ptr, end, &type, &space, &page_no);
+      EXPECT_NE(ptr, nullptr);
+      ptr = recv_parse_or_apply_log_rec_body(*m_sys, type, ptr, end, nullptr, nullptr);
+      EXPECT_NE(ptr, nullptr);
+
+      if (ptr == nullptr) {
+        break;
+      }
+
+      v.push_back(type);
+    }
+
+    return v;
+  }
+
+  /** @return a page with the contents of page, for a replay on it. Both are in mtr. */
+  BufBlock *twin(Mtr &mtr, Index *index, const page_t *page) {
+    auto block = alloc(mtr, index);
+    auto frame = block->get_frame();
+
+    memcpy(frame + PAGE_HEADER, page + PAGE_HEADER, UNIV_PAGE_SIZE - PAGE_HEADER);
+    memcpy(frame + FIL_PAGE_NEXT, page + FIL_PAGE_NEXT, 4);
+    memcpy(frame + FIL_PAGE_PREV, page + FIL_PAGE_PREV, 4);
+
+    return block;
+  }
+
+  /** Apply the redo records of mtr from pos to block as recovery does: logging off. */
+  void replay(const Mtr &mtr, ulint pos, BufBlock *block) {
+    auto log = log_of(mtr);
+    auto end = log.data() + log.size();
+    Mtr rm;
+
+    rm.start();
+    (void)rm.set_log_mode(MTR_LOG_NONE);
+    rm.memo_push(block, MTR_MEMO_PAGE_X_FIX);
+
+    for (auto ptr = log.data() + pos; ptr < end;) {
+      MlogType type{};
+      space_id_t space{};
+      page_no_t page_no{};
+
+      ptr = mlog_parse_initial_log_record(ptr, end, &type, &space, &page_no);
+      ASSERT_NE(ptr, nullptr);
+      ptr = recv_parse_or_apply_log_rec_body(*m_sys, type, ptr, end, block, &rm);
+      ASSERT_NE(ptr, nullptr);
+    }
+
+    /* The block stays latched by its own mtr. */
+    rm.m_memo.clear();
+    rm.m_modifications = false;
+    rm.commit(*m_sys);
+  }
+
+  /** The page and its replay have the same bytes, the page's own id aside. */
+  static void expect_same(const page_t *a, const page_t *b) {
+    EXPECT_EQ(memcmp(a + PAGE_HEADER, b + PAGE_HEADER, UNIV_PAGE_SIZE - PAGE_HEADER - FIL_PAGE_DATA_END), 0);
+    EXPECT_EQ(memcmp(a + FIL_PAGE_NEXT, b + FIL_PAGE_NEXT, 4), 0);
+  }
+
+  /** Run ops in a mtr on a linked page of SEC_A, with a replay of what they log on a twin
+  taken before: same bytes, and the page validates. ops may return its records' types. */
+  void check_replay(const std::function<void(Mtr &, BufBlock *)> &setup, const std::function<void(Mtr &, BufBlock *)> &ops) {
+    Mtr mtr;
+
+    mtr.start();
+    m_sys->m_fsp->latch(m_sec->get_space_id(), &mtr);
+
+    auto block = linked(mtr, m_sec);
+
+    setup(mtr, block);
+
+    auto other = twin(mtr, m_sec, block->get_frame());
+    const auto pos = log_of(mtr).size();
+
+    ops(mtr, block);
+    replay(mtr, pos, other);
+
+    expect_same(block->get_frame(), other->get_frame());
+    validate(block, m_sec);
+    validate(other, m_sec);
+
+    free_page(mtr, m_sec, other);
+    free_page(mtr, m_sec, block);
+    mtr.commit(*m_sys);
+  }
+
+  /** The pointer's bytes, read as raw. */
+  static ulint raw_field(const page_t *page) { return mach_read_from_2(page + PAGE_HEADER + PAGE_HIGH_KEY); }
+};
+
+/** No key by default, on a page linked or not, and the field reads 0 on all: page_create()
+and the allocation left it so. */
+TEST_F(HighKeyTest, None) {
+  Mtr mtr;
+
+  mtr.start();
+  m_sys->m_fsp->latch(m_sec->get_space_id(), &mtr);
+
+  auto block = alloc(mtr, m_sec);
+  auto page = block->get_frame();
+
+  EXPECT_TRUE(page_get_high_key(page).is_null());
+  EXPECT_EQ(raw_field(page), 0UL);
+
+  Btree::page_set_next(page, FIL_NULL, &mtr);
+  EXPECT_TRUE(page_get_high_key(page).is_null());
+
+  Btree::page_set_next(page, 7, &mtr);
+  EXPECT_TRUE(page_get_high_key(page).is_null());
+  EXPECT_EQ(raw_field(page), 0UL);
+  EXPECT_EQ(page_get_data_size(page), 0UL);
+  EXPECT_EQ(page_get_rec_data_size(page), 0UL);
+
+  /* page_create() doesn't invent one, and reads 0 on a page that was a sibling. */
+  m_sys->m_btree->page_create(block, m_sec, 0, &mtr);
+  EXPECT_TRUE(page_get_high_key(page).is_null());
+  EXPECT_EQ(raw_field(page), 0UL);
+
+  validate(block, m_sec);
+  free_page(mtr, m_sec, block);
+  mtr.commit(*m_sys);
+}
+
+/** A freed page with a key, which comes back from its segment, has no key: the page
+init is what makes every non-root page read 0, a former root's too. */
+TEST_F(HighKeyTest, Realloc) {
+  Mtr mtr;
+
+  mtr.start();
+  m_sys->m_fsp->latch(m_sec->get_space_id(), &mtr);
+
+  auto block = linked(mtr, m_sec);
+
+  set(mtr, block, sec_key(5));
+  free_page(mtr, m_sec, block);
+
+  auto again = alloc(mtr, m_sec);
+
+  /* The segment hands this page or another out: the init zeroes either. */
+  EXPECT_EQ(raw_field(again->get_frame()), 0UL);
+  EXPECT_TRUE(page_get_high_key(again->get_frame()).is_null());
+
+  free_page(mtr, m_sec, again);
+  mtr.commit(*m_sys);
+}
+
+/** Set and get: the bytes are copied to the heap top, no heap number, not in a list. */
+TEST_F(HighKeyTest, SetGet) {
+  Mtr mtr;
+
+  mtr.start();
+  m_sys->m_fsp->latch(m_sec->get_space_id(), &mtr);
+
+  auto block = linked(mtr, m_sec);
+  auto page = block->get_frame();
+  const auto key = sec_key(77, 3);
+  const auto top = page_header_get_field(page, PAGE_HEAP_TOP);
+
+  set(mtr, block, key);
+
+  expect_key(page, key);
+
+  const auto rec = page_get_high_key(page);
+
+  EXPECT_EQ(page_offset(rec), top + page_rec_extra_size(rec));
+  EXPECT_EQ(page_header_get_field(page, PAGE_HEAP_TOP), top + key.m_size);
+  EXPECT_EQ(page_dir_get_n_heap(page), PAGE_HEAP_NO_USER_LOW);
+  EXPECT_EQ(page_get_n_recs(page), 0UL);
+  EXPECT_EQ(page_header_get_field(page, PAGE_GARBAGE), 0UL);
+  EXPECT_EQ(page_header_get_field(page, PAGE_FREE), 0UL);
+  EXPECT_EQ(page_dir_get_n_slots(page), 2UL);
+
+  /* It's a record of the format of the page: its fields read back. */
+  ulint len{};
+
+  EXPECT_EQ(mach_read_from_4(rec.get_nth_field(0, &len)), 77UL);
+  EXPECT_EQ(len, 4UL);
+  EXPECT_EQ(mach_read_from_4(rec.get_nth_field(1, &len)), 3UL);
+
+  validate(block, m_sec);
+  free_page(mtr, m_sec, block);
+  mtr.commit(*m_sys);
+}
+
+/** A key over the limit of 1 byte offsets: the size and the origin come from the record. */
+TEST_F(HighKeyTest, Long) {
+  Mtr mtr;
+
+  mtr.start();
+  m_sys->m_fsp->latch(m_clust->get_space_id(), &mtr);
+
+  auto block = linked(mtr, m_clust);
+  auto page = block->get_frame();
+  const auto key = key_of(m_clust, clust_entry(9, 2000));
+
+  ASSERT_FALSE(key.m_rec.get_1byte_offs_flag());
+  set(mtr, block, key);
+  expect_key(page, key);
+  EXPECT_EQ(page_get_data_size(page), key.m_size);
+
+  ASSERT_FALSE(insert(mtr, block, m_clust, clust_entry(1, 10)).is_null());
+  validate(block, m_clust);
+
+  ASSERT_TRUE(m_sys->m_btree->page_reorganize(block, m_clust, &mtr));
+  expect_key(page, key);
+  validate(block, m_clust);
+
+  free_page(mtr, m_clust, block);
+  mtr.commit(*m_sys);
+}
+
+/** Inserts and deletes around the key don't touch it, also when the free list is reused. */
+TEST_F(HighKeyTest, InsDel) {
+  Mtr mtr;
+
+  mtr.start();
+  m_sys->m_fsp->latch(m_sec->get_space_id(), &mtr);
+
+  auto block = linked(mtr, m_sec);
+  auto page = block->get_frame();
+  const auto key = sec_key(1000);
+
+  fill(mtr, block, 0, 10);
+  set(mtr, block, key);
+  fill(mtr, block, 10, 30);
+  expect_key(page, key);
+  validate(block, m_sec);
+
+  for (int i = 0; i < 15; ++i) {
+    remove(mtr, block, m_sec, recs(page)[i]);
+  }
+
+  expect_key(page, key);
+  validate(block, m_sec);
+
+  /* The size of the records is the same: these reuse the free list. */
+  fill(mtr, block, 100, 15);
+  expect_key(page, key);
+  EXPECT_EQ(page_get_n_recs(page), 40UL);
+  validate(block, m_sec);
+
+  free_page(mtr, m_sec, block);
+  mtr.commit(*m_sys);
+}
+
+/** A reorganize keeps the key, removes the garbage, heap numbers run from the first user one. */
+TEST_F(HighKeyTest, Reorg) {
+  Mtr mtr;
+
+  mtr.start();
+  m_sys->m_fsp->latch(m_sec->get_space_id(), &mtr);
+
+  auto block = linked(mtr, m_sec);
+  auto page = block->get_frame();
+  const auto key = sec_key(1000);
+
+  fill(mtr, block, 0, 40);
+  set(mtr, block, key);
+
+  for (int i = 0; i < 20; ++i) {
+    remove(mtr, block, m_sec, recs(page)[i]);
+  }
+
+  const auto all = keys(page);
+  const auto data = page_get_data_size(page);
+  const auto top = page_header_get_field(page, PAGE_HEAP_TOP);
+  const auto garbage = page_header_get_field(page, PAGE_GARBAGE);
+  const auto max_ins = page_get_max_insert_size_after_reorganize(page, 1);
+
+  ASSERT_GT(garbage, 0UL);
+  ASSERT_TRUE(m_sys->m_btree->page_reorganize(block, m_sec, &mtr));
+
+  expect_key(page, key);
+  EXPECT_EQ(keys(page), all);
+  EXPECT_EQ(page_get_data_size(page), data);
+  EXPECT_EQ(page_header_get_field(page, PAGE_GARBAGE), 0UL);
+  EXPECT_EQ(page_header_get_field(page, PAGE_HEAP_TOP), top - garbage);
+  EXPECT_EQ(page_get_max_insert_size(page, 1), max_ins);
+  EXPECT_EQ(page_dir_get_n_heap(page), PAGE_HEAP_NO_USER_LOW + all.size());
+
+  ulint heap_no{PAGE_HEAP_NO_USER_LOW};
+
+  for (auto rec : recs(page)) {
+    EXPECT_EQ(rec.get_heap_no(), heap_no++);
+  }
+
+  validate(block, m_sec);
+
+  /* Records go above the key after that. */
+  fill(mtr, block, 2000, 5);
+  expect_key(page, key);
+  validate(block, m_sec);
+
+  free_page(mtr, m_sec, block);
+  mtr.commit(*m_sys);
+}
+
+/** Moving the end and the start of the list out: the key stays with the page, the
+destination gets none. */
+TEST_F(HighKeyTest, MoveOut) {
+  Mtr mtr;
+
+  mtr.start();
+  m_sys->m_fsp->latch(m_sec->get_space_id(), &mtr);
+
+  auto block = linked(mtr, m_sec);
+  auto page = block->get_frame();
+  const auto key = sec_key(1000);
+
+  fill(mtr, block, 0, 60);
+  set(mtr, block, key);
+
+  const auto data = page_get_rec_data_size(page);
+  auto right = linked(mtr, m_sec);
+
+  ASSERT_TRUE(page_move_rec_list_end(*m_sys, right, block, recs(page)[40], m_sec, &mtr));
+
+  expect_key(page, key);
+  EXPECT_TRUE(page_get_high_key(right->get_frame()).is_null());
+  EXPECT_EQ(page_get_n_recs(page), 40UL);
+  /* The size given to the delete of the moved records excludes the key. */
+  EXPECT_EQ(page_get_rec_data_size(page) + page_get_data_size(right->get_frame()), data);
+  validate(block, m_sec);
+  validate(right, m_sec);
+
+  auto left = linked(mtr, m_sec);
+
+  ASSERT_TRUE(page_move_rec_list_start(*m_sys, left, block, recs(page)[10], m_sec, &mtr));
+
+  expect_key(page, key);
+  EXPECT_TRUE(page_get_high_key(left->get_frame()).is_null());
+  EXPECT_EQ(page_get_n_recs(page), 30UL);
+  validate(block, m_sec);
+  validate(left, m_sec);
+
+  free_page(mtr, m_sec, left);
+  free_page(mtr, m_sec, right);
+  free_page(mtr, m_sec, block);
+  mtr.commit(*m_sys);
+}
+
+/** A destination that has a key before the copy (a split could do that): its heap isn't
+written over by the path for an unused heap, also if the key was cleared again. */
+TEST_F(HighKeyTest, CopyIn) {
+  Mtr mtr;
+
+  mtr.start();
+  m_sys->m_fsp->latch(m_sec->get_space_id(), &mtr);
+
+  auto block = linked(mtr, m_sec);
+
+  fill(mtr, block, 0, 30);
+
+  auto to = linked(mtr, m_sec);
+  auto to_page = to->get_frame();
+  const auto key = sec_key(1000);
+
+  set(mtr, to, key);
+
+  (void)page_copy_rec_list_end(*m_sys, to, block, recs(block->get_frame())[10], m_sec, &mtr);
+
+  expect_key(to_page, key);
+  EXPECT_EQ(page_get_n_recs(to_page), 20UL);
+  validate(to, m_sec);
+
+  auto gone = linked(mtr, m_sec);
+
+  set(mtr, gone, sec_key(2000));
+  page_clear_high_key(gone, &mtr);
+
+  const auto top = page_header_get_field(gone->get_frame(), PAGE_HEAP_TOP);
+
+  ASSERT_GT(top, PAGE_SUPREMUM_END);
+  (void)page_copy_rec_list_end(*m_sys, gone, block, recs(block->get_frame())[10], m_sec, &mtr);
+
+  EXPECT_EQ(page_get_n_recs(gone->get_frame()), 20UL);
+  EXPECT_GT(page_header_get_field(gone->get_frame(), PAGE_HEAP_TOP), top);
+  validate(gone, m_sec);
+
+  free_page(mtr, m_sec, gone);
+  free_page(mtr, m_sec, to);
+  free_page(mtr, m_sec, block);
+  mtr.commit(*m_sys);
+}
+
+/** Emptied in place by a list delete: the key and nothing else is the data. */
+TEST_F(HighKeyTest, DelLists) {
+  Mtr mtr;
+
+  mtr.start();
+  m_sys->m_fsp->latch(m_sec->get_space_id(), &mtr);
+
+  auto block = linked(mtr, m_sec);
+  auto page = block->get_frame();
+  const auto key = sec_key(1000);
+
+  fill(mtr, block, 0, 30);
+  set(mtr, block, key);
+
+  page_delete_rec_list_start(*m_sys, recs(page)[10], block, m_sec, &mtr);
+  expect_key(page, key);
+  EXPECT_EQ(page_get_n_recs(page), 20UL);
+  validate(block, m_sec);
+
+  page_delete_rec_list_end(recs(page)[0], block, m_sec, ULINT_UNDEFINED, ULINT_UNDEFINED, &mtr);
+
+  expect_key(page, key);
+  EXPECT_EQ(page_get_n_recs(page), 0UL);
+  EXPECT_EQ(page_get_data_size(page), key.m_size);
+  EXPECT_EQ(page_get_rec_data_size(page), 0UL);
+  validate(block, m_sec);
+
+  free_page(mtr, m_sec, block);
+  mtr.commit(*m_sys);
+}
+
+/** Btree::page_empty() recreates the page and keeps the key, as the only thing in the heap. */
+TEST_F(HighKeyTest, Empty) {
+  Mtr mtr;
+
+  mtr.start();
+  m_sys->m_fsp->latch(m_sec->get_space_id(), &mtr);
+
+  auto block = linked(mtr, m_sec);
+  auto page = block->get_frame();
+  const auto key = sec_key(1000);
+
+  fill(mtr, block, 0, 30);
+  set(mtr, block, key);
+  remove(mtr, block, m_sec, recs(page)[3]);
+
+  m_sys->m_btree->page_empty(block, m_sec, 0, &mtr);
+
+  expect_key(page, key);
+  EXPECT_EQ(page_get_n_recs(page), 0UL);
+  EXPECT_EQ(page_dir_get_n_heap(page), PAGE_HEAP_NO_USER_LOW);
+  EXPECT_EQ(page_header_get_field(page, PAGE_HEAP_TOP), PAGE_SUPREMUM_END + key.m_size);
+  EXPECT_EQ(page_header_get_field(page, PAGE_GARBAGE), 0UL);
+  EXPECT_EQ(page_get_data_size(page), key.m_size);
+  validate(block, m_sec);
+
+  /* It's usable as a page. */
+  fill(mtr, block, 0, 10);
+  expect_key(page, key);
+  validate(block, m_sec);
+
+  free_page(mtr, m_sec, block);
+  mtr.commit(*m_sys);
+}
+
+/** page_create() itself drops the key: there's no heap to keep it in. Who wants it keeps it. */
+TEST_F(HighKeyTest, CreateDrops) {
+  Mtr mtr;
+
+  mtr.start();
+  m_sys->m_fsp->latch(m_sec->get_space_id(), &mtr);
+
+  auto block = linked(mtr, m_sec);
+  auto page = block->get_frame();
+
+  set(mtr, block, sec_key(1000));
+  m_sys->m_btree->page_create(block, m_sec, 0, &mtr);
+
+  EXPECT_TRUE(page_get_high_key(page).is_null());
+  EXPECT_EQ(raw_field(page), 0UL);
+  EXPECT_EQ(page_get_data_size(page), 0UL);
+  validate(block, m_sec);
+
+  free_page(mtr, m_sec, block);
+  mtr.commit(*m_sys);
+}
+
+/** The data size counts the key and the free space shrinks by exactly its size, on an
+empty page and one with records. */
+TEST_F(HighKeyTest, Sizes) {
+  Mtr mtr;
+
+  mtr.start();
+  m_sys->m_fsp->latch(m_sec->get_space_id(), &mtr);
+
+  auto block = linked(mtr, m_sec);
+  auto page = block->get_frame();
+  const auto key = sec_key(1000);
+
+  for (uint32_t n : {uint32_t(0), uint32_t(25)}) {
+    fill(mtr, block, 0, n);
+
+    const auto data = page_get_data_size(page);
+    const auto max_ins = page_get_max_insert_size(page, 1);
+    const auto max_reorg = page_get_max_insert_size_after_reorganize(page, 1);
+
+    set(mtr, block, key);
+
+    EXPECT_EQ(page_get_data_size(page), data + key.m_size);
+    EXPECT_EQ(page_get_rec_data_size(page), data);
+    EXPECT_EQ(page_get_rec_data_size(page), data_size(m_sec, page));
+    EXPECT_EQ(page_get_max_insert_size(page, 1), max_ins - key.m_size);
+    EXPECT_EQ(page_get_max_insert_size_after_reorganize(page, 1), max_reorg - key.m_size);
+    validate(block, m_sec);
+
+    page_clear_high_key(block, &mtr);
+    ASSERT_TRUE(m_sys->m_btree->page_reorganize(block, m_sec, &mtr));
+  }
+
+  free_page(mtr, m_sec, block);
+  mtr.commit(*m_sys);
+}
+
+/** Fill a page that has a key: it fits as many bytes as a page without one, less the key;
+the accounting adds up at the end, and the directory and heap don't touch. */
+TEST_F(HighKeyTest, Fill) {
+  Mtr mtr;
+
+  mtr.start();
+  m_sys->m_fsp->latch(m_sec->get_space_id(), &mtr);
+
+  auto plain = linked(mtr, m_sec);
+  auto block = linked(mtr, m_sec);
+  auto page = block->get_frame();
+  const auto key = sec_key(1000);
+
+  set(mtr, block, key);
+
+  uint32_t n{};
+  uint32_t n_plain{};
+
+  while (!insert(mtr, block, m_sec, sec_entry(n, 0)).is_null()) {
+    ++n;
+  }
+
+  while (!insert(mtr, plain, m_sec, sec_entry(n_plain, 0)).is_null()) {
+    ++n_plain;
+  }
+
+  expect_key(page, key);
+  EXPECT_LE(n, n_plain);
+  EXPECT_GE(n + 2, n_plain);
+  EXPECT_EQ(page_get_n_recs(page), n);
+  EXPECT_EQ(page_get_data_size(page), data_size(m_sec, page) + key.m_size);
+  EXPECT_LE(page_header_get_field(page, PAGE_HEAP_TOP), page_offset(page_dir_get_nth_slot(page, page_dir_get_n_slots(page) - 1)));
+  validate(block, m_sec);
+
+  /* Reorganizing a full page has to succeed with the key too. */
+  ASSERT_TRUE(m_sys->m_btree->page_reorganize(block, m_sec, &mtr));
+  expect_key(page, key);
+  validate(block, m_sec);
+
+  free_page(mtr, m_sec, block);
+  free_page(mtr, m_sec, plain);
+  mtr.commit(*m_sys);
+}
+
+/** A page walk, the directory and the heap numbers are those of a page without a key,
+whenever the key was set. */
+TEST_F(HighKeyTest, Invisible) {
+  Mtr mtr;
+
+  mtr.start();
+  m_sys->m_fsp->latch(m_sec->get_space_id(), &mtr);
+
+  auto plain = linked(mtr, m_sec);
+  auto block = linked(mtr, m_sec);
+  auto page = block->get_frame();
+
+  fill(mtr, plain, 0, 40);
+  fill(mtr, block, 0, 20);
+  set(mtr, block, sec_key(1000));
+  fill(mtr, block, 20, 20);
+
+  const auto a = recs(page);
+  const auto b = recs(plain->get_frame());
+
+  ASSERT_EQ(a.size(), b.size());
+
+  for (size_t i{}; i < a.size(); ++i) {
+    EXPECT_EQ(a[i].get_heap_no(), b[i].get_heap_no()) << i;
+    EXPECT_NE(a[i], page_get_high_key(page)) << i;
+  }
+
+  EXPECT_EQ(keys(page), keys(plain->get_frame()));
+  EXPECT_EQ(page_dir_get_n_heap(page), page_dir_get_n_heap(plain->get_frame()));
+  EXPECT_EQ(page_dir_get_n_slots(page), page_dir_get_n_slots(plain->get_frame()));
+  /* A heap number lookup goes by the list: none is the key's. */
+  EXPECT_TRUE(page_find_rec_with_heap_no(page, page_dir_get_n_heap(page)).is_null());
+  validate(block, m_sec);
+
+  free_page(mtr, m_sec, block);
+  free_page(mtr, m_sec, plain);
+  mtr.commit(*m_sys);
+}
+
+/** No room: false, the page is byte for byte the same and nothing is logged, for a page
+with a key as well: the old one stays. */
+TEST_F(HighKeyTest, NoRoom) {
+  Mtr mtr;
+
+  mtr.start();
+  m_sys->m_fsp->latch(m_clust->get_space_id(), &mtr);
+
+  auto block = linked(mtr, m_clust);
+  auto page = block->get_frame();
+  const auto key = key_of(m_clust, clust_entry(9, 8));
+
+  uint32_t k{};
+
+  while (!insert(mtr, block, m_clust, clust_entry(k, 300)).is_null()) {
+    ++k;
+  }
+
+  const auto too_big = key_of(m_clust, clust_entry(1, 2000));
+
+  ASSERT_LT(page_get_max_insert_size(page, 0), too_big.m_size);
+
+  for (int i = 0; i < 2; ++i) {
+    std::vector<byte> before(page, page + UNIV_PAGE_SIZE);
+    const auto log = log_of(mtr).size();
+
+    EXPECT_FALSE(page_set_high_key(block, too_big.m_rec, too_big.m_size, &mtr));
+    EXPECT_EQ(memcmp(before.data(), page, UNIV_PAGE_SIZE), 0);
+    EXPECT_EQ(log_of(mtr).size(), log);
+
+    if (i == 0) {
+      if (page_get_max_insert_size(page, 0) < key.m_size) {
+        remove(mtr, block, m_clust, recs(page)[0]);
+        ASSERT_TRUE(m_sys->m_btree->page_reorganize(block, m_clust, &mtr));
+      }
+
+      set(mtr, block, key);
+    }
+  }
+
+  expect_key(page, key);
+  validate(block, m_clust);
+
+  free_page(mtr, m_clust, block);
+  mtr.commit(*m_sys);
+}
+
+/** A key fits to the last byte the free space reports, and not a byte over. */
+TEST_F(HighKeyTest, Exact) {
+  Mtr mtr;
+
+  mtr.start();
+  m_sys->m_fsp->latch(m_clust->get_space_id(), &mtr);
+
+  auto block = linked(mtr, m_clust);
+  auto page = block->get_frame();
+
+  /* A key of the size of all the room but one byte, then of all the room. */
+  auto extra_of = [&](ulint blen) { return key_of(m_clust, clust_entry(1, blen)).m_size - blen; };
+  const auto room = page_get_max_insert_size(page, 0);
+  const auto over = key_of(m_clust, clust_entry(1, room + 1 - extra_of(1000)));
+
+  ASSERT_EQ(over.m_size, room + 1);
+  EXPECT_FALSE(page_set_high_key(block, over.m_rec, over.m_size, &mtr));
+  EXPECT_TRUE(page_get_high_key(page).is_null());
+
+  const auto fits = key_of(m_clust, clust_entry(1, room - extra_of(1000)));
+
+  ASSERT_EQ(fits.m_size, room);
+  set(mtr, block, fits);
+  expect_key(page, fits);
+  EXPECT_EQ(page_get_max_insert_size(page, 0), 0UL);
+  validate(block, m_clust);
+
+  free_page(mtr, m_clust, block);
+  mtr.commit(*m_sys);
+}
+
+/** Replace: the old bytes are garbage, not on the free list, until the next reorganize. */
+TEST_F(HighKeyTest, Replace) {
+  Mtr mtr;
+
+  mtr.start();
+  m_sys->m_fsp->latch(m_sec->get_space_id(), &mtr);
+
+  auto block = linked(mtr, m_sec);
+  auto page = block->get_frame();
+  const auto old_key = sec_key(1000);
+  const auto new_key = sec_key(2000, 9);
+
+  fill(mtr, block, 0, 20);
+  set(mtr, block, old_key);
+
+  const auto top = page_header_get_field(page, PAGE_HEAP_TOP);
+  const auto data = page_get_data_size(page);
+
+  set(mtr, block, new_key);
+
+  expect_key(page, new_key);
+  EXPECT_EQ(page_header_get_field(page, PAGE_HEAP_TOP), top + new_key.m_size);
+  EXPECT_EQ(page_header_get_field(page, PAGE_GARBAGE), old_key.m_size);
+  EXPECT_EQ(page_header_get_field(page, PAGE_FREE), 0UL);
+  EXPECT_EQ(page_get_data_size(page), data - old_key.m_size + new_key.m_size);
+  validate(block, m_sec);
+
+  /* The garbage of the key doesn't feed the free list: a record goes on the heap top. */
+  const auto n_heap = page_dir_get_n_heap(page);
+
+  fill(mtr, block, 100, 1);
+  EXPECT_EQ(page_dir_get_n_heap(page), n_heap + 1);
+  EXPECT_EQ(page_header_get_field(page, PAGE_GARBAGE), old_key.m_size);
+
+  /* The current key as the new one. */
+  const KeyRec same{page_get_high_key(page), new_key.m_size};
+
+  set(mtr, block, same);
+  expect_key(page, new_key);
+  EXPECT_EQ(page_header_get_field(page, PAGE_GARBAGE), old_key.m_size + new_key.m_size);
+  validate(block, m_sec);
+
+  const auto after = page_get_data_size(page);
+
+  ASSERT_TRUE(m_sys->m_btree->page_reorganize(block, m_sec, &mtr));
+
+  expect_key(page, new_key);
+  EXPECT_EQ(page_header_get_field(page, PAGE_GARBAGE), 0UL);
+  EXPECT_EQ(page_get_data_size(page), after);
+  EXPECT_EQ(page_header_get_field(page, PAGE_HEAP_TOP), PAGE_SUPREMUM_END + after);
+  validate(block, m_sec);
+
+  free_page(mtr, m_sec, block);
+  mtr.commit(*m_sys);
+}
+
+/** Clear: no key, its bytes are garbage until a reorganize; clearing nothing does nothing. */
+TEST_F(HighKeyTest, Clear) {
+  Mtr mtr;
+
+  mtr.start();
+  m_sys->m_fsp->latch(m_sec->get_space_id(), &mtr);
+
+  auto block = linked(mtr, m_sec);
+  auto page = block->get_frame();
+  const auto key = sec_key(1000);
+
+  const auto log0 = log_of(mtr).size();
+
+  page_clear_high_key(block, &mtr);
+  EXPECT_EQ(log_of(mtr).size(), log0);
+
+  fill(mtr, block, 0, 20);
+  set(mtr, block, key);
+
+  const auto data = page_get_rec_data_size(page);
+
+  page_clear_high_key(block, &mtr);
+
+  EXPECT_TRUE(page_get_high_key(page).is_null());
+  EXPECT_EQ(raw_field(page), 0UL);
+  EXPECT_EQ(page_header_get_field(page, PAGE_GARBAGE), key.m_size);
+  EXPECT_EQ(page_get_data_size(page), data);
+  validate(block, m_sec);
+
+  ASSERT_TRUE(m_sys->m_btree->page_reorganize(block, m_sec, &mtr));
+  EXPECT_EQ(page_header_get_field(page, PAGE_GARBAGE), 0UL);
+  EXPECT_EQ(page_header_get_field(page, PAGE_HEAP_TOP), PAGE_SUPREMUM_END + data);
+  EXPECT_TRUE(page_get_high_key(page).is_null());
+  validate(block, m_sec);
+
+  /* Cleared, so the rightmost link is allowed, and set again after a new sibling. */
+  Btree::page_set_next(page, FIL_NULL, &mtr);
+  Btree::page_set_next(page, 9, &mtr);
+  set(mtr, block, key);
+  expect_key(page, key);
+  page_clear_high_key(block, &mtr);
+
+  free_page(mtr, m_sec, block);
+  mtr.commit(*m_sys);
+}
+
+/** What each operation logs. A reorganize logs its record alone, also with a key: the
+replay runs it. Without a key nothing of this changes the stream of the existing tree. */
+TEST_F(HighKeyTest, Redo) {
+  Mtr mtr;
+
+  mtr.start();
+  m_sys->m_fsp->latch(m_sec->get_space_id(), &mtr);
+
+  auto block = linked(mtr, m_sec);
+  auto page = block->get_frame();
+
+  fill(mtr, block, 0, 10);
+
+  auto pos = log_of(mtr).size();
+
+  ASSERT_TRUE(m_sys->m_btree->page_reorganize(block, m_sec, &mtr));
+  EXPECT_EQ(types(mtr, pos), std::vector<MlogType>{MLOG_PAGE_REORGANIZE});
+
+  pos = log_of(mtr).size();
+  m_sys->m_btree->page_empty(block, m_sec, 0, &mtr);
+  EXPECT_EQ(types(mtr, pos), (std::vector<MlogType>{MLOG_PAGE_CREATE, MLOG_2BYTES}));
+  EXPECT_EQ(raw_field(page), 0UL);
+
+  /* Emptying resets it, as for a new page; a reorganize wants one on a secondary leaf. */
+  page_set_max_trx_id(block, 1, &mtr);
+
+  pos = log_of(mtr).size();
+  set(mtr, block, sec_key(1000));
+  EXPECT_EQ(types(mtr, pos), std::vector<MlogType>{MLOG_PAGE_HIGH_KEY});
+
+  pos = log_of(mtr).size();
+  ASSERT_TRUE(m_sys->m_btree->page_reorganize(block, m_sec, &mtr));
+  EXPECT_EQ(types(mtr, pos), std::vector<MlogType>{MLOG_PAGE_REORGANIZE});
+
+  pos = log_of(mtr).size();
+  m_sys->m_btree->page_empty(block, m_sec, 0, &mtr);
+  EXPECT_EQ(types(mtr, pos), (std::vector<MlogType>{MLOG_PAGE_CREATE, MLOG_PAGE_HIGH_KEY, MLOG_2BYTES}));
+
+  pos = log_of(mtr).size();
+  page_clear_high_key(block, &mtr);
+  EXPECT_EQ(types(mtr, pos), std::vector<MlogType>{MLOG_PAGE_HIGH_KEY});
+
+  free_page(mtr, m_sec, block);
+  mtr.commit(*m_sys);
+}
+
+/** The bytes of the redo record: the page's initial record, the length, the origin, the key. */
+TEST_F(HighKeyTest, RedoBody) {
+  Mtr mtr;
+
+  mtr.start();
+  m_sys->m_fsp->latch(m_sec->get_space_id(), &mtr);
+
+  auto block = linked(mtr, m_sec);
+  const auto key = sec_key(1000);
+  const auto pos = log_of(mtr).size();
+
+  set(mtr, block, key);
+
+  auto log = log_of(mtr);
+  MlogType type{};
+  space_id_t space{};
+  page_no_t page_no{};
+  auto ptr = mlog_parse_initial_log_record(log.data() + pos, log.data() + log.size(), &type, &space, &page_no);
+
+  ASSERT_NE(ptr, nullptr);
+  EXPECT_EQ(type, MLOG_PAGE_HIGH_KEY);
+  EXPECT_EQ(space, block->get_space());
+  EXPECT_EQ(page_no, block->get_page_no());
+  EXPECT_EQ(mach_read_from_2(ptr), 2 + key.m_size);
+  EXPECT_EQ(mach_read_from_2(ptr + 2), page_rec_extra_size(key.m_rec));
+  EXPECT_EQ(std::vector<byte>(ptr + 4, log.data() + log.size()), key.bytes());
+
+  page_clear_high_key(block, &mtr);
+  free_page(mtr, m_sec, block);
+  mtr.commit(*m_sys);
+}
+
+/** Each operation's redo applied to a copy of the page before it gives the same bytes. */
+TEST_F(HighKeyTest, ReplaySet) {
+  const auto key = sec_key(1000);
+
+  check_replay([&](Mtr &, BufBlock *) {}, [&](Mtr &mtr, BufBlock *b) { set(mtr, b, key); });
+  check_replay([&](Mtr &mtr, BufBlock *b) { fill(mtr, b, 0, 20); }, [&](Mtr &mtr, BufBlock *b) { set(mtr, b, key); });
+}
+
+TEST_F(HighKeyTest, ReplayReplace) {
+  const auto key = sec_key(1000);
+  const auto key2 = sec_key(2000, 5);
+
+  check_replay([&](Mtr &mtr, BufBlock *b) { fill(mtr, b, 0, 20); set(mtr, b, key); }, [&](Mtr &mtr, BufBlock *b) { set(mtr, b, key2); });
+}
+
+TEST_F(HighKeyTest, ReplayClear) {
+  const auto key = sec_key(1000);
+
+  check_replay([&](Mtr &mtr, BufBlock *b) { fill(mtr, b, 0, 20); set(mtr, b, key); }, [&](Mtr &mtr, BufBlock *b) { page_clear_high_key(b, &mtr); });
+}
+
+/** MLOG_PAGE_REORGANIZE runs the reorganize on the twin: the key comes from its own bytes. */
+TEST_F(HighKeyTest, ReplayReorg) {
+  const auto key = sec_key(1000);
+  const auto key2 = sec_key(2000, 5);
+
+  check_replay(
+    [&](Mtr &mtr, BufBlock *b) {
+      fill(mtr, b, 0, 30);
+      set(mtr, b, key);
+      set(mtr, b, key2);
+
+      for (int i = 0; i < 10; ++i) {
+        remove(mtr, b, m_sec, recs(b->get_frame())[i]);
+      }
+    },
+    [&](Mtr &mtr, BufBlock *b) {
+      ASSERT_TRUE(m_sys->m_btree->page_reorganize(b, m_sec, &mtr));
+      expect_key(b->get_frame(), key2);
+    }
+  );
+}
+
+TEST_F(HighKeyTest, ReplayEmpty) {
+  const auto key = sec_key(1000);
+
+  check_replay(
+    [&](Mtr &mtr, BufBlock *b) {
+      fill(mtr, b, 0, 30);
+      set(mtr, b, key);
+    },
+    [&](Mtr &mtr, BufBlock *b) {
+      m_sys->m_btree->page_empty(b, m_sec, 0, &mtr);
+      expect_key(b->get_frame(), key);
+    }
+  );
+}
+
+/** All of it in one stream, in between ordinary record operations. */
+TEST_F(HighKeyTest, ReplayAll) {
+  const auto key = sec_key(1000);
+  const auto key2 = sec_key(2000, 5);
+
+  check_replay(
+    [&](Mtr &, BufBlock *) {},
+    [&](Mtr &mtr, BufBlock *b) {
+      fill(mtr, b, 0, 10);
+      set(mtr, b, key);
+      fill(mtr, b, 10, 20);
+      remove(mtr, b, m_sec, recs(b->get_frame())[5]);
+      set(mtr, b, key2);
+      ASSERT_TRUE(m_sys->m_btree->page_reorganize(b, m_sec, &mtr));
+      fill(mtr, b, 100, 5);
+      page_delete_rec_list_end(recs(b->get_frame())[20], b, m_sec, ULINT_UNDEFINED, ULINT_UNDEFINED, &mtr);
+      m_sys->m_btree->page_empty(b, m_sec, 0, &mtr);
+      page_set_max_trx_id(b, 1, &mtr);
+      fill(mtr, b, 200, 5);
+      page_clear_high_key(b, &mtr);
+      ASSERT_TRUE(m_sys->m_btree->page_reorganize(b, m_sec, &mtr));
+      EXPECT_TRUE(page_get_high_key(b->get_frame()).is_null());
+    }
+  );
+}
+
+/** Without a key, the replay of the ordinary operations gives identical bytes too. */
+TEST_F(HighKeyTest, ReplayNoKey) {
+  check_replay(
+    [&](Mtr &mtr, BufBlock *b) { fill(mtr, b, 0, 30); },
+    [&](Mtr &mtr, BufBlock *b) {
+      ASSERT_TRUE(m_sys->m_btree->page_reorganize(b, m_sec, &mtr));
+      m_sys->m_btree->page_empty(b, m_sec, 0, &mtr);
+      EXPECT_EQ(raw_field(b->get_frame()), 0UL);
+    }
+  );
+}
+
+/** A page without a right sibling is what a root is here. Its 2 bytes are the top of the
+space id of the segment header, nonzero for a space id over 65535: never read as a key,
+not in the sizes, and kept by whatever rewrites the page. */
+TEST_F(HighKeyTest, RootSeg) {
+  Mtr mtr;
+
+  mtr.start();
+  m_sys->m_fsp->latch(m_sec->get_space_id(), &mtr);
+
+  auto block = alloc(mtr, m_sec);
+  auto page = block->get_frame();
+
+  /* An fseg header as on a root: this shape is what Btree::create() leaves. */
+  for (ulint i{}; i < FSEG_HEADER_SIZE * 2; ++i) {
+    mlog_write_ulint(page + PAGE_HEADER + PAGE_BTR_SEG_LEAF + i, 0xA0 + i, MLOG_1BYTE, &mtr);
+  }
+
+  const std::vector<byte> seg(page + PAGE_HEADER + PAGE_BTR_SEG_LEAF, page + PAGE_HEADER + PAGE_BTR_SEG_LEAF + 2 * FSEG_HEADER_SIZE);
+  auto seg_same = [&] { return memcmp(seg.data(), page + PAGE_HEADER + PAGE_BTR_SEG_LEAF, seg.size()) == 0; };
+
+  /* Between the creation of its segments and of its links: FIL_PAGE_NEXT is 0. */
+  m_sys->m_btree->page_create(block, m_sec, 0, &mtr);
+  EXPECT_TRUE(seg_same());
+  EXPECT_TRUE(page_get_high_key(page).is_null());
+  page_set_max_trx_id(block, 1, &mtr);
+
+  Btree::page_set_next(page, FIL_NULL, &mtr);
+  Btree::page_set_prev(page, FIL_NULL, &mtr);
+
+  fill(mtr, block, 0, 20);
+
+  EXPECT_NE(raw_field(page), 0UL);
+  EXPECT_TRUE(page_get_high_key(page).is_null());
+  EXPECT_EQ(page_get_rec_data_size(page), page_get_data_size(page));
+  validate(block, m_sec);
+
+  ASSERT_TRUE(m_sys->m_btree->page_reorganize(block, m_sec, &mtr));
+  EXPECT_TRUE(seg_same());
+  validate(block, m_sec);
+
+  page_delete_rec_list_end(recs(page)[10], block, m_sec, ULINT_UNDEFINED, ULINT_UNDEFINED, &mtr);
+  EXPECT_TRUE(seg_same());
+
+  m_sys->m_btree->page_empty(block, m_sec, 0, &mtr);
+  EXPECT_TRUE(seg_same());
+  EXPECT_EQ(page_get_data_size(page), 0UL);
+  validate(block, m_sec);
+
+  free_page(mtr, m_sec, block);
+  mtr.commit(*m_sys);
+}
+
+/** The real thing: the root of an index reads no key, and a reorganize of it, which runs
+page_create(), keeps its segment headers. */
+TEST_F(HighKeyTest, RealRoot) {
+  Mtr mtr;
+
+  mtr.start();
+  m_sys->m_fsp->latch(m_clust->get_space_id(), &mtr);
+
+  auto block = m_sys->m_btree->block_get(m_clust->get_space_id(), m_clust->get_page_no(), RW_X_LATCH, &mtr);
+  auto page = block->get_frame();
+
+  EXPECT_EQ(mach_read_from_4(page + FIL_PAGE_NEXT), FIL_NULL);
+  EXPECT_TRUE(page_get_high_key(page).is_null());
+
+  const std::vector<byte> seg(page + PAGE_HEADER + PAGE_BTR_SEG_LEAF, page + PAGE_HEADER + PAGE_BTR_SEG_LEAF + 2 * FSEG_HEADER_SIZE);
+
+  ASSERT_TRUE(m_sys->m_btree->page_reorganize(block, m_clust, &mtr));
+
+  EXPECT_EQ(memcmp(seg.data(), page + PAGE_HEADER + PAGE_BTR_SEG_LEAF, seg.size()), 0);
+  EXPECT_TRUE(page_get_high_key(page).is_null());
+  validate(block, m_clust);
+
+  mtr.commit(*m_sys);
+}
+
+#ifdef UNIV_DEBUG
+/** Setting a key without a right sibling, as on a root, is a caller's bug that would
+overwrite a segment header: an assertion, in a debug build. */
+TEST_F(HighKeyTest, RootDeath) {
+  GTEST_FLAG_SET(death_test_style, "threadsafe");
+
+  Mtr mtr;
+
+  mtr.start();
+  m_sys->m_fsp->latch(m_sec->get_space_id(), &mtr);
+
+  auto block = alloc(mtr, m_sec);
+  auto page = block->get_frame();
+  const auto key = sec_key(1000);
+
+  EXPECT_DEATH((void)page_set_high_key(block, key.m_rec, key.m_size, &mtr), "");
+
+  Btree::page_set_next(page, FIL_NULL, &mtr);
+  EXPECT_DEATH((void)page_set_high_key(block, key.m_rec, key.m_size, &mtr), "");
+
+  free_page(mtr, m_sec, block);
+  mtr.commit(*m_sys);
+}
+
+/** A page with a key can't become rightmost before the key is cleared. */
+TEST_F(HighKeyTest, RightmostDeath) {
+  GTEST_FLAG_SET(death_test_style, "threadsafe");
+
+  Mtr mtr;
+
+  mtr.start();
+  m_sys->m_fsp->latch(m_sec->get_space_id(), &mtr);
+
+  auto block = linked(mtr, m_sec);
+  auto page = block->get_frame();
+
+  set(mtr, block, sec_key(1000));
+  EXPECT_DEATH(Btree::page_set_next(page, FIL_NULL, &mtr), "");
+
+  page_clear_high_key(block, &mtr);
+  free_page(mtr, m_sec, block);
+  mtr.commit(*m_sys);
+}
+#endif /* UNIV_DEBUG */
+
+/* --- The high key after a crash ------------------------------------------ */
+
+/** What the child that crashes tells the parent. */
+struct CrashInfo {
+  page_no_t m_page_no;
+  byte m_page[UNIV_PAGE_SIZE];
+};
+
+/** A crash: the page of the child, whose redo is durable and which the page cleaner most
+likely didn't write, is the same after recovery. */
+class HighKeyCrash : public ut::DbTest {
+ protected:
+  void SetUp() override {
+    ut::DbTest::SetUp();
+
+    auto mem = ::mmap(nullptr, sizeof(CrashInfo), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+
+    ASSERT_NE(mem, MAP_FAILED);
+    m_info = static_cast<CrashInfo *>(mem);
+  }
+
+  void TearDown() override {
+    (void)::munmap(m_info, sizeof(CrashInfo));
+    ut::DbTest::TearDown();
+  }
+
+  [[nodiscard]] Index *sec() { return get_table(*m_sys, ut::TABLE)->get_index_on_name(ut::SEC_A); }
+
+  /** Insert the records (a, 0) from first of n of SEC_A into the page. */
+  void put(Mtr &mtr, BufBlock *block, MemHeap *heap, uint32_t first, uint32_t n) {
+    auto index = sec();
+
+    for (auto a = first; a < first + n; ++a) {
+      auto t = entry(index, heap, a);
+      PageCursor cur;
+
+      (void)cur.search(*m_sys, block, index, t, PAGE_CUR_LE);
+      ASSERT_FALSE(cur.tuple_insert(t, index, 0, &mtr).is_null());
+    }
+  }
+
+  static DTuple *entry(Index *index, MemHeap *heap, uint32_t a) {
+    auto t = dtuple_create(heap, 2);
+    auto v = static_cast<byte *>(mem_heap_alloc(heap, 8));
+
+    index->copy_types(t, 2);
+    mach_write_to_4(v, a);
+    mach_write_to_4(v + 4, 0);
+    dfield_set_data(dtuple_get_nth_field(t, 0), v, 4);
+    dfield_set_data(dtuple_get_nth_field(t, 1), v + 4, 4);
+
+    return t;
+  }
+
+  /** In the child: a page with records and a key in one mtr, ops in another, the log
+  durable, the image kept for the parent. Then the parent checks the recovered page. */
+  void run(const std::function<void(Mtr &, BufBlock *, Index *)> &ops) {
+    crash([&] {
+      auto index = sec();
+      auto heap = mem_heap_create(16384);
+      Mtr mtr;
+
+      mtr.start();
+      m_sys->m_fsp->latch(index->get_space_id(), &mtr);
+
+      auto block = m_sys->m_btree->page_alloc(index, 0, FSP_UP, 0, &mtr);
+
+      ASSERT_NE(block, nullptr);
+      m_sys->m_btree->page_create(block, index, 0, &mtr);
+      page_set_max_trx_id(block, 1, &mtr);
+      Btree::page_set_next(block->get_frame(), block->get_page_no() + 1, &mtr);
+      put(mtr, block, heap, 0, 30);
+
+      auto t = entry(index, heap, 5000);
+      const auto size = rec_get_converted_size(index, t, 0);
+      auto rec = Rec::convert_dtuple_to_rec(static_cast<byte *>(mem_heap_alloc(heap, size)), index, t, 0);
+
+      ASSERT_TRUE(page_set_high_key(block, rec, size, &mtr));
+
+      m_info->m_page_no = block->get_page_no();
+      mtr.commit(*m_sys);
+
+      mtr.start();
+      block = m_sys->m_btree->block_get(index->get_space_id(), m_info->m_page_no, RW_X_LATCH, &mtr);
+      ops(mtr, block, index);
+      memcpy(m_info->m_page, block->get_frame(), UNIV_PAGE_SIZE);
+      mtr.commit(*m_sys);
+
+      m_sys->m_log->buffer_flush_to_disk();
+      mem_heap_free(heap);
+    });
+
+    auto index = sec();
+    Mtr mtr;
+
+    mtr.start();
+
+    auto block = m_sys->m_btree->block_get(index->get_space_id(), m_info->m_page_no, RW_X_LATCH, &mtr);
+    auto page = block->get_frame();
+
+    EXPECT_EQ(memcmp(page + PAGE_HEADER, m_info->m_page + PAGE_HEADER, UNIV_PAGE_SIZE - PAGE_HEADER - FIL_PAGE_DATA_END), 0);
+    EXPECT_TRUE(page_validate(page, index));
+
+    m_key = page_get_high_key(page);
+    EXPECT_FALSE(m_key.is_null());
+
+    if (!m_key.is_null()) {
+      ulint len{};
+
+      EXPECT_EQ(mach_read_from_4(m_key.get_nth_field(0, &len)), 5000UL);
+    }
+
+    mtr.commit(*m_sys);
+  }
+
+  CrashInfo *m_info{};
+  Rec m_key{};
+};
+
+TEST_F(HighKeyCrash, Set) {
+  run([](Mtr &, BufBlock *, Index *) {});
+}
+
+TEST_F(HighKeyCrash, Reorg) {
+  run([&](Mtr &mtr, BufBlock *block, Index *index) {
+    ASSERT_TRUE(m_sys->m_btree->page_reorganize(block, index, &mtr));
+  });
+}
+
+TEST_F(HighKeyCrash, Empty) {
+  run([&](Mtr &mtr, BufBlock *block, Index *index) {
+    m_sys->m_btree->page_empty(block, index, 0, &mtr);
+  });
 }
 
 }  // namespace

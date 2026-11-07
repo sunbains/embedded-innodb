@@ -15,7 +15,7 @@
 # Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 # This is the CMakeLists for Embedded InnoDB
-CMAKE_MINIMUM_REQUIRED(VERSION 3.10 FATAL_ERROR)
+CMAKE_MINIMUM_REQUIRED(VERSION 3.25 FATAL_ERROR)
 
 PROJECT (EMBEDDED_INNODB)
 
@@ -23,7 +23,7 @@ PROJECT (EMBEDDED_INNODB)
 IF(NOT CMAKE_BUILD_TYPE)
   SET(CMAKE_BUILD_TYPE Debug)
 ENDIF()
-SET(CMAKE_CXX_STANDARD 23)
+SET(CMAKE_CXX_STANDARD 26)
 SET(CMAKE_CXX_STANDARD_REQUIRED True)
 
 # Set both LIBRARY_OUTPUT_PATH and EXECUTABLE_OUTPUT_PATH
@@ -64,6 +64,15 @@ SET(WAL_BUILD_LIB ON CACHE BOOL "Build WAL library" FORCE)
 SET(WAL_ENABLE_ASAN OFF CACHE BOOL "Disable ASAN for WAL" FORCE)
 ADD_SUBDIRECTORY(${CMAKE_SOURCE_DIR}/../wal-cpp ${CMAKE_BINARY_DIR}/wal-cpp)
 MESSAGE(STATUS "Add external dependency wal-cpp")
+
+# The RW lock of every latch except the buffer pool block latches. Header only.
+# SYSTEM: -Werror is for our code, not for the warnings of its headers.
+SET(LATCH_BUILD_BENCH OFF CACHE BOOL "Disable latch benchmark" FORCE)
+SET(LATCH_BUILD_TESTS OFF CACHE BOOL "Disable latch tests" FORCE)
+SET(LATCH_BUILD_INTERPOSER OFF CACHE BOOL "Disable latch interposer" FORCE)
+SET(LATCH_INSTALL OFF CACHE BOOL "Disable latch install rules" FORCE)
+ADD_SUBDIRECTORY(${LATCH_SRC_DIR} ${CMAKE_BINARY_DIR}/latch-rwlock SYSTEM)
+MESSAGE(STATUS "Add external dependency latch-rwlock")
 
 SET(UNIT_TESTING true)
 
@@ -248,6 +257,7 @@ SET(INNODB_SOURCES
       api/api0api.cc api/api0cursor.cc api/api0misc.cc
       btr/btr0blob.cc btr/btr0btr.cc btr/btr0cur.cc btr/btr0pcur.cc
       buf/buf0buf.cc buf/buf0dblwr.cc
+      idx/idx0am.cc idx/idx0blink.cc idx/idx0blinkread.cc
       buf/buf0flu.cc buf/buf0lru.cc buf/buf0rea.cc
       data/data0data.cc data/data0type.cc
       ddl/ddl0ddl.cc
@@ -262,7 +272,7 @@ SET(INNODB_SOURCES
       log/log0log.cc log/log0recv.cc log/log0wal.cc
       mach/mach0data.cc
       mem/mem0mem.cc
-      mtr/mtr0log.cc mtr/mtr0mtr.cc
+      mtr/mtr0log.cc mtr/mtr0systrx.cc mtr/mtr0mtr.cc
       os/os0aio.cc os/os0file.cc os/os0proc.cc os/os0sync.cc os/os0thread.cc
       page/page0cur.cc page/page0page.cc
       que/que0que.cc
@@ -301,6 +311,8 @@ IF(CMAKE_SYSTEM_NAME MATCHES "Linux")
   TARGET_LINK_LIBRARIES(innodb ${LIBURING_LIB_DIR}/liburing.a)
   # Link with WAL-CPP library
   TARGET_LINK_LIBRARIES(innodb wal)
+  # Link with the RW lock: its headers and threads
+  TARGET_LINK_LIBRARIES(innodb latch::rwlock)
 ENDIF(CMAKE_SYSTEM_NAME MATCHES "Linux")
 
 # Configure Google Test if unit testing is enabled

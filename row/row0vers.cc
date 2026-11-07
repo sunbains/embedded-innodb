@@ -55,7 +55,7 @@ Trx *RowVers::impl_x_locked_off_trx_sys_mutex(const Rec rec, const Index *index,
 
   Index *clust_index;
 
-  auto clust_rec = row_get_clust_rec(m_sys, BTR_SEARCH_LEAF, rec, index, &clust_index, &mtr);
+  auto clust_rec = row_get_clust_rec(m_sys, Intent::Read, rec, index, &clust_index, &mtr);
 
   if (clust_rec.is_null()) {
     /* In a rare case it is possible that no clust rec is found for a secondary index record: if in row0undo.cc
@@ -373,7 +373,7 @@ DbErr RowVers::build_for_consistent_read(Row &row) noexcept {
 
   ut_ad(!row.m_consistent_read_view->sees_trx_id(trx_id));
 
-  rw_lock_s_lock(&m_sys.m_trx_sys->m_purge->m_latch);
+  m_sys.m_trx_sys->m_purge->m_latch.s_lock();
 
   auto version = row.m_cluster_rec;
   MemHeap *heap{};
@@ -461,7 +461,7 @@ DbErr RowVers::build_for_consistent_read(Row &row) noexcept {
   }
 
   mem_heap_free(heap);
-  rw_lock_s_unlock(&m_sys.m_trx_sys->m_purge->m_latch);
+  m_sys.m_trx_sys->m_purge->m_latch.s_unlock();
 
   return err;
 }
@@ -476,7 +476,7 @@ DbErr RowVers::build_for_semi_consistent_read(Row &row) noexcept {
 
   ut_ad(row.m_cluster_rec.offs_validate(row.m_cluster_index, row.m_cluster_offsets));
 
-  rw_lock_s_lock(&m_sys.m_trx_sys->m_purge->m_latch);
+  m_sys.m_trx_sys->m_purge->m_latch.s_lock();
 
   /* The S-latch on purge_sys prevents the purge view from changing.  Thus, if we have an uncommitted transaction at
   this point, then purge cannot remove its undo log even if the transaction could commit now. */
@@ -571,7 +571,7 @@ DbErr RowVers::build_for_semi_consistent_read(Row &row) noexcept {
     mem_heap_free(heap);
   }
 
-  rw_lock_s_unlock(&m_sys.m_trx_sys->m_purge->m_latch);
+  m_sys.m_trx_sys->m_purge->m_latch.s_unlock();
 
   return err;
 }

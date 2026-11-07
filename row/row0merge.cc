@@ -24,6 +24,7 @@ Completed by Sunny Bains and Marko Makela
 *******************************************************/
 
 #include "row0merge.h"
+#include "idx0am.h"
 #include "row0misc.h"
 #include "btr0blob.h"
 #include "btr0btr.h"
@@ -883,7 +884,7 @@ static DbErr row_merge_read_clustered_index(System &sys,
   ulint *nonnull{};
   ulint n_nonnull{};
   DbErr err = DB_SUCCESS;
-  BtreePcursor pcur{};
+  IndexCursor pcur{sys};
 
   trx->m_op_info = "reading clustered index";
 
@@ -910,7 +911,7 @@ static DbErr row_merge_read_clustered_index(System &sys,
 
   auto clust_index = old_table->get_clustered_index();
 
-  pcur.open_at_index_side(sys, true, clust_index, BTR_SEARCH_LEAF, true, 0, &mtr);
+  pcur.seek_first(clust_index, Intent::Read, &mtr);
 
   if (unlikely(old_table != new_table)) {
     ulint n_cols = old_table->get_n_cols();
@@ -966,42 +967,41 @@ static DbErr row_merge_read_clustered_index(System &sys,
 
     return err;
   };
+  constexpr ulint SCAN_YIELD = 256;
+  ulint n_scanned{};
+
   /* Scan the clustered index. */
   for (;;) {
     Rec rec;
     ulint *offsets;
     DTuple *row{};
     RowExt *ext;
-    bool has_next = true;
-
-    pcur.move_to_next_on_page(sys);
-
-    /* When switching pages, commit the mini-transaction
-    in order to release the latch on the old page. */
 
     MergeFile *file{};
     const Index *index{};
 
-    if (pcur.is_after_last_on_page()) {
+    /* Don't hold on to the index for long: commit the mini-transaction now and then. */
+    if (++n_scanned % SCAN_YIELD == 0) {
       if (unlikely(trx->is_interrupted())) {
         trx->m_error_key_num = ULINT_UNDEFINED;
         return func_exit(DB_INTERRUPTED);
       }
 
-      pcur.store_position(sys, &mtr);
+      pcur.save(&mtr);
 
       mtr.commit(sys);
 
       mtr.start();
 
-      (void)pcur.restore_position(sys, BTR_SEARCH_LEAF, &mtr, Current_location());
-      has_next = pcur.move_to_next_user_rec(sys, &mtr);
+      (void)pcur.restore(Intent::Read, &mtr);
     }
+
+    const auto has_next = pcur.next(&mtr);
 
     RowMergeBuf *buf;
 
     if (likely(has_next)) {
-      rec = pcur.get_rec();
+      rec = pcur.rec();
 
       {
         PhyRec record{clust_index, rec};
@@ -1301,7 +1301,7 @@ done0:
 
 /** Merge disk files.
 @return	DB_SUCCESS or error code */
-static __attribute__((nonnull)) DbErr row_merge(
+static DbErr row_merge(
   Trx *trx,                 /*!< in: transaction */
   const Index *index,       /*!< in: index being created */
   MergeFile *file,       /*!< in/out: file containing

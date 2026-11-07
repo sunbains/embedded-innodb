@@ -304,8 +304,13 @@ inline ulint xdes_get_n_used(const Fsp::xdes_t *descr, Mtr *mtr) noexcept {
 
   ulint count{};
 
+  /* The bits themselves: xdes_get_bit() checks the memo each time, once is enough for all of them.
+  An extent has many pages with small pages, and creating the doublewrite buffer does this for each
+  of its pages in one mini-transaction. */
   for (ulint i{}; i < FSP_EXTENT_SIZE; ++i) {
-    if (false == xdes_get_bit(descr, XDES_FREE_BIT, i, mtr)) {
+    const auto index = XDES_FREE_BIT + XDES_BITS_PER_PAGE * i;
+
+    if (!ut_bit_get_nth(mach_read_from_1(descr + XDES_BITMAP + index / 8), index % 8)) {
       ++count;
     }
   }
@@ -1266,7 +1271,7 @@ Fsp::fsp_header_t *Fsp::get_space_header(space_id_t id [[maybe_unused]], Mtr *mt
 }
 
 Fsp::xdes_t *Fsp::xdes_lst_get_descriptor(space_id_t space, FilAddr lst_node, Mtr *mtr) noexcept {
-  ut_ad(mtr->memo_contains(m_sys.m_fil->space_get_latch(space), MTR_MEMO_X_LOCK));
+  ut_ad(mtr->memo_contains(m_sys.m_fil->space_get_latch(space), MTR_MEMO_X_LATCH));
 
   const auto page = lst_node.m_page_no == 0 ? Rec(get_space_header(space, mtr)).page_align()
                                             : held_page(m_sys, mtr->m_fsp_xdes, space, lst_node.m_page_no, mtr)->get_frame();
@@ -1508,7 +1513,7 @@ BufBlock *Fsp::alloc_free_page(space_id_t space, page_no_t hint, Mtr *mtr) noexc
 }
 
 Fsp::xdes_t *Fsp::xdes_get_descriptor_with_space_hdr(fsp_header_t *sp_header, space_id_t space, ulint offset, Mtr *mtr) noexcept {
-  ut_ad(mtr->memo_contains(m_sys.m_fil->space_get_latch(space), MTR_MEMO_X_LOCK));
+  ut_ad(mtr->memo_contains(m_sys.m_fil->space_get_latch(space), MTR_MEMO_X_LATCH));
   ut_ad(mtr->memo_contains_page(sp_header, MTR_MEMO_PAGE_S_FIX) || mtr->memo_contains_page(sp_header, MTR_MEMO_PAGE_X_FIX));
   ut_ad(page_offset(sp_header) == FSP_HEADER_OFFSET);
 
@@ -1858,7 +1863,7 @@ void Fsp::latch_header(space_id_t space, Mtr *mtr) noexcept {
 
 #ifdef UNIV_DEBUG
 bool Fsp::latched(space_id_t space, const Mtr *mtr) noexcept {
-  return mtr->memo_contains(m_sys.m_fil->space_get_latch(space), MTR_MEMO_X_LOCK);
+  return mtr->memo_contains(m_sys.m_fil->space_get_latch(space), MTR_MEMO_X_LATCH);
 }
 #endif /* UNIV_DEBUG */
 

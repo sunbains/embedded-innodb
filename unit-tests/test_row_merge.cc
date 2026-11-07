@@ -35,6 +35,7 @@ inserts maintained.
 #include "ut0perf.h"
 
 #include "btr0btr.h"
+#include "idx0am.h"
 #include "btr0pcur.h"
 #include "dict0dict.h"
 #include "fsp0fsp.h"
@@ -432,7 +433,7 @@ class MergeTest : public ::testing::Test {
 
     auto trx = begin();
 
-    EXPECT_TRUE(m_sys->m_btree->validate_index(ix, trx)) << idx;
+    EXPECT_TRUE(m_sys->am(ix).validate(ix, trx)) << idx;
     commit(trx);
 
     const auto got = entries(ix);

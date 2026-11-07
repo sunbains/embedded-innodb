@@ -439,29 +439,19 @@ void row_build_row_ref_in_tuple(DTuple *ref, Rec rec, const Index *index, const 
   }
 }
 
-bool row_search_on_row_ref(System &sys, BtreePcursor *pcur, ulint mode, const Table *table, const DTuple *ref, Mtr *mtr) {
+bool row_search_on_row_ref(IndexCursor *cur, Intent intent, const Table *table, const DTuple *ref, Mtr *mtr) {
   ut_ad(dtuple_check_typed(ref));
 
   auto index = table->get_first_index();
 
   ut_a(dtuple_get_n_fields(ref) == index->get_n_unique());
+  ut_a(dtuple_get_n_fields_cmp(ref) == dtuple_get_n_fields(ref));
 
-  pcur->open(sys, index, ref, PAGE_CUR_LE, mode, mtr, Current_location());
-
-  auto low_match = pcur->get_low_match();
-
-  auto rec = pcur->get_rec();
-
-  if (page_rec_is_infimum(rec)) {
-
-    return false;
-  }
-
-  return low_match == dtuple_get_n_fields(ref);
+  return cur->find(index, ref, intent, mtr);
 }
 
-Rec row_get_clust_rec(System &sys, ulint mode, const Rec rec, const Index *index, Index **clust_index, Mtr *mtr) {
-  BtreePcursor pcur{};
+Rec row_get_clust_rec(System &sys, Intent intent, const Rec rec, const Index *index, Index **clust_index, Mtr *mtr) {
+  IndexCursor pcur{sys};
 
   ut_ad(!index->is_clustered());
 
@@ -471,9 +461,9 @@ Rec row_get_clust_rec(System &sys, ulint mode, const Rec rec, const Index *index
 
   auto ref = row_build_row_ref(ROW_COPY_POINTERS, index, rec, heap);
 
-  auto found = row_search_on_row_ref(sys, &pcur, mode, table, ref, mtr);
+  auto found = row_search_on_row_ref(&pcur, intent, table, ref, mtr);
 
-  auto clust_rec = found ? pcur.get_rec() : nullptr;
+  Rec clust_rec = found ? pcur.rec() : Rec{};
 
   mem_heap_free(heap);
 
@@ -482,17 +472,4 @@ Rec row_get_clust_rec(System &sys, ulint mode, const Rec rec, const Index *index
   *clust_index = table->get_first_index();
 
   return clust_rec;
-}
-
-bool row_search_index_entry(System &sys, Index *index, const DTuple *entry, ulint mode, BtreePcursor *pcur, Mtr *mtr) {
-  ut_ad(dtuple_check_typed(entry));
-
-  pcur->open(sys, index, entry, PAGE_CUR_LE, mode, mtr, Current_location());
-
-  auto low_match = pcur->get_low_match();
-
-  auto rec = pcur->get_rec();
-
-  /* All the fields of the key: the DB_TRX_ID of a secondary record is not one of them. */
-  return !page_rec_is_infimum(rec) && low_match == dtuple_get_n_fields_cmp(entry);
 }

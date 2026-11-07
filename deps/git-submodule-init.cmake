@@ -3,6 +3,7 @@ FIND_PACKAGE(Git QUIET)
 SET(DEPS_INSTALL_DIR "${CMAKE_SOURCE_DIR}/deps/install")
 SET(LIBURING_SRC_DIR "${CMAKE_SOURCE_DIR}/deps/liburing")
 SET(THREAD_POOL_SRC_DIR "${CMAKE_SOURCE_DIR}/deps/thread-pool")
+SET(LATCH_SRC_DIR "${CMAKE_SOURCE_DIR}/deps/latch-rwlock")
 
 IF(GIT_FOUND AND EXISTS "${CMAKE_SOURCE_DIR}/.git")
 
@@ -54,6 +55,13 @@ ELSE()
   # SYSTEM: -Werror is for our code, not for the warnings of its headers.
   INCLUDE_DIRECTORIES(SYSTEM ${LIBURING_INCLUDE_DIR})
 
+ENDIF()
+
+IF(NOT EXISTS "${LATCH_SRC_DIR}/CMakeLists.txt")
+  MESSAGE(FATAL_ERROR "Missing deps/latch-rwlock: git submodule update --init deps/latch-rwlock")
+ELSE()
+  # Header only. For the targets that don't link innodb; SYSTEM as liburing above.
+  INCLUDE_DIRECTORIES(SYSTEM ${LATCH_SRC_DIR}/include)
 ENDIF()
 
 IF(NOT EXISTS "${THREAD_POOL_SRC_DIR}")

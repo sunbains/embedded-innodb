@@ -450,6 +450,9 @@ TEST_F(BufPoolTest, LatchModes) {
 
   put(id, 1);
 
+  /* Clean: the flusher would hold an S latch on it while it writes, in the counts below. */
+  flush_all();
+
   auto block = cached_block(id);
 
   /* Try a no-wait S then X get from another thread. @return {s ok, x ok} */
@@ -492,6 +495,44 @@ TEST_F(BufPoolTest, LatchModes) {
   EXPECT_EQ(rw_lock_get_writer(&block->m_rw_lock), RW_LOCK_EX);
   EXPECT_EQ(probe(), std::make_pair(false, false)) << "X held";
   mtr.commit(*m_sys);
+
+  /* Owning it by its bits: exclusive, no RW latch, and the version says so. */
+  {
+    const auto before = block->read_begin();
+
+    mtr.start();
+    get(id, RW_B_LATCH, mtr);
+    EXPECT_EQ(rw_lock_get_writer(&block->m_rw_lock), RW_LOCK_NOT_LOCKED);
+    EXPECT_EQ(block->read_begin(), before + 1);
+
+    std::thread([&] { EXPECT_FALSE(block->bits_try_lock()); }).join();
+
+    mtr.commit(*m_sys);
+    EXPECT_EQ(block->read_begin(), before + 2);
+    EXPECT_EQ(block->m_bits.load(), 0UL);
+  }
+
+  /* The version is odd for exactly as long as a thread can be writing. */
+  const auto version = block->read_begin();
+
+  EXPECT_EQ(version % 2, 0UL);
+
+  mtr.start();
+  get(id, RW_S_LATCH, mtr);
+  EXPECT_EQ(block->read_begin(), version) << "S held";
+  EXPECT_TRUE(block->read_is_valid(version));
+  mtr.commit(*m_sys);
+
+  mtr.start();
+  get(id, RW_X_LATCH, mtr);
+  EXPECT_EQ(block->read_begin(), version + 1) << "X held";
+  EXPECT_FALSE(block->read_is_valid(version));
+  EXPECT_FALSE(block->read_is_valid(version + 1));
+  get(id, RW_X_LATCH, mtr);
+  EXPECT_EQ(block->read_begin(), version + 1) << "X in X";
+  mtr.commit(*m_sys);
+  EXPECT_EQ(block->read_begin(), version + 2);
+  EXPECT_FALSE(block->read_is_valid(version));
 
   mtr.start();
   get(id, RW_NO_LATCH, mtr, BUF_GET_NO_LATCH);

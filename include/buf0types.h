@@ -29,6 +29,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 #include "innodb0types.h"
 
+#include <atomic>
 #include <functional>
 #include <optional>
 #include <set>
@@ -459,10 +460,6 @@ struct BufBlock {
   BufPool::page_hash can point to BufPage or buf_block_t */
   BufPage m_page;
 
-  /** pointer to buffer frame which is of size UNIV_PAGE_SIZE, and
-  aligned to an address divisible by UNIV_PAGE_SIZE */
-  byte *m_frame;
-
   /** mutex protecting this block: state (also protected by the buffer
   pool mutex), io_fix, buf_fix_count, and accessed. */
   mutable Mutex m_mutex;
@@ -470,11 +467,167 @@ struct BufBlock {
   /** RW lock protoecting the buffer frame state changes. */
   mutable RwLock m_rw_lock;
 
+  /* What every read and every change of the page looks at, on a line of its own: away from the
+  block mutex and the fix count above, that the buffer pool writes on every get of the page. The rest
+  of the line is what's written only with the page owned, or never. */
+
+  /** Who owns the regions of the page, in memory only: it isn't on the page and doesn't survive a
+  restart. A page has regions, the header and the groups of records under its directory slots, and a
+  set bit is an exclusive hold on one. A compare and swap takes any set of them at once, so there's no
+  order to take them in. A group has a bit from its owner record's offset: BufBlock::group_bit(). Two
+  groups can have the same bit, which is safe, they just wait for each other.
+
+  A change to the bytes of one record that are no key (Intent::Mark) has the bit of its group. Anything
+  else has ALL_BITS: the structure of the page, and what any search reads, changes only then. HEADER_BIT
+  is also how one that wants ALL_BITS gets it: it stops new holders of group bits, and waits for the
+  ones there are to leave. */
+  alignas(64) mutable std::atomic<uint64_t> m_bits;
+
+  /** What a read with no ownership validates against: odd while ALL_BITS is held, so it changes around
+  everything that changes the structure of the frame. A read reads the frame and sees the same even
+  value before and after. Page I/O doesn't count: nobody reads a frame that is being read in, a buffer
+  fix waits. */
+  std::atomic<uint64_t> m_version;
+
+  /** Around the writes of one record's bytes by a holder of a group bit: began and ended. A read of a
+  record has no use for the bit: the holder can be busy elsewhere for a long time, with undo or the log,
+  with the record as it was. It only has to not overlap the writes: both the same before, and the first
+  the same after. A write anywhere on the page makes it go again, one record's copy. */
+  std::atomic<uint32_t> m_rec_writes_begun;
+  std::atomic<uint32_t> m_rec_writes_ended;
+
+  /** Work for whoever owns the page next: for the index implementation, a stack of its own kind of
+  operation, each in the frame of a thread that waits for it. */
+  std::atomic<void *> m_queued_ops;
+
+  /** pointer to buffer frame which is of size UNIV_PAGE_SIZE, and
+  aligned to an address divisible by UNIV_PAGE_SIZE */
+  byte *m_frame;
+
+  /** this clock is incremented every time a pointer to a record on the
+  page may become obsolete; this is used in the optimistic cursor
+  positioning: if the modify clock has not changed, we know that the pointer
+  is still valid; this field may be changed if the thread (1) owns the
+  pool mutex and the page is not bufferfixed, or (2) the thread has an
+  x-latch on the block */
+  uint64_t m_modify_clock;
+
   /** true if we know that this is an index page, and want the database
   to check its consistency before flush; note that there may be pages in the
   buffer pool which are index pages, but this flag is not set because
   we do not keep track of all pages; NOT protected by any mutex */
   bool m_check_index_page_at_flush;
+
+  static constexpr uint64_t HEADER_BIT = uint64_t{1} << 63;
+
+  /** Somebody sleeps on m_bits: not a region. A notify on it is a write to a line that all the blocks
+  share, in the standard library, even with nobody to wake: so only when this says so. */
+  static constexpr uint64_t WAITERS_BIT = uint64_t{1} << 62;
+
+  static constexpr uint64_t ALL_BITS = ~WAITERS_BIT;
+
+  /** The number of bits for groups. */
+  static constexpr ulint N_GROUP_BITS = 62;
+
+  /** @return the bit of a group, from the offset of its owner record. */
+  [[nodiscard]] static ulint group_bit(ulint owner) noexcept { return ((owner * 2654435761UL) >> 16) % N_GROUP_BITS; }
+
+#ifdef UNIV_DEBUG
+  /** Who owns it: a thread that waits for itself is a bug to report, not to hang on. */
+  std::atomic<uint64_t> m_bits_owner;
+#endif /* UNIV_DEBUG */
+
+  /** Own the page, the caller has it buffer fixed. Waits for an owner, and for a write of the page
+  to the file to finish: that reads the frame with no ownership of it.
+  @param[in] rw_x  The caller has the X latch: the write of the page can't start or be running, the
+                   flusher has the page's S latch for that. It can be marked already, the flusher
+                   waiting for this thread's latch, so it isn't to be waited for. */
+  void bits_lock(bool rw_x = false) noexcept;
+
+  /** @return true if the page is owned now. Doesn't wait.
+  @param[in] rw_x  See bits_lock(). */
+  [[nodiscard]] bool bits_try_lock(bool rw_x = false) noexcept;
+
+  /** Give up the ownership. */
+  void bits_unlock() noexcept;
+
+  /** Own a group of records, the caller has the page buffer fixed. Waits as bits_lock() does. */
+  void group_lock(ulint bit) noexcept;
+
+  /** Give up a group of records. */
+  void group_unlock(ulint bit) noexcept;
+
+  /** Sleep until the bits change, setting WAITERS_BIT for it to be noticed. For one that saw them held. */
+  void bits_wait(uint64_t bits) const noexcept;
+
+  /** Start a read of a record, under no bit.
+  @param[out] begun             What to pass to rec_read_is_valid().
+  @return false if a record is being written: there's no point. */
+  [[nodiscard]] bool rec_read_begin(uint32_t &begun) const noexcept {
+    begun = m_rec_writes_begun.load(std::memory_order_acquire);
+
+    return m_rec_writes_ended.load(std::memory_order_acquire) == begun;
+  }
+
+  /** @return true if no record was written during the read since rec_read_begin(). */
+  [[nodiscard]] bool rec_read_is_valid(uint32_t begun) const noexcept {
+    std::atomic_thread_fence(std::memory_order_acquire);
+
+    return m_rec_writes_begun.load(std::memory_order_relaxed) == begun;
+  }
+
+  /** Around the writes of a record's bytes: all of what a read must see together. */
+  struct RecWrite {
+    explicit RecWrite(BufBlock *block) noexcept : m_block(block) {
+      m_block->m_rec_writes_begun.fetch_add(1, std::memory_order_relaxed);
+
+      /* It's seen as begun before any of the writes. */
+      std::atomic_thread_fence(std::memory_order_release);
+    }
+
+    ~RecWrite() noexcept { m_block->m_rec_writes_ended.fetch_add(1, std::memory_order_release); }
+
+    BufBlock *m_block;
+  };
+
+  /** For the flusher, with the page marked as being written: on return no thread owns the page, and
+  any that tries sees the mark and gives it up without having changed anything. */
+  void bits_wait_free() noexcept;
+
+  /** To be called with the X latch just taken: an RW latch on the page owns it too, so a read sees
+  that change. Only the outermost hold of a recursive one counts. */
+  void x_locked() noexcept {
+    if (rw_lock_get_x_lock_count(&m_rw_lock) == 1) {
+      bits_lock(true);
+    }
+  }
+
+  /** To be called with the X latch about to be released. */
+  void x_unlocking() noexcept {
+    if (rw_lock_get_x_lock_count(&m_rw_lock) == 1) {
+      bits_unlock();
+    }
+  }
+
+  /** Start a read of the frame with no latch, by a thread that has it buffer fixed.
+  @return what to pass to read_is_valid(). Odd if there is a writer: don't bother. */
+  [[nodiscard]] uint64_t read_begin() const noexcept { return m_version.load(std::memory_order_acquire); }
+
+  /** @return true if what was read since read_begin() is what the page had at one time. Before
+  this it can be anything, half of one write and half of another. */
+  [[nodiscard]] bool read_is_valid(uint64_t version) const noexcept {
+    std::atomic_thread_fence(std::memory_order_acquire);
+
+    return (version & 1) == 0 && m_version.load(std::memory_order_relaxed) == version;
+  }
+
+  /** Sleep for now, for a read that saw an owner of all of it. */
+  void read_wait() const noexcept {
+    if (const auto bits = m_bits.load(std::memory_order_relaxed); (bits & HEADER_BIT) != 0) {
+      bits_wait(bits);
+    }
+  }
+
   /* @} */
 
   /** Note that this is an index page, to be checked before it's flushed.
@@ -497,13 +650,6 @@ struct BufBlock {
   /** @name Optimistic search field */
   /* @{ */
 
-  /** this clock is incremented every time a pointer to a record on the
-  page may become obsolete; this is used in the optimistic cursor
-  positioning: if the modify clock has not changed, we know that the pointer
-  is still valid; this field may be changed if the thread (1) owns the
-  pool mutex and the page is not bufferfixed, or (2) the thread has an
-  x-latch on the block */
-  uint64_t m_modify_clock;
 
   /* @} */
   /** @name Hash search fields (unprotected)

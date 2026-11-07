@@ -28,6 +28,7 @@ class System;
 
 #include "btr0pcur.h"
 #include "btr0types.h"
+#include "idx0am.h"
 #include "data0data.h"
 #include "dict0types.h"
 #include "innodb0types.h"
@@ -53,11 +54,11 @@ struct RowPurge {
    * restores the position. Otherwise, searches for the clustered index record
    * using the row reference and positions the cursor on it.
    *
-   * @param latch_mode Latch mode for the operation (BTR_SEARCH_LEAF, etc.)
+   * @param intent What the caller does at the record
    * @param mtr Mini-transaction for the operation
    * @return true if the record was found and cursor positioned, false otherwise
    */
-  bool reposition_pcur(System &sys, ulint latch_mode, Mtr *mtr);
+  bool reposition_pcur(System &sys, Intent intent, Mtr *mtr);
 
   /**
    * @brief Attempts to remove a clustered index record with specified mode.
@@ -67,10 +68,10 @@ struct RowPurge {
    * Verifies that the roll pointer matches before deletion to ensure the
    * correct record version is being purged.
    *
-   * @param mode Deletion mode (BTR_MODIFY_LEAF or BTR_MODIFY_TREE)
+   * @param intent Write or Restructure
    * @return true if successful or record already removed, false if operation failed
    */
-  bool remove_clust_if_poss_low(System &sys, ulint mode);
+  bool remove_clust_if_poss_low(System &sys, Intent intent);
 
   /**
    * @brief Removes a clustered index record if possible.
@@ -90,10 +91,10 @@ struct RowPurge {
    *
    * @param index Secondary index from which to remove the record
    * @param entry Index entry tuple representing the record to remove
-   * @param mode Deletion mode (BTR_MODIFY_LEAF or BTR_MODIFY_TREE)
+   * @param intent Write or Restructure
    * @return true if successful or record not found, false if operation failed
    */
-  bool remove_sec_if_poss_low(System &sys, Index *index, const DTuple *entry, ulint mode);
+  bool remove_sec_if_poss_low(System &sys, Index *index, const DTuple *entry, Intent intent);
 
   /**
    * @brief Removes a secondary index record if possible.
@@ -197,7 +198,7 @@ struct RowPurge {
   ulint m_rec_type;
 
   /** persistent cursor used in searching the clustered index record */
-  BtreePcursor m_pcur;
+  IndexCursor m_pcur;
 
   /* true if the clustered index record determined by ref was found in the clustered index, and we were able to position pcur on it */
   bool m_found_clust;

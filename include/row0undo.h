@@ -27,6 +27,7 @@ Created 1/8/1997 Heikki Tuuri
 #include "srv0sys.h"
 
 #include "btr0pcur.h"
+#include "idx0am.h"
 #include "dict0types.h"
 // #include "row0types.h"
 
@@ -221,11 +222,11 @@ struct UndoNode {
  *
  * @param[in,out] thr           Query thread.
  * @param[in,out] mtr           Must be committed before latching any further pages.
- * @param[in] mode              BTR_MODIFY_LEAF or BTR_MODIFY_TREE.
+ * @param[in] intent Write or Restructure
  *
  * @return DB_SUCCESS, DB_FAIL, or error code: we may run out of file space.
    */
-  [[nodiscard]] DbErr undo_clustered_index_modification(System &sys, QueThr *thr, Mtr *mtr, ulint mode) noexcept;
+  [[nodiscard]] DbErr undo_clustered_index_modification(System &sys, QueThr *thr, Mtr *mtr, Intent intent) noexcept;
 
   /**
    * @brief Removes a clustered index record after undo if possible.
@@ -237,28 +238,11 @@ struct UndoNode {
    *
    * @param[in,out] thr         Query thread.
    * @param[in,out] mtr         Must be committed before latching any further pages.
-   * @param[in] mode            BTR_MODIFY_LEAF or BTR_MODIFY_TREE.
+   * @param[in] intent Write or Restructure
    *
    * @return DB_SUCCESS, DB_FAIL, or error code: we may run out of file space.
    */
-  [[nodiscard]] DbErr remove_clustered_index_record(System &sys, QueThr *thr, Mtr *mtr, ulint mode) noexcept;
-
-  /**
-   * @brief Removes a clustered index record after undo if possible.
-   *
-   * This is attempted when the record was inserted by updating a
-   * delete-marked record and there no longer exist transactions
-   * that would see the delete-marked record. In other words, we
-   * roll back the insert by purging the record.
-   *
-   * @param[in,out] node Row undo node.
-   * @param[in,out] thr Query thread.
-   * @param[in,out] mtr Must be committed before latching any further pages.
-   * @param[in] mode BTR_MODIFY_LEAF or BTR_MODIFY_TREE.
-   *
-   * @return DB_SUCCESS, DB_FAIL, or error code: we may run out of file space.
-   */
-  [[nodiscard]] DbErr remove_clustered_index_record_low(System &sys, QueThr *thr, Mtr *mtr, ulint mode) noexcept;
+  [[nodiscard]] DbErr remove_clustered_index_record(System &sys, QueThr *thr, Mtr *mtr, Intent intent) noexcept;
 
   /**
    * @brief Delete marks or removes a secondary index entry if found.
@@ -266,12 +250,12 @@ struct UndoNode {
    * @param[in,out] thr         Query thread
    * @param[in,out] index       Index
    * @param[in] entry           Index entry
-   * @param[in] mode            Latch mode BTR_MODIFY_LEAF or BTR_MODIFY_TREE
+   * @param[in] intent Write or Restructure
    *
    * @return DB_SUCCESS, DB_FAIL, or DB_OUT_OF_FILE_SPACE
    */
   [[nodiscard]] DbErr delete_mark_or_remove_secondary_index_entry(System &sys, 
-    QueThr *thr, Index *index, DTuple *entry, ulint mode
+    QueThr *thr, Index *index, DTuple *entry, Intent intent
   ) noexcept;
 
   /**
@@ -298,7 +282,7 @@ struct UndoNode {
  * need to update the fields of the secondary index record if we updated its
  * fields but alphabetically they stayed the same, e.g., 'abc' -> 'aBc'.
  *
- * @param[in] mode              Search mode: BTR_MODIFY_LEAF or BTR_MODIFY_TREE
+ * @param[in] intent Write or Restructure
  * @param[in,out] thr           Query thread
  * @param[in,out] index         Secondary index in which to unmark the entry
  * @param[in] entry             Index entry to unmark.
@@ -306,7 +290,7 @@ struct UndoNode {
  * @return DB_FAIL or DB_SUCCESS or DB_OUT_OF_FILE_SPACE
  */
   [[nodiscard]] DbErr del_unmark_secondary_index_and_undo_update(System &sys, 
-    ulint mode, QueThr *thr, Index *index, const DTuple *entry
+    Intent intent, QueThr *thr, Index *index, const DTuple *entry
   ) noexcept;
 
   /**
@@ -358,15 +342,13 @@ struct UndoNode {
   /**
    * Removes a secondary index entry if found.
    *
-   * @param[in,out] mode          BTR_MODIFY_LEAF or BTR_MODIFY_TREE,
-   *                              depending on whether we wish optimistic or
-   *                              pessimistic descent down the index tree
+   * @param[in] intent Write or Restructure
    * @param[in] index             Remove entry from this index
    * @param[in] entry             Index entry to remove
    *
    * @return	DB_SUCCESS, DB_FAIL, or DB_OUT_OF_FILE_SPACE
    */
-  [[nodiscard]] DbErr remove_secondary_index_entry(System &sys, ulint mode, Index *index, DTuple *entry) noexcept;
+  [[nodiscard]] DbErr remove_secondary_index_entry(System &sys, Intent intent, Index *index, DTuple *entry) noexcept;
 
   /**
    * @brief Removes a secondary index entry from the index if found.
@@ -408,7 +390,7 @@ struct UndoNode {
   trx_id_t m_new_trx_id{};
 
   /** persistent cursor used in searching the clustered index record */
-  BtreePcursor m_pcur;
+  IndexCursor m_pcur;
 
   /** table where undo is done */
   Table *m_table{};

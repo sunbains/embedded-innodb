@@ -358,10 +358,53 @@ TEST_F(RecvParseTest, FileOpsTruncated) {
 /** The types that are not redo records are corrupt log: they would stop
 the parsing of the log at once. */
 TEST_F(RecvParseTest, UnknownType) {
-  /* 36 is MLOG_FILE_EXTEND. */
-  for (int type : {0, 3, 5, 6, 7, 12, 27, 37, 40, 47}) {
+  /* 36 is MLOG_FILE_EXTEND, 37 to 39 are the system transaction records, 40 is
+  MLOG_PAGE_HIGH_KEY. */
+  for (int type : {0, 3, 5, 6, 7, 12, 27, 41, 47}) {
     expect_corrupt(*m_sys, MlogType(type), {});
   }
+}
+
+/** MLOG_PAGE_HIGH_KEY: a clear is the length 0 alone. A set is its length, then the bytes:
+2 for the origin of the record, the rest the record. Complete and truncated, only the
+length is looked at without a page. */
+TEST_F(RecvParseTest, HighKey) {
+  expect_body(*m_sys, MLOG_PAGE_HIGH_KEY, {0, 0});
+
+  for (ulint n : {ulint(3), ulint(20), ulint(1000), ulint(UNIV_PAGE_SIZE - 1)}) {
+    std::vector<byte> b(2 + n);
+
+    mach_write_to_2(b.data(), n);
+
+    expect_body(*m_sys, MLOG_PAGE_HIGH_KEY, b);
+  }
+
+  /* Bigger than a page, or too short for the origin and a byte of the record. */
+  expect_corrupt(*m_sys, MLOG_PAGE_HIGH_KEY, {byte(UNIV_PAGE_SIZE >> 8), byte(UNIV_PAGE_SIZE & 0xff)});
+  expect_corrupt(*m_sys, MLOG_PAGE_HIGH_KEY, {0xff, 0xff});
+  expect_corrupt(*m_sys, MLOG_PAGE_HIGH_KEY, {0, 1});
+  expect_corrupt(*m_sys, MLOG_PAGE_HIGH_KEY, {0, 2});
+}
+
+/** The system transaction records: an id, and for a step the compensation; truncated
+nullptr and not corrupt. Parsing doesn't track them: recovery does when it stores the
+parsed records. */
+TEST_F(RecvParseTest, SysTrx) {
+  for (auto type : {MLOG_SYSTRX_UNDONE, MLOG_SYSTRX_END}) {
+    std::vector<byte> b(8);
+
+    EXPECT_EQ(recv_parse_or_apply_log_rec_body(*m_sys, type, b.data(), b.data() + 8, nullptr, nullptr), b.data() + 8);
+    EXPECT_EQ(recv_parse_or_apply_log_rec_body(*m_sys, type, b.data(), b.data() + 7, nullptr, nullptr), nullptr);
+  }
+
+  /* Id, kind, replace, the length of the arguments, 3 bytes of them. */
+  std::vector<byte> b(8 + 1 + 1 + 2 + 3);
+
+  mach_write_to_2(b.data() + 10, 3);
+
+  EXPECT_EQ(recv_parse_or_apply_log_rec_body(*m_sys, MLOG_SYSTRX_STEP, b.data(), b.data() + b.size(), nullptr, nullptr), b.data() + b.size());
+  EXPECT_EQ(recv_parse_or_apply_log_rec_body(*m_sys, MLOG_SYSTRX_STEP, b.data(), b.data() + b.size() - 1, nullptr, nullptr), nullptr);
+  EXPECT_EQ(recv_parse_or_apply_log_rec_body(*m_sys, MLOG_SYSTRX_STEP, b.data(), b.data() + 11, nullptr, nullptr), nullptr);
 }
 
 /** MLOG_FILE_EXTEND: a 4 byte body (the new size), truncated nullptr and
@@ -441,7 +484,7 @@ TEST_F(RecvParseTest, CorruptReportInBounds) {
   recv.m_buf = mem + page;
 
   /* A record of an unknown type. */
-  const std::vector<byte> log{byte(40 | MLOG_SINGLE_REC_FLAG), 0, 3, 0, 0, 0, 0};
+  const std::vector<byte> log{byte(41 | MLOG_SINGLE_REC_FLAG), 0, 3, 0, 0, 0, 0};
 
   memcpy(recv.m_buf, log.data(), log.size());
   recv.m_len = log.size();
@@ -493,7 +536,10 @@ class RecvGroupTest : public ut::SysTest {
   void add(const std::vector<byte> &log) {
     auto &recv = *m_sys->m_recv;
 
-    memcpy(recv.m_buf + recv.m_len, log.data(), log.size());
+    if (!log.empty()) {
+      memcpy(recv.m_buf + recv.m_len, log.data(), log.size());
+    }
+
     recv.m_len += log.size();
     recv.m_scanned_lsn += log.size();
   }

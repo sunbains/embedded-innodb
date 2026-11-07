@@ -607,11 +607,11 @@ static DbErr update_row_with_lock_retry(System &sys, QueThr *thr, UpdNode *node,
  * Does an update or delete of a row.
  *
  * @param[in] cursor in: Cursor instance
- * @param[in] pcur in: Btree persistent cursor
+ * @param[in] pcur in: Cursor with a saved position on the row
  *
  * @return DB_SUCCESS or err code
  */
-static DbErr execute_update_query_graph(System &sys, Cursor *cursor, BtreePcursor *pcur) noexcept {
+static DbErr execute_update_query_graph(System &sys, Cursor *cursor, IndexCursor *pcur) noexcept {
   auto trx = cursor->m_prebuilt->m_trx;
   auto table = cursor->m_prebuilt->m_table;
   auto q_proc = &cursor->m_q_proc;
@@ -624,10 +624,10 @@ static DbErr execute_update_query_graph(System &sys, Cursor *cursor, BtreePcurso
   /* This is a short term solution to fix the purge lag. */
   delay_dml_if_needed(sys);
 
-  ut_a(pcur->get_index()->is_clustered());
-  node->m_pcur->copy_stored_position(pcur);
+  ut_a(pcur->index()->is_clustered());
+  node->m_pcur->copy_saved(*pcur);
 
-  ut_a(node->m_pcur->get_rel_pos() == BtreeCursorPos::ON);
+  ut_a(node->m_pcur->saved_at() == SavedAt::On);
 
   auto savept = trx_savept_take(trx);
 
@@ -671,7 +671,7 @@ DbErr Cursor::update_row(System &sys, const Tuple *old_tuple, const Tuple *new_t
   auto cursor = this;
   auto prebuilt = cursor->m_prebuilt;
 
-  BtreePcursor *pcur;
+  IndexCursor *pcur;
 
   if (prebuilt->m_index->is_clustered()) {
     pcur = prebuilt->m_pcur;
@@ -701,12 +701,12 @@ DbErr Cursor::update_row(System &sys, const Tuple *old_tuple, const Tuple *new_t
  * Build the update query graph to delete a row from an index.
  *
  * @param[in] cursor in: current cursor
- * @param[in] pcur in: Btree persistent cursor
+ * @param[in] pcur in: Cursor with a saved position on the row
  * @param[in] rec in: record to delete
  *
  * @return DB_SUCCESS or err code
  */
-static DbErr delete_row_low(System &sys, Cursor *cursor, BtreePcursor *pcur, const Rec &rec) {
+static DbErr delete_row_low(System &sys, Cursor *cursor, IndexCursor *pcur, const Rec &rec) {
   auto table = cursor->m_prebuilt->m_table;
   auto index = table->get_first_index();
 
@@ -752,7 +752,7 @@ static DbErr delete_row_low(System &sys, Cursor *cursor, BtreePcursor *pcur, con
 DbErr Cursor::delete_row(System &sys) noexcept {
   auto cursor = this;
   DbErr err;
-  BtreePcursor *pcur;
+  IndexCursor *pcur;
   auto prebuilt = cursor->m_prebuilt;
 
   auto index = prebuilt->m_index->m_table->get_first_index();
@@ -768,7 +768,7 @@ DbErr Cursor::delete_row(System &sys) noexcept {
     pcur = prebuilt->m_pcur;
   }
 
-  if (btr_cursor_is_positioned(pcur)) {
+  if (pcur->has_saved()) {
     Rec rec;
 
     if (!prebuilt->m_row_cache.is_cache_empty()) {
@@ -779,9 +779,9 @@ DbErr Cursor::delete_row(System &sys) noexcept {
 
       mtr.start();
 
-      if (pcur->restore_position(sys, BTR_SEARCH_LEAF, &mtr, Current_location())) {
+      if (pcur->restore(Intent::Read, &mtr)) {
 
-        rec = pcur->get_rec();
+        rec = pcur->rec();
       } else {
         rec = Rec();
       }
@@ -828,7 +828,7 @@ DbErr Cursor::read_row(System &sys, Tuple *tpl) noexcept {
     err = DB_SUCCESS;
   } else {
     Mtr mtr;
-    BtreePcursor *pcur;
+    IndexCursor *pcur;
     auto prebuilt = cursor->m_prebuilt;
 
     if (prebuilt->m_need_to_access_clustered && tuple->m_type == TPL_ROW) {
@@ -843,8 +843,8 @@ DbErr Cursor::read_row(System &sys, Tuple *tpl) noexcept {
 
     mtr.start();
 
-    if (pcur->restore_position(sys, BTR_SEARCH_LEAF, &mtr, Current_location())) {
-      auto rec = pcur->get_rec();
+    if (pcur->restore(Intent::Read, &mtr)) {
+      auto rec = pcur->rec();
 
       if (!rec.get_deleted_flag()) {
         read_tuple(sys, Rec(rec), tuple);

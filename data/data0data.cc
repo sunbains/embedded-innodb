@@ -59,7 +59,7 @@ bool dfield_data_is_binary_equal(const Dfield *field, ulint len, const byte *dat
     return (true);
   }
 
-  if (0 != memcmp(dfield_get_data(field), data, len)) {
+  if (len > 0 && 0 != memcmp(dfield_get_data(field), data, len)) {
 
     return (false);
   }

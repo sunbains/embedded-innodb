@@ -162,9 +162,25 @@ struct TrxConfig {
   uint64_t m_hlc_start{};
 };
 
+/** An index implementation, see IndexAm. The catalog says which one an index has: DICT_BLINK. */
+enum class IndexAmKind : uint8_t {
+  /** The B-tree of btr0btr.cc. */
+  BTREE,
+
+  /** The Lehman & Yao B-link tree of idx0blink.cc. */
+  BLINK
+};
+
 /** Data dictionary. */
 struct DictConfig {
   uint64_t m_stats_sample_pages{8};
+
+  /** The implementation of the indexes created from now on, and of the system tables of a new database. */
+  IndexAmKind m_index_am{IndexAmKind::BLINK};
+
+  /** On a B-link tree: inserts that find a page owned queue on it, for the owner to do them in a batch.
+  Off, they wait for the page each for itself. */
+  bool m_insert_batch{true};
 };
 
 /** Server threads and shutdown. */

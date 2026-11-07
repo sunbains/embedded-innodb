@@ -127,7 +127,7 @@ Fil::~Fil() noexcept {
       mem_free(node);
     }
 
-    rw_lock_free(&space->m_latch);
+    space->m_latch.destroy();
 
     mem_free(space->m_name);
     mem_free(space);
@@ -195,7 +195,7 @@ int64_t Fil::space_get_version(space_id_t id) {
   return version;
 }
 
-RwLock *Fil::space_get_latch(space_id_t id) {
+RwLatch *Fil::space_get_latch(space_id_t id) {
   mutex_enter(&m_mutex);
 
   auto space = space_get_by_id(id);
@@ -582,8 +582,7 @@ try_again:
   UT_LIST_INIT(space->m_chain);
   space->m_magic_n = FIL_SPACE_MAGIC_N;
 
-  rw_lock_create(&space->m_latch, SYNC_FSP);
-  ut_d(space->m_latch.m_no_recursion = true);
+  space->m_latch.create();
 
   {
     auto r{m_space_by_id.emplace(id, space)};
@@ -702,7 +701,7 @@ bool Fil::space_free(space_id_t id, bool own_mutex) {
     mutex_exit(&m_mutex);
   }
 
-  rw_lock_free(&(space->m_latch));
+  space->m_latch.destroy();
 
   mem_free(space->m_name);
   mem_free(space);

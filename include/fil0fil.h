@@ -35,6 +35,7 @@ Created 10/25/1995 Heikki Tuuri
 #include "os0aio.h"
 #include "os0file.h"
 #include "srv0srv.h"
+#include "sync0latch.h"
 #include "sync0rw.h"
 
 #include <unordered_map>
@@ -74,7 +75,7 @@ struct Fil {
   /** Returns the latch of a file space.
   @param[in] space_id             Tablespace ID
   @return	latch protecting storage allocation */
-  RwLock *space_get_latch(space_id_t space_id);
+  RwLatch *space_get_latch(space_id_t space_id);
 
   /** Appends a new file to the chain of files of a space. File must be closed.
   @param[in] name                File name (file must be closed)

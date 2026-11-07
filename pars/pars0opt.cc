@@ -573,8 +573,8 @@ static void opt_search_plan_for_table(System &sys, SelNode *sel_node, ulint i,
 
   plan->m_old_row_heap = nullptr;
 
-  plan->m_pcur.init(0);
-  plan->m_clust_pcur.init(0);
+  plan->m_pcur.attach(sys);
+  plan->m_clust_pcur.attach(sys);
 }
 
 /**

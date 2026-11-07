@@ -44,6 +44,9 @@ sub-system takes a System& (or the sub-system it needs) as a parameter. */
 
 struct Aio;
 struct Btree;
+struct Index;
+struct IndexAm;
+class SysTrxSys;
 struct BufPool;
 struct Dblwr;
 struct Dict;
@@ -97,15 +100,30 @@ class System {
 
   /** Sub-systems, declared in creation order. Null before init() and after
   shutdown(). */
+  /** @return the implementation of index. */
+  [[nodiscard]] IndexAm &am(const Index *index) noexcept;
+
+  /** @return the implementation of an index with this type in the catalog. */
+  [[nodiscard]] IndexAm &am_of_type(ulint type) noexcept;
+
+  /** @return what the type of a new index has for its implementation: 0 or DICT_BLINK. */
+  [[nodiscard]] ulint new_index_am() const noexcept;
+
   std::unique_ptr<Aio> m_aio;
   std::unique_ptr<Fil> m_fil;
   std::unique_ptr<BufPool> m_buf_pool;
   std::unique_ptr<Log> m_log;
   std::unique_ptr<RecvSys> m_recv;
   std::unique_ptr<Fsp> m_fsp;
+  std::unique_ptr<SysTrxSys> m_systrx;
   std::unique_ptr<TrxSys> m_trx_sys;
   std::unique_ptr<LockSys> m_lock_sys;
   std::unique_ptr<Btree> m_btree;
+
+  /** The index implementations: every index says which it has, Config::m_dict.m_index_am is for new ones. */
+  std::unique_ptr<IndexAm> m_btree_am;
+  std::unique_ptr<IndexAm> m_blink_am;
+
   std::unique_ptr<Undo> m_undo;
   std::unique_ptr<Dict> m_dict;
   std::unique_ptr<Dblwr> m_dblwr;

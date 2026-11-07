@@ -23,6 +23,7 @@ Created 2/2/1994 Heikki Tuuri
 *******************************************************/
 
 #include "page0page.h"
+#include "log0recv.h"
 
 #include "btr0btr.h"
 
@@ -194,6 +195,146 @@ inline void page_create_write_log(buf_frame_t *frame, Mtr *mtr) {
   mlog_write_initial_log_record(frame, MLOG_PAGE_CREATE, mtr);
 }
 
+/**
+ * Copies a high key to the heap top, replacing the one on the page, if any. No
+ * heap number: PAGE_N_HEAP doesn't change. The caller has checked it fits.
+ *
+ * @param[in,out] page index page with a right sibling
+ * @param[in] start start of the bytes of the record
+ * @param[in] size size of the record
+ * @param[in] extra offset of the origin in the bytes
+ */
+static void page_high_key_install(page_t *page, const byte *start, ulint size, ulint extra) {
+  ut_ad(page_has_right(page));
+  ut_ad(extra < size);
+
+  if (const auto old = page_get_high_key(page); !old.is_null()) {
+    page_header_set_field(page, PAGE_GARBAGE, page_header_get_field(page, PAGE_GARBAGE) + page_high_key_size(old));
+  }
+
+  auto top = page_header_get_ptr(page, PAGE_HEAP_TOP);
+
+  memcpy(top, start, size);
+
+  page_header_set_ptr(page, PAGE_HEAP_TOP, top + size);
+
+  mach_write_to_2(page + PAGE_HEADER + PAGE_HIGH_KEY, page_offset(top) + extra);
+}
+
+/**
+ * Removes the high key of the page; its bytes are garbage.
+ *
+ * @param[in,out] page index page with a high key
+ */
+static void page_high_key_remove(page_t *page) {
+  const auto old = page_get_high_key(page);
+
+  ut_ad(!old.is_null());
+
+  page_header_set_field(page, PAGE_GARBAGE, page_header_get_field(page, PAGE_GARBAGE) + page_high_key_size(old));
+
+  mach_write_to_2(page + PAGE_HEADER + PAGE_HIGH_KEY, 0);
+}
+
+bool page_set_high_key(BufBlock *block, const Rec rec, ulint size, Mtr *mtr) {
+  auto page = block->get_frame();
+
+  ut_ad(mtr->memo_contains(block, MTR_MEMO_PAGE_X_FIX));
+  /* Not on a root, whose segment header is here, see PAGE_HIGH_KEY. */
+  ut_ad(page_has_right(page));
+  ut_ad(size == page_rec_extra_size(rec) + rec.get_data_size());
+
+  /* The key takes no directory slot: the reserved space of the records that
+  are on the page is enough. */
+  if (page_get_max_insert_size(page, 0) < size) {
+    return false;
+  }
+
+  const auto extra = page_rec_extra_size(rec);
+  const auto start = rec.get() - extra;
+
+  page_high_key_install(page, start, size, extra);
+
+  /* During a reorganize logging is off: its replay installs the key the same way. */
+  if (auto log_ptr = mlog_open(mtr, 11 + 2 + 2); log_ptr != nullptr) {
+    log_ptr = mlog_write_initial_log_record_fast(page, MLOG_PAGE_HIGH_KEY, log_ptr, mtr);
+
+    mach_write_to_2(log_ptr, 2 + size);
+    mach_write_to_2(log_ptr + 2, extra);
+    mlog_close(mtr, log_ptr + 4);
+
+    /* start may be the old key, which is still there. */
+    mlog_catenate_string(mtr, start, size);
+  }
+
+  return true;
+}
+
+void page_set_right_unlinked(BufBlock *block, bool unlinked, Mtr *mtr) {
+  ut_a(page_has_right(block->get_frame()));
+
+  mlog_write_ulint(block->get_frame() + PAGE_HEADER + PAGE_RIGHT_UNLINKED, unlinked ? 1 : 0, MLOG_2BYTES, mtr);
+}
+
+void page_clear_high_key(BufBlock *block, Mtr *mtr) {
+  auto page = block->get_frame();
+
+  ut_ad(mtr->memo_contains(block, MTR_MEMO_PAGE_X_FIX));
+
+  if (page_get_high_key(page).is_null()) {
+    return;
+  }
+
+  page_high_key_remove(page);
+
+  if (auto log_ptr = mlog_open(mtr, 11 + 2); log_ptr != nullptr) {
+    log_ptr = mlog_write_initial_log_record_fast(page, MLOG_PAGE_HIGH_KEY, log_ptr, mtr);
+
+    mach_write_to_2(log_ptr, 0);
+    mlog_close(mtr, log_ptr + 2);
+  }
+}
+
+byte *page_parse_high_key(System &sys, byte *ptr, byte *end_ptr, BufBlock *block) {
+  if (end_ptr < ptr + 2) {
+    return nullptr;
+  }
+
+  const auto len = mach_read_from_2(ptr);
+
+  ptr += 2;
+
+  if (len >= UNIV_PAGE_SIZE || len == 1 || len == 2) {
+    sys.m_recv->m_found_corrupt_log = true;
+    return nullptr;
+  }
+
+  if (ulint(end_ptr - ptr) < len) {
+    return nullptr;
+  }
+
+  if (block != nullptr) {
+    auto page = block->get_frame();
+
+    if (len == 0) {
+      if (!page_get_high_key(page).is_null()) {
+        page_high_key_remove(page);
+      }
+    } else {
+      const auto extra = mach_read_from_2(ptr);
+      const ulint size = len - 2;
+
+      /* Done before the crash on the same page, so it fits and has a sibling. */
+      ut_a(page_has_right(page));
+      ut_a(page_get_max_insert_size(page, 0) >= size);
+
+      page_high_key_install(page, ptr + 2, size, extra);
+    }
+  }
+
+  return ptr + len;
+}
+
 byte *page_parse_create(byte *ptr, byte *, BufBlock *block, Index *index, Mtr *mtr) {
   ut_ad(ptr != nullptr);
 
@@ -297,6 +438,13 @@ page_t *page_create(const Index *index, BufBlock *block, Mtr *mtr) {
   page_set_max_trx_id(block, 0, nullptr);
   memset(heap_top, 0, UNIV_PAGE_SIZE - PAGE_EMPTY_DIR_START - page_offset(heap_top));
 
+  /* The heap is gone and the high key with it: who keeps it (reorganize, Btree::page_empty())
+  installs it again. A root doesn't get here, it keeps its segment header: see PAGE_HIGH_KEY.
+  Part of MLOG_PAGE_CREATE: this frame's FIL_PAGE_NEXT at replay is the same. */
+  if (page_has_right(page)) {
+    mach_write_to_2(page + PAGE_HEADER + PAGE_HIGH_KEY, 0);
+  }
+
   /* 5. SET POINTERS IN RECORDS AND DIR SLOTS */
 
   /* Set the slots to point to infimum and supremum. */
@@ -382,7 +530,9 @@ Rec page_copy_rec_list_end(System &sys, BufBlock *new_block, BufBlock *block, Re
   /* Here, "ret" may be pointing to a user record or the
   predefined supremum record. */
 
-  if (page_dir_get_n_heap(new_page) == PAGE_HEAP_NO_USER_LOW) {
+  /* Without any records the heap may hold a high key, also an old one: the fast path
+  writes from the end of the supremum. */
+  if (page_dir_get_n_heap(new_page) == PAGE_HEAP_NO_USER_LOW && page_header_get_field(new_page, PAGE_HEAP_TOP) == PAGE_SUPREMUM_END) {
     PageCursor::copy_rec_list_end_to_created_page(new_page, rec, index, mtr);
   } else {
     page_copy_rec_list_end_no_locks(sys, new_block, block, rec, index, mtr);
@@ -1128,6 +1278,19 @@ bool page_simple_validate(page_t *page) {
 
   rec_heap_top = page_header_get_ptr(page, PAGE_HEAP_TOP);
 
+  /* The high key lies in the heap. */
+  if (const auto key = page_get_high_key(page); !key.is_null()) {
+    if (unlikely(key.get() < page + PAGE_SUPREMUM_END + REC_N_EXTRA_BYTES || key.get() >= rec_heap_top)) {
+      log_info(std::format("High key offset {} is out of the heap", page_offset(key)));
+      goto func_exit;
+    }
+
+    if (unlikely(key.get() - page_rec_extra_size(key) < page + PAGE_SUPREMUM_END || key.get() + key.get_data_size() > rec_heap_top)) {
+      log_info(std::format("High key at {} doesn't fit in the heap", page_offset(key)));
+      goto func_exit;
+    }
+  }
+
   if (unlikely(rec_heap_top > page_dir_get_nth_slot(page, n_slots - 1))) {
 
     log_info(std::format(
@@ -1419,6 +1582,23 @@ bool page_validate(page_t *page, Index *index) {
   if (unlikely(page_header_get_field(page, PAGE_N_RECS) + PAGE_HEAP_NO_USER_LOW != count + 1)) {
     log_info(std::format("n recs wrong {}, {}", page_header_get_field(page, PAGE_N_RECS) + PAGE_HEAP_NO_USER_LOW, count + 1));
     goto func_exit;
+  }
+
+  /* The high key is in no list: it's in the data size, and overlaps nothing. */
+  if (const auto key = page_get_high_key(page); !key.is_null()) {
+    const auto size = page_high_key_size(key);
+    const auto start = page_offset(key) - page_rec_extra_size(key);
+
+    for (i = 0; i < size; ++i) {
+      if (unlikely(buf[start + i])) {
+        log_info("Record overlaps the high key");
+        goto func_exit;
+      }
+
+      buf[start + i] = 1;
+    }
+
+    data_size += size;
   }
 
   if (unlikely(data_size != page_get_data_size(page))) {

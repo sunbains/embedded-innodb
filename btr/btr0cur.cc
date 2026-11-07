@@ -680,8 +680,10 @@ DbErr BtreeCursor::optimistic_insert(System &sys,
     return DB_FAIL;
   }
 
-  if (unlikely(max_size < BTR_CUR_PAGE_REORGANIZE_LIMIT || max_size < rec_size) && likely(page_get_n_recs(page) > 1) &&
-      page_get_max_insert_size(page, 1) < rec_size) {
+  /* Two records always fit on a page, but with a high key a lone record can leave too little:
+  a page with a high key is split in that case. */
+  if (unlikely(max_size < BTR_CUR_PAGE_REORGANIZE_LIMIT || max_size < rec_size) &&
+      likely(page_get_n_recs(page) > 1 || !page_get_high_key(page).is_null()) && page_get_max_insert_size(page, 1) < rec_size) {
 
     if (big_rec_vec.n_fields > 0) {
       dtuple_convert_back_big_rec(entry, &big_rec_vec);
@@ -746,14 +748,76 @@ DbErr BtreeCursor::optimistic_insert(System &sys,
   return DB_SUCCESS;
 }
 
+namespace {
+
+/** The restructuring of the B-tree: under the index latch and the tablespace latch, which
+the mini-transaction holds to its commit. */
+struct BtreeOps final : BtreeCursor::TreeOps {
+  explicit BtreeOps(System &sys) noexcept : m_sys(sys) {}
+
+  [[nodiscard]] bool always_reserve() const noexcept override { return false; }
+
+  void prepare(const Index *index, Mtr *mtr) noexcept override { m_sys.m_fsp->latch(index->get_space_id(), mtr); }
+
+  [[nodiscard]] bool reserve(const Index *index, ulint tree_height, ulint alloc_type, Mtr *mtr) noexcept override {
+    /* First reserve enough free space for the file segments of the index tree, so that
+    the operation will not fail because of lack of space */
+    m_reserved = m_sys.m_fsp->reserve_free_extents(&m_n_reserved, index->get_space_id(), tree_height / 16 + 3, alloc_type, mtr);
+
+    return m_reserved;
+  }
+
+  void release(const Index *index) noexcept override {
+    if (m_reserved) {
+      m_sys.m_fil->space_release_free_extents(index->get_space_id(), m_n_reserved);
+      m_reserved = false;
+    }
+  }
+
+  void free_updated(const Index *index, Rec rec, const RecOffs &offsets, const Upd *update, TrxRbCtx rb_ctx, Mtr *mtr) noexcept override {
+    Blob blob{};
+
+    blob.free_updated_extern_fields(m_sys, index, rec, offsets, update, rb_ctx, mtr);
+  }
+
+  [[nodiscard]] Rec split_and_insert(BtreeCursor *cur, const DTuple *entry, ulint n_ext, Mtr *mtr) noexcept override {
+    if (cur->get_index()->get_page_no() == cur->get_block()->get_page_no()) {
+      /* The page is the root page */
+      return m_sys.m_btree->root_raise_and_insert(cur, entry, n_ext, mtr);
+    }
+
+    return m_sys.m_btree->page_split_and_insert(cur, entry, n_ext, mtr);
+  }
+
+  void after_reinsert(BtreeCursor *cur, Mtr *mtr) noexcept override {
+    /* The record was deleted and inserted again: the page may be too empty now. */
+    if (cur->merge_recommendation(mtr)) {
+      (void)m_sys.m_btree->merge(cur, mtr);
+    }
+  }
+
+  System &m_sys;
+  ulint m_n_reserved{};
+  bool m_reserved{};
+};
+
+}  // namespace
+
 DbErr BtreeCursor::pessimistic_insert(System &sys, 
   ulint flags, DTuple *entry, Rec *rec, BigRec *big_rec, ulint n_ext, QueThr *thr, Mtr *mtr
 ) noexcept {
+  ut_ad(mtr->memo_contains(get_index()->get_lock(), MTR_MEMO_X_LOCK));
+
+  BtreeOps ops{sys};
+
+  return insert_restructure(sys, ops, flags, entry, rec, big_rec, n_ext, thr, mtr);
+}
+
+DbErr BtreeCursor::insert_restructure(System &sys, 
+  TreeOps &ops, ulint flags, DTuple *entry, Rec *rec, BigRec *big_rec, ulint n_ext, QueThr *thr, Mtr *mtr
+) noexcept {
   DbErr err;
-  bool success;
   bool dummy_inh;
-  ulint n_extents{};
-  ulint n_reserved{};
   MemHeap *heap{};
   auto index = m_index;
   BigRec big_rec_vec{};
@@ -762,7 +826,6 @@ DbErr BtreeCursor::pessimistic_insert(System &sys,
 
   *big_rec = BigRec{};
 
-  ut_ad(mtr->memo_contains(get_index()->get_lock(), MTR_MEMO_X_LOCK));
   ut_ad(mtr->memo_contains(get_block(), MTR_MEMO_PAGE_X_FIX));
 
   /* Try first an optimistic insert; reset the cursor flag: we do not
@@ -786,18 +849,12 @@ DbErr BtreeCursor::pessimistic_insert(System &sys,
     return err;
   }
 
-  if (!(flags & BTR_NO_UNDO_LOG_FLAG)) {
-    /* First reserve enough free space for the file segments
-    of the index tree, so that the insert will not fail because
-    of lack of space */
+  const bool reserve = !(flags & BTR_NO_UNDO_LOG_FLAG) || ops.always_reserve();
 
-    n_extents = m_tree_height / 16 + 3;
+  if (reserve) {
+    ops.prepare(index, mtr);
 
-    sys.m_fsp->latch(index->get_space_id(), mtr);
-
-    success = sys.m_fsp->reserve_free_extents(&n_reserved, index->get_space_id(), n_extents, FSP_NORMAL, mtr);
-
-    if (!success) {
+    if (!ops.reserve(index, m_tree_height, flags & BTR_NO_UNDO_LOG_FLAG ? FSP_CLEANING : FSP_NORMAL, mtr)) {
       return DB_OUT_OF_FILE_SPACE;
     }
   }
@@ -821,20 +878,14 @@ DbErr BtreeCursor::pessimistic_insert(System &sys,
 
     if (big_rec_vec.n_fields == 0) {
 
-      if (n_extents > 0) {
-        sys.m_fil->space_release_free_extents(index->get_space_id(), n_reserved);
+      if (reserve) {
+        ops.release(index);
       }
       return DB_TOO_BIG_RECORD;
     }
   }
 
-  if (index->get_page_no() == get_block()->get_page_no()) {
-
-    /* The page is the root page */
-    *rec = sys.m_btree->root_raise_and_insert(this, entry, n_ext, mtr);
-  } else {
-    *rec = sys.m_btree->page_split_and_insert(this, entry, n_ext, mtr);
-  }
+  *rec = ops.split_and_insert(this, entry, n_ext, mtr);
 
   if (likely_null(heap)) {
     mem_heap_free(heap);
@@ -847,8 +898,8 @@ DbErr BtreeCursor::pessimistic_insert(System &sys,
     sys.m_lock_sys->update_insert(get_block(), *rec);
   }
 
-  if (n_extents > 0) {
-    sys.m_fil->space_release_free_extents(index->get_space_id(), n_reserved);
+  if (reserve) {
+    ops.release(index);
   }
 
   *big_rec = big_rec_vec;
@@ -1026,13 +1077,17 @@ DbErr BtreeCursor::update_in_place(System &sys, ulint flags, const Upd *update, 
     return err;
   }
 
-  if (!(flags & BTR_KEEP_SYS_FLAG)) {
-    sys.m_row_upd->rec_sys_fields(rec, index, offsets, trx, roll_ptr);
-  }
-
   was_delete_marked = rec.get_deleted_flag();
 
-  sys.m_row_upd->rec_in_place(rec, index, offsets, update);
+  {
+    BufBlock::RecWrite write{get_block()};
+
+    if (!(flags & BTR_KEEP_SYS_FLAG)) {
+      sys.m_row_upd->rec_sys_fields(rec, index, offsets, trx, roll_ptr);
+    }
+
+    sys.m_row_upd->rec_in_place(rec, index, offsets, update);
+  }
 
   update_in_place_log(sys, flags, rec, index, update, trx, roll_ptr, mtr);
 
@@ -1130,7 +1185,7 @@ DbErr BtreeCursor::optimistic_update(System &sys, ulint flags, const Upd *update
     goto err_exit;
   }
 
-  if (unlikely(page_get_data_size(page) - old_rec_size + new_rec_size < BTR_CUR_PAGE_LOW_FILL_LIMIT)) {
+  if (unlikely(page_get_rec_data_size(page) - old_rec_size + new_rec_size < BTR_CUR_PAGE_LOW_FILL_LIMIT)) {
 
     /* The page would become too empty */
 
@@ -1239,13 +1294,21 @@ void BtreeCursor::pess_upd_restore_supremum(System &sys, BufBlock *block, const 
 DbErr BtreeCursor::pessimistic_update(System &sys, 
   ulint flags, MemHeap **heap, BigRec *big_rec, const Upd *update, ulint cmpl_info, QueThr *thr, Mtr *mtr
 ) noexcept {
+  ut_ad(mtr->memo_contains(m_index->get_lock(), MTR_MEMO_X_LOCK));
+
+  BtreeOps ops{sys};
+
+  return update_restructure(sys, ops, flags, heap, big_rec, update, cmpl_info, thr, mtr);
+}
+
+DbErr BtreeCursor::update_restructure(System &sys, 
+  TreeOps &ops, ulint flags, MemHeap **heap, BigRec *big_rec, const Upd *update, ulint cmpl_info, QueThr *thr, Mtr *mtr
+) noexcept {
 
   BigRec big_rec_vec{};
   BigRec dummy_big_rec;
   roll_ptr_t roll_ptr;
   bool was_first;
-  ulint n_extents{};
-  ulint n_reserved;
   ulint n_ext;
   RecOffs offsets{};
 
@@ -1254,7 +1317,6 @@ DbErr BtreeCursor::pessimistic_update(System &sys,
   auto index = m_index;
   auto block = get_block();
 
-  ut_ad(mtr->memo_contains(index->get_lock(), MTR_MEMO_X_LOCK));
   ut_ad(mtr->memo_contains(block, MTR_MEMO_PAGE_X_FIX));
 
   auto optim_err = optimistic_update(sys, flags, update, cmpl_info, thr, mtr);
@@ -1276,18 +1338,12 @@ DbErr BtreeCursor::pessimistic_update(System &sys,
   }
 
   /* Past here the tree can change, in either direction: pages are allocated or freed. */
-  sys.m_fsp->latch(index->get_space_id(), mtr);
+  ops.prepare(index, mtr);
 
   if (optim_err == DB_OVERFLOW) {
-    /* First reserve enough free space for the file segments
-    of the index tree, so that the update will not fail because
-    of lack of space */
-
-    n_extents = m_tree_height / 16 + 3;
-
     auto reserve_flag = flags & BTR_NO_UNDO_LOG_FLAG ? FSP_CLEANING : FSP_NORMAL;
 
-    if (!sys.m_fsp->reserve_free_extents(&n_reserved, index->get_space_id(), n_extents, reserve_flag, mtr)) {
+    if (!ops.reserve(index, m_tree_height, reserve_flag, mtr)) {
       return DB_OUT_OF_FILE_SPACE;
     }
   }
@@ -1339,7 +1395,7 @@ DbErr BtreeCursor::pessimistic_update(System &sys,
 
     ut_ad(big_rec_vec.n_fields == 0);
 
-    blob.free_updated_extern_fields(sys, index, rec, offsets, update, trx_is_recv(sys, trx) ? RB_RECOVERY : RB_NORMAL, mtr);
+    ops.free_updated(index, rec, offsets, update, trx_is_recv(sys, trx) ? RB_RECOVERY : RB_NORMAL, mtr);
   }
 
   /* We have to set appropriate extern storage bits in the new
@@ -1405,10 +1461,7 @@ DbErr BtreeCursor::pessimistic_update(System &sys,
       blob.unmark_extern_fields(rec, index, offsets, mtr);
     }
 
-    /* The record was deleted and inserted again: the page may be too empty now. */
-    if (merge_recommendation(mtr)) {
-      (void)sys.m_btree->merge(this, mtr);
-    }
+    ops.after_reinsert(this, mtr);
 
     err = DB_SUCCESS;
     goto return_after_reservations;
@@ -1423,8 +1476,8 @@ DbErr BtreeCursor::pessimistic_update(System &sys,
   /* The first parameter means that no lock checking and undo logging
   is made in the insert */
 
-  err = pessimistic_insert(sys, 
-    BTR_NO_UNDO_LOG_FLAG | BTR_NO_LOCKING_FLAG | BTR_KEEP_SYS_FLAG, new_entry, &rec, &dummy_big_rec, n_ext, nullptr, mtr
+  err = insert_restructure(sys, 
+    ops, BTR_NO_UNDO_LOG_FLAG | BTR_NO_LOCKING_FLAG | BTR_KEEP_SYS_FLAG, new_entry, &rec, &dummy_big_rec, n_ext, nullptr, mtr
   );
 
   ut_a(!rec.is_null());
@@ -1468,9 +1521,7 @@ DbErr BtreeCursor::pessimistic_update(System &sys,
 
 return_after_reservations:
 
-  if (n_extents > 0) {
-    sys.m_fil->space_release_free_extents(index->get_space_id(), n_reserved);
-  }
+  ops.release(index);
 
   *big_rec = big_rec_vec;
 
@@ -1601,12 +1652,16 @@ DbErr BtreeCursor::del_mark_set_clust_rec(System &sys, ulint flags, bool val, Qu
     err = TrxUndoRecord::report_row_operation(sys, flags, TRX_UNDO_MODIFY_OP, thr, index, nullptr, nullptr, 0, rec, &roll_ptr);
 
     if (err == DB_SUCCESS) {
-      set_deleted_flag(rec, val > 0);
-
       auto trx = thr_get_trx(thr);
 
-      if (!(flags & BTR_KEEP_SYS_FLAG)) {
-        sys.m_row_upd->rec_sys_fields(rec, index, offsets, trx, roll_ptr);
+      {
+        BufBlock::RecWrite write{get_block()};
+
+        set_deleted_flag(rec, val > 0);
+
+        if (!(flags & BTR_KEEP_SYS_FLAG)) {
+          sys.m_row_upd->rec_sys_fields(rec, index, offsets, trx, roll_ptr);
+        }
       }
 
       del_mark_set_clust_rec_log(sys, flags, rec, index, val, trx, roll_ptr, mtr);
@@ -1992,6 +2047,10 @@ int64_t BtreeCursor::estimate_n_rows_in_range(System &sys,
 }
 
 void BtreeCursor::estimate_number_of_different_key_vals(System &sys, const Index *index) noexcept {
+  estimate_n_diff(sys, index, [&](Mtr *mtr) { open_at_rnd_pos(sys, index, BTR_SEARCH_LEAF, mtr, Current_location()); });
+}
+
+void BtreeCursor::estimate_n_diff(System &sys, const Index *index, const std::function<void(Mtr *)> &open_rnd) noexcept {
   page_t *page;
   Rec rec;
   ulint n_cols;
@@ -2037,7 +2096,7 @@ void BtreeCursor::estimate_number_of_different_key_vals(System &sys, const Index
     Rec supremum;
     mtr.start();
 
-    open_at_rnd_pos(sys, index, BTR_SEARCH_LEAF, &mtr, Current_location());
+    open_rnd(&mtr);
 
     /* Count the number of different key values for each prefix of
     the key on this index page. If the prefix does not determine
