@@ -202,7 +202,7 @@ struct RowSel {
    * @return DB_SUCCESS or error code
    */
   [[nodiscard]] DbErr set_rec_lock(
-    const BufBlock *block, const Rec rec, Index *index, const ulint *offsets, LockMode mode, ulint type, QueThr *thr
+    IndexCursor *cur, const Rec rec, Index *index, const ulint *offsets, LockMode mode, ulint type, QueThr *thr
   ) noexcept;
 
   /**

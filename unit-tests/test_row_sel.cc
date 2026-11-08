@@ -776,25 +776,20 @@ class RowSelIdxTest : public SharedDb {
     return rows;
   }
 
-  /** @return the record locks of trx, with the keys of the records. */
+  /** @return the record locks of trx, with the keys of the records: a lock is on a key fingerprint, so
+  the fingerprints of all the records and the page fences of index are what names them, -1 for a fence. */
   std::vector<RecLock> locks_of(const Trx *trx, const Index *index) {
-    std::vector<std::pair<PageId, std::pair<ulint, ulint>>> raw;
+    std::vector<std::pair<uint64_t, ulint>> raw;
 
-    /* All the page shards of the lock system: latched X. */
+    /* All the shards of the lock system: latched X. */
     m_sys->m_lock_sys->x_lock();
 
-    for (auto &shard : m_sys->m_lock_sys->m_page_shards) {
-      for (const auto &[page_id, locks] : shard.m_locks) {
+    for (auto &shard : m_sys->m_lock_sys->m_key_shards) {
+      for (const auto &[key, locks] : shard.m_locks) {
         for (auto lock : locks) {
-          if (lock->m_trx != trx) {
-            continue;
-          }
-
-          for (ulint h{}; h < lock->rec_get_n_bits(); ++h) {
-            if (lock->rec_is_nth_bit_set(h)) {
-              /* The mode and the gap flags, without LOCK_REC. */
-              raw.emplace_back(page_id, std::pair(h, ulint(lock->precise_mode() & ~LOCK_TYPE_MASK)));
-            }
+          if (lock->m_trx == trx && lock->rec_index() == index && lock->rec_is_nth_bit_set(LOCK_BIT)) {
+            /* The mode and the gap flags, without LOCK_REC. */
+            raw.emplace_back(key.m_fold, ulint(lock->precise_mode() & ~LOCK_TYPE_MASK));
           }
         }
       }
@@ -802,33 +797,33 @@ class RowSelIdxTest : public SharedDb {
 
     m_sys->m_lock_sys->x_unlock();
 
-    std::vector<RecLock> v;
+    std::map<uint64_t, int64_t> names;
 
-    for (const auto &[page_id, hm] : raw) {
-      if (page_id.space_id() != index->get_space_id()) {
-        continue;
-      }
-
+    {
       Mtr mtr;
+      IndexCursor cur{*m_sys};
 
       mtr.start();
+      cur.seek_first(index, Intent::Read, &mtr);
 
-      auto page = m_sys->m_btree->page_get(page_id.space_id(), page_id.page_no(), RW_S_LATCH, &mtr);
+      while (cur.next(&mtr)) {
+        ulint len;
 
-      if (m_sys->m_btree->page_get_index_id(page) == index->m_id) {
-        auto rec = page_find_rec_with_heap_no(page, hm.first);
-        int64_t key{-1};
-
-        if (!rec.is_null() && page_rec_is_user_rec(rec)) {
-          ulint len;
-
-          key = mach_read_from_4(rec.get_nth_field(0, &len));
-        }
-
-        v.push_back(RecLock{page_id.page_no(), key, hm.second});
+        names[Btree::lock_key(index, cur.rec()).m_fold] = mach_read_from_4(cur.rec().get_nth_field(0, &len));
+        names.emplace(Btree::lock_fence(index, cur.block()).m_fold, -1);
       }
 
-      mtr.commit(*m_sys);
+      cur.commit(&mtr);
+    }
+
+    names.emplace(lock::end_of(index).m_fold, -1);
+
+    std::vector<RecLock> v;
+
+    for (const auto &[fold, mode] : raw) {
+      const auto it = names.find(fold);
+
+      v.push_back(RecLock{0, it != names.end() ? it->second : -2, mode});
     }
 
     std::sort(v.begin(), v.end());
@@ -1288,8 +1283,8 @@ TEST_F(RowSelIdxTest, LockSecAndClust) {
   commit(trx);
 }
 
-/** A locking scan to the end of the index locks the supremum (the gap
-after the last record) in REPEATABLE READ. */
+/** A locking scan to the end of the index locks the gap after the last record, the fence at the end
+of the index, in REPEATABLE READ. */
 TEST_F(RowSelIdxTest, LockScanToEnd) {
   load(5);
 
@@ -1306,7 +1301,10 @@ TEST_F(RowSelIdxTest, LockScanToEnd) {
     EXPECT_EQ(at.m_err, DB_END_OF_INDEX);
   }
 
-  EXPECT_EQ(keys_locked(trx, m_tab->clust(), LOCK_S | LOCK_ORDINARY), (std::vector<int64_t>{-1, 10, 20, 30, 40, 50}));
+  EXPECT_EQ(keys_locked(trx, m_tab->clust(), LOCK_S | LOCK_ORDINARY), (std::vector<int64_t>{10, 20, 30, 40, 50}));
+
+  /* The end is a fence: a lock on it is on the gap only, and says so. */
+  EXPECT_EQ(keys_locked(trx, m_tab->clust(), LOCK_S | LOCK_GAP), (std::vector<int64_t>{-1}));
   commit(trx);
 }
 

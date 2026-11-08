@@ -557,7 +557,7 @@ DbErr RowInsert::foreign_check_on_constraint(
   MemHeap *upd_vec_heap = nullptr;
   Rec rec;
   Rec clust_rec;
-  const BufBlock *clust_block;
+  IndexCursor *clust_cur;
   Upd *update;
   ulint n_to_update;
   DbErr err;
@@ -661,7 +661,7 @@ DbErr RowInsert::foreign_check_on_constraint(
 
     clust_index = index;
     clust_rec = rec;
-    clust_block = pcur->block();
+    clust_cur = pcur;
   } else {
     /* We have to look for the record in the clustered index
     in the child table */
@@ -675,7 +675,7 @@ DbErr RowInsert::foreign_check_on_constraint(
     const auto found = cascade->m_pcur->find(clust_index, ref, Intent::Read, mtr);
 
     clust_rec = cascade->m_pcur->rec();
-    clust_block = cascade->m_pcur->block();
+    clust_cur = cascade->m_pcur;
 
     if (!found) {
 
@@ -703,7 +703,7 @@ DbErr RowInsert::foreign_check_on_constraint(
     we already have a normal shared lock on the appropriate
     gap if the search criterion was not unique */
 
-    err = m_sys.m_lock_sys->clust_rec_read_check_and_lock_alt(0, clust_block, clust_rec, clust_index, LOCK_X, LOCK_REC_NOT_GAP, thr);
+    err = m_sys.m_lock_sys->clust_rec_read_check_and_lock_alt(0, clust_cur->lock_pos(clust_rec), clust_rec, clust_index, LOCK_X, LOCK_REC_NOT_GAP, thr);
   }
 
   if (err != DB_SUCCESS) {
@@ -848,26 +848,26 @@ nonstandard_exit_func:
 }
 
 DbErr RowInsert::set_shared_rec_lock(
-  ulint type, const BufBlock *block, const Rec rec, const Index *index, const ulint *offsets, QueThr *thr
+  ulint type, IndexCursor *cur, const Rec rec, const Index *index, const ulint *offsets, QueThr *thr
 ) noexcept {
   ut_ad(rec.offs_validate(index, offsets));
 
   if (index->is_clustered()) {
-    return m_sys.m_lock_sys->clust_rec_read_check_and_lock(0, block, rec, index, offsets, LOCK_S, type, thr);
+    return m_sys.m_lock_sys->clust_rec_read_check_and_lock(0, cur->lock_pos(rec), rec, index, offsets, LOCK_S, type, thr);
   } else {
-    return m_sys.m_lock_sys->sec_rec_read_check_and_lock(0, block, rec, index, offsets, LOCK_S, type, thr);
+    return m_sys.m_lock_sys->sec_rec_read_check_and_lock(0, cur->lock_pos(rec), rec, index, offsets, LOCK_S, type, thr);
   }
 }
 
 DbErr RowInsert::set_exclusive_rec_lock(
-  ulint type, const BufBlock *block, const Rec rec, const Index *index, const ulint *offsets, QueThr *thr
+  ulint type, IndexCursor *cur, const Rec rec, const Index *index, const ulint *offsets, QueThr *thr
 ) noexcept {
   ut_ad(rec.offs_validate(index, offsets));
 
   if (index->is_clustered()) {
-    return m_sys.m_lock_sys->clust_rec_read_check_and_lock(0, block, rec, index, offsets, LOCK_X, type, thr);
+    return m_sys.m_lock_sys->clust_rec_read_check_and_lock(0, cur->lock_pos(rec), rec, index, offsets, LOCK_X, type, thr);
   } else {
-    return m_sys.m_lock_sys->sec_rec_read_check_and_lock(0, block, rec, index, offsets, LOCK_X, type, thr);
+    return m_sys.m_lock_sys->sec_rec_read_check_and_lock(0, cur->lock_pos(rec), rec, index, offsets, LOCK_X, type, thr);
   }
 }
 
@@ -987,7 +987,6 @@ run_again:
 
   for (;;) {
     Rec rec = pcur.rec();
-    const BufBlock *block = pcur.block();
 
     if (page_rec_is_infimum(rec)) {
 
@@ -1002,7 +1001,7 @@ run_again:
 
     if (page_rec_is_supremum(rec)) {
 
-      err = set_shared_rec_lock(LOCK_ORDINARY, block, rec, check_index, offsets, thr);
+      err = set_shared_rec_lock(LOCK_ORDINARY, &pcur, rec, check_index, offsets, thr);
 
       if (err != DB_SUCCESS) {
 
@@ -1016,7 +1015,7 @@ run_again:
 
     if (cmp == 0) {
       if (rec.get_deleted_flag()) {
-        err = set_shared_rec_lock(LOCK_ORDINARY, block, rec, check_index, offsets, thr);
+        err = set_shared_rec_lock(LOCK_ORDINARY, &pcur, rec, check_index, offsets, thr);
         if (err != DB_SUCCESS) {
 
           break;
@@ -1026,7 +1025,7 @@ run_again:
         a record because we can allow inserts
         into gaps */
 
-        err = set_shared_rec_lock(LOCK_REC_NOT_GAP, block, rec, check_index, offsets, thr);
+        err = set_shared_rec_lock(LOCK_REC_NOT_GAP, &pcur, rec, check_index, offsets, thr);
 
         if (err != DB_SUCCESS) {
 
@@ -1054,7 +1053,6 @@ run_again:
           }
 
           /* foreign_check_on_constraint may have repositioned pcur on a different block */
-          block = pcur.block();
         } else {
           foreign_report_err("Trying to delete or update", thr, foreign, rec, entry);
 
@@ -1065,7 +1063,7 @@ run_again:
     }
 
     if (cmp < 0) {
-      err = set_shared_rec_lock(LOCK_GAP, block, rec, check_index, offsets, thr);
+      err = set_shared_rec_lock(LOCK_GAP, &pcur, rec, check_index, offsets, thr);
       if (err != DB_SUCCESS) {
 
         break;
@@ -1251,7 +1249,6 @@ DbErr RowInsert::scan_sec_index_for_duplicate(const Index *index, DTuple *entry,
 
   do {
     Rec rec = pcur.rec();
-    const BufBlock *block = pcur.block();
 
     if (page_rec_is_infimum(rec)) {
 
@@ -1271,10 +1268,10 @@ DbErr RowInsert::scan_sec_index_for_duplicate(const Index *index, DTuple *entry,
       duplicates ( REPLACE, LOAD DATAFILE REPLACE,
       INSERT ON DUPLICATE KEY UPDATE). */
 
-      err = set_exclusive_rec_lock(LOCK_ORDINARY, block, rec, index, offsets, thr);
+      err = set_exclusive_rec_lock(LOCK_ORDINARY, &pcur, rec, index, offsets, thr);
     } else {
 
-      err = set_shared_rec_lock(LOCK_ORDINARY, block, rec, index, offsets, thr);
+      err = set_shared_rec_lock(LOCK_ORDINARY, &pcur, rec, index, offsets, thr);
     }
 
     if (err != DB_SUCCESS) {
@@ -1371,10 +1368,10 @@ DbErr RowInsert::duplicate_error_in_clust(IndexCursor *cur, DTuple *entry, QueTh
         duplicates ( REPLACE, LOAD DATAFILE REPLACE,
         INSERT ON DUPLICATE KEY UPDATE). */
 
-        err = set_exclusive_rec_lock(LOCK_REC_NOT_GAP, cur->block(), rec, index, offsets, thr);
+        err = set_exclusive_rec_lock(LOCK_REC_NOT_GAP, cur, rec, index, offsets, thr);
       } else {
 
-        err = set_shared_rec_lock(LOCK_REC_NOT_GAP, cur->block(), rec, index, offsets, thr);
+        err = set_shared_rec_lock(LOCK_REC_NOT_GAP, cur, rec, index, offsets, thr);
       }
 
       if (err != DB_SUCCESS) {
@@ -1405,10 +1402,10 @@ DbErr RowInsert::duplicate_error_in_clust(IndexCursor *cur, DTuple *entry, QueTh
         /* If the SQL-query will update or replace duplicate key we will take X-lock for
         duplicates ( REPLACE, LOAD DATAFILE REPLACE, INSERT ON DUPLICATE KEY UPDATE). */
 
-        err = set_exclusive_rec_lock(LOCK_REC_NOT_GAP, cur->block(), rec, index, offsets, thr);
+        err = set_exclusive_rec_lock(LOCK_REC_NOT_GAP, cur, rec, index, offsets, thr);
       } else {
 
-        err = set_shared_rec_lock(LOCK_REC_NOT_GAP, cur->block(), rec, index, offsets, thr);
+        err = set_shared_rec_lock(LOCK_REC_NOT_GAP, cur, rec, index, offsets, thr);
       }
 
       if (err != DB_SUCCESS) {

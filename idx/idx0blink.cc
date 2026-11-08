@@ -925,8 +925,6 @@ struct Smo final : BtreeCursor::TreeOps {
 
     ut_a(moved);
 
-    m_sys.m_lock_sys->update_split_right(new_block, block);
-
     /* After the list copy, its fast path is for a new page. */
     if (!old_key_copy.is_null()) {
       const auto installed = page_set_high_key(new_block, old_key_copy, old_key_size, m_mtr);
@@ -1451,6 +1449,15 @@ class Merge {
     /* Nothing below this fails. Before the tree changes: see the header on a Path. */
     m_shared.m_drain.note_unlink();
 
+    /* The high key of left bounds no gap after this: what locked the gap below it locks the gap below
+    what's after it now, the first record of the right page or the end of it. The same key when that
+    record is still there. */
+    if (lv == 0) {
+      const auto after = Btree::lock_first(m_index, right);
+
+      m_sys.m_lock_sys->inherit_gap(m_index, after, Btree::lock_fence(m_index, left));
+    }
+
     page_clear_high_key(left, &mtr);
 
     if (page_get_max_insert_size(left_page, page_get_n_recs(right_page)) < right_size + high_key_size) {
@@ -1466,8 +1473,6 @@ class Merge {
     const auto orig_pred = page_copy_rec_list_start(m_sys, left, right, page_get_supremum_rec(right_page), m_index, &mtr);
 
     ut_a(!orig_pred.is_null());
-
-    m_sys.m_lock_sys->update_merge_left(left, orig_pred, right);
 
     /* The links first: a key needs the right link to be there, see PAGE_HIGH_KEY. */
     Btree::page_set_next(left_page, next_no, &mtr);
@@ -1557,8 +1562,6 @@ class Merge {
     buf_block_modify_clock_inc(root);
 
     (void)page_copy_rec_list_end(m_sys, root, child, page_get_infimum_rec(child_page), m_index, &mtr);
-
-    m_sys.m_lock_sys->update_copy_and_discard(root, child);
 
     ut_ad(page_validate(root->get_frame(), m_index));
 
@@ -2137,18 +2140,23 @@ struct BlinkCursor final : IndexAm::Cursor {
 
     m_pcur.get_btr_cur()->m_index = const_cast<Index *>(index);
 
-    /* Nothing needs this to be a page of the tree later: whoever does the work looks. */
+    /* Whoever does the work looks at what the page is then: dead, another level, or past its high key
+    goes back here. What it can't see is that the page was freed and is a page of this tree again, for
+    other keys, since the descent: so it mustn't be freed while this is queued on it. The guard of the
+    descent stays until the work is done. */
+    Drain::Guard guard{shared(m_sys).m_drain};
     Mtr mtr;
     BufBlock *block;
 
     mtr.start();
 
     {
-      Drain::Guard guard{shared(m_sys).m_drain};
       Path path;
 
       block = m_sys.m_btree->block_get(index->get_space_id(), descend(m_sys, index, entry, PAGE_CUR_LE, Edge::KEY, 0, path), RW_NO_LATCH, &mtr);
     }
+
+    test_point(m_sys, TestPoint::BATCH_FOUND);
 
     InsertOp op;
 
@@ -2762,6 +2770,8 @@ struct BlinkCursor final : IndexAm::Cursor {
     return m_pcur.get_block();
   }
 
+  [[nodiscard]] LockPos lock_pos(Rec rec) noexcept override { return Btree::lock_pos(index(), m_pcur.get_block(), rec); }
+
   /** An empty page has no record to be relative to, as in the old tree, but here it can be
   anywhere on the level: just before the high key is where it is. Without a high key it's after
   the last record, whichever the side of the empty page. Only when it's the only page is it
@@ -3003,7 +3013,7 @@ struct BlinkCursor final : IndexAm::Cursor {
       blob_mtr.commit(m_sys);
     }
 
-    m_sys.m_lock_sys->update_delete(block, rec);
+    m_sys.m_lock_sys->update_delete(index, Btree::lock_key(index, rec), Btree::lock_next(index, block, rec));
 
     cur->get_page_cur()->delete_rec(m_sys, index, offsets, mtr);
 

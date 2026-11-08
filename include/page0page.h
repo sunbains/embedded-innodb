@@ -137,14 +137,15 @@ constexpr ulint PAGE_RIGHT_UNLINKED = PAGE_HIGH_KEY + 2;
 /** Start of data on the page */
 constexpr ulint PAGE_DATA = PAGE_HEADER + 36 + 2 * FSEG_HEADER_SIZE;
 
-/** Offset of the page infimum record on a page */
+/** Offset of the page infimum record on a page. Its data is a byte, "I": the record status says what it
+is, its data doesn't have to. */
 constexpr ulint PAGE_INFIMUM = PAGE_DATA + 1 + REC_N_EXTRA_BYTES;
 
-/** Offset of the page supremum record on a page */
-constexpr ulint PAGE_SUPREMUM = PAGE_DATA + 2 + 2 * REC_N_EXTRA_BYTES + 8;
+/** Offset of the page supremum record on a page: its data is "S". */
+constexpr ulint PAGE_SUPREMUM = PAGE_DATA + 2 + 2 * REC_N_EXTRA_BYTES + 1;
 
 /** Offset of the page supremum record end on a page */
-constexpr ulint PAGE_SUPREMUM_END = PAGE_SUPREMUM + 9;
+constexpr ulint PAGE_SUPREMUM_END = PAGE_SUPREMUM + 1;
 
 /*-----------------------------*/
 

@@ -168,7 +168,7 @@ Lock *LockSys::table_create(Table *table, LockMode type_mode, Trx *trx) noexcept
     for (auto l : table->m_locks) {
       if (l == lock) {
         break;
-      } else if (lock->has_to_wait_for(l, ULINT_UNDEFINED)) {
+      } else if (lock->has_to_wait_for(l)) {
         b.add(l->m_trx);
       }
     }
@@ -292,7 +292,7 @@ bool LockSys::table_has_to_wait_in_queue(Lock *wait_lock) noexcept {
       return false;
     }
 
-    if (wait_lock->has_to_wait_for(lock, ULINT_UNDEFINED)) {
+    if (wait_lock->has_to_wait_for(lock)) {
 
       return true;
     }

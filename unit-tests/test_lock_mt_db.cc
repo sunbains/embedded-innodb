@@ -249,7 +249,7 @@ class LockMtDb : public SharedDb {
       while (!m_stop.load(std::memory_order_acquire)) {
         test->x_enter();
 
-        for (auto &shard : test->m_lock_sys->m_page_shards) {
+        for (auto &shard : test->m_lock_sys->m_key_shards) {
           for (const auto &[page_id, locks] : shard.m_locks) {
             for (auto l : locks) {
               /* The state: with the trx mutex (C4 of a commit). */
@@ -1110,15 +1110,15 @@ TEST_F(LockMtDb, ConvertAfterC2) {
 
   auto b = begin();
 
-  ASSERT_EQ(m_lock_sys->rec_lock_for(b, mode, &page.m_block, heap_no, m_index), DB_SUCCESS);
+  ASSERT_EQ(m_lock_sys->rec_lock_for(b, mode, page.key(m_index, heap_no), m_index), DB_SUCCESS);
 
   {
-    LockSys::PageLatch latch(*m_lock_sys, page.id());
+    LockSys::KeyLatch latch(*m_lock_sys, page.key(m_index, heap_no));
 
-    m_lock_sys->impl_to_expl(pinned, &page.m_block, heap_no, m_index);
+    m_lock_sys->impl_to_expl(pinned, page.key(m_index, heap_no), m_index);
 
-    EXPECT_EQ(m_lock_sys->rec_has_expl(page.id(), mode, heap_no, pinned), nullptr) << "a lock for a transaction past C2";
-    EXPECT_NE(m_lock_sys->rec_has_expl(page.id(), mode, heap_no, b), nullptr);
+    EXPECT_EQ(m_lock_sys->rec_has_expl(page.key(m_index, heap_no), mode, pinned), nullptr) << "a lock for a transaction past C2";
+    EXPECT_NE(m_lock_sys->rec_has_expl(page.key(m_index, heap_no), mode, b), nullptr);
   }
 
   TrxSys::unpin(pinned);
@@ -1126,7 +1126,7 @@ TEST_F(LockMtDb, ConvertAfterC2) {
   commit(b);
 
   x_enter();
-  EXPECT_EQ(m_lock_sys->rec_queue(page.id()), nullptr) << "record locks left on the fake page";
+  EXPECT_EQ(m_lock_sys->rec_queue(page.key(m_index, heap_no)), nullptr) << "record locks left on the fake page";
   x_exit();
 }
 
@@ -1148,31 +1148,31 @@ TEST_F(LockMtDb, ConvertAfterUndo) {
 
   auto b = begin();
 
-  ASSERT_EQ(m_lock_sys->rec_lock_for(b, mode, &page.m_block, heap_no, m_index), DB_SUCCESS);
+  ASSERT_EQ(m_lock_sys->rec_lock_for(b, mode, page.key(m_index, heap_no), m_index), DB_SUCCESS);
 
   {
-    LockSys::PageLatch latch(*m_lock_sys, page.id());
+    LockSys::KeyLatch latch(*m_lock_sys, page.key(m_index, heap_no));
 
-    m_lock_sys->impl_to_expl(pinned, &page.m_block, heap_no, m_index);
+    m_lock_sys->impl_to_expl(pinned, page.key(m_index, heap_no), m_index);
 
-    EXPECT_EQ(m_lock_sys->rec_has_expl(page.id(), mode, heap_no, w), nullptr) << "a lock for w past a granted lock of b";
+    EXPECT_EQ(m_lock_sys->rec_has_expl(page.key(m_index, heap_no), mode, w), nullptr) << "a lock for w past a granted lock of b";
   }
 
   commit(b);
 
   {
-    LockSys::PageLatch latch(*m_lock_sys, page.id());
+    LockSys::KeyLatch latch(*m_lock_sys, page.key(m_index, heap_no));
 
-    m_lock_sys->impl_to_expl(pinned, &page.m_block, heap_no, m_index);
+    m_lock_sys->impl_to_expl(pinned, page.key(m_index, heap_no), m_index);
 
-    EXPECT_NE(m_lock_sys->rec_has_expl(page.id(), mode, heap_no, w), nullptr);
+    EXPECT_NE(m_lock_sys->rec_has_expl(page.key(m_index, heap_no), mode, w), nullptr);
   }
 
   TrxSys::unpin(pinned);
   rollback(w);
 
   x_enter();
-  EXPECT_EQ(m_lock_sys->rec_queue(page.id()), nullptr) << "record locks left on the fake page";
+  EXPECT_EQ(m_lock_sys->rec_queue(page.key(m_index, heap_no)), nullptr) << "record locks left on the fake page";
   x_exit();
 }
 

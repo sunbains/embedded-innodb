@@ -87,6 +87,33 @@ struct TrxMutex {
   ut::Latch m_mutex;
 };
 
+/** An atomic that construction and destruction leave alone. A Trx is type stable, its memory is reused in
+place by the pool of TrxSys, and the latch free deadlock walk (lock0deadlock.h) can read a field of one
+that is being reused: a constructor that wrote it would be a race with that read. The pool zeroes the
+memory when it allocates it, and puts the initial value (nullptr, false) back with an atomic store when a
+Trx goes back to it: the next owner starts from that. */
+template <typename T>
+struct TypeStable {
+  TypeStable() noexcept {}
+  ~TypeStable() noexcept {}
+
+  TypeStable(const TypeStable &) = delete;
+  TypeStable &operator=(const TypeStable &) = delete;
+
+  [[nodiscard]] T load(std::memory_order order = std::memory_order_seq_cst) const noexcept { return m_value.load(order); }
+
+  void store(T value, std::memory_order order = std::memory_order_seq_cst) noexcept { m_value.store(value, order); }
+
+  TypeStable &operator=(T value) noexcept {
+    store(value);
+    return *this;
+  }
+
+  union {
+    std::atomic<T> m_value;
+  };
+};
+
 /*
  * The transaction handle; every session has a trx object which is freed only
  * when the session is freed; in addition there may be session-less transactions
@@ -573,13 +600,13 @@ struct Trx {
   lock0deadlock.h); nullptr when it does not wait. Written by the lock
   system (with the trx sys mutex held); an atomic, so that the deadlock
   search can follow the edges without the queue latches. */
-  std::atomic<Trx *> m_blocking_trx{};
+  TypeStable<Trx *> m_blocking_trx;
 
   /** While the transaction waits: true if more than one transaction blocks
   it (m_blocking_trx names one of them). The fast deadlock walk over the one
   edge graph is complete only along transactions with one blocker; past one
   with several, the full search runs (lock0deadlock.h). */
-  std::atomic<bool> m_blocking_multi{};
+  TypeStable<bool> m_blocking_multi;
 
   /** The full deadlock search that visited this transaction: equal to
   LockSys::m_deadlock_epoch if the current search has searched its subtree

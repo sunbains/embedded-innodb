@@ -59,11 +59,10 @@ THE CHECK (deadlock_find())
 It runs for every new waiting lock: on a request (enter_lock_wait() walks
 latch free with the shard latch of the request held; if the walk is suspect,
 deadlock_resolve() runs deadlock_occurs() with X once the shard latch is
-released), with the requester as the start; when a page operation moves a
-waiting lock, deadlock_check_moved(), after the page operation, with its
-transaction as the start. Between the walk and the full check the graph may
-change: the full check, under X, is the one that decides; a cycle that forms
-in between is found by the request or the move that closes it.
+released), with the requester as the start. Nothing moves a waiting lock
+(locks are on keys, not on where records are). Between the walk and the full
+check the graph may change: the full check, under X, is the one that decides;
+a cycle that forms in between is found by the request that closes it.
 
 PROOF
 

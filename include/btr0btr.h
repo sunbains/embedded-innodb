@@ -164,6 +164,26 @@ struct Btree {
    * @param[in] index           The index.
    * @param[in,out] mtr         Mini-transaction.
    */
+  /** The locks of a page that leaves the tree go to heir, the boundary after it. */
+  void discard_locks(const Index *index, const BufBlock *block, LockKey heir) noexcept;
+
+  /** @return the lock key of a user record of index. */
+  [[nodiscard]] static LockKey lock_key(const Index *index, Rec rec) noexcept;
+
+  /** @return the fence after the records of a page, what bounds the gap after its last record for the
+  locks: a B-link page's high key, the end of the index; on the old tree, the page itself, as its
+  supremum record did. */
+  [[nodiscard]] static LockKey lock_fence(const Index *index, const BufBlock *block) noexcept;
+
+  /** @return the first boundary of a page, for the locks: its first record, or its fence if it has none. */
+  [[nodiscard]] static LockKey lock_first(const Index *index, const BufBlock *block) noexcept;
+
+  /** @return the boundary after rec on its page, for the locks: the next record or the fence. */
+  [[nodiscard]] static LockKey lock_next(const Index *index, const BufBlock *block, Rec rec) noexcept;
+
+  /** @return what a lock at rec is on: the record, or the fence for the supremum. */
+  [[nodiscard]] static LockPos lock_pos(const Index *index, const BufBlock *block, Rec rec) noexcept;
+
   [[nodiscard]] page_t *seg_root(const Index *index, Mtr *mtr) noexcept;
 
 #ifdef UNIV_DEBUG

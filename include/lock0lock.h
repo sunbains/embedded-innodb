@@ -28,8 +28,8 @@ is split, each piece owned by one latch:
 
   Latch                      Level (sync0sync.h)   Owns
   -------------------------  --------------------  --------------------------
-  page shard latch           SYNC_LOCK_SYS_PAGE    the record lock queues of
-  (N_PAGE_SHARDS, by page)   320                   the pages of the shard, the
+  key shard latch            SYNC_LOCK_SYS_PAGE    the record lock queues of
+  (N_KEY_SHARDS, by key)     320                   the keys of the shard, the
                                                    bitmaps of their locks
   table shard latch          SYNC_LOCK_SYS_TABLE   Table::m_locks of the tables
   (N_TABLE_SHARDS, by table) 318                   of the shard
@@ -51,17 +51,17 @@ is split, each piece owned by one latch:
                                                    the query threads in it
 
 A thread acquires a latch only if its level is lower than that of every latch
-it holds. So: at most two page shard latches (in the order of their shard
-numbers: the page operations that move locks between two pages), or one table
-shard latch, possibly after a page shard latch; then one trx mutex. The trx sys mutex may be taken with lock system latches held
+it holds. So: at most two key shard latches (in the order of their shard
+numbers: the inheritance of gap locks from one key to another), or one table
+shard latch, possibly after a key shard latch; then one trx mutex. The trx sys mutex may be taken with lock system latches held
 (it is not, in practice); a lock system latch is never taken with the trx sys
 mutex held: the callers that used to call the lock system with it held now
 release it first (Trx::commit_low() has none, the lock monitor). A trx mutex is
 taken last. The debug builds check this order (LockSys::Held, TrxMutex::n_held()
 and mutex_own() of the trx sys mutex), and every internal function of the lock
-system asserts the latch of the queue it reads (owns_page(), owns_table()).
+system asserts the latch of the queue it reads (owns_key(), owns_table()).
 
-X is every shard latch held by one thread (x_lock(): the page shards in the
+X is every shard latch held by one thread (x_lock(): the key shards in the
 order of their numbers, then the table shards: the latching order, so it can't
 deadlock with a thread on its way through the shards; reentrant). It is all of
 the lock system at once: the full deadlock search, the cancel of a deadlock
@@ -159,12 +159,12 @@ impossible (the pin is taken with the id shard mutex, which C2 takes), C3
 waits for the existing ones, and C4 comes after C3. So every lock a
 conversion creates for T is in T's lock list before C4, hence before C5
 walks the list and releases it. (T's own requests come from T's own thread,
-before its commit; the locks a page operation creates for T, by inheritance
-or a move, come from locks of T that C5 has not released yet, under the same
-shard latches, and C5 runs until T's list is empty.)
+before its commit; the locks an inheritance creates for T come from locks of
+T that C5 has not released yet, under the same shard latches, and C5 runs
+until T's list is empty.)
 
 No conflict is missed, and no conflict is made: a reader whose V3 comes
-before C2 creates T's explicit lock under the page shard latch before its
+before C2 creates T's explicit lock under the key shard latch before its
 own request, which therefore waits until C5 releases it. A reader whose V1
 or V3 comes after C2 does not create one: C1 is done, T's changes are
 committed (and a rollback undoes all its changes before its C2), so there is
@@ -265,214 +265,37 @@ struct LockSys {
   [[nodiscard]] ulint get_size() const noexcept;
 
   /**
-   * @brief Updates the lock table when a page has been reorganized.
+   * A key went in: the gap below next is the gap below key and the gap below next now, and what locks
+   * the gap of next as a gap locks the gap of key too. The index calls it with the record in, before it
+   * lets go of what makes the insert and the boundary after it one.
    *
-   * This function updates the lock table to reflect changes after a page
-   * has been reorganized. It also copies the locks set on the infimum of
-   * the page. The infimum may carry locks if an update of a record is
-   * occurring on the page, and its locks were temporarily stored on the
-   * infimum.
-   *
-   * @param[in] block  The old index page, now reorganized.
-   * @param[in] oblock A copy of the old, not reorganized page.
+   * @param[in] index The index.
+   * @param[in] key   The key that went in.
+   * @param[in] next  The boundary after it: the next key or a fence.
    */
-  void move_reorganize_page(const BufBlock *block, const BufBlock *oblock) noexcept;
+  void update_insert(const Index *index, LockKey key, LockKey next) noexcept;
 
   /**
-   * @brief Moves the explicit locks on user records to another page if a record
-   * list end is moved to another page.
+   * A key goes from the index (purge, a rollback of an insert, a page that goes): what locks it locks
+   * the gap below next as a gap, the transactions waiting for it go on and find what's there, and on key
+   * only its gap stays locked: it can be a fence still.
    *
-   * This function transfers the explicit locks associated with user records
-   * from one page to another when the end of a record list is moved.
-   *
-   * @param[in] new_block The index page to move to.
-   * @param[in] block The current index page.
-   * @param[in] rec The first record moved on the page.
+   * @param[in] index The index.
+   * @param[in] key   The key that goes.
+   * @param[in] next  The boundary after it.
    */
-  void move_rec_list_end(const BufBlock *new_block, const BufBlock *block, const Rec rec) noexcept;
+  void update_delete(const Index *index, LockKey key, LockKey next) noexcept;
 
   /**
-   * @brief Moves the explicit locks on user records to another page if a record
-   * list start is moved to another page.
+   * What locks the gap below key locks the gap below heir too, as gap locks: for a boundary that goes
+   * (a fence a merge took off) or a gap that a page operation gives another boundary. A copy: a lock
+   * more is a wait more at most, never a conflict missed.
    *
-   * This function transfers the explicit locks associated with user records
-   * from one page to another when the start of a record list is moved.
-   *
-   * @param[in] new_block The index page to move to.
-   * @param[in] block The current index page.
-   * @param[in] rec The first record on the page that is NOT copied.
-   * @param[in] old_end The old previous-to-last record on the new page before the records were copied.
+   * @param[in] index The index.
+   * @param[in] heir  The boundary that takes them.
+   * @param[in] key   The boundary they're on.
    */
-  void move_rec_list_start(const BufBlock *new_block, const BufBlock *block, const Rec rec, const Rec old_end) noexcept;
-
-  /**
-   * @brief Updates the lock table when a page is split to the right.
-   *
-   * This function updates the lock table to reflect changes after a page
-   * has been split to the right. It ensures that the locks are correctly
-   * transferred and maintained on the new right page.
-   *
-   * @param[in] right_block The right page after the split.
-   * @param[in] left_block The left page after the split.
-   */
-  void update_split_right(const BufBlock *right_block, const BufBlock *left_block) noexcept;
-
-  /**
-   * @brief Updates the lock table when a page is merged to the right.
-   *
-   * This function updates the lock table to reflect changes after a page
-   * has been merged to the right. It ensures that the locks are correctly
-   * transferred and maintained on the new right page.
-   *
-   * @param[in] right_block The right page to which the merge occurred.
-   * @param[in] orig_succ The original successor of the infimum on the right page before the merge.
-   * @param[in] left_block The merged index page which will be discarded.
-   */
-  void update_merge_right(const BufBlock *right_block, const Rec orig_succ, const BufBlock *left_block) noexcept;
-
-  /**
-   * @brief Updates the lock table when the root page is copied to another in btr_root_raise_and_insert.
-   *
-   * This function updates the lock table to reflect changes when the root page is copied to another
-   * page during the btr_root_raise_and_insert operation. Note that lock structures are left on the
-   * root page, even though they do not make sense on pages other than leaf pages. The reason for this
-   * is that in a pessimistic update, the infimum record of the root page will act as a dummy carrier
-   * of the locks of the record to be updated.
-   *
-   * @param[in] block The index page to which the root page is copied.
-   * @param[in] root The root page being copied.
-   */
-  void update_root_raise(const BufBlock *block, const BufBlock *root) noexcept;
-
-  /**
-   * @brief Updates the lock table when a page is copied to another and the original
-   * page is removed from the chain of leaf pages, except if the page is the root.
-   *
-   * This function ensures that the lock table is updated correctly when a page
-   * is copied to a new location and the original page is removed from the chain
-   * of leaf pages. Note that this operation does not apply if the page being
-   * copied is the root page.
-   *
-   * @param[in] new_block The index page to which the original page is copied.
-   * @param[in] block The original index page that is being copied; NOT the root page.
-   */
-  void update_copy_and_discard(const BufBlock *new_block, const BufBlock *block) noexcept;
-
-  /**
-   * @brief Updates the lock table when a page is split to the left.
-   *
-   * This function updates the lock table to reflect changes after a page
-   * has been split to the left. It ensures that the locks are correctly
-   * transferred and maintained on the new left page.
-   *
-   * @param[in] right_block The right page after the split.
-   * @param[in] left_block The left page after the split.
-   */
-  void update_split_left(const BufBlock *right_block, const BufBlock *left_block) noexcept;
-
-  /**
-   * @brief Updates the lock table when a page is merged to the left.
-   *
-   * This function updates the lock table to reflect changes after a page
-   * has been merged to the left. It ensures that the locks are correctly
-   * transferred and maintained on the new left page.
-   *
-   * @param[in] left_block The left page to which the merge occurred.
-   * @param[in] orig_pred The original predecessor of the supremum on the left page before the merge.
-   * @param[in] right_block The merged index page which will be discarded.
-   */
-  void update_merge_left(const BufBlock *left_block, const Rec orig_pred, const BufBlock *right_block) noexcept;
-
-  /**
-   * @brief Resets the original locks on the heir record and replaces them with gap type locks
-   * inherited from the specified record.
-   *
-   * This function is used to reset the locks on the heir record and inherit the gap type locks
-   * from another record. The locks on the original record are not reset.
-   *
-   * @param[in] heir_block Block containing the record which inherits the locks.
-   * @param[in] block Block containing the record from which the locks are inherited; does NOT reset the locks on this record.
-   * @param[in] heir_heap_no Heap number of the inheriting record.
-   * @param[in] heap_no Heap number of the donating record.
-   */
-  void rec_reset_and_inherit_gap_locks(
-    const BufBlock *heir_block, const BufBlock *block, ulint heir_heap_no, ulint heap_no
-  ) noexcept;
-
-  /**
-   * @brief Updates the lock table when a page is discarded.
-   *
-   * This function updates the lock table to reflect changes after a page
-   * has been discarded. It ensures that the locks are correctly transferred
-   * and maintained on the heir record.
-   *
-   * @param[in] heir_block The index page which will inherit the locks.
-   * @param[in] heir_heap_no The heap number of the record which will inherit the locks.
-   * @param[in] block The index page which will be discarded.
-   */
-  void update_discard(const BufBlock *heir_block, ulint heir_heap_no, const BufBlock *block) noexcept;
-
-  /**
-   * @brief Updates the lock table when a new user record is inserted.
-   *
-   * This function updates the lock table to reflect the insertion of a new user record.
-   * It ensures that the appropriate locks are set for the newly inserted record.
-   *
-   * @param[in] block Buffer block containing the inserted record.
-   * @param[in] rec The inserted record.
-   */
-  void update_insert(const BufBlock *block, const Rec rec) noexcept;
-
-  /**
-   * @brief Updates the lock table when a record is removed.
-   *
-   * This function updates the lock table to reflect the removal of a record.
-   * It ensures that the locks associated with the record are correctly
-   * managed and updated in the lock table.
-   *
-   * @param[in] block Buffer block containing the record to be removed.
-   * @param[in] rec The record to be removed.
-   */
-  void update_delete(const BufBlock *block, const Rec rec) noexcept;
-
-  /**
-   * @brief Stores the explicit locks of a record on the page infimum record.
-   *
-   * This function is used to store the lock state of a record when it is
-   * updated and the size of the record changes in the update. The record
-   * is moved, potentially to another page, during such an update. The infimum
-   * record acts as a dummy carrier record, managing lock releases while the
-   * actual record is being moved.
-   *
-   * @param[in] block Buffer block containing the record.
-   * @param[in] rec Record whose lock state is stored on the infimum record of the same page; lock bits are reset on the record.
-   */
-  void rec_store_on_page_infimum(const BufBlock *block, const Rec rec) noexcept;
-
-  /**
-   * @brief Restores the state of explicit lock requests on a single record.
-   *
-   * This function restores the state of explicit lock requests on a single record,
-   * where the state was stored on the infimum of the page. It ensures that the lock
-   * state is correctly transferred from the infimum to the specified record.
-   *
-   * @param[in] block Buffer block containing the record.
-   * @param[in] rec Record whose lock state is restored.
-   * @param[in] donator Page (rec is not necessarily on this page) whose infimum stored the lock state; lock bits are reset on the infimum.
-   */
-  void rec_restore_from_page_infimum(const BufBlock *block, const Rec rec, const BufBlock *donator) noexcept;
-
-  /**
-   * @brief Checks if there are explicit record locks on a page.
-   *
-   * This function determines whether there are any explicit record locks
-   * present on the specified page within the given tablespace.
-   *
-   * @param[in] page_id The page id.
-   *
-   * @return true if there are explicit record locks on the page, false otherwise.
-   */
-  [[nodiscard]] bool rec_expl_exist_on_page(PageId page_id) noexcept;
+  void inherit_gap(const Index *index, LockKey heir, LockKey key) noexcept;
 
   /**
    * @brief Checks if locks of other transactions prevent an immediate insert of a record.
@@ -493,9 +316,7 @@ struct LockSys {
    *
    * @return DB_SUCCESS, DB_LOCK_WAIT, DB_DEADLOCK, or DB_QUE_THR_SUSPENDED.
    */
-  [[nodiscard]] DbErr rec_insert_check_and_lock(
-    ulint flags, const Rec rec, BufBlock *block, const Index *index, QueThr *thr, Mtr *mtr, bool *inherit
-  ) noexcept;
+  [[nodiscard]] DbErr rec_insert_check_and_lock(ulint flags, LockKey next, const Index *index, QueThr *thr, bool *inherit) noexcept;
 
   /**
    * @brief Checks if locks of other transactions prevent an immediate modify (update,
@@ -515,9 +336,7 @@ struct LockSys {
    *
    * @return DB_SUCCESS, DB_LOCK_WAIT, DB_DEADLOCK, or DB_QUE_THR_SUSPENDED.
    */
-  [[nodiscard]] DbErr clust_rec_modify_check_and_lock(
-    ulint flags, const BufBlock *block, const Rec rec, const Index *index, const ulint *offsets, QueThr *thr
-  ) noexcept;
+  [[nodiscard]] DbErr clust_rec_modify_check_and_lock(ulint flags, LockKey key, const Rec rec, const Index *index, const ulint *offsets, QueThr *thr) noexcept;
 
   /**
    * @brief Checks if locks of other transactions prevent an immediate modify
@@ -539,9 +358,7 @@ struct LockSys {
    *
    * @return DB_SUCCESS, DB_LOCK_WAIT, DB_DEADLOCK, or DB_QUE_THR_SUSPENDED.
    */
-  [[nodiscard]] DbErr sec_rec_modify_check_and_lock(
-    ulint flags, BufBlock *block, const Rec rec, const Index *index, QueThr *thr, Mtr *mtr
-  ) noexcept;
+  [[nodiscard]] DbErr sec_rec_modify_check_and_lock(ulint flags, LockKey key, const Index *index, QueThr *thr) noexcept;
 
   /**
    * @brief Checks if locks of other transactions prevent an immediate read, or passing
@@ -563,10 +380,7 @@ struct LockSys {
    *
    * @return DB_SUCCESS, DB_LOCK_WAIT, DB_DEADLOCK, or DB_QUE_THR_SUSPENDED.
    */
-  [[nodiscard]] DbErr sec_rec_read_check_and_lock(
-    ulint flags, const BufBlock *block, const Rec rec, const Index *index, const ulint *offsets, LockMode mode,
-    ulint gap_mode, QueThr *thr
-  ) noexcept;
+  [[nodiscard]] DbErr sec_rec_read_check_and_lock(ulint flags, LockPos pos, const Rec rec, const Index *index, const ulint *offsets, LockMode mode, ulint gap_mode, QueThr *thr) noexcept;
 
   /**
    * @brief Checks if locks of other transactions prevent an immediate read, or passing
@@ -588,10 +402,7 @@ struct LockSys {
    *
    * @return DB_SUCCESS, DB_LOCK_WAIT, DB_DEADLOCK, or DB_QUE_THR_SUSPENDED.
    */
-  [[nodiscard]] DbErr clust_rec_read_check_and_lock(
-    ulint flags, const BufBlock *block, const Rec rec, const Index *index, const ulint *offsets, LockMode mode,
-    ulint gap_mode, QueThr *thr
-  ) noexcept;
+  [[nodiscard]] DbErr clust_rec_read_check_and_lock(ulint flags, LockPos pos, const Rec rec, const Index *index, const ulint *offsets, LockMode mode, ulint gap_mode, QueThr *thr) noexcept;
 
   /**
    * @brief Checks if locks of other transactions prevent an immediate read, or passing
@@ -615,9 +426,7 @@ struct LockSys {
    *
    * @return DB_SUCCESS, DB_LOCK_WAIT, DB_DEADLOCK, or DB_QUE_THR_SUSPENDED.
    */
-  [[nodiscard]] DbErr clust_rec_read_check_and_lock_alt(
-    ulint flags, const BufBlock *block, const Rec rec, const Index *index, LockMode mode, ulint gap_mode, QueThr *thr
-  ) noexcept;
+  [[nodiscard]] DbErr clust_rec_read_check_and_lock_alt(ulint flags, LockPos pos, const Rec rec, const Index *index, LockMode mode, ulint gap_mode, QueThr *thr) noexcept;
 
   /**
    * @brief Checks if a record is visible in a consistent read.
@@ -679,7 +488,7 @@ struct LockSys {
    * @param[in] rec Record for which the lock is set.
    * @param[in] lock_mode Lock mode, either LOCK_S or LOCK_X.
    */
-  void rec_unlock(Trx *trx, const BufBlock *block, const Rec rec, LockMode lock_mode) noexcept;
+  void rec_unlock(Trx *trx, LockKey key, LockMode lock_mode) noexcept;
 
   /**
    * @brief Releases transaction locks and releases other transactions waiting because of these locks.
@@ -849,27 +658,12 @@ struct LockSys {
   }
 
   /**
-   * Gets the heap_no of the smallest user record on a page.
-   *
-   * @param[in] block buffer block
-   *
-   * @return	heap_no of smallest user record, or PAGE_HEAP_NO_SUPREMUM
-   */
-  [[nodiscard]] inline ulint get_min_heap_no(const BufBlock *block) noexcept {
-    const auto page = block->m_frame;
-
-    /* The successor of the infimum: the supremum if the page is empty. */
-    return page_rec_get_next(Rec(page + PAGE_INFIMUM)).get_heap_no();
-  }
-
-  /**
    * Gets the previous record lock set on a record.
    *
    * @param[in] in_lock   in: record lock
-   * @param[in] heap_no   in: heap number of the record
    * @return              previous lock on the same record, nullptr if none exists
    */
-  [[nodiscard]] const Lock *rec_get_prev(const Lock *in_lock, ulint heap_no) noexcept;
+  [[nodiscard]] const Lock *rec_get_prev(const Lock *in_lock) noexcept;
 
   /**
    * @brief Gets the type of a lock.
@@ -890,11 +684,10 @@ struct LockSys {
    * This function checks if a lock exists for a given page and heap number.
    *
    * @param[in] page_id The page id.
-   * @param[in] heap_no The heap number.
    *
    * @return A pointer to the lock if found, or nullptr if no such lock exists.
    */
-  const Lock *rec_exists(const Rec_locks &rec_locks, ulint heap_no) const noexcept;
+  const Lock *rec_exists(const Rec_locks &rec_locks) const noexcept;
 #endif /* UNIV_DEBUG */
   /**
    * @brief Sets the print InnoDB lock monitor flag.
@@ -953,16 +746,12 @@ struct LockSys {
    * @param[in] type_mode Lock mode and wait flag, type is ignored and replaced by LOCK_REC.
    * @param[in] space Tablespace ID.
    * @param[in] page_no Page number in the tablespace.
-   * @param[in] heap_no Heap number in the page.
-   * @param[in] n_bits Number of bits in the lock bitmap.
    * @param[in] index Index of the record.
    * @param[in,out] trx Transaction that wants to create the record lock.
    *
    * @return A pointer to the created lock.
    */
-  [[nodiscard]] Lock *rec_create_low(
-    PageId page_id, LockMode type_mode, ulint heap_no, ulint n_bits, const Index *index, Trx *trx
-  ) noexcept;
+  [[nodiscard]] Lock *rec_create_low(LockKey page_id, LockMode type_mode, const Index *index, Trx *trx) noexcept;
 
 #ifdef UNIV_DEBUG
   /**
@@ -976,18 +765,6 @@ struct LockSys {
    */
   [[nodiscard]] bool lock_validate() noexcept;
 
-  /**
-   * @brief Validates the record lock queues on a page.
-   *
-   * This function checks the validity of the record lock queues for a specific page
-   * identified by its space ID and page number. It ensures that the locks on the page
-   * are consistent and correctly maintained.
-   *
-   * @param[in] space The space ID of the page to validate.
-   * @param[in] page_no The page number within the space to validate.
-   * @return true if the record lock queues on the page are valid, false otherwise.
-   */
-  [[nodiscard]] bool rec_validate_page(PageId page_id, bool held = false) noexcept;
 
   /**
    * @brief Checks if some other transaction has a lock request in the queue.
@@ -1000,13 +777,12 @@ struct LockSys {
    * @param[in] mode     The lock mode to check for, either LOCK_S or LOCK_X.
    * @param[in] gap      LOCK_GAP if gap locks should be considered, or 0 if not.
    * @param[in] wait     LOCK_WAIT if waiting locks should be considered, or 0 if not.
-   * @param[in] heap_no  The heap number of the record.
    * @param[in] trx      The transaction to check against, or nullptr to check requests by all transactions.
    *
    * @return A pointer to the lock if found, or nullptr if no such lock exists.
    */
   [[nodiscard]] const Lock *rec_other_has_expl_req(
-    PageId page_id, LockMode mode, ulint gap, ulint wait, ulint heap_no, const Trx *trx
+    LockKey page_id, LockMode mode, ulint gap, ulint wait, const Trx *trx
   ) const noexcept;
 
 #endif /* UNIV_DEBUG */
@@ -1086,32 +862,26 @@ struct LockSys {
    * @return the queue of a page, nullptr if it has no record locks.
    * @param[in] page_id The page.
    */
-  [[nodiscard]] Rec_locks *rec_queue(PageId page_id) const noexcept {
-    ut_ad(owns_page(page_id));
+  [[nodiscard]] Rec_locks *rec_queue(LockKey page_id) const noexcept {
+    ut_ad(owns_key(page_id));
 
-    return m_page_shards[page_shard_no(page_id)].m_locks.find(page_id);
+    return m_key_shards[key_shard_no(page_id)].m_locks.find(page_id);
   }
 
   /** @return the queue of a page, created if it has none. */
-  [[nodiscard]] Rec_locks &rec_queue_add(PageId page_id) noexcept {
-    ut_ad(owns_page(page_id));
+  [[nodiscard]] Rec_locks &rec_queue_add(LockKey page_id) noexcept {
+    ut_ad(owns_key(page_id));
 
-    return m_page_shards[page_shard_no(page_id)].m_locks.get(page_id);
+    return m_key_shards[key_shard_no(page_id)].m_locks.get(page_id);
   }
 
   /** Erase the (empty) queue of a page. */
-  void rec_queue_erase(PageId page_id) noexcept {
-    ut_ad(owns_page(page_id));
+  void rec_queue_erase(LockKey page_id) noexcept {
+    ut_ad(owns_key(page_id));
 
-    m_page_shards[page_shard_no(page_id)].m_locks.erase(page_id);
+    m_key_shards[key_shard_no(page_id)].m_locks.erase(page_id);
   }
 
-  /**
-   * @brief The deadlock check of the transactions whose waiting lock the
-   * page operation of the calling thread moved (moved()): one victim per
-   * cycle found. Called with no latch held, after the page operation.
-   */
-  void deadlock_check_moved() noexcept;
 
   /**
    * @brief The latch free part of the deadlock check of a waiting
@@ -1205,11 +975,10 @@ struct LockSys {
    *
    * @param[in] rec_locks The queue of the page.
    * @param[in] wait_lock The waiting lock.
-   * @param[in] heap_no Its record.
    *
    * @return The owner of the first such lock, or nullptr.
    */
-  [[nodiscard]] const Trx *rec_find_blocker(const Rec_locks &rec_locks, const Lock *wait_lock, ulint heap_no, bool *multi) const noexcept;
+  [[nodiscard]] const Trx *rec_find_blocker(const Rec_locks &rec_locks, const Lock *wait_lock, bool *multi) const noexcept;
 
   /**
    * @brief Gets the wait flag of a lock.
@@ -1223,19 +992,6 @@ struct LockSys {
   [[nodiscard]] inline bool get_wait(const Lock *lock) noexcept;
 
 #ifdef UNIV_DEBUG
-  /**
-   * @brief Gets the first explicit lock request on a record.
-   *
-   * This function retrieves the first explicit lock request on a record
-   * identified by the page id and the heap number.  It iterates through
-   * the locks and returns the first lock that matches the specified heap number.
-   *
-   * @param[in] page_id The page id.
-   * @param[in] heap_no The heap number of the record.
-   *
-   * @return The first lock on the specified record, or nullptr if none exists.
-   */
-  [[nodiscard]] inline Lock *rec_get_first(PageId page_id, ulint heap_no) noexcept;
 #endif /* UNIV_DEBUG */
 
   /**
@@ -1261,12 +1017,11 @@ struct LockSys {
    *
    * @param[in] page_id The page id containing the record.
    * @param[in] precise_mode The precise lock mode to check for, which can be LOCK_S or LOCK_X, possibly ORed with LOCK_GAP or LOCK_REC_NOT_GAP.
-   * @param[in] heap_no The heap number of the record.
    * @param[in] trx The transaction to check for the lock.
    *
    * @return A pointer to the lock if found, or nullptr if no such lock exists.
    */
-  [[nodiscard]] const Lock *rec_has_expl(PageId page_id, ulint precise_mode, ulint heap_no, const Trx *trx) const noexcept;
+  [[nodiscard]] const Lock *rec_has_expl(LockKey page_id, ulint precise_mode, const Trx *trx) const noexcept;
 
   /**
    * @brief Checks if some other transaction has a conflicting explicit lock request in the queue.
@@ -1276,12 +1031,11 @@ struct LockSys {
    *
    * @param[in] mode     The lock mode to check for, either LOCK_S or LOCK_X, possibly ORed with LOCK_GAP, LOCK_REC_NOT_GAP, or LOCK_INSERT_INTENTION.
    * @param[in] page_id  The page id containing the record.
-   * @param[in] heap_no  The heap number of the record.
    * @param[in] trx      The transaction to check against.
    *
    * @return A pointer to the conflicting lock if found, or nullptr if no such lock exists.
    */
-  [[nodiscard]] Lock *rec_other_has_conflicting(PageId page_id, LockMode mode, ulint heap_no, Trx *trx) noexcept;
+  [[nodiscard]] Lock *rec_other_has_conflicting(LockKey page_id, LockMode mode, Trx *trx) noexcept;
 
   /**
    * @brief Finds a similar record lock on the same page for the same transaction.
@@ -1291,13 +1045,12 @@ struct LockSys {
    * is needed if a suitable existing one is found.
    *
    * @param[in] type_mode The type_mode field of the lock.
-   * @param[in] heap_no The gap number of the record.
    * @param[in] lock The first lock on the page.
    * @param[in] trx The transaction to check for.
    *
    * @return A pointer to the similar lock if found, or nullptr if no such lock exists.
    */
-  [[nodiscard]] Lock *rec_find_similar_on_page(LockMode type_mode, ulint heap_no, Lock *lock, const Trx *trx) noexcept;
+  [[nodiscard]] Lock *rec_find_similar_on_page(LockMode type_mode, Lock *lock, const Trx *trx) noexcept;
 
   /**
    * @brief Checks if some transaction has an implicit x-lock on a record in a secondary index.
@@ -1323,15 +1076,12 @@ struct LockSys {
    *
    * @param[in] type_mode Lock mode and wait flag, type is ignored and replaced by LOCK_REC.
    * @param[in] block Buffer block containing the record.
-   * @param[in] heap_no Heap number of the record.
    * @param[in] index Index of the record.
    * @param[in] trx Transaction requesting the lock.
    *
    * @return The created lock.
    */
-  [[nodiscard]] Lock *rec_create(
-    LockMode type_mode, const BufBlock *block, ulint heap_no, const Index *index, const Trx *trx
-  ) noexcept;
+  [[nodiscard]] Lock *rec_create(LockMode type_mode, LockKey key, const Index *index, const Trx *trx) noexcept;
 
   /**
    * @brief Enqueues a waiting request for a lock which cannot be granted immediately and checks for deadlocks.
@@ -1343,7 +1093,6 @@ struct LockSys {
    *                      possibly ORed with LOCK_GAP or LOCK_REC_NOT_GAP, ORed with LOCK_INSERT_INTENTION
    *                      if this waiting lock request is set when performing an insert of an index record.
    * @param[in] block Buffer block containing the record.
-   * @param[in] heap_no Heap number of the record.
    * @param[in] index Index of the record.
    * @param[in] thr Query thread.
    *
@@ -1352,9 +1101,7 @@ struct LockSys {
    * @return DB_QUE_THR_SUSPENDED if the query thread should be stopped.
    * @return DB_SUCCESS if there was a deadlock but another transaction was chosen as a victim, and the lock was granted immediately.
    */
-  [[nodiscard]] DbErr rec_enqueue_waiting(
-    LockMode type_mode, const BufBlock *block, ulint heap_no, const Index *index, Trx *trx, QueThr *thr
-  ) noexcept;
+  [[nodiscard]] DbErr rec_enqueue_waiting(LockMode type_mode, LockKey key, const Index *index, Trx *trx, QueThr *thr) noexcept;
 
   /**
    * @brief Adds a record lock request in the record queue.
@@ -1366,15 +1113,17 @@ struct LockSys {
    *
    * @param[in] type_mode Lock mode, wait, gap etc. flags; type is ignored and replaced by LOCK_REC.
    * @param[in] block Buffer block containing the record.
-   * @param[in] heap_no Heap number of the record.
    * @param[in] index Index of the record.
    * @param[in] trx Transaction.
    *
    * @return Lock where the bit was set.
    */
-  [[nodiscard]] Lock *rec_add_to_queue(
-    LockMode type_mode, const BufBlock *block, ulint heap_no, const Index *index, const Trx *trx
-  ) noexcept;
+  [[nodiscard]] Lock *rec_add_to_queue(LockMode type_mode, LockKey key, const Index *index, const Trx *trx) noexcept;
+
+  /** @return the mode of a request at pos: on a fence only its gap, as on the supremum of a page. */
+  [[nodiscard]] static LockMode fence_mode(LockPos pos, LockMode mode) noexcept {
+    return pos.m_fence ? LockMode((mode & ~LOCK_REC_NOT_GAP) | LOCK_GAP) : mode;
+  }
 
   /**
    * @brief Fast routine for locking a record in the most common cases.
@@ -1389,15 +1138,12 @@ struct LockSys {
    *                  the caller will set an implicit lock.
    * @param[in] mode  Lock mode: LOCK_X or LOCK_S possibly ORed with either LOCK_GAP or LOCK_REC_NOT_GAP.
    * @param[in] block Buffer block containing the record.
-   * @param[in] heap_no Heap number of the record.
    * @param[in] index Index of the record.
    * @param[in] thr   Query thread.
    *
    * @return true if locking succeeded.
    */
-  [[nodiscard]] bool rec_lock_fast(
-    bool impl, LockMode mode, const BufBlock *block, ulint heap_no, const Index *index, Trx *trx
-  ) noexcept;
+  [[nodiscard]] bool rec_lock_fast(bool impl, LockMode mode, LockKey key, const Index *index, Trx *trx) noexcept;
 
   /**
    * @brief General, slower routine for locking a record.
@@ -1411,15 +1157,12 @@ struct LockSys {
    * @param[in] mode   Lock mode: LOCK_X or LOCK_S possibly ORed with either LOCK_GAP
    *                   or LOCK_REC_NOT_GAP.
    * @param[in] block  Buffer block containing the record.
-   * @param[in] heap_no Heap number of the record.
    * @param[in] index  Index of the record.
    * @param[in] thr    Query thread.
    *
    * @return DB_SUCCESS, DB_LOCK_WAIT, or an error code.
    */
-  [[nodiscard]] DbErr rec_lock_slow(
-    bool impl, LockMode mode, const BufBlock *block, ulint heap_no, const Index *index, Trx *trx, QueThr *thr
-  ) noexcept;
+  [[nodiscard]] DbErr rec_lock_slow(bool impl, LockMode mode, LockKey key, const Index *index, Trx *trx, QueThr *thr) noexcept;
 
   /**
    * @brief Tries to lock the specified record in the mode requested.
@@ -1434,15 +1177,12 @@ struct LockSys {
    * @param[in] mode   Lock mode: LOCK_X or LOCK_S possibly ORed to either
    *                   LOCK_GAP or LOCK_REC_NOT_GAP.
    * @param[in] block  Buffer block containing the record.
-   * @param[in] heap_no Heap number of the record.
    * @param[in] index  Index of the record.
    * @param[in] thr    Query thread.
    *
    * @return DB_SUCCESS, DB_LOCK_WAIT, or an error code.
    */
-  [[nodiscard]] DbErr rec_lock(
-    bool impl, LockMode mode, const BufBlock *block, ulint heap_no, const Index *index, Trx *trx, QueThr *thr
-  ) noexcept;
+  [[nodiscard]] DbErr rec_lock(bool impl, LockMode mode, LockKey key, const Index *index, Trx *trx, QueThr *thr) noexcept;
 
   /**
    * @brief Locks a record for trx, waiting if needed: what the check and
@@ -1452,9 +1192,7 @@ struct LockSys {
    *
    * @return DB_SUCCESS, DB_LOCK_WAIT or DB_DEADLOCK.
    */
-  [[nodiscard]] DbErr rec_lock_for(
-    Trx *trx, LockMode mode, const BufBlock *block, ulint heap_no, const Index *index, QueThr *thr = nullptr
-  ) noexcept;
+  [[nodiscard]] DbErr rec_lock_for(Trx *trx, LockMode mode, LockKey key, const Index *index, QueThr *thr = nullptr) noexcept;
 
   /**
    * @brief Checks if a waiting record lock request still has to wait in a queue.
@@ -1465,11 +1203,10 @@ struct LockSys {
    *
    * @param[in] rec_locks The record locks to check.
    * @param[in] wait_lock The lock request that is waiting.
-   * @param[in] heap_no The heap number of the record.
    *
    * @return true if the lock request still has to wait, false otherwise.
    */
-  [[nodiscard]] bool rec_has_to_wait_in_queue(const Rec_locks &rec_locks, Lock *wait_lock, ulint heap_no) const noexcept;
+  [[nodiscard]] bool rec_has_to_wait_in_queue(const Rec_locks &rec_locks, Lock *wait_lock) const noexcept;
 
   /**
    * @brief Grants a lock to a waiting lock request and releases the waiting transaction.
@@ -1523,9 +1260,8 @@ struct LockSys {
    * @brief rec_grant_pass() for the locks on one record.
    *
    * @param[in,out] rec_locks The queue of a page.
-   * @param[in] heap_no The record.
    */
-  void rec_grant_pass_on(Rec_locks &rec_locks, ulint heap_no, GrantPlan *plan = nullptr) noexcept;
+  void rec_grant_pass_on(Rec_locks &rec_locks, GrantPlan *plan = nullptr) noexcept;
 
   /**
    * @brief The decision of a grant pass for one waiting lock: grant it
@@ -1546,27 +1282,6 @@ struct LockSys {
    */
   void rec_discard(Lock *in_lock) noexcept;
 
-  /**
-   * @brief Removes record lock objects set on an index page which is discarded.
-   *
-   * This function removes all record lock objects associated with an index page
-   * that is being discarded. It does not move locks or check for waiting locks,
-   * so the lock bitmaps must already be reset when this function is called.
-   *
-   * @param[in] page_id The page id to be discarded.
-   */
-  void rec_free_all_from_discard_page(PageId page_id) noexcept;
-
-  /**
-   * @brief Resets the lock bits for a single record and releases transactions waiting for lock requests.
-   *
-   * This function resets the lock bits for a specified record within a block and releases any transactions
-   * that are waiting for lock requests on that record.
-   *
-   * @param[in] page_id  The page id containing the record.
-   * @param[in] heap_no  The heap number of the record.
-   */
-  void rec_reset_and_release_wait(PageId page_id, ulint heap_no) noexcept;
 
   /**
    * @brief Makes a record inherit the locks (except LOCK_INSERT_INTENTION type)
@@ -1580,10 +1295,8 @@ struct LockSys {
    * @param[in] heir_block   Block containing the record which inherits the locks.
    * @param[in] block        Block containing the record from which locks are inherited;
    *                         does NOT reset the locks on this record.
-   * @param[in] heir_heap_no Heap number of the inheriting record.
-   * @param[in] heap_no      Heap number of the donating record.
    */
-  void rec_inherit_to_gap(const BufBlock *heir_block, const BufBlock *block, ulint heir_heap_no, ulint heap_no) noexcept;
+  void rec_inherit_to_gap(LockKey heir, LockKey key) noexcept;
 
   /**
    * @brief Makes a record inherit the gap locks (except LOCK_INSERT_INTENTION type)
@@ -1596,26 +1309,8 @@ struct LockSys {
    *
    * @param[in] block        Buffer block containing the record from which locks are inherited;
    *                         does NOT reset the locks on this record.
-   * @param[in] heir_heap_no Heap number of the inheriting record.
-   * @param[in] heap_no      Heap number of the donating record.
    */
-  void rec_inherit_to_gap_if_gap_lock(const BufBlock *block, ulint heir_heap_no, ulint heap_no) noexcept;
-
-  /**
-   * @brief Moves the locks of a record to another record and resets the lock bits of
-   * the donating record.
-   *
-   * This function transfers all locks from the donating record to the receiving record.
-   * It also resets the lock bits of the donating record. The receiving record must not
-   * have any existing lock requests.
-   *
-   * @param[in] receiver         Buffer block containing the receiving record.
-   * @param[in] donator          Buffer block containing the donating record.
-   * @param[in] receiver_heap_no Heap number of the record which gets the locks;
-   *                             there must be no lock requests on it.
-   * @param[in] donator_heap_no  Heap number of the record which gives the locks.
-   */
-  void rec_move(const BufBlock *receiver, const BufBlock *donator, ulint receiver_heap_no, ulint donator_heap_no) noexcept;
+  void rec_inherit_to_gap_if_gap_lock(LockKey heir, LockKey key) noexcept;
 
   /**
    * @brief Creates a table lock object and adds it as the last in the lock queue
@@ -1750,9 +1445,7 @@ struct LockSys {
    * @param[in] offsets Column offsets obtained from PhyRec::get_col_offsets(rec, index).
    * @return true if the lock queue is valid, false otherwise.
    */
-  [[nodiscard]] bool rec_queue_validate(
-    const BufBlock *block, const Rec rec, const Index *index, const ulint *offsets
-  ) noexcept;
+  [[nodiscard]] bool rec_queue_validate(LockKey key, const Index *index) noexcept;
 
   /**
    * @brief Validates the lock system.
@@ -1774,10 +1467,9 @@ struct LockSys {
    *
    * @param[in] impl_trx The owner of the implicit lock, pinned.
    * @param[in] block    The buffer block of the record, its shard latched.
-   * @param[in] heap_no  The record.
    * @param[in] index    The index of the record.
    */
-  void impl_to_expl(Trx *impl_trx, const BufBlock *block, ulint heap_no, const Index *index) noexcept;
+  void impl_to_expl(Trx *impl_trx, LockKey key, const Index *index) noexcept;
 
   /**
    * @brief Checks if a transaction has no waiters.
@@ -1796,16 +1488,16 @@ struct LockSys {
  private:
 #endif /* !UNIT_TESTING */
 
-  /** The number of page shards: the record lock queues, by page. */
-  static constexpr size_t N_PAGE_SHARDS = 512;
+  /** The number of key shards: the record lock queues, by key. */
+  static constexpr size_t N_KEY_SHARDS = 512;
 
   /** The number of table shards: the table lock queues, by table id. */
   static constexpr size_t N_TABLE_SHARDS = 64;
 
-  /** A page shard: its latch and the record lock queues of its pages. */
-  struct alignas(64) PageShard {
+  /** A key shard: its latch and the record lock queues of its keys. */
+  struct alignas(64) KeyShard {
     ut::Latch m_mutex;
-    PageQueues m_locks;
+    KeyQueues m_locks;
   };
 
   /** A table shard: its latch (the queues are in Table::m_locks). */
@@ -1813,10 +1505,10 @@ struct LockSys {
     ut::Latch m_mutex;
   };
 
-  /** @return the page shard of a page. */
-  [[nodiscard]] static uint32_t page_shard_no(PageId page_id) noexcept {
-    const auto h = (uint64_t(page_id.m_space_id) << 32 | page_id.m_page_no) * 0x9E3779B97F4A7C15ULL;
-    return uint32_t(h >> 55) % N_PAGE_SHARDS;
+  /** @return the shard of a key. */
+  [[nodiscard]] static uint32_t key_shard_no(LockKey key) noexcept {
+    const auto h = key.m_fold * 0x9E3779B97F4A7C15ULL;
+    return uint32_t(h >> 55) % N_KEY_SHARDS;
   }
 
   /** @return the table shard of a table. */
@@ -1828,7 +1520,7 @@ struct LockSys {
   struct Held {
     const LockSys *m_owner{};
     uint32_t m_x{};
-    std::array<int32_t, 2> m_pages{-1, -1};
+    std::array<int32_t, 2> m_keys{-1, -1};
     int32_t m_table{-1};
   };
 
@@ -1841,17 +1533,17 @@ struct LockSys {
   /** @return true if the calling thread holds X or a shard latch. */
   [[nodiscard]] bool latched() const noexcept {
     const auto &h = held();
-    return h.m_x > 0 || h.m_pages[0] >= 0 || h.m_table >= 0;
+    return h.m_x > 0 || h.m_keys[0] >= 0 || h.m_table >= 0;
   }
 
   /** @return true if the calling thread holds no latch of the lock system. */
   [[nodiscard]] bool nothing_latched() const noexcept { return !latched(); }
 
   /** @return true if the calling thread may read and change the queue of page_id. */
-  [[nodiscard]] bool owns_page(PageId page_id) const noexcept {
+  [[nodiscard]] bool owns_key(LockKey page_id) const noexcept {
     const auto &h = held();
-    const auto shard = int32_t(page_shard_no(page_id));
-    return h.m_x > 0 || h.m_pages[0] == shard || h.m_pages[1] == shard;
+    const auto shard = int32_t(key_shard_no(page_id));
+    return h.m_x > 0 || h.m_keys[0] == shard || h.m_keys[1] == shard;
   }
 
   /** @return true if the calling thread may read and change the queue of table. */
@@ -1883,20 +1575,20 @@ struct LockSys {
     uint32_t m_no;
   };
 
-  /** One or two page shard latches for a scope (a no-op if the thread holds
+  /** One or two key shard latches for a scope (a no-op if the thread holds
   X). */
-  class PageLatch {
+  class KeyLatch {
    public:
-    PageLatch(LockSys &lock_sys, PageId page_id) noexcept;
-    PageLatch(LockSys &lock_sys, PageId a, PageId b) noexcept;
+    KeyLatch(LockSys &lock_sys, LockKey page_id) noexcept;
+    KeyLatch(LockSys &lock_sys, LockKey a, LockKey b) noexcept;
 
-    /** The latch of a page shard, by its number. */
-    PageLatch(LockSys &lock_sys, ShardNo shard) noexcept;
+    /** The latch of a key shard, by its number. */
+    KeyLatch(LockSys &lock_sys, ShardNo shard) noexcept;
 
-    ~PageLatch() noexcept;
+    ~KeyLatch() noexcept;
 
-    PageLatch(const PageLatch &) = delete;
-    PageLatch &operator=(const PageLatch &) = delete;
+    KeyLatch(const KeyLatch &) = delete;
+    KeyLatch &operator=(const KeyLatch &) = delete;
 
    private:
     LockSys &m_lock_sys;
@@ -1922,16 +1614,13 @@ struct LockSys {
     bool m_noop{};
   };
 
-  /** The waiting transactions whose waiting lock a page operation of the
-  calling thread moved, for deadlock_check_moved(). Thread local. */
-  [[nodiscard]] static std::vector<Trx *> &moved() noexcept;
 
   /** The requester of the calling thread whose latch free deadlock walk was
   suspect, for deadlock_after_wait(). Thread local. */
   [[nodiscard]] static Trx *&suspect() noexcept;
 
-  /** The page shards. */
-  std::array<PageShard, N_PAGE_SHARDS> m_page_shards{};
+  /** The key shards. */
+  std::array<KeyShard, N_KEY_SHARDS> m_key_shards{};
 
   /** The table shards. */
   std::array<TableShard, N_TABLE_SHARDS> m_table_shards{};
@@ -2000,3 +1689,17 @@ struct LockSys {
 };
 
 UT_LIST_NODE_GETTER_DEFINITION(Lock, m_trx_locks);
+
+namespace lock {
+
+/** @return the key of a record of index, for its locks: from the fields the index is ordered on. */
+[[nodiscard]] LockKey key_of(const Index *index, const Rec rec, const ulint *offsets) noexcept;
+
+/** @return the key of a search tuple or an entry of index: equal to the key of a record that compares
+equal to it on all the ordering fields. */
+[[nodiscard]] LockKey key_of(const Index *index, const DTuple *tuple) noexcept;
+
+/** @return the fence after the last key of index. */
+[[nodiscard]] LockKey end_of(const Index *index) noexcept;
+
+}  // namespace lock

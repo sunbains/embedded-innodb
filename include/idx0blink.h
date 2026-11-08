@@ -322,6 +322,9 @@ enum class TestPoint : uint8_t {
 
   /** A read that holds nothing is about to copy a record, it has validated nothing yet. */
   SNAP_COPY,
+
+  /** A batched insert found its page, it isn't queued on it yet. */
+  BATCH_FOUND,
 };
 
 #ifdef UNIT_TESTING

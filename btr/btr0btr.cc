@@ -230,6 +230,75 @@ void Btree::page_create(BufBlock *block, Index *index, ulint level, Mtr *mtr) no
   page_set_index_id(page, index->m_id, mtr);
 }
 
+LockKey Btree::lock_key(const Index *index, Rec rec) noexcept {
+  std::array<ulint, REC_OFFS_NORMAL_SIZE> offs_{};
+  MemHeap *heap{};
+
+  rec_offs_init(offs_);
+
+  const RecOffs offs = PhyRec(index, rec).get_col_offsets(offs_.data(), index->get_n_unique_in_tree(), &heap, Current_location());
+  const auto key = lock::key_of(index, rec, offs.get());
+
+  if (heap != nullptr) {
+    mem_heap_free(heap);
+  }
+
+  return key;
+}
+
+LockKey Btree::lock_fence(const Index *index, const BufBlock *block) noexcept {
+  const auto page = block->get_frame();
+
+  /* By what the page is, not by the kind of index: the old tree's code runs on either. */
+  if (!page_has_right(page)) {
+    return lock::end_of(index);
+  }
+
+  if (const auto high_key = page_get_high_key(page); !high_key.is_null()) {
+    return lock_key(index, high_key);
+  }
+
+  /* A page of the old tree: a value of its own for each page, as the supremum was, which its page
+  operations hand on (inherit_gap()). */
+  const auto fold = ((uint64_t(block->get_page_id().m_space_id) << 32 | block->get_page_no()) ^ index->m_id << 7) * 0x9E3779B97F4A7C15ULL;
+
+  return LockKey{fold | 1};
+}
+
+void Btree::discard_locks(const Index *index, const BufBlock *block, LockKey heir) noexcept {
+  const auto page = block->get_frame();
+
+  /* Only leaves have locks. */
+  if (!page_is_leaf(page)) {
+    return;
+  }
+
+  /* What's on the page goes, as the deletes of its records would have it. */
+  for (auto rec = page_rec_get_next_const(page_get_infimum_rec(page)); !page_rec_is_supremum(rec); rec = page_rec_get_next_const(rec)) {
+    m_sys.m_lock_sys->update_delete(index, lock_key(index, rec), heir);
+  }
+
+  m_sys.m_lock_sys->inherit_gap(index, heir, lock_fence(index, block));
+}
+
+LockKey Btree::lock_first(const Index *index, const BufBlock *block) noexcept {
+  const auto first = page_rec_get_next_const(page_get_infimum_rec(block->get_frame()));
+
+  return page_rec_is_supremum(first) ? lock_fence(index, block) : lock_key(index, first);
+}
+
+LockKey Btree::lock_next(const Index *index, const BufBlock *block, Rec rec) noexcept {
+  const auto next = page_rec_get_next_const(rec);
+
+  return page_rec_is_supremum(next) ? lock_fence(index, block) : lock_key(index, next);
+}
+
+LockPos Btree::lock_pos(const Index *index, const BufBlock *block, Rec rec) noexcept {
+  ut_ad(!page_rec_is_infimum(rec));
+
+  return page_rec_is_supremum(rec) ? LockPos{lock_fence(index, block), true} : LockPos{lock_key(index, rec), false};
+}
+
 page_t *Btree::seg_root(const Index *index, Mtr *mtr) noexcept {
   if (!index->is_blink()) {
     return root_get(index->m_page_id, mtr);
@@ -587,11 +656,6 @@ bool Btree::page_reorganize_low(bool recovery, BufBlock *block, const Index *ind
     ut_a(installed);
   }
 
-  if (likely(!recovery)) {
-    /* Update the record lock bitmaps */
-    m_sys.m_lock_sys->move_reorganize_page(block, temp_block);
-  }
-
   auto data_size2 = page_get_data_size(page);
   auto max_ins_size2 = page_get_max_insert_size_after_reorganize(page, 1);
 
@@ -725,7 +789,10 @@ void Btree::root_raise(BtreeCursor *btr_cur, BufBlock *new_block, const DTuple *
   information of the record to be inserted on the infimum of the
   root page: we cannot discard the lock structs on the root page */
 
-  m_sys.m_lock_sys->update_root_raise(new_block, root_block);
+  /* The supremum of the root is the new page's now. Only leaves have locks. */
+  if (page_is_leaf(new_block->get_frame())) {
+    m_sys.m_lock_sys->inherit_gap(index, lock_fence(index, new_block), lock_fence(index, root_block));
+  }
 
   /* Create a memory heap where the node pointer is stored */
   auto heap = mem_heap_create(100);
@@ -1273,7 +1340,11 @@ Rec Btree::page_split_and_insert(BtreeCursor *btr_cur, const DTuple *tuple, ulin
       left_block = new_block;
       right_block = block;
 
-      m_sys.m_lock_sys->update_split_left(right_block, left_block);
+      /* The gap at the end of the new left page is the gap below the first record on the right. */
+      if (page_is_leaf(left_block->get_frame())) m_sys.m_lock_sys->inherit_gap(
+        btr_cur->get_index(), lock_fence(btr_cur->get_index(), left_block),
+        lock_first(btr_cur->get_index(), right_block)
+      );
 
 #ifdef UNIV_BTR_AVOID_COPY
     } else if (split_rec.is_null()) {
@@ -1290,7 +1361,16 @@ Rec Btree::page_split_and_insert(BtreeCursor *btr_cur, const DTuple *tuple, ulin
       left_block = block;
       right_block = new_block;
 
-      m_sys.m_lock_sys->update_split_right(right_block, left_block);
+      /* The gap at the end of the left page is the right page's end now, and the gap below the first
+      record of the right page is at the end of the left page too. */
+      const auto split_index = btr_cur->get_index();
+
+      if (page_is_leaf(left_block->get_frame())) {
+        m_sys.m_lock_sys->inherit_gap(split_index, lock_fence(split_index, right_block), lock_fence(split_index, left_block));
+        m_sys.m_lock_sys->inherit_gap(
+          split_index, lock_fence(split_index, left_block), lock_first(split_index, right_block)
+        );
+      }
     }
 
     /* At this point, split_rec, move_limit and first_rec may point
@@ -1475,7 +1555,9 @@ void Btree::lift_page_up(Index *index, BufBlock *block, Mtr *mtr) noexcept {
   /* Copy the records to the father page one by one (this also moves their locks). */
   (void)page_copy_rec_list_end(m_sys, father_block, block, page_get_infimum_rec(page), index, mtr);
 
-  m_sys.m_lock_sys->update_copy_and_discard(father_block, block);
+  if (page_is_leaf(page)) {
+    m_sys.m_lock_sys->inherit_gap(index, lock_fence(index, father_block), lock_fence(index, block));
+  }
 
   /* Go upward to root page, decrementing levels by one. */
   for (ulint i{}; i < n_blocks; ++i, ++page_level) {
@@ -1599,7 +1681,15 @@ bool Btree::merge(BtreeCursor *cursor, Mtr *mtr) noexcept {
 
     node_ptr_delete(index, block, mtr);
 
-    m_sys.m_lock_sys->update_merge_left(merge_block, orig_pred, block);
+    /* The gap at the end of the left page is below the first record that came from the right, and
+    the end of the right page is the end of the left page now. */
+    if (page_is_leaf(page)) {
+      if (const auto first = page_rec_get_next_const(orig_pred); !page_rec_is_supremum(first)) {
+        m_sys.m_lock_sys->inherit_gap(index, lock_key(index, first), lock_fence(index, merge_block));
+      }
+
+      m_sys.m_lock_sys->inherit_gap(index, lock_fence(index, merge_block), lock_fence(index, block));
+    }
 
   } else {
     auto orig_succ = page_copy_rec_list_end(m_sys, merge_block, block, page_get_infimum_rec(page), cursor->m_index, mtr);
@@ -1615,7 +1705,10 @@ bool Btree::merge(BtreeCursor *cursor, Mtr *mtr) noexcept {
     node_ptr_set_child_page_no(father_cursor.get_rec(), offsets, right_page_no, mtr);
     node_ptr_delete(index, merge_block, mtr);
 
-    m_sys.m_lock_sys->update_merge_right(merge_block, orig_succ, block);
+    /* The end of the left page was the gap below what was first on the right. */
+    if (page_is_leaf(page)) {
+      m_sys.m_lock_sys->inherit_gap(index, lock_key(index, orig_succ), lock_fence(index, block));
+    }
   }
 
   mem_heap_free(heap);
@@ -1649,7 +1742,9 @@ void Btree::discard_only_page_on_level(Index *index, BufBlock *block, Mtr *mtr) 
     page_get_father(index, block, mtr, &btr_cur);
     auto father = btr_cur.get_block();
 
-    m_sys.m_lock_sys->update_discard(father, PAGE_HEAP_NO_SUPREMUM, block);
+    if (page_is_leaf(block->get_frame())) {
+      discard_locks(index, block, lock_fence(index, father));
+    }
 
     /* Free the file page */
     page_free(index, block, mtr);
@@ -1737,9 +1832,13 @@ void Btree::discard_page(BtreeCursor *btr_cur, Mtr *mtr) noexcept {
   level_list_remove(space, page, mtr);
 
   if (left_page_no != FIL_NULL) {
-    m_sys.m_lock_sys->update_discard(merge_block, PAGE_HEAP_NO_SUPREMUM, block);
+    if (page_is_leaf(block->get_frame())) {
+      discard_locks(index, block, lock_fence(index, merge_block));
+    }
   } else {
-    m_sys.m_lock_sys->update_discard(merge_block, m_sys.m_lock_sys->get_min_heap_no(merge_block), block);
+    if (page_is_leaf(block->get_frame())) {
+      discard_locks(index, block, lock_first(index, merge_block));
+    }
   }
 
   /* Free the file page */

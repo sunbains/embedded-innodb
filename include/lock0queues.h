@@ -39,9 +39,9 @@ donator's queue while it adds the receiver's). The shard latch protects it.
 #include <utility>
 #include <vector>
 
-class PageQueues {
+class KeyQueues {
  public:
-  using value_type = std::pair<const PageId, Rec_locks>;
+  using value_type = std::pair<const LockKey, Rec_locks>;
 
  private:
   struct Node {
@@ -60,7 +60,7 @@ class PageQueues {
     using pointer = V *;
     using reference = V &;
 
-    Iter(const PageQueues *queues, size_t bucket, Node *node) noexcept : m_queues(queues), m_bucket(bucket), m_node(node) { skip(); }
+    Iter(const KeyQueues *queues, size_t bucket, Node *node) noexcept : m_queues(queues), m_bucket(bucket), m_node(node) { skip(); }
 
     reference operator*() const noexcept { return m_node->m_kv; }
     pointer operator->() const noexcept { return &m_node->m_kv; }
@@ -81,7 +81,7 @@ class PageQueues {
       }
     }
 
-    const PageQueues *m_queues;
+    const KeyQueues *m_queues;
     size_t m_bucket;
     Node *m_node;
   };
@@ -89,12 +89,12 @@ class PageQueues {
   using iterator = Iter<value_type>;
   using const_iterator = Iter<const value_type>;
 
-  PageQueues() noexcept = default;
+  KeyQueues() noexcept = default;
 
-  PageQueues(const PageQueues &) = delete;
-  PageQueues &operator=(const PageQueues &) = delete;
+  KeyQueues(const KeyQueues &) = delete;
+  KeyQueues &operator=(const KeyQueues &) = delete;
 
-  ~PageQueues() noexcept {
+  ~KeyQueues() noexcept {
     for (auto node : m_buckets) {
       while (node != nullptr) {
         auto next = node->m_next;
@@ -111,7 +111,7 @@ class PageQueues {
   }
 
   /** @return the queue of the page, or nullptr. */
-  [[nodiscard]] Rec_locks *find(PageId page_id) const noexcept {
+  [[nodiscard]] Rec_locks *find(LockKey page_id) const noexcept {
     if (m_n == 0) {
       return nullptr;
     }
@@ -126,7 +126,7 @@ class PageQueues {
   }
 
   /** @return the queue of the page, created empty if there is none. */
-  [[nodiscard]] Rec_locks &get(PageId page_id) noexcept {
+  [[nodiscard]] Rec_locks &get(LockKey page_id) noexcept {
     if (auto locks = find(page_id); locks != nullptr) {
       return *locks;
     }
@@ -157,7 +157,7 @@ class PageQueues {
   }
 
   /** Erase the queue of the page, if there is one. */
-  void erase(PageId page_id) noexcept {
+  void erase(LockKey page_id) noexcept {
     if (m_n == 0) {
       return;
     }
@@ -191,8 +191,8 @@ class PageQueues {
 
   /** @return the bucket of a page: the high bits of a multiplicative hash
   (the shard of the page is chosen with the highest 9 bits of another). */
-  [[nodiscard]] size_t bucket(PageId page_id) const noexcept {
-    const auto h = (uint64_t(page_id.m_space_id) << 32 | page_id.m_page_no) * 0xD6E8FEB86659FD93ULL;
+  [[nodiscard]] size_t bucket(LockKey page_id) const noexcept {
+    const auto h = page_id.m_fold * 0xD6E8FEB86659FD93ULL;
     return size_t(h >> m_shift);
   }
 

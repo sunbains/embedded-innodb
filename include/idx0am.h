@@ -38,6 +38,7 @@ The contract:
 
 #include "api0types.h"
 #include "db0err.h"
+#include "lock0types.h"
 #include "rem0rec.h"
 #include "trx0types.h"
 
@@ -164,6 +165,11 @@ struct IndexAm {
     block and record. Goes away when the lock API takes an opaque lock key.
     @return the block of the record. */
     [[nodiscard]] virtual BufBlock *block() noexcept = 0;
+
+    /** @return what a lock at rec is on: rec is the record of the cursor, or one next to it that it
+    read, or a position between records (on_rec() false), which is a fence. Valid while the cursor holds
+    its position: a lock call with it and the change it protects are atomic with what the index holds. */
+    [[nodiscard]] virtual LockPos lock_pos(Rec rec) noexcept = 0;
 
     /** Remember the position, to come back to it in another mini-transaction. */
     virtual void save(Mtr *mtr) noexcept = 0;
@@ -401,6 +407,8 @@ class IndexCursor {
 
   /** ESCAPE HATCH for calls into the lock API only: see IndexAm::Cursor::block(). */
   [[nodiscard]] BufBlock *block() noexcept { return m_cur->block(); }
+
+  [[nodiscard]] LockPos lock_pos(Rec rec) noexcept { return m_cur->lock_pos(rec); }
 
   void save(Mtr *mtr) noexcept { m_cur->save(mtr); }
 

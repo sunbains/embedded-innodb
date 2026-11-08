@@ -511,10 +511,9 @@ DbErr Plan::get_clust_rec(System &sys, SelNode *sel_node, const Rec rec, QueThr 
 
     /* If this session is using READ COMMITTED isolation level we lock only the record, i.e., next-key locking is not used. */
     auto trx = thr_get_trx(thr);
-    auto block = m_clust_pcur.block();
     const auto lock_mode = sel_node->m_row_lock_mode;
     const auto lock_type = trx->m_isolation_level == TRX_ISO_READ_COMMITTED ? LOCK_REC_NOT_GAP : LOCK_ORDINARY;
-    const auto err = sys.m_lock_sys->clust_rec_read_check_and_lock(0, block, clust_rec, index, offsets, lock_mode, lock_type, thr);
+    const auto err = sys.m_lock_sys->clust_rec_read_check_and_lock(0, m_clust_pcur.lock_pos(clust_rec), clust_rec, index, offsets, lock_mode, lock_type, thr);
 
     if (unlikely(err != DB_SUCCESS)) {
       return func_exit(err);
@@ -579,7 +578,7 @@ DbErr Plan::get_clust_rec(System &sys, SelNode *sel_node, const Rec rec, QueThr 
 }
 
 inline DbErr RowSel::set_rec_lock(
-  const BufBlock *block, const Rec rec, Index *index, const ulint *offsets, LockMode mode, ulint type, QueThr *thr
+  IndexCursor *cur, const Rec rec, Index *index, const ulint *offsets, LockMode mode, ulint type, QueThr *thr
 ) noexcept {
   auto trx = thr_get_trx(thr);
   auto buf_pool = m_sys.m_buf_pool.get();
@@ -587,9 +586,9 @@ inline DbErr RowSel::set_rec_lock(
   if (trx->m_trx_locks.size() > 10000 && buf_pool->m_LRU->buf_pool_running_out()) {
     return DB_LOCK_TABLE_FULL;
   } else if (index->is_clustered()) {
-    return m_sys.m_lock_sys->clust_rec_read_check_and_lock(0, block, rec, index, offsets, mode, type, thr);
+    return m_sys.m_lock_sys->clust_rec_read_check_and_lock(0, cur->lock_pos(rec), rec, index, offsets, mode, type, thr);
   } else {
-    return m_sys.m_lock_sys->sec_rec_read_check_and_lock(0, block, rec, index, offsets, mode, type, thr);
+    return m_sys.m_lock_sys->sec_rec_read_check_and_lock(0, cur->lock_pos(rec), rec, index, offsets, mode, type, thr);
   }
 }
 
@@ -957,10 +956,9 @@ rec_loop:
       }
 
       {
-        auto block = plan->m_pcur.block();
         const auto lock_mode = sel_node->m_row_lock_mode;
 
-        err = set_rec_lock(block, next_rec, index, offsets, lock_mode, lock_type, thr);
+        err = set_rec_lock(&plan->m_pcur, next_rec, index, offsets, lock_mode, lock_type, thr);
 
         if (err != DB_SUCCESS) {
           /* Note that in this case we will store in pcur the PREDECESSOR of the record
@@ -1014,10 +1012,9 @@ skip_lock:
     }
 
     {
-      auto block = plan->m_pcur.block();
       const auto lock_mode = sel_node->m_row_lock_mode;
 
-      err = set_rec_lock(block, rec, index, offsets, lock_mode, lock_type, thr);
+      err = set_rec_lock(&plan->m_pcur, rec, index, offsets, lock_mode, lock_type, thr);
     }
 
     if (err != DB_SUCCESS) {
@@ -1731,11 +1728,10 @@ DbErr RowSel::get_clust_rec_with_prebuilt(
     /* Try to place a lock on the index record; we are searching the clust rec with a unique condition, hence
     we set a LOCK_REC_NOT_GAP type lock */
 
-    auto block = prebuilt->m_clust_pcur->block();
     const auto lock_type = prebuilt->m_select_lock_type;
 
     const auto err =
-      m_sys.m_lock_sys->clust_rec_read_check_and_lock(0, block, clust_rec, clust_index, *offsets, lock_type, LOCK_REC_NOT_GAP, thr);
+      m_sys.m_lock_sys->clust_rec_read_check_and_lock(0, prebuilt->m_clust_pcur->lock_pos(clust_rec), clust_rec, clust_index, *offsets, lock_type, LOCK_REC_NOT_GAP, thr);
 
     if (err != DB_SUCCESS) {
 
@@ -1932,7 +1928,7 @@ DbErr RowSel::unlock_for_client(Prebuilt *prebuilt, bool has_latches_on_recs) no
 
     auto rec = pcur->rec();
 
-    m_sys.m_lock_sys->rec_unlock(trx, pcur->block(), rec, prebuilt->m_select_lock_type);
+    m_sys.m_lock_sys->rec_unlock(trx, pcur->lock_pos(rec).m_key, prebuilt->m_select_lock_type);
 
     mtr.commit(m_sys);
 
@@ -1963,7 +1959,7 @@ DbErr RowSel::unlock_for_client(Prebuilt *prebuilt, bool has_latches_on_recs) no
 
     auto rec = clust_pcur->rec();
 
-    m_sys.m_lock_sys->rec_unlock(trx, clust_pcur->block(), rec, prebuilt->m_select_lock_type);
+    m_sys.m_lock_sys->rec_unlock(trx, clust_pcur->lock_pos(rec).m_key, prebuilt->m_select_lock_type);
 
     mtr.commit(m_sys);
   }
@@ -2250,7 +2246,7 @@ DbErr RowSel::mvcc_fetch(
         offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
       }
 
-      err = set_rec_lock(pcur->block(), next, index, offsets, prebuilt->m_select_lock_type, LOCK_GAP, thr);
+      err = set_rec_lock(pcur, next, index, offsets, prebuilt->m_select_lock_type, LOCK_GAP, thr);
 
       if (err != DB_SUCCESS) {
 
@@ -2323,7 +2319,7 @@ rec_loop:
 
       const auto lock_type = prebuilt->m_select_lock_type;
 
-      err = set_rec_lock(pcur->block(), rec, index, offsets, lock_type, LOCK_ORDINARY, thr);
+      err = set_rec_lock(pcur, rec, index, offsets, lock_type, LOCK_ORDINARY, thr);
 
       if (err != DB_SUCCESS) {
 
@@ -2433,7 +2429,7 @@ rec_loop:
         /* Try to place a gap lock on the index record only if this session is not using a READ COMMITTED isolation level. */
 
         const auto lock_type = prebuilt->m_select_lock_type;
-        err = set_rec_lock(pcur->block(), rec, index, offsets, lock_type, LOCK_GAP, thr);
+        err = set_rec_lock(pcur, rec, index, offsets, lock_type, LOCK_GAP, thr);
 
         if (err != DB_SUCCESS) {
 
@@ -2489,9 +2485,8 @@ rec_loop:
     }
 
     {
-      auto block = pcur->block();
 
-      err = set_rec_lock(block, rec, index, offsets, prebuilt->m_select_lock_type, lock_type, thr);
+      err = set_rec_lock(pcur, rec, index, offsets, prebuilt->m_select_lock_type, lock_type, thr);
     }
 
     if (err != DB_SUCCESS) {

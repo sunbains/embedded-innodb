@@ -41,11 +41,6 @@ locks and the summaries of the grant pass. Private to lock/.
 #include <thread>
 #include <vector>
 
-/** Safety margin when creating a new record lock: this many extra records
-can be inserted to the page without need to create a lock with a bigger
-bitmap */
-constexpr ulint LOCK_PAGE_BITMAP_MARGIN = 64;
-
 static const bool Lock_compatibility_matrix[4][4] = {
   /**         IS     IX       S     X   */
   /* IS */ {true, true, true, false},
@@ -157,19 +152,18 @@ bool Lock::mode_compatible(LockMode lhs, LockMode rhs) noexcept {
  *  possibly ORed with LOCK_GAP, LOCK_REC_NOT_GAP or LOCK_INSERT_INTENTION.
  * @param[in] held The precise mode of a lock ahead of it in the queue,
  *  granted or waiting.
- * @param[in] lock_is_on_supremum True if the record is the supremum: every
- *  lock on it is a gap lock.
+ * A request on a fence comes as a gap request (LockSys::fence_mode()): there is no record to say so.
  *
  * @return true if the request has to wait for the lock.
  */
-static inline bool rec_mode_blocks(Lock_mode_type type_mode, Lock_mode_type held, bool lock_is_on_supremum) noexcept {
+static inline bool rec_mode_blocks(Lock_mode_type type_mode, Lock_mode_type held) noexcept {
   if (Lock::mode_compatible(LockMode(LOCK_MODE_MASK & type_mode), LockMode(LOCK_MODE_MASK & held))) {
     return false;
   }
 
   /* We have somewhat complex rules when gap type record locks cause waits */
 
-  if ((lock_is_on_supremum || (type_mode & LOCK_GAP)) && !(type_mode & LOCK_INSERT_INTENTION)) {
+  if ((type_mode & LOCK_GAP) && !(type_mode & LOCK_INSERT_INTENTION)) {
 
     /* Gap type locks without LOCK_INSERT_INTENTION flag do not need to wait for anything. This is because
     different users can have conflicting lock types on gaps. */
@@ -201,10 +195,10 @@ static inline bool rec_mode_blocks(Lock_mode_type type_mode, Lock_mode_type held
   return !(held & LOCK_INSERT_INTENTION);
 }
 
-bool Lock::rec_blocks(const Trx *trx, Lock_mode_type type_mode, bool lock_is_on_supremum) const noexcept {
+bool Lock::rec_blocks(const Trx *trx, Lock_mode_type type_mode) const noexcept {
   ut_ad(type() == LOCK_REC);
 
-  return trx != m_trx && rec_mode_blocks(type_mode, m_type_mode, lock_is_on_supremum);
+  return trx != m_trx && rec_mode_blocks(type_mode, m_type_mode);
 }
 
 namespace {
@@ -216,8 +210,8 @@ rec_has_to_wait_in_queue() does) costs O(W^2) for W waiters. Instead one
 pass in queue order keeps, per record, a summary of the locks seen so far,
 and a waiter is decided against the summary in O(1).
 
-Whether a lock blocks a request depends only on the two precise modes, the
-supremum, and whether the transactions differ (rec_mode_blocks()). So the
+Whether a lock blocks a request depends only on the two precise modes and
+whether the transactions differ (rec_mode_blocks()). So the
 summary keeps the locks by class (their mode, S or X, and their gap, record
 only and insert intention flags: 16 classes) and, per class, up to three
 distinct transactions: a waiter is blocked by a class that conflicts with it
@@ -238,23 +232,21 @@ inline Lock_mode_type cls_mode(uint32_t c) noexcept {
   );
 }
 
-/** rec_mode_blocks() by class: [supremum][request class] is the mask of the held classes that block it. */
+/** rec_mode_blocks() by class: [request class] is the mask of the held classes that block it. */
 struct ClsBlocks {
   ClsBlocks() noexcept {
-    for (uint32_t sup{}; sup < 2; ++sup) {
-      for (uint32_t req{}; req < 16; ++req) {
-        m_mask[sup][req] = 0;
+    for (uint32_t req{}; req < 16; ++req) {
+      m_mask[req] = 0;
 
-        for (uint32_t held{}; held < 16; ++held) {
-          if (rec_mode_blocks(cls_mode(req), cls_mode(held), sup != 0)) {
-            m_mask[sup][req] |= uint16_t(1U << held);
-          }
+      for (uint32_t held{}; held < 16; ++held) {
+        if (rec_mode_blocks(cls_mode(req), cls_mode(held))) {
+          m_mask[req] |= uint16_t(1U << held);
         }
       }
     }
   }
 
-  uint16_t m_mask[2][16];
+  uint16_t m_mask[16];
 };
 
 const ClsBlocks cls_blocks;
@@ -320,8 +312,8 @@ struct RecSeen {
   lock, preferring one that waits itself (its edge leads on in the waits-for
   graph, see pick_blocker()), or nullptr.
   @param[out] multi true if several transactions block it */
-  [[nodiscard]] const Trx *blocker(const Lock *wait, bool sup, bool *multi) const noexcept {
-    auto mask = uint32_t(m_mask & cls_blocks.m_mask[sup][rec_cls(wait->precise_mode())]);
+  [[nodiscard]] const Trx *blocker(const Lock *wait, bool *multi) const noexcept {
+    auto mask = uint32_t(m_mask & cls_blocks.m_mask[rec_cls(wait->precise_mode())]);
     Blockers b;
 
     while (mask != 0) {
@@ -395,8 +387,8 @@ Lock *Lock::rec_clone(MemHeap *heap) const noexcept {
 
   /* Not the node of the list of the locks of the trx: the thread that
   appends a lock to it writes the node of its last lock, with the trx mutex
-  only (the page shard latch of that lock is not needed). The other fields
-  and the bitmap change only under the page shard latch, held here. */
+  only (the key shard latch of that lock is not needed). The other fields
+  and the bitmap change only under the key shard latch, held here. */
   constexpr auto node = offsetof(Lock, m_trx_locks);
   constexpr auto rest = offsetof(Lock, m_n_bits);
 

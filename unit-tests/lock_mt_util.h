@@ -142,6 +142,12 @@ struct FakePage {
 
   [[nodiscard]] PageId id() const { return m_block.get_page_id(); }
 
+  /** @return the lock key of the record heap_no of this page of index: the tests name keys by a page
+  and a heap number, the lock system knows only keys. */
+  [[nodiscard]] LockKey key(ulint heap_no) const { return LockKey{uint64_t(m_block.get_page_no()) << 16 | heap_no}; }
+
+  [[nodiscard]] LockKey key(const Index *, ulint heap_no) const { return key(heap_no); }
+
   Frame m_frame;
   BufBlock m_block{};
 };
@@ -319,7 +325,7 @@ class SharedDb : public ut::DbTest {
 
     size_t n_pages{};
 
-    for (auto &shard : m_lock_sys->m_page_shards) {
+    for (auto &shard : m_lock_sys->m_key_shards) {
       n_pages += shard.m_locks.size();
     }
 

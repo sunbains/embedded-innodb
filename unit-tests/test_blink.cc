@@ -2657,4 +2657,477 @@ TEST_F(BlinkPerf, Mixed) {
   });
 }
 
+/** A tuple of one field of the given type, for the fingerprints. */
+[[nodiscard]] DTuple *typed_key(MemHeap *heap, ulint mtype, ulint prtype, const void *data, ulint len) {
+  auto t = dtuple_create(heap, 1);
+  auto f = dtuple_get_nth_field(t, 0);
+
+  dtype_set(dfield_get_type(f), mtype, prtype, len == UNIV_SQL_NULL ? 0 : len);
+
+  if (len == UNIV_SQL_NULL) {
+    dfield_set_null(f);
+  } else {
+    dfield_set_data(f, data, len);
+  }
+
+  return t;
+}
+
+/** Keys equal under the comparison have one fingerprint, different keys don't: CHAR and VARCHAR without
+their trailing spaces, binary as it is, NULL apart from empty. */
+TEST_F(Blink, LockKeyOf) {
+  const auto fold = [&](ulint mtype, ulint prtype, const char *data, ulint len) {
+    return lock::key_of(m_index, typed_key(m_heap, mtype, prtype, data, len)).m_fold;
+  };
+
+  const auto text = DATA_ENGLISH;
+  const auto bin = dtype_form_prtype(0, DATA_CLIENT_BINARY_CHARSET_COLL);
+
+  EXPECT_EQ(fold(DATA_VARCHAR, text, "ab", 2), fold(DATA_VARCHAR, text, "ab  ", 4)) << "the padding is no part of it";
+  EXPECT_EQ(fold(DATA_CHAR, text, "ab", 2), fold(DATA_CHAR, text, "ab ", 3));
+  EXPECT_NE(fold(DATA_VARCHAR, text, "ab", 2), fold(DATA_VARCHAR, text, "ac", 2));
+  EXPECT_NE(fold(DATA_VARCHAR, text, "ab", 2), fold(DATA_VARCHAR, text, " ab", 3)) << "only trailing spaces";
+  EXPECT_NE(fold(DATA_BINARY, bin, "ab", 2), fold(DATA_BINARY, bin, "ab ", 3)) << "binary isn't padded";
+  EXPECT_NE(fold(DATA_BINARY, bin, "ab", 2), fold(DATA_BINARY, bin, "ab\0", 3));
+  EXPECT_NE(fold(DATA_VARCHAR, text, nullptr, UNIV_SQL_NULL), fold(DATA_VARCHAR, text, "", 0)) << "NULL isn't empty";
+
+  /* The edges: nothing, all padding, a zero byte where there's no padding. */
+  EXPECT_EQ(fold(DATA_VARCHAR, text, "", 0), fold(DATA_VARCHAR, text, "   ", 3)) << "all padding is empty";
+  EXPECT_EQ(fold(DATA_CHAR, text, "", 0), fold(DATA_CHAR, text, " ", 1));
+  EXPECT_NE(fold(DATA_BINARY, bin, "", 0), fold(DATA_BINARY, bin, "\0", 1));
+  EXPECT_NE(fold(DATA_VARCHAR, text, "a", 1), fold(DATA_VARCHAR, text, "a\0", 2)) << "a zero byte isn't padding";
+
+  /* The longest key there can be, and one byte different at its end. */
+  {
+    std::string longest(blink::max_key_size(), 'k');
+    auto other = longest;
+
+    other.back() = 'l';
+
+    EXPECT_NE(fold(DATA_VARCHAR, text, longest.data(), longest.size()), fold(DATA_VARCHAR, text, other.data(), other.size()));
+    EXPECT_EQ(fold(DATA_VARCHAR, text, longest.data(), longest.size()), fold(DATA_VARCHAR, text, (longest + "  ").data(), longest.size() + 2));
+  }
+
+  /* Lengths that go over a word. */
+  EXPECT_EQ(fold(DATA_VARCHAR, text, "abcdefghij", 10), fold(DATA_VARCHAR, text, "abcdefghij      ", 16));
+  EXPECT_NE(fold(DATA_VARCHAR, text, "abcdefghij", 10), fold(DATA_VARCHAR, text, "abcdefghik", 10));
+
+  /* Each fingerprint of 1000 keys is its own, and none is the end of the index. */
+  std::set<uint64_t> folds;
+
+  for (uint32_t k{}; k < 1000; ++k) {
+    folds.insert(lock::key_of(m_index, key(k, m_heap)).m_fold);
+    mem_heap_empty(m_heap);
+  }
+
+  EXPECT_EQ(folds.size(), 1000UL);
+  EXPECT_EQ(folds.count(lock::end_of(m_index).m_fold), 0UL);
+}
+
+/** A record and its search key have one fingerprint, and so the lock of a search and the lock of a
+change meet. The fingerprint is the index's: another index has another for the same key. */
+TEST_F(Blink, LockKeyRec) {
+  put_all(1, 500, 100);
+
+  uint32_t n{};
+  Mtr mtr;
+  IndexCursor cur{*m_sys};
+
+  mtr.start();
+  cur.seek_first(m_index, Intent::Read, &mtr);
+
+  while (cur.next(&mtr)) {
+    const auto k = key_of(m_index, cur.rec());
+
+    EXPECT_EQ(Btree::lock_key(m_index, cur.rec()), lock::key_of(m_index, key(k, m_heap))) << k;
+    EXPECT_FALSE(cur.lock_pos(cur.rec()).m_fence);
+    mem_heap_empty(m_heap);
+    ++n;
+  }
+
+  cur.commit(&mtr);
+
+  EXPECT_EQ(n, 500U);
+
+  m_sys->m_dict->mutex_acquire();
+  const auto other = m_sys->m_dict->m_sys_tables->get_first_index();
+  m_sys->m_dict->mutex_release();
+
+  EXPECT_NE(lock::key_of(other, key(7, m_heap)), lock::key_of(m_index, key(7, m_heap)));
+}
+
+/** The boundaries of the leaves for the locks: after a load in order, the fence of a page is its high
+key, which is the key of the first record of the page to the right; the last page's fence is the end of
+the index; after the last record of a page comes its fence. */
+TEST_F(Blink, LockFence) {
+  put_all(1, 3000, 300);
+
+  const auto shape = validated();
+  const auto &leaves = shape.m_levels[0];
+
+  ASSERT_GE(leaves.size(), 3UL);
+
+  for (size_t i{}; i < leaves.size(); ++i) {
+    Mtr mtr;
+
+    mtr.start();
+
+    const auto block = m_sys->m_btree->block_get(m_index->get_space_id(), leaves[i], RW_B_LATCH, &mtr);
+    const auto page = block->get_frame();
+    const auto fence = Btree::lock_fence(m_index, block);
+    const auto last = page_rec_get_prev(page_get_supremum_rec(page));
+
+    EXPECT_EQ(Btree::lock_next(m_index, block, last), fence) << i;
+    EXPECT_EQ(Btree::lock_pos(m_index, block, page_get_supremum_rec(page)).m_key, fence);
+    EXPECT_TRUE(Btree::lock_pos(m_index, block, page_get_supremum_rec(page)).m_fence);
+    EXPECT_EQ(Btree::lock_first(m_index, block), Btree::lock_key(m_index, page_rec_get_next(page_get_infimum_rec(page))));
+
+    if (i + 1 == leaves.size()) {
+      EXPECT_EQ(fence, lock::end_of(m_index)) << "the last page";
+    } else {
+      EXPECT_EQ(fence, Btree::lock_key(m_index, page_get_high_key(page)));
+
+      const auto right = m_sys->m_btree->block_get(m_index->get_space_id(), leaves[i + 1], RW_B_LATCH, &mtr);
+
+      EXPECT_EQ(fence, Btree::lock_first(m_index, right)) << "the high key is the first key on the right, " << i;
+    }
+
+    mtr.commit(*m_sys);
+  }
+}
+
+/** For a merge: transactions that hold locks commit on every way out of a test, else the shutdown waits
+for them. */
+struct Commits {
+  Commits(Blink &test) : m_test(test) {}
+
+  ~Commits() {
+    for (auto trx : m_trxs) {
+      m_test.end(trx);
+    }
+  }
+
+  Trx *begin() { return m_trxs.emplace_back(m_test.start_trx()); }
+
+  Blink &m_test;
+  std::vector<Trx *> m_trxs;
+};
+
+/** The first and the last key of a leaf. */
+std::pair<uint32_t, uint32_t> Blink::page_keys(page_no_t page_no) const {
+  std::pair<uint32_t, uint32_t> keys;
+
+  on_page(page_no, [&](page_t *page, Mtr *) {
+    keys.first = key_of(m_index, page_rec_get_next(page_get_infimum_rec(page)));
+    keys.second = key_of(m_index, page_rec_get_prev(page_get_supremum_rec(page)));
+  });
+
+  return keys;
+}
+
+/** Delete [from, to], all of them there. */
+void Blink::del_range(uint32_t from, uint32_t to) {
+  for (auto k = from; k <= to; ++k) {
+    ASSERT_TRUE(del(k, m_heap)) << k;
+    mem_heap_empty(m_heap);
+  }
+}
+
+/** A gap lock on a fence that a merge takes off still stops an insert into that gap: it's copied to the
+boundary after it. The fence has no record of its own when it's locked (the first records on the right
+went before), so only the merge can hand the lock on: a delete of a record hands on its own locks. */
+TEST_F(Blink, LockMergeFence) {
+  put_all(1, 3000, 300);
+
+  const auto leaves = validated().m_levels[0];
+
+  ASSERT_GE(leaves.size(), 4UL);
+
+  LockKey fence;
+
+  on_page(leaves[1], [&](page_t *, Mtr *mtr) {
+    fence = Btree::lock_fence(m_index, m_sys->m_btree->block_get(m_index->get_space_id(), leaves[1], RW_B_LATCH, mtr));
+  });
+
+  const auto [left_first, left_last] = page_keys(leaves[1]);
+  const auto [right_first, right_last] = page_keys(leaves[2]);
+
+  ASSERT_EQ(right_first, left_last + 1);
+  ASSERT_EQ(fence, lock::key_of(m_index, key(right_first, m_heap)));
+
+  /* The right page without its first three: the fence is a key with no record now. Then the lock, then
+two records left on the left and two after kept on the right, which makes the merge. */
+  const auto kept = right_first + 3;
+
+  ASSERT_NO_FATAL_FAILURE(del_range(right_first, right_first + 2));
+  ASSERT_EQ(page_keys(leaves[2]).first, kept) << "no merge yet";
+
+  Commits trxs{*this};
+  auto holder = trxs.begin();
+
+  ASSERT_EQ(m_sys->m_lock_sys->rec_lock_for(holder, LockMode(LOCK_X | LOCK_GAP), fence, m_index), DB_SUCCESS);
+
+  ASSERT_NO_FATAL_FAILURE(del_range(left_first + 2, left_last));
+  ASSERT_NO_FATAL_FAILURE(del_range(kept + 2, right_last));
+
+  ASSERT_LT(validated().m_levels[0].size(), leaves.size()) << "a merge";
+
+  /* An insert between the left records and kept, where the fence was: kept is its boundary now. */
+  const auto next = lock::key_of(m_index, key(kept, m_heap));
+  auto inserter = trxs.begin();
+
+  LockSys::KeyLatch latch(*m_sys->m_lock_sys, next);
+
+  EXPECT_NE(m_sys->m_lock_sys->rec_other_has_conflicting(next, LockMode(LOCK_X | LOCK_GAP | LOCK_INSERT_INTENTION), inserter), nullptr)
+    << "the gap lock went with the gap";
+}
+
+/** The edges of the fences: a tree of one page has the end of the index after its last record; an empty
+tree has nothing but the end, its first boundary is that too. */
+TEST_F(Blink, LockFenceRoot) {
+  const auto root = [&](auto check) {
+    on_page(m_index->get_page_no(), [&](page_t *, Mtr *mtr) {
+      check(m_sys->m_btree->block_get(m_index->get_space_id(), m_index->get_page_no(), RW_B_LATCH, mtr));
+    });
+  };
+
+  root([&](BufBlock *block) {
+    ASSERT_EQ(page_get_n_recs(block->get_frame()), 0UL);
+    EXPECT_EQ(Btree::lock_fence(m_index, block), lock::end_of(m_index));
+    EXPECT_EQ(Btree::lock_first(m_index, block), lock::end_of(m_index)) << "an empty tree: the end is all there is";
+  });
+
+  put_all(1, 3, 100);
+
+  root([&](BufBlock *block) {
+    const auto page = block->get_frame();
+
+    ASSERT_EQ(page_get_n_recs(page), 3UL);
+    EXPECT_EQ(Btree::lock_next(m_index, block, page_rec_get_prev(page_get_supremum_rec(page))), lock::end_of(m_index));
+    EXPECT_EQ(Btree::lock_next(m_index, block, page_get_infimum_rec(page)), Btree::lock_first(m_index, block));
+  });
+}
+
+/** A merge whose right page kept its first record: the fence of the left page and that record are one
+key, nothing moves, and the gap lock on it still stops an insert into the gap. */
+TEST_F(Blink, LockMergeSameKey) {
+  put_all(1, 3000, 300);
+
+  const auto leaves = validated().m_levels[0];
+
+  ASSERT_GE(leaves.size(), 4UL);
+
+  const auto [left_first, left_last] = page_keys(leaves[1]);
+  const auto [right_first, right_last] = page_keys(leaves[2]);
+  const auto fence = lock::key_of(m_index, key(right_first, m_heap));
+
+  Commits trxs{*this};
+  auto holder = trxs.begin();
+
+  ASSERT_EQ(m_sys->m_lock_sys->rec_lock_for(holder, LockMode(LOCK_X | LOCK_GAP), fence, m_index), DB_SUCCESS);
+
+  ASSERT_NO_FATAL_FAILURE(del_range(left_first + 2, left_last));
+  ASSERT_NO_FATAL_FAILURE(del_range(right_first + 3, right_last));
+
+  ASSERT_LT(validated().m_levels[0].size(), leaves.size()) << "a merge";
+
+  auto inserter = trxs.begin();
+
+  LockSys::KeyLatch latch(*m_sys->m_lock_sys, fence);
+
+  EXPECT_NE(m_sys->m_lock_sys->rec_other_has_conflicting(fence, LockMode(LOCK_X | LOCK_GAP | LOCK_INSERT_INTENTION), inserter), nullptr);
+}
+
+/** A merge of the last page with nothing left on it: the gap below the fence goes to the end of the
+index, the boundary after it now. The last page is emptied before the fence is locked, so that only the
+merge hands the lock on. */
+TEST_F(Blink, LockMergeToEnd) {
+  put_all(1, 3000, 300);
+
+  const auto leaves = validated().m_levels[0];
+
+  ASSERT_GE(leaves.size(), 3UL);
+
+  const auto [left_first, left_last] = page_keys(leaves[leaves.size() - 2]);
+  const auto [last_first, last_last] = page_keys(leaves.back());
+  const auto fence = lock::key_of(m_index, key(last_first, m_heap));
+
+  ASSERT_EQ(last_last, 3000U);
+
+  /* All of the last page: an empty page stays until the one before is small too. */
+  ASSERT_NO_FATAL_FAILURE(del_range(last_first, last_last));
+  ASSERT_EQ(validated().m_levels[0].size(), leaves.size()) << "no merge yet";
+
+  Commits trxs{*this};
+  auto holder = trxs.begin();
+
+  ASSERT_EQ(m_sys->m_lock_sys->rec_lock_for(holder, LockMode(LOCK_X | LOCK_GAP), fence, m_index), DB_SUCCESS);
+
+  ASSERT_NO_FATAL_FAILURE(del_range(left_first + 2, left_last));
+
+  ASSERT_LT(validated().m_levels[0].size(), leaves.size()) << "a merge";
+
+  const auto end = lock::end_of(m_index);
+  auto inserter = trxs.begin();
+
+  LockSys::KeyLatch latch(*m_sys->m_lock_sys, end);
+
+  EXPECT_NE(m_sys->m_lock_sys->rec_other_has_conflicting(end, LockMode(LOCK_X | LOCK_GAP | LOCK_INSERT_INTENTION), inserter), nullptr)
+    << "the gap lock is at the end of the index";
+}
+
+/** What a key costs for its locks: the fingerprint of a search tuple by the length of the key, and of a
+record on its page (with the offsets of its fields). Linear in the length, best of three. */
+class LockKeyPerf : public Blink {};
+
+TEST_F(LockKeyPerf, KeyOf) {
+  const auto text = DATA_ENGLISH;
+  const auto per_key = [&](ulint len) {
+    std::string data(len, 'k');
+    const auto t = typed_key(m_heap, DATA_VARCHAR, text, data.data(), len);
+    double best{1e18};
+
+    for (int round{}; round < 3; ++round) {
+      auto r = ut::bench(std::format("key_of_varchar_{}", len), 200000, [&](uint64_t i) {
+        /* A different key each time, the same length. */
+        data[i % len] = char('a' + i % 26);
+        ut::keep(lock::key_of(m_index, t).m_fold);
+      });
+
+      best = std::min(best, r.ns_per_op());
+    }
+
+    return best;
+  };
+
+  /* The tuple once, its value changed in place: the fingerprint is what's timed. */
+  const auto t = key(0, m_heap);
+  const auto int_data = static_cast<byte *>(dfield_get_data(dtuple_get_nth_field(t, 0)));
+  double int_ns{1e18};
+
+  for (int round{}; round < 3; ++round) {
+    const auto r = ut::bench("key_of_int", 200000, [&](uint64_t i) {
+      mach_write_to_4(int_data, uint32_t(i));
+      ut::keep(lock::key_of(m_index, t).m_fold);
+    });
+
+    int_ns = std::min(int_ns, r.ns_per_op());
+  }
+
+  const auto short_key = per_key(32);
+  const auto long_key = per_key(512);
+
+  std::printf("KeyOf: int %.0f ns, 32 bytes %.0f ns, 512 bytes %.0f ns\n", int_ns, short_key, long_key);
+
+  /* 16 times the bytes, not more than 32 times the cost: linear, with what's fixed. */
+  EXPECT_LT(long_key, 32 * short_key);
+}
+
+TEST_F(LockKeyPerf, KeyOfRec) {
+  put_all(1, 200, 100);
+
+  Mtr mtr;
+  IndexCursor cur{*m_sys};
+
+  mtr.start();
+  cur.seek_first(m_index, Intent::Read, &mtr);
+  ASSERT_TRUE(cur.next(&mtr));
+
+  const auto rec = cur.rec();
+  auto r = ut::bench("lock_key_rec", 200000, [&](uint64_t) { ut::keep(Btree::lock_key(m_index, rec).m_fold); });
+
+  cur.commit(&mtr);
+
+  EXPECT_LT(r.ns_per_op(), 20000);
+}
+
+/** Runs fn at the point a batched insert has found its page, once. */
+struct AtBatchFound {
+  static inline std::atomic<bool> s_armed{};
+  static inline std::function<void()> s_fn;
+
+  static void hook(System &, blink::TestPoint point) {
+    if (point == blink::TestPoint::BATCH_FOUND && s_armed.exchange(false)) {
+      s_fn();
+    }
+  }
+};
+
+/** A batched insert that found its page waits for whoever owns it: in that time the page can be merged
+away, and its number can be a new page of the tree, for other keys. The insert must not go there: the
+page is kept from being freed until the insert is done, so it's dead when the insert is applied, and the
+insert goes back to its thread for the normal way. Without that, it lands on the new page, below the
+keys of that page. */
+TEST_F(Blink, BatchPageReused) {
+  m_sys->m_config.m_dict.m_insert_batch = true;
+
+  /* Even keys: the odd ones are room for the insert. */
+  for (uint32_t k{1}; k <= 3000; ++k) {
+    ASSERT_EQ(put(k * 2, 300, m_heap), DB_SUCCESS);
+    mem_heap_empty(m_heap);
+  }
+
+  const auto leaves = validated().m_levels[0];
+
+  ASSERT_GE(leaves.size(), 4UL);
+
+  const auto victim = leaves[2];
+  const auto [left_first, left_last] = page_keys(leaves[1]);
+  const auto [first, last] = page_keys(victim);
+  const auto x = first + 1;
+  bool reused{};
+
+  AtBatchFound::s_fn = [&] {
+    /* The insert holds the guard that keeps the victim from being freed: the tree has a page less than
+    the segment until it's done. */
+    m_holding_frees = true;
+
+    /* Two records left on each: the victim is taken in by its left sibling, it's dead. */
+    for (auto k = left_first + 4; k <= left_last; k += 2) {
+      ASSERT_TRUE(del(k, m_heap)) << k;
+      mem_heap_empty(m_heap);
+    }
+
+    for (auto k = first + 4; k <= last; k += 2) {
+      ASSERT_TRUE(del(k, m_heap)) << k;
+      mem_heap_empty(m_heap);
+    }
+
+    /* Appends, until a split takes the page, if it's free. */
+    for (uint32_t k{7000}; k < 7000 + 2 * 3000 && !reused; k += 2) {
+      ASSERT_EQ(put(k, 300, m_heap), DB_SUCCESS);
+      mem_heap_empty(m_heap);
+
+      if (k % 64 == 0) {
+        const auto now = validated().m_levels[0];
+
+        reused = std::find(now.begin(), now.end(), victim) != now.end() && page_keys(victim).first >= 7000;
+      }
+    }
+
+    m_holding_frees = false;
+  };
+
+  blink::set_test_hook(*m_sys, AtBatchFound::hook);
+  AtBatchFound::s_armed = true;
+
+  IndexCursor cur{*m_sys};
+  const auto err = cur.insert_batched(m_index, entry(x, 50, m_heap), DML_FLAGS, nullptr);
+
+  blink::set_test_hook(*m_sys, nullptr);
+  ASSERT_FALSE(HasFailure());
+
+  EXPECT_FALSE(reused) << "the page was freed with an insert queued on it";
+  EXPECT_EQ(err, DB_FAIL) << "the page it found is dead: the normal way";
+
+  if (err == DB_FAIL) {
+    ASSERT_EQ(put(x, 50, m_heap), DB_SUCCESS);
+  }
+
+  mem_heap_empty(m_heap);
+
+  EXPECT_TRUE(has(x, m_heap));
+  (void)validated();
+}
+
 }  // namespace

@@ -157,11 +157,11 @@ bool LockSys::deadlock_local(Trx *start) noexcept {
   ulint heap_no{ULINT_UNDEFINED};
 
   if (wait_lock->type() == LOCK_REC) {
-    ut_ad(owns_page(wait_lock->page_id()));
+    ut_ad(owns_key(wait_lock->key()));
 
     heap_no = wait_lock->rec_find_set_bit();
 
-    for (auto lock : *rec_queue(wait_lock->page_id())) {
+    for (auto lock : *rec_queue(wait_lock->key())) {
       if (lock->rec_is_nth_bit_set(heap_no)) {
         q.push_back(lock);
       }
@@ -226,7 +226,7 @@ bool LockSys::deadlock_local(Trx *start) noexcept {
     todo.pop_back();
 
     for (size_t j{}; j < i; ++j) {
-      if (!q[i]->has_to_wait_for(q[j], heap_no)) {
+      if (!q[i]->has_to_wait_for(q[j])) {
         continue;
       }
 
@@ -378,7 +378,7 @@ DeadlockWalk LockSys::deadlock_dfs(const Trx *start, Trx *trx, const Lock *wait_
 
   if (wait_lock->type() == LOCK_REC) {
     const auto heap_no = wait_lock->rec_find_set_bit();
-    const auto queue = rec_queue(wait_lock->page_id());
+    const auto queue = rec_queue(wait_lock->key());
 
     ut_a(heap_no != ULINT_UNDEFINED);
     ut_a(queue != nullptr);
@@ -386,7 +386,7 @@ DeadlockWalk LockSys::deadlock_dfs(const Trx *start, Trx *trx, const Lock *wait_
     for (auto lock : *queue) {
       if (lock == wait_lock) {
         break;
-      } else if (lock->rec_is_nth_bit_set(heap_no) && wait_lock->has_to_wait_for(lock, heap_no)) {
+      } else if (lock->rec_is_nth_bit_set(heap_no) && wait_lock->has_to_wait_for(lock)) {
         if (const auto r = edge(lock->m_trx); r != DeadlockWalk::NONE) {
           return r;
         }
@@ -396,7 +396,7 @@ DeadlockWalk LockSys::deadlock_dfs(const Trx *start, Trx *trx, const Lock *wait_
     for (auto lock : wait_lock->m_table.m_table->m_locks) {
       if (lock == wait_lock) {
         break;
-      } else if (wait_lock->has_to_wait_for(lock, ULINT_UNDEFINED)) {
+      } else if (wait_lock->has_to_wait_for(lock)) {
         if (const auto r = edge(lock->m_trx); r != DeadlockWalk::NONE) {
           return r;
         }
@@ -426,43 +426,3 @@ Trx *LockSys::deadlock_victim(Trx *start, Trx *pred) noexcept {
   return Trx::weight_cmp(pred, start) >= 0 ? start : pred;
 }
 
-void LockSys::deadlock_check_moved() noexcept {
-  ut_ad(x_own() || nothing_latched());
-
-  auto &m = moved();
-
-  if (m.empty()) {
-    return;
-  }
-
-  std::vector<Trx *> todo;
-
-  todo.swap(m);
-
-  for (auto trx : todo) {
-    /* The waiting lock of trx was moved by a page operation: new edges, is
-    there a cycle through them now? The latch free walk first. A path too
-    deep here is not a deadlock: only a requester is rolled back for that. */
-    if (!deadlock_suspect(trx)) {
-      continue;
-    }
-
-    Exclusive x(*this);
-
-    while (waiting_lock(trx) != nullptr) {
-      Trx *pred{};
-
-      if (deadlock_find(trx, &pred) != DeadlockWalk::CYCLE) {
-        break;
-      }
-
-      set_deadlock_found();
-
-      auto victim = deadlock_victim(trx, pred);
-
-      log_info("*** WE ROLL BACK TRANSACTION ", victim == trx ? "(2)" : "(1)");
-
-      choose_victim(victim);
-    }
-  }
-}

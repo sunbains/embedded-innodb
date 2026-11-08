@@ -587,6 +587,9 @@ TEST_F(BlinkChurn, Run) {
 
   std::printf("CHURN seed=%u secs=%u page=%lu\n", seed, secs, ulint(UNIV_PAGE_SIZE));
 
+  /* Before anything can fail: an abort loses what's buffered. */
+  std::fflush(stdout);
+
   ASSERT_NO_FATAL_FAILURE(create_table());
 
   for (uint32_t i{1}; i <= N_STABLE; ++i) {
@@ -672,6 +675,9 @@ TEST_F(BlinkChurn, Crash) {
   const auto secs = std::max<uint32_t>(env("IB_TEST_SECS", 60) / (N_ROUNDS + 1), 2);
 
   std::printf("CHURN crash seed=%u secs=%u page=%lu\n", seed, secs, ulint(UNIV_PAGE_SIZE));
+
+  /* Before anything can fail: an abort loses what's buffered. */
+  std::fflush(stdout);
 
   ASSERT_NO_FATAL_FAILURE(create_table());
 

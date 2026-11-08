@@ -38,6 +38,18 @@ both in lock_mt_util.h. */
 
 namespace {
 
+/** @return the key of the record heap_no of the fake page page_no, as
+FakePage::key() names it: for the locks a test makes without a page. */
+LockKey fake_key(page_no_t page_no, ulint heap_no) {
+  return LockKey{uint64_t(page_no) << 16 | heap_no};
+}
+
+/** @return true if key is one that FakePage::key() names: the fingerprints of
+real keys (lock::key_of()) fill 64 bits, those are below 2^48. */
+bool is_fake(LockKey key) {
+  return key.m_fold < uint64_t{1} << 48;
+}
+
 /** In-memory lock queues on fake pages, of started transactions. */
 class LockMt : public SharedDb {
  protected:
@@ -62,11 +74,14 @@ class LockMt : public SharedDb {
   the check and lock functions do (an insert intention as
   rec_insert_check_and_lock(): no lock unless it waits), without a query
   thread. Called with the lock system latched X (the latches it takes are
-  then no-ops) by the storms, without it by the perf tests.
+  then no-ops) by the storms, without it by the perf tests. The request is on
+  the key of heap_no of page; the supremum is a fence: the mode becomes a gap
+  mode (LockSys::fence_mode()).
   @return GRANTED, WAIT (trx->m_wait_lock is the request), or DEADLOCK: the
   request is cancelled and trx is the victim. */
-  Got rec_request(Trx *trx, const BufBlock &block, ulint mode, ulint heap_no) {
-    const auto err = m_lock_sys->rec_lock_for(trx, LockMode(mode), &block, heap_no, m_index);
+  Got rec_request(Trx *trx, const FakePage &page, ulint mode, ulint heap_no) {
+    const auto pos = LockPos{page.key(heap_no), heap_no == SUP};
+    const auto err = m_lock_sys->rec_lock_for(trx, LockSys::fence_mode(pos, LockMode(mode)), pos.m_key, m_index);
 
     if (err == DB_SUCCESS) {
       return GRANTED;
@@ -177,17 +192,11 @@ class LockMt : public SharedDb {
       for (auto l : m_table->m_locks) {
         s += std::format(" [trx {} mode {:#x}]", l->m_trx->m_id, Lock_mode_type(l->precise_mode()));
       }
-    } else if (auto q = m_lock_sys->rec_queue(lock->page_id()); q != nullptr) {
+    } else if (auto q = m_lock_sys->rec_queue(lock->key()); q != nullptr) {
       for (auto l : *q) {
-        s += std::format(" [trx {} mode {:#x} heap_no", l->m_trx->m_id, Lock_mode_type(l->precise_mode()));
-
-        for (ulint h{}; h < l->rec_get_n_bits(); ++h) {
-          if (l->rec_is_nth_bit_set(h)) {
-            s += std::format(" {}", h);
-          }
-        }
-
-        s += "]";
+        s += std::format(
+          " [trx {} mode {:#x}{}]", l->m_trx->m_id, Lock_mode_type(l->precise_mode()), l->rec_is_nth_bit_set(LOCK_BIT) ? "" : " reset"
+        );
       }
     }
 
@@ -249,32 +258,25 @@ class LockMt : public SharedDb {
   void check_queues() {
     std::vector<const Lock *> q;
 
-    for (auto &shard : m_lock_sys->m_page_shards) {
-     for (const auto &[page_id, locks] : shard.m_locks) {
-      if (page_id.m_space_id != FAKE_SPACE) {
-        continue;
-      }
+    for (auto &shard : m_lock_sys->m_key_shards) {
+      for (const auto &[key, locks] : shard.m_locks) {
+        if (!is_fake(key)) {
+          continue;
+        }
 
-      ulint n_bits{};
-
-      for (auto l : locks) {
-        n_bits = std::max<ulint>(n_bits, l->rec_get_n_bits());
-      }
-
-      for (ulint h{}; h < n_bits; ++h) {
         q.clear();
 
+        /* One queue per key: the locks with the bit set (a reset lock stays in the queue until its trx ends). */
         for (auto l : locks) {
-          if (l->rec_is_nth_bit_set(h)) {
+          if (l->rec_is_nth_bit_set(LOCK_BIT)) {
             q.push_back(l);
           }
         }
 
         if (!q.empty()) {
-          check_queue(q, h, page_id.m_page_no);
+          check_queue(q, key.m_fold & 0xFFFF, page_no_t(key.m_fold >> 16));
         }
       }
-     }
     }
 
     q.clear();
@@ -318,7 +320,8 @@ class LockMt : public SharedDb {
     }
   }
 
-  /** check_queues() of the locks q on one record. */
+  /** check_queues() of the locks q on one key, the record heap_no of page (the requests on the
+  supremum, a fence, are gap requests already: sup changes nothing for them). */
   void check_queue(const std::vector<const Lock *> &q, ulint heap_no, page_no_t page) {
     const bool sup = heap_no == SUP;
 
@@ -380,16 +383,14 @@ class LockMt : public SharedDb {
     std::thread m_thread;
   };
 
-  /** @return the number of fake pages with record locks. */
+  /** @return the number of keys of fake pages with record locks. */
   size_t n_fake_pages() {
     x_enter();
 
     size_t n{};
 
-    for (auto &shard : m_lock_sys->m_page_shards) {
-      n += size_t(std::count_if(shard.m_locks.begin(), shard.m_locks.end(), [](const auto &e) {
-        return e.first.m_space_id == FAKE_SPACE;
-      }));
+    for (auto &shard : m_lock_sys->m_key_shards) {
+      n += size_t(std::count_if(shard.m_locks.begin(), shard.m_locks.end(), [](const auto &e) { return is_fake(e.first); }));
     }
 
     x_exit();
@@ -417,7 +418,7 @@ class LockMt : public SharedDb {
 
 /** Threads lock records of two pages at random with every record lock mode
 - plain (next-key), gap, record only and insert intention, S and X - on the
-supremum and on the first and last user records of the page, 1 to 4 locks
+supremum (a fence: gap requests) and on the first and last user records of the page, 1 to 4 locks
 per transaction, then commit or roll back. Upgrades (S then X) and
 deadlocks happen. A checker validates the queues while they run, and the
 model checks each grant against the locks the others hold: no two granted
@@ -467,7 +468,7 @@ TEST_F(LockMt, RecStorm) {
           x_enter();
 
           const auto since = m_seq;
-          const auto got = rec_request(trx, page->m_block, mode, heap_no);
+          const auto got = rec_request(trx, *page, mode, heap_no);
 
           if (got == GRANTED) {
             model_grant(trx, page_no, heap_no, mode, since);
@@ -550,10 +551,10 @@ TEST_F(LockMt, DeadlockCycles) {
     x_enter();
 
     for (int i{}; i < n; ++i) {
-      EXPECT_EQ(rec_request(trxs[i], ring.m_block, LOCK_X | LOCK_REC_NOT_GAP, 2 + i), GRANTED);
+      EXPECT_EQ(rec_request(trxs[i], ring, LOCK_X | LOCK_REC_NOT_GAP, 2 + i), GRANTED);
 
       for (int e{}; e < extra[i]; ++e) {
-        (void)m_lock_sys->rec_create_low(PageId{FAKE_SPACE, page_no_t(1000 + i * 64 + e)}, LOCK_X, 2, 16, m_index, trxs[i]);
+        (void)m_lock_sys->rec_create(LOCK_X, fake_key(page_no_t(1000 + i * 64 + e), 2), m_index, trxs[i]);
       }
     }
 
@@ -572,7 +573,7 @@ TEST_F(LockMt, DeadlockCycles) {
 
         x_enter();
 
-        const auto got = rec_request(trx, ring.m_block, LOCK_X | LOCK_REC_NOT_GAP, 2 + (i + 1) % n);
+        const auto got = rec_request(trx, ring, LOCK_X | LOCK_REC_NOT_GAP, 2 + (i + 1) % n);
 
         /* The request that closes the cycle finds the deadlock: it is the
         victim, or it chooses another one, which has not seen it yet (that
@@ -623,7 +624,7 @@ TEST_F(LockMt, DeadlockCycles) {
   }
 }
 
-/** Cycles of 2 to 16 transactions formed concurrently in different page
+/** Cycles of 2 to 16 transactions formed concurrently in different key
 shards, with no lock system latch held by the test: each transaction holds a
 record of a page of its own, and its thread requests the record of the next
 one, all at the same time. Each request publishes its edge and walks latch
@@ -644,7 +645,7 @@ TEST_F(LockMt, DeadlockCyclesSharded) {
     for (int i{}; i < n; ++i) {
       pages.push_back(std::make_unique<FakePage>(page_no_t(5000 + 97 * i)));
       trxs.push_back(begin());
-      ASSERT_EQ(rec_request(trxs[i], pages[i]->m_block, LOCK_X | LOCK_REC_NOT_GAP, 2), GRANTED);
+      ASSERT_EQ(rec_request(trxs[i], *pages[i], LOCK_X | LOCK_REC_NOT_GAP, 2), GRANTED);
     }
 
     std::barrier sync(n);
@@ -657,7 +658,7 @@ TEST_F(LockMt, DeadlockCyclesSharded) {
 
         sync.arrive_and_wait();
 
-        const auto got = rec_request(trx, pages[(i + 1) % n]->m_block, LOCK_X | LOCK_REC_NOT_GAP, 2);
+        const auto got = rec_request(trx, *pages[(i + 1) % n], LOCK_X | LOCK_REC_NOT_GAP, 2);
 
         victim[i] = got == DEADLOCK || (got == WAIT && !await(trx));
 
@@ -693,16 +694,16 @@ TEST_F(LockMt, DeadlockDepthEdge) {
     x_enter();
 
     for (int i{}; i < n; ++i) {
-      (void)m_lock_sys->rec_create_low(PageId{FAKE_SPACE, page_no_t(i)}, LOCK_X, 2, 16, m_index, t[i]);
+      (void)m_lock_sys->rec_create(LOCK_X, fake_key(page_no_t(i), 2), m_index, t[i]);
     }
 
     /* t[i] waits for the record of t[i + 1] (at depth i of the search), the last does not wait. */
     for (int i = 1; i + 1 < n; ++i) {
-      (void)m_lock_sys->rec_create_low(PageId{FAKE_SPACE, page_no_t(i + 1)}, LockMode(LOCK_X | LOCK_WAIT), 2, 16, m_index, t[i]);
+      (void)m_lock_sys->rec_create(LockMode(LOCK_X | LOCK_WAIT), fake_key(page_no_t(i + 1), 2), m_index, t[i]);
       t[i]->m_que_state = TRX_QUE_LOCK_WAIT;
     }
 
-    auto req = m_lock_sys->rec_create_low(PageId{FAKE_SPACE, 1}, LockMode(LOCK_X | LOCK_WAIT), 2, 16, m_index, t[0]);
+    auto req = m_lock_sys->rec_create(LockMode(LOCK_X | LOCK_WAIT), fake_key(1, 2), m_index, t[0]);
 
     EXPECT_EQ(m_lock_sys->deadlock_occurs(req, t[0]), expected) << n << " transactions";
 
@@ -737,12 +738,12 @@ TEST_F(LockMt, SearchLimits) {
 
   x_enter();
 
-  (void)m_lock_sys->rec_create_low(PageId{FAKE_SPACE, 1}, LOCK_X, 2, 16, m_index, b);
-  (void)m_lock_sys->rec_create_low(PageId{FAKE_SPACE, 2}, LOCK_X, 2, 16, m_index, c);
-  (void)m_lock_sys->rec_create_low(PageId{FAKE_SPACE, 2}, LockMode(LOCK_X | LOCK_WAIT), 2, 16, m_index, b);
+  (void)m_lock_sys->rec_create(LOCK_X, fake_key(1, 2), m_index, b);
+  (void)m_lock_sys->rec_create(LOCK_X, fake_key(2, 2), m_index, c);
+  (void)m_lock_sys->rec_create(LockMode(LOCK_X | LOCK_WAIT), fake_key(2, 2), m_index, b);
   b->m_que_state = TRX_QUE_LOCK_WAIT;
 
-  (void)m_lock_sys->rec_create_low(PageId{FAKE_SPACE, 1}, LockMode(LOCK_X | LOCK_WAIT), 2, 16, m_index, a);
+  (void)m_lock_sys->rec_create(LockMode(LOCK_X | LOCK_WAIT), fake_key(1, 2), m_index, a);
 
   EXPECT_EQ(a->m_blocking_trx.load(), b);
   EXPECT_EQ(b->m_blocking_trx.load(), c);
@@ -781,9 +782,9 @@ TEST_F(LockMt, WaitEdges) {
   auto w = begin();
 
   x_enter();
-  ASSERT_EQ(rec_request(a, page.m_block, LOCK_S | LOCK_REC_NOT_GAP, 2), GRANTED);
-  ASSERT_EQ(rec_request(b, page.m_block, LOCK_S | LOCK_REC_NOT_GAP, 2), GRANTED);
-  ASSERT_EQ(rec_request(w, page.m_block, LOCK_X | LOCK_REC_NOT_GAP, 2), WAIT);
+  ASSERT_EQ(rec_request(a, page, LOCK_S | LOCK_REC_NOT_GAP, 2), GRANTED);
+  ASSERT_EQ(rec_request(b, page, LOCK_S | LOCK_REC_NOT_GAP, 2), GRANTED);
+  ASSERT_EQ(rec_request(w, page, LOCK_X | LOCK_REC_NOT_GAP, 2), WAIT);
 
   auto first = w->m_blocking_trx.load();
 
@@ -829,16 +830,16 @@ TEST_F(LockMt, DeadlockPastRunningBlocker) {
     auto w = begin();
 
     x_enter();
-    ASSERT_EQ(rec_request(a, page.m_block, LOCK_S | LOCK_REC_NOT_GAP, 2), GRANTED);
-    ASSERT_EQ(rec_request(b, page.m_block, LOCK_S | LOCK_REC_NOT_GAP, 2), GRANTED);
-    ASSERT_EQ(rec_request(w, page.m_block, LOCK_X | LOCK_REC_NOT_GAP, 3), GRANTED);
-    ASSERT_EQ(rec_request(w, page.m_block, LOCK_X | LOCK_REC_NOT_GAP, 2), WAIT);
+    ASSERT_EQ(rec_request(a, page, LOCK_S | LOCK_REC_NOT_GAP, 2), GRANTED);
+    ASSERT_EQ(rec_request(b, page, LOCK_S | LOCK_REC_NOT_GAP, 2), GRANTED);
+    ASSERT_EQ(rec_request(w, page, LOCK_X | LOCK_REC_NOT_GAP, 3), GRANTED);
+    ASSERT_EQ(rec_request(w, page, LOCK_X | LOCK_REC_NOT_GAP, 2), WAIT);
 
     /* The queue order makes a the chosen blocker; there are two. */
     EXPECT_EQ(w->m_blocking_trx.load(), a);
     EXPECT_TRUE(w->m_blocking_multi.load());
 
-    const auto got = rec_request(b, page.m_block, LOCK_X | LOCK_REC_NOT_GAP, 3);
+    const auto got = rec_request(b, page, LOCK_X | LOCK_REC_NOT_GAP, 3);
 
     EXPECT_EQ(got, DEADLOCK) << "round " << round << ": the cycle b -> w -> b past the running a was missed";
     EXPECT_FALSE(w->m_was_chosen_as_deadlock_victim);
@@ -889,7 +890,7 @@ TEST_F(LockMt, UpgradesPastIdleReaders) {
     x_enter();
 
     for (auto t : all) {
-      ASSERT_EQ(rec_request(t, page.m_block, LOCK_S | LOCK_REC_NOT_GAP, 2), GRANTED);
+      ASSERT_EQ(rec_request(t, page, LOCK_S | LOCK_REC_NOT_GAP, 2), GRANTED);
     }
 
     x_exit();
@@ -901,7 +902,7 @@ TEST_F(LockMt, UpgradesPastIdleReaders) {
 
     for (auto t : up) {
       x_enter();
-      const auto got = rec_request(t, page.m_block, LOCK_X | LOCK_REC_NOT_GAP, 2);
+      const auto got = rec_request(t, page, LOCK_X | LOCK_REC_NOT_GAP, 2);
 
       std::vector<Trx *> victims;
 
@@ -967,7 +968,7 @@ TEST_F(LockMt, HandoffFifo) {
     auto holder = begin();
 
     x_enter();
-    ASSERT_EQ(rec_request(holder, page.m_block, LOCK_X | LOCK_REC_NOT_GAP, HEAP_NO), GRANTED);
+    ASSERT_EQ(rec_request(holder, page, LOCK_X | LOCK_REC_NOT_GAP, HEAP_NO), GRANTED);
     x_exit();
 
     for (int i{}; i < N; ++i) {
@@ -984,7 +985,7 @@ TEST_F(LockMt, HandoffFifo) {
         }
 
         x_enter();
-        const auto got = rec_request(trxs[i], page.m_block, modes[i], HEAP_NO);
+        const auto got = rec_request(trxs[i], page, modes[i], HEAP_NO);
         x_exit();
 
         ticket.store(i + 1, std::memory_order_release);
@@ -1066,7 +1067,7 @@ TEST_F(LockMt, ManyOnOne) {
       x_enter();
 
       const auto since = m_seq;
-      const auto got = rec_request(trx, page.m_block, mode, HEAP_NO);
+      const auto got = rec_request(trx, page, mode, HEAP_NO);
 
       if (got == GRANTED) {
         model_grant(trx, 1, HEAP_NO, mode, since);
@@ -1100,8 +1101,8 @@ TEST_F(LockMt, ManyOnOne) {
 }
 
 /** One transaction holds 100,000 record locks on 2,000 pages (in most of
-the page shards), and the record with the largest heap number of a page
-with 8,192 records. 8 threads wait for records of it. Its commit releases
+the key shards: a lock and a queue per key), and the record with the largest
+heap number of a page with 8,192 records. 8 threads wait for records of it. Its commit releases
 the locks shard by shard, at most LOCK_RELEASE_BATCH locks per hold of a
 shard latch, while the checker runs (with X, between the batches): every
 waiter is granted, no lock is left. */
@@ -1124,18 +1125,19 @@ TEST_F(LockMt, BigTrx) {
 
   for (auto &page : pages) {
     for (ulint h = 2; h < N_HEAPS + 2; ++h) {
-      ASSERT_EQ(rec_request(holder, page->m_block, LOCK_X | LOCK_REC_NOT_GAP, h), GRANTED);
+      ASSERT_EQ(rec_request(holder, *page, LOCK_X | LOCK_REC_NOT_GAP, h), GRANTED);
     }
   }
 
-  ASSERT_EQ(rec_request(holder, big.m_block, LOCK_X | LOCK_REC_NOT_GAP, MAX_HEAP_NO), GRANTED);
+  ASSERT_EQ(rec_request(holder, big, LOCK_X | LOCK_REC_NOT_GAP, MAX_HEAP_NO), GRANTED);
 
+  /* The bitmap of a lock sized for the heap numbers of the page is gone: every lock is on one key, LOCK_BIT. */
   const auto last = holder->m_trx_locks.back();
 
-  EXPECT_GE(last->rec_get_n_bits(), MAX_HEAP_NO + 1);
-  EXPECT_TRUE(last->rec_is_nth_bit_set(MAX_HEAP_NO));
+  EXPECT_EQ(last->key(), big.key(MAX_HEAP_NO));
+  EXPECT_EQ(last->rec_find_set_bit(), LOCK_BIT);
 
-  ASSERT_EQ(rec_request(holder, big.m_block, LOCK_X, SUP), GRANTED);
+  ASSERT_EQ(rec_request(holder, big, LOCK_X, SUP), GRANTED);
 
   const auto n_structs = holder->m_trx_locks.size();
 
@@ -1152,11 +1154,11 @@ TEST_F(LockMt, BigTrx) {
     threads.emplace_back([&, t] {
       std::mt19937 rng(t);
       auto trx = begin();
-      auto &block = t == 0 ? big.m_block : pages[rng() % N_PAGES]->m_block;
+      const auto &page = t == 0 ? big : *pages[rng() % N_PAGES];
       const auto heap_no = t == 0 ? MAX_HEAP_NO : 2 + rng() % N_HEAPS;
 
       x_enter();
-      const auto got = rec_request(trx, block, LOCK_S | LOCK_REC_NOT_GAP, heap_no);
+      const auto got = rec_request(trx, page, LOCK_S | LOCK_REC_NOT_GAP, heap_no);
       x_exit();
 
       EXPECT_EQ(got, WAIT);
@@ -1190,11 +1192,10 @@ TEST_F(LockMt, BigTrx) {
   std::printf("BigTrx: commit of %lu locks in %lu structs: %.1f ms\n", (unsigned long)(N_PAGES * N_HEAPS + 2), (unsigned long)n_structs, ms.count());
 }
 
-/** The release of a lock with W waiters behind it grants them in one pass
-over the page queue, O(W) (the per record summaries of the grant pass), not
-O(W^2) like a scan from the front of the queue for each waiter. Two shapes,
-each at W = 256 and W = 4096: (1) one holder of W records of a page and an X
-waiter for each record; (2) one holder of a record in X and W waiters for it
+/** The release of locks with W waiters behind them grants them in one pass
+over each queue, O(W), not O(W^2) like a scan from the front of the queue
+for each waiter. Two shapes, each at W = 256 and W = 4096: (1) one holder of
+W records of a page (W keys, W queues) and an X waiter for each record; (2) one holder of a record in X and W waiters for it
 in S, all granted together. Every waiter is granted. The time per grant at
 4096 is less than 4 times the time at 256, the best of 3 runs (a quadratic
 release is 16 times). */
@@ -1211,12 +1212,12 @@ TEST_F(LockMt, ReleaseLinear) {
     x_enter();
 
     for (ulint i{}; i < (one_rec ? 1 : w); ++i) {
-      EXPECT_EQ(rec_request(holder, page.m_block, LOCK_X | LOCK_REC_NOT_GAP, 2 + i), GRANTED);
+      EXPECT_EQ(rec_request(holder, page, LOCK_X | LOCK_REC_NOT_GAP, 2 + i), GRANTED);
     }
 
     for (ulint i{}; i < w; ++i) {
       const auto mode = one_rec ? LOCK_S | LOCK_REC_NOT_GAP : LOCK_X | LOCK_REC_NOT_GAP;
-      EXPECT_EQ(rec_request(trxs[i], page.m_block, mode, one_rec ? 2 : 2 + i), WAIT);
+      EXPECT_EQ(rec_request(trxs[i], page, mode, one_rec ? 2 : 2 + i), WAIT);
     }
 
     const auto start = Clock::now();
@@ -1280,8 +1281,8 @@ TEST_F(LockMt, DeadlockIdle) {
     auto req_trx = begin();
 
     x_enter();
-    EXPECT_EQ(rec_request(holder, page.m_block, LOCK_X | LOCK_REC_NOT_GAP, 2), GRANTED);
-    auto req = m_lock_sys->rec_create(LockMode(LOCK_X | LOCK_REC_NOT_GAP | LOCK_WAIT), &page.m_block, 2, m_index, req_trx);
+    EXPECT_EQ(rec_request(holder, page, LOCK_X | LOCK_REC_NOT_GAP, 2), GRANTED);
+    auto req = m_lock_sys->rec_create(LockMode(LOCK_X | LOCK_REC_NOT_GAP | LOCK_WAIT), page.key(2), m_index, req_trx);
     x_exit();
 
     double best{1e9};
@@ -1323,15 +1324,15 @@ TEST_F(LockMt, DeadlockIdle) {
   EXPECT_LT(many, 3 * few + 2e-6) << "the deadlock check depends on the number of active transactions";
 }
 
-/** @return two page numbers of FAKE_SPACE after from: one in the same page
-shard as from, one in another. */
-std::pair<page_no_t, page_no_t> shard_pages(page_no_t from) {
-  const auto shard = LockSys::page_shard_no(PageId{FAKE_SPACE, from});
+/** @return two page numbers after from: one whose key of heap_no
+(fake_key()) is in the same key shard as that of from, one in another. */
+std::pair<page_no_t, page_no_t> shard_pages(page_no_t from, ulint heap_no) {
+  const auto shard = LockSys::key_shard_no(fake_key(from, heap_no));
   page_no_t same{};
   page_no_t other{};
 
   for (page_no_t p = from + 1; same == 0 || other == 0; ++p) {
-    if (LockSys::page_shard_no(PageId{FAKE_SPACE, p}) == shard) {
+    if (LockSys::key_shard_no(fake_key(p, heap_no)) == shard) {
       same = same == 0 ? p : same;
     } else {
       other = other == 0 ? p : other;
@@ -1341,33 +1342,41 @@ std::pair<page_no_t, page_no_t> shard_pages(page_no_t from) {
   return {same, other};
 }
 
-/** Locks moved between two pages by a page operation
-(update_copy_and_discard(): the locks on the supremum of one page go to the
-supremum of the other, the first page is discarded), the
-two pages in the same page shard and in two different shards (the operation
-takes both shard latches, in the order of their numbers). A holds S on the
-supremum of the donor (a gap lock), w waits there with an insert intention;
-the move takes both to the receiver, w still waiting behind a there, its
-edge to a, the donor without locks. a commits: w is granted on the
-receiver. Meanwhile 4 threads lock and release records of other pages of the
-same two shards. 50 rounds of each. */
+/** Locks copied from one key to another by the operations on two keys, which
+take both shard latches (in the order of their numbers), the two keys in the
+same key shard and in two different shards. Even rounds: inherit_gap(), a
+holds S on the donor, a fence (a gap lock), and the receiver gets a copy.
+Odd rounds: update_delete() of the donor, on which a holds a plain S: its
+next key, the receiver, gets a's lock as a gap lock, and on the donor it
+becomes a gap lock. Then w requests an insert into the gap of the receiver:
+it waits behind a's copy, its edge to a; the donor keeps a's lock as a gap
+lock. a commits: w is granted. Meanwhile 4 threads lock and release keys of
+other pages in the same shards. 50 rounds of each. (This was a page operation,
+update_copy_and_discard(), that moved the waiting lock itself from page to
+page: records keep their keys now, no lock moves.) */
 TEST_F(LockMt, ShardBoundary) {
   const page_no_t donor_no = 7;
-  const auto [same_no, other_no] = shard_pages(donor_no);
+  const auto [same_no, other_no] = shard_pages(donor_no, SUP);
 
-  ASSERT_EQ(LockSys::page_shard_no(PageId{FAKE_SPACE, same_no}), LockSys::page_shard_no(PageId{FAKE_SPACE, donor_no}));
-  ASSERT_NE(LockSys::page_shard_no(PageId{FAKE_SPACE, other_no}), LockSys::page_shard_no(PageId{FAKE_SPACE, donor_no}));
+  ASSERT_EQ(LockSys::key_shard_no(fake_key(same_no, SUP)), LockSys::key_shard_no(fake_key(donor_no, SUP)));
+  ASSERT_NE(LockSys::key_shard_no(fake_key(other_no, SUP)), LockSys::key_shard_no(fake_key(donor_no, SUP)));
 
   std::atomic<bool> stop{};
   std::atomic<uint64_t> n_ops{};
   std::vector<std::thread> threads;
 
-  /* The noise: pages of the shards of the donor and of the receivers. */
-  const auto [same2, other2] = shard_pages(other_no);
+  /* The noise: keys of record 2 of other pages, in the shard of the donor (and of the receiver in the
+  same shard) and in that of the other receiver. */
+  const auto shard_of = [](page_no_t p) { return LockSys::key_shard_no(fake_key(p, SUP)); };
   std::vector<std::unique_ptr<FakePage>> noise;
 
-  for (auto p : {shard_pages(same_no).first, same2, other2, shard_pages(donor_no + 1000).first}) {
-    noise.push_back(std::make_unique<FakePage>(p));
+  for (auto shard : {shard_of(donor_no), shard_of(other_no)}) {
+    for (page_no_t p = 1000, n{}; n < 2; ++p) {
+      if (LockSys::key_shard_no(fake_key(p, 2)) == shard) {
+        noise.push_back(std::make_unique<FakePage>(p));
+        ++n;
+      }
+    }
   }
 
   for (int t{}; t < 4; ++t) {
@@ -1377,7 +1386,7 @@ TEST_F(LockMt, ShardBoundary) {
       while (!stop.load()) {
         auto &page = *noise[t % noise.size()];
 
-        EXPECT_EQ(rec_request(trx, page.m_block, LOCK_X | LOCK_REC_NOT_GAP, 2 + n_ops % 5), GRANTED);
+        EXPECT_EQ(rec_request(trx, page, LOCK_X | LOCK_REC_NOT_GAP, 2), GRANTED);
         m_lock_sys->release(trx);
         ++n_ops;
       }
@@ -1390,21 +1399,32 @@ TEST_F(LockMt, ShardBoundary) {
     for (int round{}; round < 50; ++round) {
       FakePage donor(donor_no);
       FakePage receiver(receiver_no);
+      const bool del = round % 2 == 1;
 
       auto a = begin();
       auto w = begin();
 
-      ASSERT_EQ(rec_request(a, donor.m_block, LOCK_S, SUP), GRANTED);
-      ASSERT_EQ(rec_request(w, donor.m_block, II, SUP), WAIT);
+      /* The operation, with its own latches. */
+      if (del) {
+        /* The donor's key is a record here: a plain request, not a fence (rec_request() would make it one). */
+        ASSERT_EQ(m_lock_sys->rec_lock_for(a, LOCK_S, donor.key(SUP), m_index), DB_SUCCESS);
+        m_lock_sys->update_delete(m_index, donor.key(SUP), receiver.key(SUP));
+      } else {
+        ASSERT_EQ(rec_request(a, donor, LOCK_S, SUP), GRANTED);
+        m_lock_sys->inherit_gap(m_index, receiver.key(SUP), donor.key(SUP));
+      }
 
-      /* The page operation, with its own latches: the donor is discarded. */
-      m_lock_sys->update_copy_and_discard(&receiver.m_block, &donor.m_block);
+      ASSERT_EQ(rec_request(w, receiver, II, SUP), WAIT);
 
       x_enter();
 
-      EXPECT_EQ(m_lock_sys->rec_queue(donor.id()), nullptr) << "locks left on the donor";
+      const auto q = m_lock_sys->rec_queue(donor.key(SUP));
+
+      ASSERT_NE(q, nullptr) << "the donor lost its lock";
+      ASSERT_EQ(q->size(), 1u);
+      EXPECT_TRUE(q->front()->rec_is_gap());
       ASSERT_NE(w->m_wait_lock, nullptr);
-      EXPECT_EQ(w->m_wait_lock->page_id(), receiver.id());
+      EXPECT_EQ(w->m_wait_lock->key(), receiver.key(SUP));
       EXPECT_EQ(w->m_blocking_trx.load(), a);
 
       x_exit();
@@ -1427,8 +1447,8 @@ TEST_F(LockMt, ShardBoundary) {
   EXPECT_EQ(n_fake_pages(), 0u);
 }
 
-/** A commit of a transaction with 100,000 record locks, on 100,000 pages
-(spread over all the page shards), while 8 threads lock and release records
+/** A commit of a transaction with 100,000 record locks, on 100,000 keys
+(spread over all the key shards), while 8 threads lock and release records
 of pages of their own, in the same shards: the commit holds a shard latch
 for at most LOCK_RELEASE_BATCH locks and nothing global, so no other thread
 waits long. The longest lock and release of the others during the commit is
@@ -1440,13 +1460,13 @@ TEST_F(LockMt, BigCommitOtherShards) {
 
   auto holder = begin();
 
-  /* Pages without frames: the locks are made directly, each under the
+  /* Keys without pages: the locks are made directly, each under the
   latch of its shard. */
   for (page_no_t p{}; p < N_LOCKS; ++p) {
-    const PageId page_id{FAKE_SPACE, 200000 + p};
-    LockSys::PageLatch latch(*m_lock_sys, page_id);
+    const auto key = fake_key(200000 + p, 2);
+    LockSys::KeyLatch latch(*m_lock_sys, key);
 
-    (void)m_lock_sys->rec_create_low(page_id, LockMode(LOCK_X | LOCK_REC_NOT_GAP), 2, 16, m_index, holder);
+    (void)m_lock_sys->rec_create(LockMode(LOCK_X | LOCK_REC_NOT_GAP), key, m_index, holder);
   }
 
   std::atomic<bool> committing{};
@@ -1462,7 +1482,7 @@ TEST_F(LockMt, BigCommitOtherShards) {
       while (!stop.load()) {
         const auto start = Clock::now();
 
-        EXPECT_EQ(rec_request(trx, mine.m_block, LOCK_X | LOCK_REC_NOT_GAP, 2), GRANTED);
+        EXPECT_EQ(rec_request(trx, mine, LOCK_X | LOCK_REC_NOT_GAP, 2), GRANTED);
         m_lock_sys->release(trx);
 
         if (committing.load()) {
@@ -1506,61 +1526,6 @@ TEST_F(LockMt, BigCommitOtherShards) {
 
   EXPECT_LT(max, SANITIZER ? 100.0 : 20.0) << "another thread waited long for the commit";
   EXPECT_EQ(n_fake_pages(), 0u);
-}
-
-/** A lock bitmap is sized for the records the page has when the lock is
-made, plus a margin of 64. After the page grew, a request of the same
-transaction for a record past the end of the bitmap gets a new lock with a
-larger bitmap, not a bit past the end of the old one; a record at the last
-bit of the old bitmap still goes in the old lock. A waiter for the new
-record is granted when the holder commits. */
-TEST_F(LockMt, BitmapGrow) {
-  FakePage page(1, 10);
-
-  auto a = begin();
-  auto b = begin();
-
-  x_enter();
-
-  ASSERT_EQ(rec_request(a, page.m_block, LOCK_X | LOCK_REC_NOT_GAP, 5), GRANTED);
-
-  auto first = a->m_trx_locks.back();
-  const auto n_bits = first->rec_get_n_bits();
-
-  ASSERT_LT(n_bits, 200u);
-
-  page.m_frame.set_n_heap(300);
-
-  ASSERT_EQ(rec_request(a, page.m_block, LOCK_X | LOCK_REC_NOT_GAP, n_bits - 1), GRANTED);
-  EXPECT_EQ(a->m_trx_locks.size(), 1u) << "the last bit of the old bitmap goes in the old lock";
-  EXPECT_TRUE(first->rec_is_nth_bit_set(n_bits - 1));
-
-  ASSERT_EQ(rec_request(a, page.m_block, LOCK_X | LOCK_REC_NOT_GAP, 250), GRANTED);
-  ASSERT_EQ(a->m_trx_locks.size(), 2u) << "a new lock for a record past the old bitmap";
-
-  auto second = a->m_trx_locks.back();
-
-  EXPECT_GT(second->rec_get_n_bits(), 250u);
-  EXPECT_TRUE(second->rec_is_nth_bit_set(250));
-  EXPECT_FALSE(first->rec_is_nth_bit_set(250));
-
-  x_exit();
-
-  auto result = std::async(std::launch::async, [&] {
-    x_enter();
-    const auto got = rec_request(b, page.m_block, LOCK_S | LOCK_REC_NOT_GAP, 250);
-    x_exit();
-
-    return got == WAIT && await(b);
-  });
-
-  ASSERT_TRUE(wait_for_lock_wait(b));
-
-  commit(a);
-
-  EXPECT_TRUE(result.get());
-
-  commit(b);
 }
 
 /** Threads take table locks on the test table through the API (real
@@ -1689,40 +1654,40 @@ TEST_F(LockMt, TableStorm) {
 }
 
 /** X against the shard latches: 4 threads add to a plain counter per shard
-under PageLatch (one page or two, in either order), TableLatch, and a page
+under KeyLatch (one key or two, in either order), TableLatch, and a key
 then a table latch; 2 threads take X (a reentrant X inside, too), add to all
 the counters and check they do not change while they hold it. No deadlock, no
 lost add (and TSan sees no race on the plain counters). 1 s. */
 TEST_F(LockMt, XMix) {
-  constexpr size_t N_PAGES = 64;
+  constexpr size_t N_KEYS = 64;
 
-  std::array<uint64_t, LockSys::N_PAGE_SHARDS> pages{};
+  std::array<uint64_t, LockSys::N_KEY_SHARDS> keys{};
   std::array<uint64_t, LockSys::N_TABLE_SHARDS> tables{};
   std::atomic<uint64_t> n_added{};
   std::atomic<bool> stop{};
   std::vector<std::thread> threads;
 
-  auto page_id = [](uint32_t i) { return PageId{FAKE_SPACE, page_no_t(i % N_PAGES)}; };
+  auto key = [](uint32_t i) { return fake_key(1, i % N_KEYS); };
 
   for (int t{}; t < 4; ++t) {
     threads.emplace_back([&, t] {
       std::mt19937 rng(t);
 
       while (!stop.load(std::memory_order_relaxed)) {
-        const auto a = page_id(rng());
-        const auto b = page_id(rng());
-        const auto sa = LockSys::page_shard_no(a);
-        const auto sb = LockSys::page_shard_no(b);
+        const auto a = key(rng());
+        const auto b = key(rng());
+        const auto sa = LockSys::key_shard_no(a);
+        const auto sb = LockSys::key_shard_no(b);
 
         switch (rng() % 3) {
           case 0: {
-            LockSys::PageLatch latch(*m_lock_sys, a, b);
+            LockSys::KeyLatch latch(*m_lock_sys, a, b);
 
-            ++pages[sa];
+            ++keys[sa];
             ++n_added;
 
             if (sb != sa) {
-              ++pages[sb];
+              ++keys[sb];
               ++n_added;
             }
             break;
@@ -1735,10 +1700,10 @@ TEST_F(LockMt, XMix) {
             break;
           }
           default: {
-            LockSys::PageLatch p(*m_lock_sys, a);
+            LockSys::KeyLatch p(*m_lock_sys, a);
             LockSys::TableLatch l(*m_lock_sys, m_table);
 
-            ++pages[sa];
+            ++keys[sa];
             ++tables[LockSys::table_shard_no(m_table)];
             n_added += 2;
           }
@@ -1755,12 +1720,12 @@ TEST_F(LockMt, XMix) {
         x_enter();
         x_enter();
 
-        const auto p0 = pages;
+        const auto p0 = keys;
         const auto t0 = tables;
 
         std::this_thread::yield();
 
-        EXPECT_EQ(pages, p0) << "a page shard latch held under X";
+        EXPECT_EQ(keys, p0) << "a key shard latch held under X";
         EXPECT_EQ(tables, t0) << "a table shard latch held under X";
 
         x_exit();
@@ -1781,7 +1746,7 @@ TEST_F(LockMt, XMix) {
 
   uint64_t sum{};
 
-  for (auto v : pages) {
+  for (auto v : keys) {
     sum += v;
   }
 
@@ -1811,7 +1776,7 @@ TEST_F(LockMtPerf, RecUncontended) {
     }
 
     auto r = ut::bench_mt(std::format("rec_uncontended_t{}", n), n, 20000, [&](int t, uint64_t i) {
-      ut::keep(rec_request(trxs[t], pages[t]->m_block, LOCK_X | LOCK_REC_NOT_GAP, 2 + i % 8));
+      ut::keep(rec_request(trxs[t], *pages[t], LOCK_X | LOCK_REC_NOT_GAP, 2 + i % 8));
       m_lock_sys->release(trxs[t]);
     });
 
@@ -1836,7 +1801,7 @@ TEST_F(LockMtPerf, RecHotS) {
     }
 
     auto r = ut::bench_mt(std::format("rec_hot_s_t{}", n), n, 20000, [&](int t, uint64_t) {
-      ut::keep(rec_request(trxs[t], page.m_block, LOCK_S | LOCK_REC_NOT_GAP, 2));
+      ut::keep(rec_request(trxs[t], page, LOCK_S | LOCK_REC_NOT_GAP, 2));
       m_lock_sys->release(trxs[t]);
     });
 
@@ -1865,7 +1830,7 @@ TEST_F(LockMtPerf, RecHotX) {
     auto r = ut::bench_mt(std::format("rec_hot_x_t{}", n), n, n == 1 ? 20000 : 4000, [&](int t, uint64_t) {
       const auto start = Clock::now();
 
-      const auto got = rec_request(trxs[t], page.m_block, LOCK_X | LOCK_REC_NOT_GAP, 2);
+      const auto got = rec_request(trxs[t], page, LOCK_X | LOCK_REC_NOT_GAP, 2);
 
       if (got == WAIT) {
         (void)await_fast(trxs[t]);
@@ -1893,11 +1858,11 @@ TEST_F(LockMtPerf, RecHotX) {
   }
 }
 
-/** One transaction holds W records of a page in X (one lock), W
-transactions wait each for one of them. Its release grants them all in one
-pass over the page queue (rec_grant_pass()), O(W) for the release: the time
-per grant does not grow with W. (It was a scan of the queue from its front
-for each waiter, O(W^2).) */
+/** One transaction holds W records of a page in X (a lock per key), W
+transactions wait each for one of them. Its release grants them all, a grant
+pass over each queue of one waiter (rec_grant_pass()), O(W) for the release:
+the time per grant does not grow with W. (It was a scan of the page queue
+from its front for each waiter, O(W^2), when a queue was a page's.) */
 TEST_F(LockMtPerf, GrantScan) {
   for (ulint w : {64, 256, 1024, 4096}) {
     FakePage page(1, w + 2);
@@ -1911,13 +1876,13 @@ TEST_F(LockMtPerf, GrantScan) {
     x_enter();
 
     for (ulint i{}; i < w; ++i) {
-      EXPECT_EQ(rec_request(holder, page.m_block, LOCK_X | LOCK_REC_NOT_GAP, 2 + i), GRANTED);
+      EXPECT_EQ(rec_request(holder, page, LOCK_X | LOCK_REC_NOT_GAP, 2 + i), GRANTED);
     }
 
     const auto enqueue_start = Clock::now();
 
     for (ulint i{}; i < w; ++i) {
-      EXPECT_EQ(rec_request(trxs[i], page.m_block, LOCK_X | LOCK_REC_NOT_GAP, 2 + i), WAIT);
+      EXPECT_EQ(rec_request(trxs[i], page, LOCK_X | LOCK_REC_NOT_GAP, 2 + i), WAIT);
     }
 
     const std::chrono::duration<double> enqueue = Clock::now() - enqueue_start;
@@ -1959,10 +1924,10 @@ TEST_F(LockMtPerf, DeadlockCost) {
     x_enter();
 
     for (auto trx : trxs) {
-      EXPECT_EQ(rec_request(trx, page.m_block, LOCK_S | LOCK_REC_NOT_GAP, 2), GRANTED);
+      EXPECT_EQ(rec_request(trx, page, LOCK_S | LOCK_REC_NOT_GAP, 2), GRANTED);
     }
 
-    auto req = m_lock_sys->rec_create(LockMode(LOCK_X | LOCK_REC_NOT_GAP | LOCK_WAIT), &page.m_block, 2, m_index, req_trx);
+    auto req = m_lock_sys->rec_create(LockMode(LOCK_X | LOCK_REC_NOT_GAP | LOCK_WAIT), page.key(2), m_index, req_trx);
 
     x_exit();
 
@@ -2004,8 +1969,8 @@ TEST_F(LockMtPerf, DeadlockCost) {
     auto req_trx = begin();
 
     x_enter();
-    EXPECT_EQ(rec_request(holder, page.m_block, LOCK_X | LOCK_REC_NOT_GAP, 2), GRANTED);
-    auto req = m_lock_sys->rec_create(LockMode(LOCK_X | LOCK_REC_NOT_GAP | LOCK_WAIT), &page.m_block, 2, m_index, req_trx);
+    EXPECT_EQ(rec_request(holder, page, LOCK_X | LOCK_REC_NOT_GAP, 2), GRANTED);
+    auto req = m_lock_sys->rec_create(LockMode(LOCK_X | LOCK_REC_NOT_GAP | LOCK_WAIT), page.key(2), m_index, req_trx);
     x_exit();
 
     x_enter();
@@ -2036,7 +2001,7 @@ TEST_F(LockMtPerf, DeadlockCost) {
   }
 }
 
-/** The hot S record load: the latency of a lock and its release (the page
+/** The hot S record load: the latency of a lock and its release (the key
 shard latch of the record shared by all),
 p50 and p99, by thread count; and the release of a transaction with 1,000
 locks on 1,000 pages: shard by shard, nothing global held (it was one hold
@@ -2054,7 +2019,7 @@ TEST_F(LockMtPerf, MutexHold) {
 
     ut::bench_mt(std::format("latch_hot_s_t{}", n), n, 10000, [&](int t, uint64_t) {
       const auto t0 = Clock::now();
-      ut::keep(rec_request(trxs[t], page.m_block, LOCK_S | LOCK_REC_NOT_GAP, 2));
+      ut::keep(rec_request(trxs[t], page, LOCK_S | LOCK_REC_NOT_GAP, 2));
       m_lock_sys->release(trxs[t]);
       ops[t].push_back(std::chrono::duration<double, std::nano>(Clock::now() - t0).count());
     });
@@ -2082,7 +2047,7 @@ TEST_F(LockMtPerf, MutexHold) {
   auto big = begin();
 
   for (auto &p : pages) {
-    ut::keep(rec_request(big, p->m_block, LOCK_X | LOCK_REC_NOT_GAP, 2));
+    ut::keep(rec_request(big, *p, LOCK_X | LOCK_REC_NOT_GAP, 2));
   }
 
   const auto start = Clock::now();

@@ -103,6 +103,8 @@ struct BtreeCursorAm final : IndexAm::Cursor {
 
   BufBlock *block() noexcept override { return m_pcur.get_block(); }
 
+  [[nodiscard]] LockPos lock_pos(Rec rec) noexcept override { return Btree::lock_pos(index(), m_pcur.get_block(), rec); }
+
   void save(Mtr *mtr) noexcept override { m_pcur.store_position(m_sys, mtr); }
 
   bool restore(Intent intent, Mtr *mtr, SourceLocation loc) noexcept override {

@@ -1205,7 +1205,7 @@ DbErr RowUpdate::clust_step(UpdNode *node, QueThr *thr) noexcept {
 
   if (!node->m_has_clust_rec_x_lock) {
 
-    err = m_sys.m_lock_sys->clust_rec_modify_check_and_lock(0, pcur->block(), rec, index, offsets, thr);
+    err = m_sys.m_lock_sys->clust_rec_modify_check_and_lock(0, lock::key_of(index, rec, offsets), rec, index, offsets, thr);
 
     if (err != DB_SUCCESS) {
       mtr->commit(m_sys);

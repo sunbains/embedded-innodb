@@ -138,15 +138,36 @@ struct TableLock {
 /** Play it safe. */
 static_assert(std::is_standard_layout<TableLock>::value, "TableLock must have a standard layout");
 
-/** Record lock for a page */
+/** What a record lock is on: a key of an index, by a 64 bit fingerprint of its ordering fields, never
+by where the record is. Two keys with one fingerprint share their locks: that's a wait that wasn't
+needed, never a conflict missed, see lock::key_of(). */
+struct LockKey {
+  /** Of the index id and the key: keys of two indexes that collide share their locks too. */
+  uint64_t m_fold{};
+
+  bool operator==(const LockKey &) const = default;
+};
+
+/** A position to lock: a key, and whether it's a record or a fence, a key that bounds a gap and has no
+record of its own here (the high key of a page, the end of the index). On a fence only the gap below
+it is locked, as on the supremum record of a page. */
+struct LockPos {
+  LockKey m_key{};
+  bool m_fence{};
+};
+
+/** The bit of a record lock that says it's on its key: one key to a queue. */
+constexpr ulint LOCK_BIT = 0;
+
+/** Record lock on a key */
 struct RecLock {
   using List_node = UT_LIST_NODE_T(Lock);
 
   /** Index record lock */
   const Index *m_index;
 
-  /** Page ID. */
-  PageId m_page_id;
+  /** The fingerprint of the key. */
+  uint64_t m_fold;
 
   /** List of the record locks on the same page */
   List_node m_rec_locks;
@@ -260,22 +281,17 @@ struct Lock {
    *
    * This function determines whether a new lock request by a transaction (trx)
    * has to wait for an existing lock (this) to be removed. The decision is
-   * based on the type and mode of the new lock, the characteristics of the
-   * existing lock, and whether the lock is on the 'supremum' record of an
-   * index page.
+   * based on the type and mode of the new lock and the characteristics of the
+   * existing lock. A request on a fence comes as a gap request.
    *
    * @param[in] trx                  The transaction requesting the new lock.
    * @param[in] type_mode            The requested precise mode of the new lock to set:
    *                                 LOCK_S or LOCK_X, possibly ORed with LOCK_GAP,
    *                                 LOCK_REC_NOT_GAP, or LOCK_INSERT_INTENTION.
-   * @param[in] lock_is_on_supremum  True if the lock is being set on the
-   *                                 'supremum' record of an index page,
-   *                                 indicating that the lock request is
-   *                                 really for a 'gap' type lock.
    *
    * @return true if the new lock has to wait for lock to be removed, false otherwise.
    */
-  [[nodiscard]] inline bool rec_blocks(const Trx *trx, Lock_mode_type type_mode, bool lock_is_on_supremum) const noexcept;
+  [[nodiscard]] inline bool rec_blocks(const Trx *trx, Lock_mode_type type_mode) const noexcept;
 
   /**
    * @brief Checks if a lock request lock1 has to wait for request lock2.
@@ -285,11 +301,10 @@ struct Lock {
    *
    * @param[in] lock  Another lock. It is assumed that this lock has a lock bit
    *                  set on the same record as in lock1 if the locks are record locks.
-   * @param[in] heap_no The heap number of the record if the lock is a record lock, otherwise ULINT_UNDEFINED.
    *
    * @return true if lock1 has to wait for lock2 to be removed.
    */
-  [[nodiscard]] bool has_to_wait_for(const Lock *lock, ulint heap_no) const noexcept;
+  [[nodiscard]] bool has_to_wait_for(const Lock *lock) const noexcept;
 
   /**
    * @brief Resets the wait flag of a lock and the back pointer in the transaction.
@@ -539,30 +554,7 @@ struct Lock {
    */
   [[nodiscard]] inline const char *rec_index_name() const noexcept;
 
-  /**
-   * @brief Gets the tablespace number for a record lock.
-   *
-   * This function retrieves the tablespace number associated with the specified
-   * record lock.
-   *
-   * @return The tablespace number on which the lock is.
-   */
-  [[nodiscard]] inline space_id_t rec_space_id() const noexcept {
-    ut_ad(type() == LOCK_REC);
-    return m_rec.m_page_id.m_space_id;
-  }
 
-  /**
-   * @brief Gets the page number on which the record lock is.
-   *
-   * This function retrieves the page number associated with the specified record lock.
-   *
-   * @return The page number on which the lock is.
-   */
-  [[nodiscard]] inline page_no_t rec_page_no() const noexcept {
-    ut_ad(type() == LOCK_REC);
-    return m_rec.m_page_id.m_page_no;
-  }
 
   /**
    * @brief Copies a record lock to the specified memory heap.
@@ -593,9 +585,9 @@ struct Lock {
    *
    * @return The page id of the lock.
    */
-  [[nodiscard]] inline PageId page_id() const noexcept {
+  [[nodiscard]] inline LockKey key() const noexcept {
     ut_ad(type() == LOCK_REC);
-    return m_rec.m_page_id;
+    return LockKey{m_rec.m_fold};
   }
 
   /**

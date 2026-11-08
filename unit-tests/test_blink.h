@@ -31,6 +31,7 @@ every level of the tree. */
 #include "fsp0fsp.h"
 #include "idx0am.h"
 #include "idx0blink.h"
+#include "lock0lock.h"
 #include "log0log.h"
 #include "mach0data.h"
 #include "page0page.h"
@@ -203,6 +204,20 @@ class Blink : public ut::DbTest {
 
   /** Remove the record for k.
   @return true if there was one. */
+  /** @return the first and the last key of a leaf. */
+  [[nodiscard]] std::pair<uint32_t, uint32_t> page_keys(page_no_t page_no) const;
+
+  /** Delete [from, to], all of them there. */
+  void del_range(uint32_t from, uint32_t to);
+
+ public:
+  /** A transaction, and its commit, for helpers outside the fixture. */
+  [[nodiscard]] Trx *start_trx() { return begin(); }
+
+  void end(Trx *trx) { commit(trx); }
+
+ protected:
+
   [[nodiscard]] bool del(uint32_t k, MemHeap *heap) const {
     Mtr mtr;
     IndexCursor cur{*m_sys};

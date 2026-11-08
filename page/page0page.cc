@@ -371,8 +371,9 @@ page_t *page_create(const Index *index, BufBlock *block, Mtr *mtr) {
   dtuple_set_info_bits(tuple, REC_STATUS_INFIMUM);
   auto field = dtuple_get_nth_field(tuple, 0);
 
-  dfield_set_data(field, "infimum", 8);
-  dtype_set(dfield_get_type(field), DATA_VARCHAR, DATA_ENGLISH | DATA_NOT_NULL, 8);
+  /* A byte: what a system record is says its status, not its data. */
+  dfield_set_data(field, "I", 1);
+  dtype_set(dfield_get_type(field), DATA_VARCHAR, DATA_ENGLISH | DATA_NOT_NULL, 1);
   /* Set the corresponding physical record to its place in the page
   record heap */
 
@@ -401,8 +402,8 @@ page_t *page_create(const Index *index, BufBlock *block, Mtr *mtr) {
   dtuple_set_info_bits(tuple, REC_STATUS_SUPREMUM);
   field = dtuple_get_nth_field(tuple, 0);
 
-  dfield_set_data(field, "supremum", 9);
-  dtype_set(dfield_get_type(field), DATA_VARCHAR, DATA_ENGLISH | DATA_NOT_NULL, 9);
+  dfield_set_data(field, "S", 1);
+  dtype_set(dfield_get_type(field), DATA_VARCHAR, DATA_ENGLISH | DATA_NOT_NULL, 1);
 
   auto supremum_rec = Rec::convert_dtuple_to_rec(heap_top, index, tuple, 0);
 
@@ -542,10 +543,6 @@ Rec page_copy_rec_list_end(System &sys, BufBlock *new_block, BufBlock *block, Re
     page_update_max_trx_id(sys, new_block, page_get_max_trx_id(page), mtr);
   }
 
-  /* Update the lock table and possible hash index */
-
-  sys.m_lock_sys->move_rec_list_end(new_block, block, rec);
-
   return ret;
 }
 
@@ -596,10 +593,6 @@ Rec page_copy_rec_list_start(System &sys, BufBlock *new_block, BufBlock *block, 
   if (!index->is_clustered() && page_is_leaf(rec.page_align())) {
     page_update_max_trx_id(sys, new_block, page_get_max_trx_id(rec.page_align()), mtr);
   }
-
-  /* Update the lock table and possible hash index */
-
-  sys.m_lock_sys->move_rec_list_start(new_block, block, rec, first_rec);
 
   return first_rec;
 }

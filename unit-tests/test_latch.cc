@@ -99,22 +99,22 @@ TEST(Latch, Wake) {
 
 /** Random finds, adds and erases against a map; every queue keeps its address
 while it exists; iteration sees each queue once. */
-TEST(PageQueues, Model) {
-  PageQueues q;
-  std::map<std::pair<space_id_t, page_no_t>, Rec_locks *> model;
+TEST(KeyQueues, Model) {
+  KeyQueues q;
+  std::map<uint64_t, Rec_locks *> model;
   std::mt19937 rng(21);
 
   EXPECT_TRUE(q.empty());
-  EXPECT_EQ(q.find(PageId{1, 1}), nullptr);
+  EXPECT_EQ(q.find(LockKey{1}), nullptr);
   EXPECT_TRUE(q.begin() == q.end());
 
-  q.erase(PageId{1, 1});
+  q.erase(LockKey{1});
 
   for (int i{}; i < 200000; ++i) {
     /* A range that grows the table, then shrinks it. */
     const uint32_t range = 1 + uint32_t(i < 100000 ? i / 20 : (200000 - i) / 20);
-    const PageId id{space_id_t(rng() % 3), page_no_t(rng() % range)};
-    const auto key = std::pair(id.m_space_id, id.m_page_no);
+    const LockKey id{uint64_t(rng() % 3) << 32 | uint64_t(rng() % range)};
+    const auto key = id.m_fold;
     const auto it = model.find(key);
 
     switch (rng() % 3) {
@@ -146,7 +146,7 @@ TEST(PageQueues, Model) {
       size_t n{};
 
       for (auto &[page_id, locks] : q) {
-        const auto m = model.find(std::pair(page_id.m_space_id, page_id.m_page_no));
+        const auto m = model.find(page_id.m_fold);
 
         ASSERT_NE(m, model.end());
         ASSERT_EQ(&locks, m->second);

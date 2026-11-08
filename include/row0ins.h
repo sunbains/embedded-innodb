@@ -310,7 +310,7 @@ struct RowInsert {
    * @return DB_SUCCESS if successful, or an error code.
    */
   [[nodiscard]] DbErr set_shared_rec_lock(
-    ulint type, const BufBlock *block, const Rec rec, const Index *index, const ulint *offsets, QueThr *thr
+    ulint type, IndexCursor *cur, const Rec rec, const Index *index, const ulint *offsets, QueThr *thr
   ) noexcept;
 
   /**
@@ -328,7 +328,7 @@ struct RowInsert {
    * @return DB_SUCCESS if successful, or an error code.
    */
   [[nodiscard]] DbErr set_exclusive_rec_lock(
-    ulint type, const BufBlock *block, const Rec rec, const Index *index, const ulint *offsets, QueThr *thr
+    ulint type, IndexCursor *cur, const Rec rec, const Index *index, const ulint *offsets, QueThr *thr
   ) noexcept;
 
   /**

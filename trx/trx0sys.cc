@@ -659,6 +659,9 @@ Trx *TrxSys::create_trx(void *arg) noexcept {
 
   if (mem == nullptr) {
     mem = mem_alloc(sizeof(Trx));
+
+    /* The fields that construction leaves alone start here: see TypeStable. */
+    memset(mem, 0, sizeof(Trx));
   }
 
   auto trx = new (mem) Trx(session, arg, event);
@@ -683,6 +686,11 @@ void TrxSys::destroy_trx(Trx *&trx) noexcept {
   auto event = trx->m_wait_event;
 
   trx->m_wait_event = nullptr;
+
+  /* The next owner starts from what this one leaves: see TypeStable. Atomic stores, a deadlock walk can
+be reading them. */
+  trx->m_blocking_trx.store(nullptr);
+  trx->m_blocking_multi.store(false);
 
   call_destructor(trx);
 

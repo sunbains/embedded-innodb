@@ -54,7 +54,7 @@ DbErr LockSys::enter_lock_wait(Trx *trx, QueThr *thr) noexcept {
 }
 
 void LockSys::grant(Lock *lock) noexcept {
-  ut_ad(lock->type() == LOCK_TABLE ? owns_table(lock->m_table.m_table) : owns_page(lock->page_id()));
+  ut_ad(lock->type() == LOCK_TABLE ? owns_table(lock->m_table.m_table) : owns_key(lock->key()));
 
   auto trx = lock->m_trx;
 
@@ -141,7 +141,7 @@ void LockSys::release(Trx *trx) noexcept {
     the batch are only in queues of this shard): the batch is the last. */
     auto take = [&]() {
       auto in_shard = [&](const Lock *l) {
-        return rec ? l->type() == LOCK_REC && page_shard_no(l->page_id()) == shard
+        return rec ? l->type() == LOCK_REC && key_shard_no(l->key()) == shard
                    : l->type() == LOCK_TABLE && table_shard_no(l->m_table.m_table) == shard;
       };
 
@@ -165,7 +165,7 @@ void LockSys::release(Trx *trx) noexcept {
     };
 
     if (rec) {
-      PageLatch latch(*this, ShardNo{shard});
+      KeyLatch latch(*this, ShardNo{shard});
 
       const auto n = take();
 
@@ -190,7 +190,7 @@ void LockSys::release(Trx *trx) noexcept {
     discard frees the empty locks of the page; its memory stays, in the lock
     heap of trx): the next batch is read again with the latch. */
     rec = next->type() == LOCK_REC;
-    shard = rec ? page_shard_no(next->page_id()) : table_shard_no(next->m_table.m_table);
+    shard = rec ? key_shard_no(next->key()) : table_shard_no(next->m_table.m_table);
   }
 
   if (big_heap) {
@@ -201,7 +201,7 @@ void LockSys::release(Trx *trx) noexcept {
 }
 
 void LockSys::cancel_waiting_and_release(Lock *lock) noexcept {
-  ut_ad(lock->type() == LOCK_TABLE ? owns_table(lock->m_table.m_table) : owns_page(lock->page_id()));
+  ut_ad(lock->type() == LOCK_TABLE ? owns_table(lock->m_table.m_table) : owns_key(lock->key()));
 
   if (lock->type() == LOCK_REC) {
 
@@ -269,7 +269,7 @@ bool LockSys::cancel_wait(Trx *trx) noexcept {
     lock memory stays: it is in the lock heap of trx, which only its own
     thread (this one) empties. */
     if (lock->type() == LOCK_REC) {
-      PageLatch latch(*this, lock->page_id());
+      KeyLatch latch(*this, lock->key());
 
       trx_mutex_enter(trx);
       const bool still = trx->m_wait_lock == lock;

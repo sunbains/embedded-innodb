@@ -577,11 +577,16 @@ inline DbErr BtreeCursor::ins_lock_and_undo(System &sys,
 
   auto rec = get_rec();
   auto index = m_index;
-  auto err = sys.m_lock_sys->rec_insert_check_and_lock(flags, rec, get_block(), index, thr, mtr, inherit);
+  auto err = sys.m_lock_sys->rec_insert_check_and_lock(flags, Btree::lock_next(index, get_block(), rec), index, thr, inherit);
 
   if (err != DB_SUCCESS) {
 
     return err;
+  }
+
+  if (!(flags & BTR_NO_LOCKING_FLAG) && !index->is_clustered()) {
+    /* Update the page max trx id field */
+    page_update_max_trx_id(sys, get_block(), thr_get_trx(thr)->m_id, mtr);
   }
 
   roll_ptr_t roll_ptr;
@@ -740,7 +745,7 @@ DbErr BtreeCursor::optimistic_insert(System &sys,
 
   if (!(flags & BTR_NO_LOCKING_FLAG) && inherit) {
 
-    sys.m_lock_sys->update_insert(block, *rec);
+    sys.m_lock_sys->update_insert(index, Btree::lock_key(index, *rec), Btree::lock_next(index, block, *rec));
   }
 
   *big_rec = big_rec_vec;
@@ -895,7 +900,7 @@ DbErr BtreeCursor::insert_restructure(System &sys,
 
   if (!(flags & BTR_NO_LOCKING_FLAG)) {
 
-    sys.m_lock_sys->update_insert(get_block(), *rec);
+    sys.m_lock_sys->update_insert(index, Btree::lock_key(index, *rec), Btree::lock_next(index, get_block(), *rec));
   }
 
   if (reserve) {
@@ -917,7 +922,14 @@ DbErr BtreeCursor::upd_lock_and_undo(System &sys,
 
   if (!index->is_clustered()) {
     /* We do undo logging only when we update a clustered index record */
-    return sys.m_lock_sys->sec_rec_modify_check_and_lock(flags, get_block(), rec, index, thr, mtr);
+    const auto err = sys.m_lock_sys->sec_rec_modify_check_and_lock(flags, Btree::lock_key(index, rec), index, thr);
+
+    if (err == DB_SUCCESS && !(flags & BTR_NO_LOCKING_FLAG)) {
+      /* Update the page max trx id field */
+      page_update_max_trx_id(sys, get_block(), thr_get_trx(thr)->m_id, mtr);
+    }
+
+    return err;
   }
 
   /* Check if we have to wait for a lock: enqueue an explicit lock request if yes */
@@ -937,7 +949,7 @@ DbErr BtreeCursor::upd_lock_and_undo(System &sys,
       offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
     }
 
-    err = sys.m_lock_sys->clust_rec_modify_check_and_lock(flags, get_block(), rec, index, offsets, thr);
+    err = sys.m_lock_sys->clust_rec_modify_check_and_lock(flags, lock::key_of(index, rec, offsets), rec, index, offsets, thr);
 
     if (likely_null(heap)) {
       mem_heap_free(heap);
@@ -1214,11 +1226,6 @@ DbErr BtreeCursor::optimistic_update(System &sys, ulint flags, const Upd *update
     return err;
   }
 
-  /* Ok, we may do the replacement. Store on the page infimum the
-  explicit locks on rec, before deleting rec (see the comment in
-  pessimistic_update). */
-
-  sys.m_lock_sys->rec_store_on_page_infimum(block, rec);
 
   auto page_cursor = get_page_cur();
 
@@ -1245,9 +1252,6 @@ DbErr BtreeCursor::optimistic_update(System &sys, ulint flags, const Upd *update
   /* We calculated above the insert would fit */
   ut_a(!rec.is_null());
 
-  /* Restore the old explicit lock state on the record */
-
-  sys.m_lock_sys->rec_restore_from_page_infimum(block, rec, block);
 
   page_cursor->move_to_next();
 
@@ -1288,7 +1292,9 @@ void BtreeCursor::pess_upd_restore_supremum(System &sys, BufBlock *block, const 
   /* We must already have an x-latch on prev_block! */
   ut_ad(mtr->memo_contains(prev_block, MTR_MEMO_PAGE_X_FIX));
 
-  sys.m_lock_sys->rec_reset_and_inherit_gap_locks(prev_block, block, PAGE_HEAP_NO_SUPREMUM, page_rec_get_heap_no(rec));
+  /* The supremum of the page to the left bounds the gap below rec now: what's on it is what's on rec,
+  as gap locks. */
+  sys.m_lock_sys->inherit_gap(m_index, Btree::lock_fence(m_index, prev_block), Btree::lock_key(m_index, rec));
 }
 
 DbErr BtreeCursor::pessimistic_update(System &sys, 
@@ -1315,9 +1321,8 @@ DbErr BtreeCursor::update_restructure(System &sys,
   *big_rec = BigRec{};
 
   auto index = m_index;
-  auto block = get_block();
 
-  ut_ad(mtr->memo_contains(block, MTR_MEMO_PAGE_X_FIX));
+  ut_ad(mtr->memo_contains(get_block(), MTR_MEMO_PAGE_X_FIX));
 
   auto optim_err = optimistic_update(sys, flags, update, cmpl_info, thr, mtr);
 
@@ -1434,7 +1439,6 @@ DbErr BtreeCursor::update_restructure(System &sys,
   delete the lock structs set on the root page even if the root
   page carries just node pointers. */
 
-  sys.m_lock_sys->rec_store_on_page_infimum(block, rec);
 
   page_cursor = get_page_cur();
 
@@ -1445,7 +1449,6 @@ DbErr BtreeCursor::update_restructure(System &sys,
   rec = insert_if_possible(sys, new_entry, n_ext, mtr);
 
   if (!rec.is_null()) {
-    sys.m_lock_sys->rec_restore_from_page_infimum(get_block(), rec, block);
 
     {
       PhyRec record{index, rec};
@@ -1508,7 +1511,6 @@ DbErr BtreeCursor::update_restructure(System &sys,
     blob.unmark_extern_fields(rec, index, offsets, mtr);
   }
 
-  sys.m_lock_sys->rec_restore_from_page_infimum(get_block(), rec, block);
 
   /* If necessary, restore also the correct lock state for a new,
   preceding supremum record created in a page split. While the old
@@ -1644,7 +1646,7 @@ DbErr BtreeCursor::del_mark_set_clust_rec(System &sys, ulint flags, bool val, Qu
   ut_ad(index->is_clustered());
   ut_ad(!rec.get_deleted_flag());
 
-  auto err = sys.m_lock_sys->clust_rec_modify_check_and_lock(flags, get_block(), rec, index, offsets, thr);
+  auto err = sys.m_lock_sys->clust_rec_modify_check_and_lock(flags, lock::key_of(index, rec, offsets), rec, index, offsets, thr);
 
   if (err == DB_SUCCESS) {
     roll_ptr_t roll_ptr;
@@ -1735,7 +1737,12 @@ DbErr BtreeCursor::del_mark_set_sec_rec(System &sys, ulint flags, bool val, QueT
   }
 #endif /* UNIV_DEBUG */
 
-  auto err = sys.m_lock_sys->sec_rec_modify_check_and_lock(flags, get_block(), rec, m_index, thr, mtr);
+  auto err = sys.m_lock_sys->sec_rec_modify_check_and_lock(flags, Btree::lock_key(m_index, rec), m_index, thr);
+
+  if (err == DB_SUCCESS && !(flags & BTR_NO_LOCKING_FLAG)) {
+    /* Update the page max trx id field */
+    page_update_max_trx_id(sys, get_block(), thr_get_trx(thr)->m_id, mtr);
+  }
 
   if (err != DB_SUCCESS) {
 
@@ -1780,7 +1787,7 @@ bool BtreeCursor::optimistic_delete(System &sys, Mtr *mtr) noexcept {
   if (!offsets.any_extern() && delete_will_underflow(offsets.size(), mtr)) {
     auto page = block->get_frame();
 
-    sys.m_lock_sys->update_delete(block, rec);
+    sys.m_lock_sys->update_delete(m_index, Btree::lock_key(m_index, rec), Btree::lock_next(m_index, block, rec));
 
     page_get_max_insert_size_after_reorganize(page, 1);
 
@@ -1852,7 +1859,7 @@ DbErr BtreeCursor::pessimistic_delete(System &sys, bool has_reserved_extents, Tr
     err = DB_SUCCESS;
 
   } else {
-    sys.m_lock_sys->update_delete(block, rec);
+    sys.m_lock_sys->update_delete(m_index, Btree::lock_key(m_index, rec), Btree::lock_next(m_index, block, rec));
 
     const auto level = sys.m_btree->page_get_level(page, mtr);
 
