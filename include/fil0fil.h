@@ -136,7 +136,7 @@ struct Fil {
   startup.
   @param[in] fh                    Open data file handle
   @param[out] flushed_lsn          Maximum flushed LSN */
-  void read_flushed_lsn(os_file_t fh, lsn_t &max_flushed_lsn);
+  void read_flushed_lsn(const os::File &file, lsn_t &max_flushed_lsn);
 
   /** Parses the body of a log record written about an .ibd file operation. That
    is, the log record part after the standard (type, space id, page no) header of

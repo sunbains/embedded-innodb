@@ -303,6 +303,8 @@ leave_function:
 void *TrxRollback::rollback_or_clean_all_recovered(System &sys, void *) {
   trx_rollback_or_clean_recovered(sys, true);
 
+  sys.m_trx_sys->m_recv_rollback_active.store(false, std::memory_order_release);
+
   sys.m_srv->thread_exited();
 
   return nullptr;
@@ -830,7 +832,7 @@ QueThr *TrxRollback::rollback_step(System &sys, QueThr *thr) {
 
     if (m_partial) {
       sig_no = TRX_SIG_ROLLBACK_TO_SAVEPT;
-      savept = &(this->m_savept);
+      savept = &m_savept;
     } else {
       sig_no = TRX_SIG_TOTAL_ROLLBACK;
       savept = nullptr;

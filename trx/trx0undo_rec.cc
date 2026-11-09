@@ -407,7 +407,7 @@ DbErr TrxUndoRecord::get_undo_rec(System &sys, roll_ptr_t roll_ptr, trx_id_t trx
 }
 
 DbErr TrxUndoRecord::prev_version_build(System &sys, 
-  const Rec index_rec, Mtr *index_mtr __attribute__((unused)), const Rec rec, Index *index, RecOffs offsets, MemHeap *heap,
+  const Rec index_rec, [[maybe_unused]] Mtr *index_mtr, const Rec rec, Index *index, RecOffs offsets, MemHeap *heap,
   Rec *old_vers
 ) {
   byte *buf;

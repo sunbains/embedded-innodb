@@ -38,16 +38,6 @@ macro ULINTPF. */
 
 #define ULINTPF "%lu"
 
-/* Disable GCC extensions */
-#if !defined(__attribute__) && !defined(__GNUC__)
-#define __attribute__(X)
-#define HIDDEN
-#else /* !defined( __attribute__) && !defined(__GNUC__) */
-/* Linkage specifier for non-static InnoDB symbols (variables and functions)
-that are only referenced from within InnoDB. */
-#define HIDDEN __attribute__((visibility("hidden")))
-#endif /* !defined( __attribute__) && !defined(__GNUC__) */
-
 /** Check B-tree links */
 #define UNIV_BTR_DEBUG
 
@@ -200,7 +190,7 @@ struct SourceLocation {
   explicit SourceLocation(std::source_location from = std::source_location::current()) : m_from(from) {}
 
   SourceLocation &operator=(const SourceLocation &rhs) {
-    this->m_from = rhs.m_from;
+    m_from = rhs.m_from;
     return *this;
   }
 
@@ -305,9 +295,6 @@ using std::hardware_destructive_interference_size;
 constexpr std::size_t hardware_constructive_interference_size = 64;
 constexpr std::size_t hardware_destructive_interference_size = 64;
 #endif /* __cpp_lib_hardware_interference_size */
-
-/** OS file handle */
-using os_file_t = int;
 
 /** For Direct IO we need aligned allocations. */
 template <typename T, std::size_t Alignment = IB_FILE_BLOCK_SIZE>

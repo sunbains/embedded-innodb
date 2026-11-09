@@ -286,6 +286,9 @@ struct IndexAm {
     @return true if nothing is held for the cursor on any page now. */
     [[nodiscard]] virtual bool give_up_page(Mtr *) noexcept { return false; }
 
+    /** @return true if the record the cursor is on is in a copy of its page, nothing held there. */
+    [[nodiscard]] virtual bool reads_copy() const noexcept { return false; }
+
     virtual void close() noexcept = 0;
   };
 
@@ -419,6 +422,9 @@ class IndexCursor {
 
   /** See IndexAm::Cursor::give_up_page(). */
   [[nodiscard]] bool give_up_page(Mtr *mtr) noexcept { return m_cur->give_up_page(mtr); }
+
+  /** See IndexAm::Cursor::reads_copy(). */
+  [[nodiscard]] bool reads_copy() const noexcept { return m_cur->reads_copy(); }
 
   [[nodiscard]] DbErr remove(Intent intent, TrxRbCtx rb_ctx, Mtr *mtr) noexcept { return m_cur->remove(intent, rb_ctx, mtr); }
 

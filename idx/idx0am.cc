@@ -107,13 +107,13 @@ struct BtreeCursorAm final : IndexAm::Cursor {
   [[nodiscard]] LockPos lock_pos(Rec rec) noexcept override { return Btree::lock_pos(index(), m_pcur.get_block(), rec); }
 
   [[nodiscard]] At at() noexcept override {
-    const auto rec = this->rec();
+    const auto here = rec();
 
-    return page_rec_is_supremum(rec) ? At::FENCE : page_rec_is_infimum(rec) ? At::START : At::REC;
+    return page_rec_is_supremum(here) ? At::FENCE : page_rec_is_infimum(here) ? At::START : At::REC;
   }
 
   [[nodiscard]] Next peek_next() noexcept override {
-    const auto next = page_rec_get_next_const(this->rec());
+    const auto next = page_rec_get_next_const(rec());
 
     return Next{next, page_rec_is_supremum(next) ? At::FENCE : At::REC};
   }

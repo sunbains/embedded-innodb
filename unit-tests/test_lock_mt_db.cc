@@ -1290,7 +1290,7 @@ TEST_F(LockMtDb, UpgradeWithIdleReader) {
 
     const std::chrono::duration<double> secs = Clock::now() - start;
 
-    EXPECT_LT(secs.count(), 1.0) << (table ? "table" : "record") << ": the deadlock was not found at once";
+    EXPECT_LT(secs, PROMPT) << (table ? "table" : "record") << ": the deadlock was not found at once";
 
     const bool a_done = ra.wait_for(0ms) == std::future_status::ready;
     auto &done = a_done ? ra : rb;
@@ -1339,7 +1339,7 @@ TEST_F(LockMtDb, InterruptWait) {
   api::trx_interrupt(w);
 
   EXPECT_EQ(get(result, w, 5s), DB_INTERRUPTED);
-  EXPECT_LT(Clock::now() - start, SLOW * 500ms);
+  EXPECT_LT(Clock::now() - start, PROMPT);
 
   auto t3 = begin();
   auto r3 = std::async(std::launch::async, [&] { return incr(t3, 2); });
@@ -1706,7 +1706,7 @@ TEST_F(LockMtDb, Timeout0) {
   auto r = std::async(std::launch::async, [&] { return incr(w, 1); });
 
   EXPECT_EQ(get(r, w, 5s), DB_LOCK_WAIT_TIMEOUT);
-  EXPECT_LT(Clock::now() - start, SLOW * 200ms);
+  EXPECT_LT(Clock::now() - start, PROMPT);
 
   std::printf("Timeout0: a 0 s timeout fired after %.3f s\n", std::chrono::duration<double>(Clock::now() - start).count());
 

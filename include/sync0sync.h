@@ -91,8 +91,7 @@ bool mutex_validate(const Mutex *mutex); /** in: mutex */
 /** Checks that the current thread owns the mutex. Works only
 in the debug version.
 @return	true if owns */
-bool mutex_own(const Mutex *mutex) /** in: mutex */
-  __attribute__((warn_unused_result));
+[[nodiscard]] bool mutex_own(const Mutex *mutex); /** in: mutex */
 
 #endif /* UNIV_DEBUG */
 

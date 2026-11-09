@@ -1180,7 +1180,7 @@ SymNode *pars_column_def(SymNode *sym_node, const ParsResWord *type,
 }
 
 TableNode *pars_create_table(System &sys, SymNode *table_sym, SymNode *column_defs,
-                              void *not_fit_in_memory __attribute__((unused))) {
+                              [[maybe_unused]] void *not_fit_in_memory) {
   const auto n_cols = que_node_list_get_len(column_defs);
   auto table = Table::create(table_sym->name, DICT_HDR_SPACE, n_cols, 0, false,
                              Current_location());

@@ -332,9 +332,9 @@ bool BufBlock::bits_try_lock(bool rw_x) noexcept {
     return false;
   }
 
-  m_version.store(m_version.load(std::memory_order_relaxed) + 1, std::memory_order_relaxed);
-
-  /* The version goes odd before anything the owner writes. */
+  /* Odd while the page is owned: a reader that began before or during the write fails its check.
+  The release fence orders the add before anything the owner writes (the seqlock of Boehm). */
+  m_version.fetch_add(1, std::memory_order_relaxed);
   std::atomic_thread_fence(std::memory_order_release);
 
   ut_d(m_bits_owner.store(bits_self(), std::memory_order_relaxed));
@@ -408,9 +408,8 @@ void BufBlock::bits_lock(bool rw_x) noexcept {
       continue;
     }
 
-    m_version.store(m_version.load(std::memory_order_relaxed) + 1, std::memory_order_relaxed);
-
-    /* The version goes odd before anything the owner writes. */
+    /* As in bits_lock(). */
+    m_version.fetch_add(1, std::memory_order_relaxed);
     std::atomic_thread_fence(std::memory_order_release);
 
     ut_d(m_bits_owner.store(bits_self(), std::memory_order_relaxed));
@@ -463,7 +462,8 @@ void BufBlock::group_unlock(ulint bit) noexcept {
 void BufBlock::bits_unlock() noexcept {
   ut_d(m_bits_owner.store(0, std::memory_order_relaxed));
 
-  m_version.store(m_version.load(std::memory_order_relaxed) + 1, std::memory_order_release);
+  /* Even again, released: what the owner wrote is before it, for a reader that acquires it. */
+  m_version.fetch_add(1, std::memory_order_release);
 
   if ((m_bits.exchange(0, std::memory_order_release) & WAITERS_BIT) != 0) {
     m_bits.notify_all();
@@ -1454,7 +1454,8 @@ void BufPool::page_init_low(BufPage *bpage) {
 
 void BufPool::page_init(const PageId &page_id, BufBlock *block) {
   /* What anybody validated against is of the page that was here. */
-  block->m_version.store(block->m_version.load(std::memory_order_relaxed) + 2, std::memory_order_release);
+  /* An atomic add: an owner can be changing it under its bits, not this mutex. */
+  block->m_version.fetch_add(2, std::memory_order_release);
 
   ut_ad(mutex_own(&m_mutex));
   ut_ad(mutex_own(&(block->m_mutex)));

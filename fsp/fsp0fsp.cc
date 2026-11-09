@@ -461,7 +461,7 @@ static void fsp_init_file_page(BufBlock *block, Mtr *mtr) noexcept {
  *
  * @return	segment inode
  */
-inline Fsp::fseg_inode_t *fsp_seg_inode_page_get_nth_inode(page_t *page, ulint i, Mtr *mtr __attribute__((unused))) noexcept {
+inline Fsp::fseg_inode_t *fsp_seg_inode_page_get_nth_inode(page_t *page, ulint i, [[maybe_unused]] Mtr *mtr) noexcept {
   ut_ad(i < FSP_SEG_INODES_PER_PAGE);
   ut_ad(mtr->memo_contains_page(page, MTR_MEMO_PAGE_X_FIX));
 
@@ -628,7 +628,7 @@ static Fsp::fseg_inode_t *fseg_inode_get(System &sys, fseg_header_t *header, spa
  *
  * @return The page number, FIL_NULL if not in use.
  */
-inline ulint fseg_get_nth_frag_page_no(Fsp::fseg_inode_t *inode, ulint n, Mtr *mtr __attribute__((unused))) noexcept {
+inline ulint fseg_get_nth_frag_page_no(Fsp::fseg_inode_t *inode, ulint n, [[maybe_unused]] Mtr *mtr) noexcept {
   ut_ad(n < FSEG_FRAG_ARR_N_SLOTS);
   ut_ad(mtr->memo_contains_page(inode, MTR_MEMO_PAGE_X_FIX));
   ut_ad(mach_read_from_4(inode + FSEG_MAGIC_N) == FSEG_MAGIC_N_VALUE);

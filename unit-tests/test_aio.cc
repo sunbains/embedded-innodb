@@ -96,7 +96,8 @@ class AioFileTest : public ::testing::Test {
     ASSERT_GE(m_fd, 0);
     ASSERT_EQ(::ftruncate(m_fd, FILE_SIZE), 0);
 
-    m_node.m_fh = m_fd;
+    /* The node's while the test runs: close() takes it back. */
+    m_node.m_file = os::File{m_fd};
     m_node.m_file_name = m_name.data();
     m_node.open = true;
     m_node.m_size_in_pages = FILE_SIZE / UNIV_PAGE_SIZE;
@@ -113,6 +114,8 @@ class AioFileTest : public ::testing::Test {
 
   void close() {
     m_aio.reset();
+
+    (void)m_node.m_file.release();
 
     if (m_fd >= 0) {
       ::close(m_fd);
@@ -726,9 +729,13 @@ TEST_F(AioFileTest, ErrorResult) {
 
   ASSERT_GE(ro, 0);
 
-  FilNode node = m_node;
+  FilNode node{};
 
-  node.m_fh = ro;
+  node.m_file = os::File{ro};
+  node.m_file_name = m_node.m_file_name;
+  node.open = true;
+  node.m_size_in_pages = m_node.m_size_in_pages;
+  node.m_magic_n = FIL_NODE_MAGIC_N;
 
   Buf out(4096);
 
@@ -739,8 +746,6 @@ TEST_F(AioFileTest, ErrorResult) {
 
   ASSERT_EQ(m_aio->reap(write_queue(), done), DB_SUCCESS);
   EXPECT_LT(done.m_ret, 0) << "the error is returned to the caller";
-
-  ::close(ro);
 }
 
 /** Reads and writes in parallel by many threads, through the handler: the

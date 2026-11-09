@@ -124,7 +124,7 @@ Fil::~Fil() noexcept {
     for (auto node : space->m_chain) {
       ut_a(node->m_magic_n == FIL_NODE_MAGIC_N);
       mem_free(node->m_file_name);
-      mem_free(node);
+      delete node;
     }
 
     space->m_latch.destroy();
@@ -221,7 +221,7 @@ bool Fil::space_is_flushed(FilSpace *space) {
 void Fil::node_create(const char *name, ulint size, space_id_t id, bool is_raw) {
   mutex_enter(&m_mutex);
 
-  auto node = static_cast<FilNode *>(mem_alloc(sizeof(FilNode)));
+  auto node = new FilNode{};
 
   node->m_file_name = mem_strdup(name);
   node->open = false;
@@ -244,7 +244,7 @@ void Fil::node_create(const char *name, ulint size, space_id_t id, bool is_raw) 
 
     log_err(std::format("Could not find tablespace {} for file in the tablespace memory cache.", id));
 
-    mem_free(node);
+    delete node;
 
   } else {
 
@@ -265,37 +265,29 @@ void Fil::node_create(const char *name, ulint size, space_id_t id, bool is_raw) 
 }
 
 void Fil::node_open_file(FilNode *node, FilSpace *space, bool startup) {
-  off_t size;
-  bool success;
-
   ut_ad(mutex_own(&m_mutex));
   ut_a(node->m_n_pending == 0);
   ut_a(node->open == false);
 
   if (node->m_size_in_pages == 0) {
-    /* It must be a single-table tablespace and we do not know the
-    size of the file yet. First we open the file in the normal
-    mode, no async I/O here, for simplicity. Then do some checks,
-    and close the file again.
-    NOTE that we could not use the simple file read function
-    os_file_read() in Windows to read from a file opened for
-    async I/O! */
+    /* It must be a single-table tablespace and we do not know the size of the file yet: open it
+    for reading only, check it, and close it again. */
+    auto file = os::File::open(node->m_file_name, os::Open::READ);
 
-    node->m_fh = os_file_create_simple_no_error_handling(node->m_file_name, OS_FILE_OPEN, OS_FILE_READ_ONLY, &success);
-
-    if (!success) {
-      /* The following call prints an error message */
-      os_file_get_last_error(true);
-
-      log_fatal(std::format("Cannot open '{}'. Have you deleted .ibd files under a running server?", node->m_file_name));
+    if (!file) {
+      log_fatal(std::format("Cannot open '{}': {}. Have you deleted .ibd files under a running server?", node->m_file_name, file.error().message()));
     }
 
-    success = os_file_get_size(node->m_fh, &size);
-    ut_a(success);
+    const auto measured = file->size();
+
+    if (!measured) {
+      log_fatal(std::format("Cannot measure the size of '{}': {}", node->m_file_name, measured.error().message()));
+    }
 
     /* The system tablespace is opened at the start and closed at shutdown. */
     ut_a(space->m_id != SYS_TABLESPACE || startup);
 
+    const auto size = *measured;
     auto size_bytes = size;
 
     if (size_bytes < off_t(FIL_IBD_FILE_INITIAL_SIZE * UNIV_PAGE_SIZE)) {
@@ -310,16 +302,17 @@ void Fil::node_open_file(FilNode *node, FilSpace *space, bool startup) {
     auto ptr = static_cast<byte *>(ut_new(2 * UNIV_PAGE_SIZE));
     auto page = reinterpret_cast<page_t *>(ut_align(ptr, UNIV_PAGE_SIZE));
 
-    success = os_file_read(node->m_fh, page, UNIV_PAGE_SIZE, 0);
+    if (const auto err = file->read(page, UNIV_PAGE_SIZE, 0); err) {
+      log_fatal(std::format("Cannot read the first page of '{}': {}", node->m_file_name, err.message()));
+    }
 
     auto flags = m_sys.m_fsp->get_flags(page);
     auto space_id = m_sys.m_fsp->get_space_id(page);
 
     ut_delete(ptr);
 
-    /* Close the file now that we have read the space id from it */
-
-    os_file_close(node->m_fh);
+    /* Read only: nothing a close can lose. */
+    (void)file->close();
 
     if (space_id != space->m_id) {
       log_fatal(
@@ -347,20 +340,14 @@ void Fil::node_open_file(FilNode *node, FilSpace *space, bool startup) {
     space->m_size_in_pages += node->m_size_in_pages;
   }
 
-  /* Open the file for reading and writing, in Windows normally in the
-  unbuffered async I/O mode, though global variables may make
-  os_file_create() to fall back to the normal file I/O mode. */
+  /* For reading and writing, past the OS cache if the flush method says so. */
+  auto file = os::File::open(node->m_file_name, os::Open::READ_WRITE, m_sys.m_config.m_fil.m_flush_method == SRV_UNIX_O_DIRECT);
 
-  bool ret;
-
-  if (node->m_is_raw_disk) {
-    node->m_fh = os_file_create(node->m_file_name, OS_FILE_OPEN_RAW, OS_FILE_AIO, m_sys.m_config.m_fil.m_flush_method, &ret);
-  } else {
-    node->m_fh = os_file_create(node->m_file_name, OS_FILE_OPEN, OS_FILE_AIO, m_sys.m_config.m_fil.m_flush_method, &ret);
+  if (!file) {
+    log_fatal(std::format("Cannot open '{}' for I/O: {}", node->m_file_name, file.error().message()));
   }
 
-  ut_a(ret);
-
+  node->m_file = std::move(*file);
   node->open = true;
 
   ++m_n_open;
@@ -373,8 +360,10 @@ void Fil::node_close_file(FilNode *node) {
   ut_a(node->m_n_pending_flushes == 0);
   ut_a(node->m_modification_counter == node->m_flush_counter);
 
-  auto ret = os_file_close(node->m_fh);
-  ut_a(ret);
+  /* Everything written is flushed, see the asserts: an error of close() is the file system's. */
+  if (const auto err = node->m_file.close(); err) {
+    log_fatal(std::format("Cannot close '{}': {}", node->m_file_name, err.message()));
+  }
 
   node->open = false;
   ut_a(m_n_open > 0);
@@ -483,7 +472,7 @@ void Fil::node_free(FilNode *node, FilSpace *space) {
   UT_LIST_REMOVE(space->m_chain, node);
 
   mem_free(node->m_file_name);
-  mem_free(node);
+  delete node;
 }
 
 bool Fil::space_create(const char *name, space_id_t id, ulint flags) {
@@ -898,13 +887,14 @@ DbErr Fil::write_flushed_lsn_to_data_files(lsn_t lsn) {
   return DB_SUCCESS;
 }
 
-void Fil::read_flushed_lsn(os_file_t fh, lsn_t &flushed_lsn) {
+void Fil::read_flushed_lsn(const os::File &file, lsn_t &flushed_lsn) {
   auto ptr = static_cast<byte *>(ut_new(2 * UNIV_PAGE_SIZE));
   /* Align the memory for a possible read from a raw device */
   auto buf = static_cast<byte *>(ut_align(ptr, UNIV_PAGE_SIZE));
 
-  auto success = os_file_read(fh, buf, UNIV_PAGE_SIZE, 0);
-  ut_a(success);
+  if (const auto err = file.read(buf, UNIV_PAGE_SIZE, 0); err) {
+    log_fatal("Cannot read the flushed LSN: ", err.message());
+  }
 
   flushed_lsn = mach_read_from_8(buf + FIL_PAGE_FILE_FLUSH_LSN);
 
@@ -912,21 +902,23 @@ void Fil::read_flushed_lsn(os_file_t fh, lsn_t &flushed_lsn) {
 }
 
 void Fil::create_directory_for_tablename(const char *name) {
-  auto len = m_sys.m_config.m_fil.m_data_home.size();
-  ut_a(len > 0);
+  const auto &home = m_sys.m_config.m_fil.m_data_home;
 
-  auto namend = strchr(name, '/');
-  ut_a(namend);
+  ut_a(!home.empty());
 
-  auto path = (char *)mem_alloc(len + (namend - name) + 2);
+  const auto namend = strchr(name, '/');
 
-  strncpy(path, m_sys.m_config.m_fil.m_data_home.c_str(), len);
-  ut_a(path[len - 1] == SRV_PATH_SEPARATOR);
+  ut_a(namend != nullptr);
 
-  strncpy(path + len, name, namend - name);
+  const auto dir = std::filesystem::path(home) / std::string_view(name, size_t(namend - name));
+  std::error_code ec;
 
-  ut_a(os_file_create_directory(path, false));
-  mem_free(path);
+  /* One that exists is no error. */
+  (void)std::filesystem::create_directory(dir, ec);
+
+  if (ec) {
+    log_fatal(std::format("Cannot create the directory {}: {}", dir.string(), ec.message()));
+  }
 }
 
 void Fil::op_write_log(
@@ -1156,10 +1148,15 @@ bool Fil::delete_tablespace(space_id_t id) {
 
       mtr.commit(m_sys);
 
-      success = os_file_delete(path);
+      /* A file that's gone already is no error. */
+      std::error_code ec;
 
-      if (!success) {
-        success = os_file_delete_if_exists(path);
+      (void)std::filesystem::remove(path, ec);
+
+      success = !ec;
+
+      if (ec) {
+        log_err(std::format("Cannot delete {}: {}", path, ec.message()));
       }
     }
 
@@ -1382,7 +1379,15 @@ retry:
   success = rename_tablespace_in_mem(space, node, path);
 
   if (success) {
-    success = os_file_rename(old_path, path);
+    std::error_code ec;
+
+    std::filesystem::rename(old_path, path, ec);
+
+    success = !ec;
+
+    if (ec) {
+      log_err(std::format("Cannot rename {} to {}: {}", old_path, path, ec.message()));
+    }
 
     if (!success) {
       /* We have to revert the changes we made
@@ -1417,73 +1422,59 @@ DbErr Fil::create_new_single_table_tablespace(space_id_t *space_id, const char *
   ut_a(flags == 0);
   ut_a(size >= FIL_IBD_FILE_INITIAL_SIZE);
 
-  bool ret{};
   auto path = make_ibd_name(tablename, is_temp);
-  auto file = os_file_create(path, OS_FILE_CREATE, OS_FILE_NORMAL, m_sys.m_config.m_fil.m_flush_method, &ret);
+  auto opened = os::File::open(path, os::Open::CREATE, m_sys.m_config.m_fil.m_flush_method == SRV_UNIX_O_DIRECT);
 
-  if (!ret) {
-    log_err(std::format("Unable to create file {}.", path));
+  if (!opened) {
+    const auto err = opened.error();
 
-    /* The following call will print an error message */
+    log_err(std::format("Unable to create file {}: {}", path, err.message()));
 
-    auto err = os_file_get_last_error(true);
+    mem_free(path);
 
-    if (err == OS_FILE_ALREADY_EXISTS) {
-      log_err(std::format(
+    if (err == std::errc::file_exists) {
+      log_err(
         "The file already exists though the corresponding table did not"
         " exist in the InnoDB data dictionary. Have you moved InnoDB"
         " .ibd files around without using the SQL commands DISCARD TABLESPACE"
         " and IMPORT TABLESPACE, or did the server crash in the middle of"
-        " CREATE TABLE? You can resolve the problem by removing the file {}"
-        " under the 'datadir' of the server.",
-        path
-      ));
-
-      mem_free(path);
+        " CREATE TABLE? You can resolve the problem by removing the file"
+        " under the 'datadir' of the server."
+      );
 
       return DB_TABLESPACE_ALREADY_EXISTS;
     }
 
-    if (err == OS_FILE_DISK_FULL) {
-
-      mem_free(path);
-
-      return DB_OUT_OF_FILE_SPACE;
-    }
-
-    mem_free(path);
-
-    return DB_ERROR;
+    return err == std::errc::no_space_on_device ? DB_OUT_OF_FILE_SPACE : DB_ERROR;
   }
 
-  ret = os_file_set_size(path, file, size * UNIV_PAGE_SIZE);
+  auto file = std::move(*opened);
 
-  if (!ret) {
-    os_file_close(file);
-    os_file_delete(path);
+  /* Until it's a tablespace of the cache, a file that failed goes again. */
+  auto err_exit = [&file](char *path, DbErr err) -> DbErr {
+    (void)file.close();
+
+    std::error_code ec;
+
+    (void)std::filesystem::remove(path, ec);
 
     mem_free(path);
-    return DB_OUT_OF_FILE_SPACE;
+
+    return err;
+  };
+
+  if (const auto err = file.allocate(0, off_t(size) * UNIV_PAGE_SIZE); err) {
+    log_err(std::format("Unable to allocate {} pages to {}: {}", size, path, err.message()));
+
+    return err_exit(path, err == std::errc::no_space_on_device ? DB_OUT_OF_FILE_SPACE : DB_ERROR);
   }
 
   if (*space_id == SYS_TABLESPACE) {
     *space_id = assign_new_space_id();
   }
 
-  auto err_exit = [](char *path, os_file_t file) -> DbErr {
-    if (file != -1) {
-      os_file_close(file);
-    }
-
-    os_file_delete(path);
-
-    mem_free(path);
-
-    return DB_ERROR;
-  };
-
   if (*space_id == ULINT_UNDEFINED) {
-    return err_exit(path, file);
+    return err_exit(path, DB_ERROR);
   }
 
   /* We have to write the space id to the file immediately and flush the
@@ -1491,9 +1482,8 @@ DbErr Fil::create_new_single_table_tablespace(space_id_t *space_id, const char *
   tablespaces exist and what are their space id's, so that we can apply
   the log records to the right file. It may take quite a while until
   buffer pool flush algorithms write anything to the file and flush it to
-  disk. If we would not write here anything, the file would be filled
-  with zeros from the call of os_file_set_size(), until a buffer pool
-  flush would write to it. */
+  disk. If we would not write here anything, the file would be all zeros
+  until a buffer pool flush would write to it. */
 
   auto ptr = static_cast<byte *>(ut_new(3 * UNIV_PAGE_SIZE));
   auto page = static_cast<byte *>(ut_align(ptr, UNIV_PAGE_SIZE));
@@ -1506,34 +1496,32 @@ DbErr Fil::create_new_single_table_tablespace(space_id_t *space_id, const char *
 
   m_sys.m_buf_pool->m_flusher->init_for_writing(page, 0);
 
-  ret = os_file_write(path, file, page, UNIV_PAGE_SIZE, 0);
+  const auto write_err = file.write(page, UNIV_PAGE_SIZE, 0);
 
   ut_delete(ptr);
 
-  if (ret == 0) {
+  if (write_err) {
+    log_err(std::format("Could not write the first page to tablespace {}: {}", path, write_err.message()));
 
-    log_err(std::format("Could not write the first page to tablespace {}", path));
-
-    return err_exit(path, file);
+    return err_exit(path, DB_ERROR);
   }
 
-  ret = os_file_flush(file);
+  if (const auto err = file.sync(); err) {
+    log_err(std::format("File flush of tablespace {} failed: {}", path, err.message()));
 
-  if (!ret) {
-    log_err(std::format("File flush of tablespace {} failed", path));
-    return err_exit(path, file);
+    return err_exit(path, DB_ERROR);
   }
 
-  os_file_close(file);
+  if (const auto err = file.close(); err) {
+    log_err(std::format("Could not close tablespace {}: {}", path, err.message()));
 
-  if (*space_id == ULINT_UNDEFINED) {
-    return err_exit(path, -1);
+    return err_exit(path, DB_ERROR);
   }
 
   success = space_create(path, *space_id, flags);
 
   if (!success) {
-    return err_exit(path, -1);
+    return err_exit(path, DB_ERROR);
   }
 
   node_create(path, size, *space_id, false);
@@ -1554,29 +1542,22 @@ DbErr Fil::create_new_single_table_tablespace(space_id_t *space_id, const char *
 }
 
 bool Fil::open_single_table_tablespace(bool check_space_id, space_id_t id, ulint flags, const char *name) {
-  char *filepath;
-  bool success;
-  space_id_t space_id;
-  ulint space_flags;
-
-  filepath = make_ibd_name(name, false);
+  auto filepath = make_ibd_name(name, false);
 
   /* ROW_FORMAT=REDUNDANT (table->flags == 0).  For any other format, the tablespace flags
   should equal (table->flags & ~(~0UL << DICT_TF_BITS)). */
   ut_a(!(flags & (~0UL << DICT_TF_BITS)));
 
-  auto file = os_file_create_simple_no_error_handling(filepath, OS_FILE_OPEN, OS_FILE_READ_ONLY, &success);
+  auto file = os::File::open(filepath, os::Open::READ);
 
-  if (!success) {
-    /* The following call prints an error message */
-    os_file_get_last_error(true);
-
+  if (!file) {
     log_err(std::format(
-      "Trying to open a table, but could not open the tablespace file {}!"
+      "Trying to open a table, but could not open the tablespace file {}: {}!"
       " Have you moved InnoDB .ibd files around without using the commands DISCARD TABLESPACE and"
       " IMPORT TABLESPACE? It is also possible that this is a temporary table ..., and the server"
       " removed the .ibd file for this.",
-      filepath
+      filepath,
+      file.error().message()
     ));
 
     mem_free(filepath);
@@ -1584,21 +1565,25 @@ bool Fil::open_single_table_tablespace(bool check_space_id, space_id_t id, ulint
     return false;
   }
 
-  if (!check_space_id) {
-    space_id = id;
-  } else {
-    /* Read the first page of the tablespace */
+  space_id_t space_id{id};
 
-    auto buf2 = (byte *)ut_new(2 * UNIV_PAGE_SIZE);
-    /* Align the memory for file i/o if we might have O_DIRECT set */
-    auto page = (byte *)ut_align(buf2, UNIV_PAGE_SIZE);
+  if (check_space_id) {
+    /* The first page, aligned for O_DIRECT: the tablespace id and flags are on it. */
+    auto buf2 = static_cast<byte *>(ut_new(2 * UNIV_PAGE_SIZE));
+    auto page = static_cast<byte *>(ut_align(buf2, UNIV_PAGE_SIZE));
 
-    success = os_file_read(file, page, UNIV_PAGE_SIZE, 0);
+    if (const auto err = file->read(page, UNIV_PAGE_SIZE, 0); err) {
+      log_err(std::format("Could not read the first page of {}: {}", filepath, err.message()));
 
-    /* We have to read the tablespace id and flags from the file. */
+      ut_delete(buf2);
+      mem_free(filepath);
+
+      return false;
+    }
 
     space_id = m_sys.m_fsp->get_space_id(page);
-    space_flags = m_sys.m_fsp->get_flags(page);
+
+    const auto space_flags = m_sys.m_fsp->get_flags(page);
 
     ut_delete(buf2);
 
@@ -1606,7 +1591,7 @@ bool Fil::open_single_table_tablespace(bool check_space_id, space_id_t id, ulint
       log_err(std::format(
         "Tablespace id and flags in file {} are {} and {}, but in the InnoDB data"
         " dictionary they are {} and {}. Have you moved InnoDB .ibd files"
-        " around without using the commands DISCARD TABLESPACE andIMPORT TABLESPACE?",
+        " around without using the commands DISCARD TABLESPACE and IMPORT TABLESPACE?",
         filepath,
         space_id,
         space_flags,
@@ -1614,7 +1599,6 @@ bool Fil::open_single_table_tablespace(bool check_space_id, space_id_t id, ulint
         flags
       ));
 
-      os_file_close(file);
       mem_free(filepath);
 
       return false;
@@ -1622,48 +1606,24 @@ bool Fil::open_single_table_tablespace(bool check_space_id, space_id_t id, ulint
   }
 
   if (space_create(filepath, space_id, flags)) {
-    /* We do not measure the size of the file, that is why we pass the 0 below
-     */
-
+    /* We do not measure the size of the file, that is why we pass the 0 below */
     node_create(filepath, 0, space_id, false);
   }
 
-  os_file_close(file);
   mem_free(filepath);
 
-  return success;
+  return true;
 }
 
 void Fil::load_single_table_tablespace(IbRecovery recovery, const char *dbname, const char *filename) {
-  char dir[OS_FILE_MAX_PATH];
+  /* Under the data home, without its leading ./ */
+  const auto filepath = (std::filesystem::path(normalize_path(m_sys.m_config.m_fil.m_data_home.c_str())) / dbname / filename).string();
 
-  strcpy(dir, m_sys.m_config.m_fil.m_data_home.c_str());
+  auto file = os::File::open(filepath, os::Open::READ);
 
-  auto ptr = normalize_path(dir);
-  auto len = strlen(dbname) + strlen(filename) + strlen(dir) + 3;
-  auto filepath = (char *)mem_alloc(len);
-
-  auto dbname_len = strlen(dbname);
-
-  if (strlen(ptr) > 0) {
-    std::snprintf(filepath, len, "%s%s/%s", ptr, dbname, filename);
-  } else if (dbname_len == 0 || dbname[dbname_len - 1] == SRV_PATH_SEPARATOR) {
-
-    std::snprintf(filepath, len, "%s%s", dbname, filename);
-  } else {
-    std::snprintf(filepath, len, "%s/%s", dbname, filename);
-  }
-
-  bool success;
-
-  auto file = os_file_create_simple_no_error_handling(filepath, OS_FILE_OPEN, OS_FILE_READ_ONLY, &success);
-
-  if (!success) {
-    /* The following call prints an error message */
-    os_file_get_last_error(true);
-
+  if (!file) {
     log_err(std::format(
-      "Could not open single-table tablespace file {}!"
+      "Could not open single-table tablespace file {}: {}!"
       " We do not continue the crash recovery, because the table may become"
       " corrupt if we cannot apply the log records in the InnoDB log to it."
       " To fix the problem and start InnoDB: \n"
@@ -1676,13 +1636,11 @@ void Fil::load_single_table_tablespace(IbRecovery recovery, const char *dbname, 
       "   3) If the file system or the disk is broken, and you cannot remove"
       " the .ibd file, you can set force_recovery != IB_RECOVERY_DEFAULT"
       " and force InnoDB to continue crash recovery here.",
-      filepath
+      filepath,
+      file.error().message()
     ));
 
-    mem_free(filepath);
-
     if (recovery != IB_RECOVERY_DEFAULT) {
-
       log_err(std::format(
         "force_recovery was set to {}. Continuing crash recovery even though"
         " we cannot access the .ibd file of this table.",
@@ -1695,18 +1653,13 @@ void Fil::load_single_table_tablespace(IbRecovery recovery, const char *dbname, 
     log_fatal("Cannot access .ibd file: ", filepath);
   }
 
-  off_t size{};
+  const auto size = file->size();
 
-  success = os_file_get_size(file, &size);
-
-  if (!success) {
-    /* The following call prints an error message */
-    os_file_get_last_error(true);
-
+  if (!size) {
     log_err(std::format(
-      "Could not measure the size of single-table tablespace file {}!"
+      "Could not measure the size of single-table tablespace file {}: {}!"
       " We do not continue crash recovery, because the table will become"
-      " corrupt if we cannot apply the log recordsin the InnoDB log to it."
+      " corrupt if we cannot apply the log records in the InnoDB log to it."
       " To fix the problem and start the server:\n"
       "    1) If there is a permission problem in the file and the server cannot"
       " access the file, you should modify the permissions.\n"
@@ -1716,14 +1669,11 @@ void Fil::load_single_table_tablespace(IbRecovery recovery, const char *dbname, 
       "    3) If the file system or the disk is broken, and you cannot remove"
       " the .ibd file, you can set force_recovery != IB_RECOVERY_DEFAULT"
       " and force InnoDB to continue crash recovery here.",
-      filepath
+      filepath,
+      size.error().message()
     ));
 
-    os_file_close(file);
-    mem_free(filepath);
-
     if (recovery != IB_RECOVERY_DEFAULT) {
-
       log_warn(std::format(
         "force_recovery was set to {}. Continuing crash recovery"
         " even though we cannot access the .ibd file of this table.",
@@ -1736,80 +1686,56 @@ void Fil::load_single_table_tablespace(IbRecovery recovery, const char *dbname, 
     log_fatal("Could not measure size of ", filepath);
   }
 
-  /* TODO: What to do in other cases where we cannot access an .ibd
-  file during a crash recovery? */
-
-  /* Every .ibd file is created >= 4 pages in size. Smaller files
-  cannot be ok. */
-
-  if (size < off_t(FIL_IBD_FILE_INITIAL_SIZE * UNIV_PAGE_SIZE)) {
-
+  /* Every .ibd file is created >= 4 pages in size. Smaller files cannot be ok. */
+  if (*size < off_t(FIL_IBD_FILE_INITIAL_SIZE * UNIV_PAGE_SIZE)) {
     log_err(std::format(
-      "The size of single-table tablespace file {} is only {}, should be at least {}!", filepath, size, 4 * UNIV_PAGE_SIZE
+      "The size of single-table tablespace file {} is only {}, should be at least {}!",
+      filepath,
+      *size,
+      FIL_IBD_FILE_INITIAL_SIZE * UNIV_PAGE_SIZE
     ));
-
-    os_file_close(file);
-    mem_free(filepath);
 
     return;
   }
 
-  /* Read the first page of the tablespace if the size big enough */
-
+  /* The first page, aligned for O_DIRECT: the tablespace id and flags are on it. */
   auto buf2 = static_cast<byte *>(ut_new(2 * UNIV_PAGE_SIZE));
-
-  /* Align the memory for file i/o if we might have O_DIRECT set */
   auto page = static_cast<byte *>(ut_align(buf2, UNIV_PAGE_SIZE));
-
+  space_id_t space_id{FIL_NULL};
   ulint flags{};
-  space_id_t space_id;
 
-  if (size >= off_t(FIL_IBD_FILE_INITIAL_SIZE * UNIV_PAGE_SIZE)) {
-    success = os_file_read(file, page, UNIV_PAGE_SIZE, 0);
-
-    /* We have to read the tablespace id from the file */
-
+  if (const auto err = file->read(page, UNIV_PAGE_SIZE, 0); err) {
+    log_warn(std::format("Could not read the first page of {}: {}", filepath, err.message()));
+  } else {
     space_id = m_sys.m_fsp->get_space_id(page);
     flags = m_sys.m_fsp->get_flags(page);
-  } else {
-    space_id = FIL_NULL;
-    flags = 0;
   }
+
+  ut_delete(buf2);
 
   if (space_id == FIL_NULL || space_id == SYS_TABLESPACE) {
+    log_warn(std::format("Tablespace id {} in file {} is not sensible", space_id, filepath));
 
-    log_warn(std::format("Tablespace id {} in file {} is not sensible\n", space_id, filepath));
-
-    goto func_exit;
+    return;
   }
-  success = space_create(filepath, space_id, flags);
 
-  if (!success) {
-
+  if (!space_create(filepath.c_str(), space_id, flags)) {
     if (m_sys.m_config.m_recv.m_force_recovery > 0) {
-
       log_warn(std::format(
         "innodb_force_recovery was set to {}. Continuing crash recovery"
         " even though the tablespace creation of this table failed.",
         to_int(m_sys.m_config.m_recv.m_force_recovery)
       ));
 
-      goto func_exit;
+      return;
     }
 
     log_fatal("During recovery");
   }
 
-  /* We do not use the size information we have about the file, because
-  the rounding formula for extents and pages is somewhat complex; we
-  let node_open() do that task. */
-
-  node_create(filepath, 0, space_id, false);
-
-func_exit:
-  os_file_close(file);
-  ut_delete(buf2);
-  mem_free(filepath);
+  /* We do not use the size information we have about the file, because the rounding formula for
+  extents and pages is somewhat complex; we let node_open() do that task. */
+  node_create(filepath.c_str(), 0, space_id, false);
 }
 
 DbErr Fil::scan_and_load_tablespaces(const std::string &dir, const std::string &dbname, IbRecovery recovery, ulint max_depth, ulint depth) {
@@ -1821,18 +1747,21 @@ DbErr Fil::scan_and_load_tablespaces(const std::string &dir, const std::string &
   }
 
   const fs::path path(dir);
+  std::error_code ec;
 
-  if (fs::status(path).type() != fs::file_type::directory) {
-    log_err(std::format("The datadir is not a directory: '{}'", dir));
+  if (!fs::is_directory(path, ec)) {
+    log_err(std::format("The datadir is not a directory: '{}'{}", dir, ec ? ": " + ec.message() : ""));
     return DB_ERROR;
   }
 
   const std::string ext = ".ibd";
+  fs::directory_iterator it{path, ec};
 
-  for (auto it{fs::directory_iterator(path)}; it != fs::directory_iterator(); ++it) {
+  for (; !ec && it != fs::directory_iterator(); it.increment(ec)) {
     const auto filename = it->path().filename().string();
+    std::error_code type_ec;
 
-    if (it->is_directory()) {
+    if (it->is_directory(type_ec)) {
       /* A directory directly under the data home is a database. */
       const auto db = dbname.empty() ? filename : dbname + SRV_PATH_SEPARATOR + filename;
 
@@ -1840,10 +1769,15 @@ DbErr Fil::scan_and_load_tablespaces(const std::string &dir, const std::string &
         log_err(std::format("Failed to scan and load tablespaces in directory: '{}'", it->path().string()));
       }
 
-    } else if (!dbname.empty() && it->is_regular_file() && it->path().extension().string() == ext) {
+    } else if (!dbname.empty() && it->is_regular_file(type_ec) && it->path().extension().string() == ext) {
       /* Single-table tablespaces live in their database directory. */
       load_single_table_tablespace(recovery, dbname.c_str(), filename.c_str());
     }
+  }
+
+  if (ec) {
+    log_err(std::format("Cannot read the directory '{}': {}", dir, ec.message()));
+    return DB_ERROR;
   }
 
   return DB_SUCCESS;
@@ -2059,7 +1993,6 @@ bool Fil::extend_space_to_desired_size(page_no_t *actual_size, space_id_t space_
 
   const page_no_t start_page_no = space->m_size_in_pages;
   const page_no_t node_start = space->m_size_in_pages - node->m_size_in_pages;
-  const auto fh = node->m_fh;
 
   space->m_is_being_extended = true;
 
@@ -2075,46 +2008,16 @@ bool Fil::extend_space_to_desired_size(page_no_t *actual_size, space_id_t space_
   page_no_t n_added{};
   bool success{true};
 
-  /* Allocate the blocks: the new part reads as zeros, without writing it. */
-  if (::fallocate(fh, 0, off, len) == 0) {
+  /* The blocks are reserved, or written with zeros where the file system can't. */
+  if (const auto err = node->m_file.allocate(off, len); !err) {
     n_added = size_after_extend - start_page_no;
   } else {
-    /* The file system can't (EOPNOTSUPP), or out of space: write zeros,
-    the part that fits. */
-    const auto chunk = std::min<ulint>(64, size_after_extend - start_page_no) * page_size;
-    auto buf2 = static_cast<byte *>(mem_alloc(chunk + page_size));
-    auto buf = static_cast<byte *>(ut_align(buf2, page_size));
+    /* Out of space: measure the file for how much of it was extended. */
+    const auto measured = node->m_file.size();
+    const auto file_pages = measured ? page_no_t(*measured / page_size) : page_no_t{};
+    const auto node_pages = start_page_no - node_start;
 
-    memset(buf, 0, chunk);
-
-    auto page_no = start_page_no;
-
-    while (page_no < size_after_extend) {
-      const ulint n_pages = std::min<ulint>(chunk / page_size, size_after_extend - page_no);
-      const off_t woff = off_t(page_no - node_start) * page_size;
-
-      IoCtx io_ctx = {.m_batch = false, .m_fil_node = node, .m_msg = nullptr, .m_io_request = IoRequest::Sync_write};
-
-      /* DbErr: DB_SUCCESS is not 0, the result is not a bool. */
-      if (m_sys.m_aio->submit(std::move(io_ctx), buf, page_size * n_pages, woff) != DB_SUCCESS) {
-        success = false;
-        break;
-      }
-
-      page_no += n_pages;
-    }
-
-    mem_free(buf2);
-
-    if (success) {
-      n_added = size_after_extend - start_page_no;
-    } else {
-      /* Measure the file to find how much of it we could extend. */
-      const auto file_pages = page_no_t(os_file_get_size_as_iblonglong(fh) / page_size);
-      const auto node_pages = start_page_no - node_start;
-
-      n_added = file_pages > node_pages ? file_pages - node_pages : 0;
-    }
+    n_added = file_pages > node_pages ? file_pages - node_pages : 0;
   }
 
   /* No sync here (upstream flushed the space after every extension). The
@@ -2395,7 +2298,6 @@ bool Fil::aio_wait(ulint segment) {
 }
 
 void Fil::flush(space_id_t space_id) {
-  os_file_t file;
   int64_t old_mod_counter;
 
   mutex_enter(&m_mutex);
@@ -2425,7 +2327,7 @@ void Fil::flush(space_id_t space_id) {
       ++m_n_flushes;
     retry:
       if (node->m_n_pending_flushes > 0) {
-        /* We want to avoid calling os_file_flush() on the file twice at
+        /* We want to avoid flushing the file twice at
         the same time: wait for the flush in progress (it may cover our
         changes too), instead of sleeping 20 ms. */
         {
@@ -2443,7 +2345,6 @@ void Fil::flush(space_id_t space_id) {
       }
 
       ut_a(node->open);
-      file = node->m_fh;
       node->m_n_pending_flushes++;
 
       mutex_exit(&m_mutex);
@@ -2451,7 +2352,11 @@ void Fil::flush(space_id_t space_id) {
       /* nosync: the writes are not made durable (tests, benchmarks), as for
       the log. */
       if (m_sys.m_config.m_fil.m_flush_method != SRV_UNIX_NOSYNC) {
-        os_file_flush(file);
+        /* Open while it has flushes pending. What the writes left on the device is unknown when
+        this fails: the database can't go on as if they were durable. */
+        if (const auto err = node->m_file.sync(); err) {
+          log_fatal(std::format("Flush of {} failed: {}", node->m_file_name, err.message()));
+        }
       }
 
       mutex_enter(&m_mutex);
@@ -2569,24 +2474,29 @@ FilPageType Fil::page_get_type(const byte *page) {
 }
 
 bool Fil::rmdir(const char *dbname) {
-  bool success{};
-  char dir[OS_FILE_MAX_PATH];
+  const auto dir = std::filesystem::path(m_sys.m_config.m_fil.m_data_home) / dbname;
+  std::error_code ec;
 
-  std::snprintf(dir, sizeof(dir), "%s%s", m_sys.m_config.m_fil.m_data_home.c_str(), dbname);
+  /* Only if it's empty. */
+  if (!std::filesystem::remove(dir, ec) || ec) {
+    log_err(std::format("Removing directory {}: {}", dir.string(), ec ? ec.message() : "it does not exist"));
 
-  if (::rmdir(dbname) != 0) {
-    log_err("Removing directory: ", dbname);
-  } else {
-    success = true;
+    return false;
   }
-  return success;
+
+  return true;
 }
 
 bool Fil::mkdir(const char *dbname) {
-  char dir[OS_FILE_MAX_PATH];
+  const auto dir = std::filesystem::path(m_sys.m_config.m_fil.m_data_home) / dbname;
+  std::error_code ec;
 
-  std::snprintf(dir, sizeof(dir), "%s%s", m_sys.m_config.m_fil.m_data_home.c_str(), dbname);
+  /* One that exists is no error. */
+  (void)std::filesystem::create_directory(dir, ec);
 
-  /* If exists (false) then don't return error. */
-  return os_file_create_directory(dir, false);
+  if (ec) {
+    log_err(std::format("Creating directory {}: {}", dir.string(), ec.message()));
+  }
+
+  return !ec;
 }

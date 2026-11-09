@@ -2785,32 +2785,34 @@ TEST_F(SessTest, TrxLinkAndGraphs) {
 
 using MiscTest = RowTest;
 
-/** row_create_tempfile(): an unnamed file in $TMPDIR (no link), read and
-written; none in a directory that does not exist. */
+/** row_create_tempfile(): an unnamed file in the directory (no link, nothing in the directory),
+read and written; none in a directory that does not exist. */
 TEST_F(MiscTest, TempFile) {
-  for (const char *prefix : {"ibtest", static_cast<const char *>(nullptr)}) {
-    const auto fd = row_create_tempfile(prefix);
+  ut::TestDir dir;
 
-    ASSERT_GE(fd, 0);
+  for (const char *prefix : {"ibtest", static_cast<const char *>(nullptr)}) {
+    const auto fd = row_create_tempfile(dir.m_path, prefix);
+
+    ASSERT_TRUE(fd) << fd.error().message();
 
     struct stat st {};
 
-    ASSERT_EQ(::fstat(fd, &st), 0);
+    ASSERT_EQ(::fstat(*fd, &st), 0);
     EXPECT_EQ(st.st_nlink, 0U);
-    EXPECT_EQ(::pwrite(fd, "hello", 5, 4096), 5);
+    EXPECT_TRUE(std::filesystem::is_empty(dir.m_path)) << "no name left in the directory";
+    EXPECT_EQ(::pwrite(*fd, "hello", 5, 4096), 5);
 
     std::array<char, 5> buf{};
 
-    EXPECT_EQ(::pread(fd, buf.data(), 5, 4096), 5);
+    EXPECT_EQ(::pread(*fd, buf.data(), 5, 4096), 5);
     EXPECT_EQ(std::string(buf.data(), 5), "hello");
-    ::close(fd);
+    ::close(*fd);
   }
 
-  const std::string old = ::getenv("TMPDIR") != nullptr ? ::getenv("TMPDIR") : "";
+  const auto missing = row_create_tempfile(dir.m_path / "nonexistent", "x");
 
-  ::setenv("TMPDIR", "/nonexistent-dir-of-test_data", 1);
-  EXPECT_EQ(row_create_tempfile("x"), -1);
-  ::setenv("TMPDIR", old.c_str(), 1);
+  ASSERT_FALSE(missing);
+  EXPECT_EQ(missing.error(), std::errc::no_such_file_or_directory);
 }
 
 /** Each error has its own string; an unknown code says so. */

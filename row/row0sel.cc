@@ -443,6 +443,33 @@ inline bool Plan::test_other_conds() noexcept {
   return true;
 }
 
+bool RowSel::latch_clust_rec(IndexCursor *pcur, const Index *index, Rec &rec, RecOffs &offsets, MemHeap **heap, Mtr *mtr) noexcept {
+  byte *buf{};
+  ulint buf_size{};
+  ulint n_fields;
+  auto key_heap = mem_heap_create(256);
+
+  /* The key refers to buf, and the copy goes when the cursor moves. */
+  const auto prefix = index->copy_rec_order_prefix(rec, &n_fields, buf, buf_size);
+  const auto key = index->build_data_tuple(prefix, n_fields, key_heap);
+  const auto found = pcur->find(index, key, Intent::Read, mtr);
+
+  mem_heap_free(key_heap);
+  mem_free(buf);
+
+  if (!found) {
+    return false;
+  }
+
+  rec = pcur->rec();
+
+  PhyRec record{index, rec};
+
+  offsets = record.get_all_col_offsets(offsets, heap, Current_location());
+
+  return true;
+}
+
 [[nodiscard]] DbErr RowSel::build_prev_vers(System &sys, RowVers::Row &row) noexcept {
   if (row.m_old_row_heap != nullptr) {
     mem_heap_empty(row.m_old_row_heap);
@@ -1701,7 +1728,13 @@ DbErr RowSel::get_clust_rec_with_prebuilt(
     clustered index record did not exist in the read view of
     trx. */
 
-    if (!rec.get_deleted_flag() || prebuilt->m_select_lock_type != LOCK_NONE) {
+    /* Nor for a consistent read of a copy of the secondary page: the copy can be older than the
+    clustered record the rollback of an insert removed after the secondary one. The record of
+    an insert the view doesn't see is no row of the view either. */
+    const bool unseen = prebuilt->m_select_lock_type == LOCK_NONE && trx->m_read_view != nullptr &&
+                        !m_sys.m_lock_sys->sec_rec_cons_read_sees(rec, trx->m_read_view);
+
+    if ((!rec.get_deleted_flag() || prebuilt->m_select_lock_type != LOCK_NONE) && !unseen) {
       log_err("Clustered record for sec rec not found");
       m_sys.m_dict->index_name_print(trx, sec_index);
       log_err("sec index record ");
@@ -1723,6 +1756,10 @@ DbErr RowSel::get_clust_rec_with_prebuilt(
 
     *offsets = record.get_all_col_offsets(*offsets, offset_heap, Current_location());
   }
+
+  /* The record found is the row of the secondary record, not a neighbour: the whole key. */
+  ut_ad(cmp_dtuple_rec(clust_index->m_cmp_ctx, prebuilt->m_clust_ref, clust_rec, *offsets) == 0);
+  ut_ad(dtuple_get_n_fields_cmp(prebuilt->m_clust_ref) == clust_index->get_n_unique());
 
   if (prebuilt->m_select_lock_type != LOCK_NONE) {
     /* Try to place a lock on the index record; we are searching the clust rec with a unique condition, hence
@@ -1747,8 +1784,21 @@ DbErr RowSel::get_clust_rec_with_prebuilt(
     /* If the isolation level allows reading of uncommitted data,
     then we never look for an earlier version */
 
-    if (trx->m_isolation_level > TRX_ISO_READ_UNCOMMITTED &&
-        !m_sys.m_lock_sys->clust_rec_cons_read_sees(clust_rec, clust_index, *offsets, trx->m_read_view)) {
+    auto sees = trx->m_isolation_level <= TRX_ISO_READ_UNCOMMITTED ||
+                m_sys.m_lock_sys->clust_rec_cons_read_sees(clust_rec, clust_index, *offsets, trx->m_read_view);
+
+    /* See latch_clust_rec(). Gone since the copy, it was an insert the rollback has taken back. */
+    if (!sees && prebuilt->m_clust_pcur->reads_copy()) {
+      if (!latch_clust_rec(prebuilt->m_clust_pcur, clust_index, clust_rec, *offsets, offset_heap, mtr)) {
+        clust_rec = Rec{};
+
+        return func_exit(prebuilt, out_rec, clust_rec, mtr);
+      }
+
+      sees = m_sys.m_lock_sys->clust_rec_cons_read_sees(clust_rec, clust_index, *offsets, trx->m_read_view);
+    }
+
+    if (!sees) {
 
       RowVers::Row row{
         .m_cluster_rec = clust_rec,
@@ -1779,9 +1829,12 @@ DbErr RowSel::get_clust_rec_with_prebuilt(
     the secondary index value is in some interval would return a wrong result if we would not drop rows which we come to
     visit through secondary index records that would not really exist in our snapshot. */
 
-    if (!clust_rec.is_null() &&
-        (!old_vers.is_null() || trx->m_isolation_level <= TRX_ISO_READ_UNCOMMITTED || rec.get_deleted_flag()) &&
-        !sec_rec_is_for_clust_rec(rec, sec_index, clust_rec, clust_index)) {
+    /* With a latch on the secondary page that held the record till now, a version the view sees
+    that's not older and a record not delete marked would be enough to know. A copy of the page
+    holds nothing: a rollback undoes the secondary indexes first, then the clustered one, and the
+    copy can have an entry the rollback has removed since, of a row it has given its old values
+    back. RecvTest.DuringCheckpoint read rows twice from that, with the background rollback. */
+    if (!clust_rec.is_null() && !sec_rec_is_for_clust_rec(rec, sec_index, clust_rec, clust_index)) {
 
       clust_rec = Rec{};
     }
@@ -2441,8 +2494,18 @@ rec_loop:
       /* Fetch a previous version of the row if the current one is not visible in the snapshot; if we have a very
       high force recovery level set, we try to avoid crashes by skipping this lookup */
 
-      if (likely(recovery < IB_RECOVERY_NO_UNDO_LOG_SCAN) &&
-          !m_sys.m_lock_sys->clust_rec_cons_read_sees(rec, index, offsets, trx->m_read_view)) {
+      auto sees = recovery >= IB_RECOVERY_NO_UNDO_LOG_SCAN || m_sys.m_lock_sys->clust_rec_cons_read_sees(rec, index, offsets, trx->m_read_view);
+
+      /* See latch_clust_rec(). Gone since the copy, the scan goes on from where it is now. */
+      if (!sees && pcur->reads_copy()) {
+        if (!latch_clust_rec(pcur, index, rec, offsets, &heap, &mtr)) {
+          goto next_rec;
+        }
+
+        sees = m_sys.m_lock_sys->clust_rec_cons_read_sees(rec, index, offsets, trx->m_read_view);
+      }
+
+      if (!sees) {
 
         Rec old_vers;
 

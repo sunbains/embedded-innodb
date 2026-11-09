@@ -581,7 +581,7 @@ void UndoPage::erase_page_end(Mtr *mtr) {
   mlog_write_initial_log_record(*this, MLOG_UNDO_ERASE_END, mtr);
 }
 
-byte *trx_undo_parse_erase_page_end(byte *ptr, byte *end_ptr __attribute__((unused)), RawPage page, Mtr *mtr) {
+byte *trx_undo_parse_erase_page_end(byte *ptr, [[maybe_unused]] byte *end_ptr, RawPage page, Mtr *mtr) {
   ut_ad(ptr && end_ptr);
 
   if (page == nullptr) {

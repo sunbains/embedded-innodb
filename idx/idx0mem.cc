@@ -493,8 +493,8 @@ struct MemCursor final : IndexAm::Cursor {
     ut_a(m_at == At::REC);
 
     auto &t = m_am.tree(m_index);
-    const auto rec = this->rec();
-    const auto key = lock_pos(rec).m_key;
+    const auto here = rec();
+    const auto key = lock_pos(here).m_key;
 
     /* The boundary after it: the next record or the end. */
     const auto next = next_boundary();
@@ -522,16 +522,16 @@ struct MemCursor final : IndexAm::Cursor {
 
   /** The lock check and the undo of a change of the record of the cursor, as BtreeCursor does it. */
   [[nodiscard]] DbErr lock_and_undo(ulint flags, const Upd *update, ulint cmpl_info, QueThr *thr, roll_ptr_t *roll_ptr) noexcept {
-    const auto rec = this->rec();
+    const auto here = rec();
 
     if (!m_index->is_clustered()) {
-      return m_sys.m_lock_sys->sec_rec_modify_check_and_lock(flags, lock_pos(rec).m_key, m_index, thr);
+      return m_sys.m_lock_sys->sec_rec_modify_check_and_lock(flags, lock_pos(here).m_key, m_index, thr);
     }
 
     if (!(flags & BTR_NO_LOCKING_FLAG)) {
       MemHeap *heap{};
-      const auto offs = offsets_of(m_index, rec, heap);
-      const auto err = m_sys.m_lock_sys->clust_rec_modify_check_and_lock(flags, lock::key_of(m_index, rec, offs.get()), rec, m_index, offs.get(), thr);
+      const auto offs = offsets_of(m_index, here, heap);
+      const auto err = m_sys.m_lock_sys->clust_rec_modify_check_and_lock(flags, lock::key_of(m_index, here, offs.get()), here, m_index, offs.get(), thr);
 
       mem_heap_free(heap);
 
@@ -540,7 +540,7 @@ struct MemCursor final : IndexAm::Cursor {
       }
     }
 
-    return TrxUndoRecord::report_row_operation(m_sys, flags, TRX_UNDO_MODIFY_OP, thr, m_index, nullptr, update, cmpl_info, rec, roll_ptr);
+    return TrxUndoRecord::report_row_operation(m_sys, flags, TRX_UNDO_MODIFY_OP, thr, m_index, nullptr, update, cmpl_info, here, roll_ptr);
   }
 
   DbErr update(Intent, ulint flags, MemHeap **heap, BigRec *big_rec, const Upd *update, ulint cmpl_info, QueThr *thr, Mtr *) noexcept override {
@@ -563,9 +563,9 @@ struct MemCursor final : IndexAm::Cursor {
     }
 
     /* The new version of the record, the same key: it takes the place of the old one. */
-    const auto rec = this->rec();
+    const auto here = rec();
     MemHeap *offs_heap{};
-    const auto offs = offsets_of(m_index, rec, offs_heap);
+    const auto offs = offsets_of(m_index, here, offs_heap);
 
     /* No field changes size: the record changes where it is, as on a page. */
     if (!m_sys.m_row_upd->changes_field_size_or_external(m_index, offs.get(), update)) {
@@ -579,7 +579,7 @@ struct MemCursor final : IndexAm::Cursor {
     }
 
     ulint n_ext;
-    auto entry = row_rec_to_index_entry(ROW_COPY_DATA, rec, m_index, offs, &n_ext, *heap);
+    auto entry = row_rec_to_index_entry(ROW_COPY_DATA, here, m_index, offs, &n_ext, *heap);
 
     mem_heap_free(offs_heap);
 
@@ -630,15 +630,15 @@ struct MemCursor final : IndexAm::Cursor {
       return err;
     }
 
-    const auto rec = this->rec();
+    const auto here = rec();
     MemHeap *heap{};
-    const auto offs = offsets_of(m_index, rec, heap);
+    const auto offs = offsets_of(m_index, here, heap);
 
     if (m_index->is_clustered() && !(flags & BTR_KEEP_SYS_FLAG)) {
-      m_sys.m_row_upd->rec_sys_fields(rec, m_index, offs.get(), thr_get_trx(thr), roll_ptr);
+      m_sys.m_row_upd->rec_sys_fields(here, m_index, offs.get(), thr_get_trx(thr), roll_ptr);
     }
 
-    m_sys.m_row_upd->rec_in_place(rec, m_index, offs.get(), update);
+    m_sys.m_row_upd->rec_in_place(here, m_index, offs.get(), update);
 
     mem_heap_free(heap);
 
@@ -705,7 +705,7 @@ struct MemCursor final : IndexAm::Cursor {
   DbErr set_delete_mark(ulint flags, bool val, QueThr *thr, Mtr *) noexcept override {
     ut_a(m_at == At::REC);
 
-    auto rec = this->rec();
+    auto here = rec();
 
     if (m_index->is_clustered()) {
       roll_ptr_t roll_ptr{};
@@ -715,12 +715,12 @@ struct MemCursor final : IndexAm::Cursor {
       }
 
       MemHeap *heap{};
-      const auto offs = offsets_of(m_index, rec, heap);
+      const auto offs = offsets_of(m_index, here, heap);
 
-      rec.set_deleted_flag(val);
+      here.set_deleted_flag(val);
 
       if (!(flags & BTR_KEEP_SYS_FLAG)) {
-        m_sys.m_row_upd->rec_sys_fields(rec, m_index, offs.get(), thr_get_trx(thr), roll_ptr);
+        m_sys.m_row_upd->rec_sys_fields(here, m_index, offs.get(), thr_get_trx(thr), roll_ptr);
       }
 
       mem_heap_free(heap);
@@ -728,13 +728,13 @@ struct MemCursor final : IndexAm::Cursor {
       return DB_SUCCESS;
     }
 
-    if (const auto err = m_sys.m_lock_sys->sec_rec_modify_check_and_lock(flags, lock_pos(rec).m_key, m_index, thr); err != DB_SUCCESS) {
+    if (const auto err = m_sys.m_lock_sys->sec_rec_modify_check_and_lock(flags, lock_pos(here).m_key, m_index, thr); err != DB_SUCCESS) {
       return err;
     }
 
     /* The mark and the last modifier change together. */
-    rec.set_deleted_flag(val);
-    mach_write_to_8(const_cast<byte *>(rec.get()) + row_get_sec_trx_id_offset(rec), thr_get_trx(thr)->m_id);
+    here.set_deleted_flag(val);
+    mach_write_to_8(const_cast<byte *>(here.get()) + row_get_sec_trx_id_offset(here), thr_get_trx(thr)->m_id);
 
     return DB_SUCCESS;
   }

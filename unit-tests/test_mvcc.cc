@@ -132,6 +132,142 @@ class Mvcc : public ut::DbTest {
 };
 
 /** Each change of a secondary record makes its transaction the last modifier. */
+/** A consistent read of the secondary index while a transaction's inserts are rolled back: the
+rollback empties pages and merges them under the scans. Every scan sees exactly the committed rows,
+in (a, k) order, whatever the rollback has done so far. RecvTest.DuringCheckpoint found an extra
+entry, out of order, read during the background rollback after a recovery. */
+TEST_F(Mvcc, SecScanDuringRollback) {
+  constexpr uint32_t COMMITTED = 2000;
+  constexpr uint32_t ROLLED_BACK = 6000;
+  constexpr int ROUNDS = 3;
+  constexpr int READERS = 4;
+
+  /* a = k % 9 as in RecvTest: the keys of an a are spread over the index. */
+  ut::Rows rows;
+
+  /* Spread: the rolled back keys are between the committed ones, the pages they empty are among
+  pages that stay. */
+  for (uint32_t k{}; k < COMMITTED; ++k) {
+    rows[k * 4] = ut::Row{k * 4, (k * 4) % 9, "x"};
+  }
+
+  load(rows);
+
+  std::atomic<bool> stop{};
+  std::atomic<uint64_t> n_scans{};
+  std::vector<std::thread> readers;
+
+  for (int r{}; r < READERS; ++r) {
+    readers.emplace_back([&] {
+      while (!stop.load()) {
+        auto trx = begin();
+        const auto sec = scan_sec(trx);
+
+        commit(trx);
+
+        ASSERT_EQ(sec.size(), rows.size()) << "scan " << n_scans.load();
+
+        for (size_t i{1}; i < sec.size(); ++i) {
+          ASSERT_LT(std::pair(sec[i - 1].m_a, sec[i - 1].m_k), std::pair(sec[i].m_a, sec[i].m_k))
+            << "out of order at " << i << " of scan " << n_scans.load();
+        }
+
+        n_scans.fetch_add(1);
+      }
+    });
+  }
+
+  for (int round{}; round < ROUNDS && !HasFatalFailure(); ++round) {
+    auto trx = begin();
+
+    for (uint32_t i{}; i < ROLLED_BACK; ++i) {
+      /* Not the committed keys: k * 4 + 1, + 2, + 3. */
+      const auto k = (i / 3) * 4 + 1 + i % 3;
+
+      ASSERT_EQ(insert(trx, ut::Row{k, k % 9, "x"}), DB_SUCCESS) << k;
+    }
+
+    rollback(trx);
+  }
+
+  stop = true;
+
+  for (auto &t : readers) {
+    t.join();
+  }
+
+  EXPECT_GT(n_scans.load(), 0UL);
+  expect_rows(rows);
+}
+
+/** The same after a crash, as RecvTest.DuringCheckpoint had it: the inserts of a transaction the
+crash left open are rolled back in the background by the restart, under consistent reads of the
+secondary index that start at once. Every scan sees exactly the committed rows, in (a, k) order. */
+TEST_F(Mvcc, SecScanAfterCrash) {
+  constexpr uint32_t COMMITTED = 2000;
+  constexpr uint32_t OPEN = 6000;
+  constexpr int READERS = 4;
+
+  /* a = k % 9 as in RecvTest: the keys of an a are spread over the index. */
+  ut::Rows rows;
+
+  for (uint32_t k{}; k < COMMITTED; ++k) {
+    rows[k * 4] = ut::Row{k * 4, (k * 4) % 9, "x"};
+  }
+
+  load(rows);
+
+  crash([&] {
+    auto open = begin();
+
+    for (uint32_t i{}; i < OPEN; ++i) {
+      const auto k = (i / 3) * 4 + 1 + i % 3;
+
+      ASSERT_EQ(insert(open, ut::Row{k, k % 9, "x"}), DB_SUCCESS) << k;
+    }
+
+    /* A commit after them: the log of the open transaction is on disk at the kill. */
+    auto flush = begin();
+
+    ASSERT_EQ(insert(flush, ut::Row{COMMITTED * 4 + 1000, 0, "flush"}), DB_SUCCESS);
+    commit(flush);
+  });
+
+  rows[COMMITTED * 4 + 1000] = ut::Row{COMMITTED * 4 + 1000, 0, "flush"};
+
+  /* The rollback of the open transaction runs from here, in the background. */
+  std::atomic<uint64_t> n_scans{};
+  std::vector<std::thread> readers;
+  const auto until = std::chrono::steady_clock::now() + std::chrono::seconds(3);
+
+  for (int r{}; r < READERS; ++r) {
+    readers.emplace_back([&] {
+      while (std::chrono::steady_clock::now() < until) {
+        auto trx = begin();
+        const auto sec = scan_sec(trx);
+
+        commit(trx);
+
+        ASSERT_EQ(sec.size(), rows.size()) << "scan " << n_scans.load();
+
+        for (size_t i{1}; i < sec.size(); ++i) {
+          ASSERT_LT(std::pair(sec[i - 1].m_a, sec[i - 1].m_k), std::pair(sec[i].m_a, sec[i].m_k))
+            << "out of order at " << i << " of scan " << n_scans.load();
+        }
+
+        n_scans.fetch_add(1);
+      }
+    });
+  }
+
+  for (auto &t : readers) {
+    t.join();
+  }
+
+  EXPECT_GT(n_scans.load(), 0UL);
+  expect_rows(rows);
+}
+
 TEST_F(Mvcc, SecIdInsert) {
   auto t = begin();
   const auto id = t->m_id;

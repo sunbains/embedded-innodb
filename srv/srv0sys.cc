@@ -183,8 +183,6 @@ DbErr System::init(const Config &config) noexcept {
 
   
 
-  os_file_init();
-
   m_aio = Aio::create(m_config.m_aio);
   m_fil = std::make_unique<Fil>(*this);
   m_buf_pool = std::make_unique<BufPool>(*this);
@@ -290,7 +288,6 @@ void System::destroy() noexcept {
   destroy_subsystem(m_aio);
   destroy_subsystem(m_buf_pool);
 
-  os_file_free();
 }
 
 /**
@@ -310,8 +307,9 @@ static DbErr create_system_tablespace(System &sys, const std::string &path) noex
 
   {
     auto home_dir = filename.parent_path();
+    std::error_code ec;
 
-    if (fs::status(home_dir).type() != fs::file_type::directory) {
+    if (!fs::is_directory(home_dir, ec)) {
       log_err(std::format(
         "Data home directory '{}' does not exist, is not a directory"
         " or you don't have read-write permissions. We require that"
@@ -322,26 +320,35 @@ static DbErr create_system_tablespace(System &sys, const std::string &path) noex
     }
   }
 
-  if (fs::exists(filename) && fs::status(filename).type() == fs::file_type::regular) {
+  if (std::error_code ec; fs::is_regular_file(filename, ec)) {
     log_warn(std::format("System tablespace '{}' already exists", filename.generic_string()));
     return DB_TABLE_EXISTS;
   }
 
   log_info(std::format("Creating the system tablespace: 'system.idb' of size {} MB ", SYSTEM_IBD_FILE_INITIAL_SIZE / (1024 * 1024)));
 
-  bool success{};
-  auto fh = os_file_create(filename.c_str(), OS_FILE_CREATE, OS_FILE_NORMAL, sys.m_config.m_fil.m_flush_method, &success);
+  auto file = os::File::open(filename, os::Open::CREATE, sys.m_config.m_fil.m_flush_method == SRV_UNIX_O_DIRECT);
 
-  if (!success && os_file_get_last_error(false) != OS_FILE_ALREADY_EXISTS) {
-    log_err(std::format("Can't create {}", filename.generic_string()));
+  if (!file) {
+    log_err(std::format("Can't create {}: {}", filename.generic_string(), file.error().message()));
     return DB_ERROR;
   }
 
-  success = os_file_set_size(filename.c_str(), fh, SYSTEM_IBD_FILE_INITIAL_SIZE);
-  ut_a(success);
+  if (const auto err = file->allocate(0, SYSTEM_IBD_FILE_INITIAL_SIZE); err) {
+    log_err(std::format("Can't allocate {} bytes to {}: {}", SYSTEM_IBD_FILE_INITIAL_SIZE, filename.generic_string(), err.message()));
+    return err == std::errc::no_space_on_device ? DB_OUT_OF_FILE_SPACE : DB_ERROR;
+  }
 
-  success = os_file_close(fh);
-  ut_a(success);
+  /* Durable before anything is written to it: its size is what it starts with. */
+  if (const auto err = file->sync(); err) {
+    log_err(std::format("Can't flush {}: {}", filename.generic_string(), err.message()));
+    return DB_ERROR;
+  }
+
+  if (const auto err = file->close(); err) {
+    log_err(std::format("Can't close {}: {}", filename.generic_string(), err.message()));
+    return DB_ERROR;
+  }
 
   return DB_SUCCESS;
 }
@@ -363,38 +370,38 @@ static DbErr open_system_tablespace(System &sys, const std::string &path, lsn_t 
   fs::path filename(path);
 
   /* Must exist if we've been asked to open the file. */
-  ut_a(fs::status(filename).type() == fs::file_type::regular);
+  {
+    std::error_code ec;
 
-  bool success{};
-  auto fh = os_file_create(filename.c_str(), OS_FILE_OPEN, OS_FILE_NORMAL, sys.m_config.m_fil.m_flush_method, &success);
+    ut_a(fs::is_regular_file(filename, ec));
+  }
 
-  if (!success && os_file_get_last_error(false) != OS_FILE_ALREADY_EXISTS) {
-    log_err(std::format("Can't open {}", filename.generic_string()));
+  auto file = os::File::open(filename, os::Open::READ_WRITE, sys.m_config.m_fil.m_flush_method == SRV_UNIX_O_DIRECT);
+
+  if (!file) {
+    log_err(std::format("Can't open {}: {}", filename.generic_string(), file.error().message()));
     return DB_ERROR;
   }
 
-  off_t size{};
+  const auto measured = file->size();
 
-  {
-    auto ret = os_file_get_size(fh, &size);
-    ut_a(ret);
+  if (!measured) {
+    log_err(std::format("Can't measure {}: {}", filename.generic_string(), measured.error().message()));
+    return DB_ERROR;
   }
 
-  /* Convert to number of pages. */
-  size /= UNIV_PAGE_SIZE;
+  /* In pages. */
+  const auto size = *measured / off_t(UNIV_PAGE_SIZE);
 
   /* Before anything reads the files as of this format. */
-  if (TrxSys::check_format(fh, sys.m_config.m_trx.m_node_id) != DB_SUCCESS) {
-    (void)os_file_close(fh);
+  if (TrxSys::check_format(*file, sys.m_config.m_trx.m_node_id) != DB_SUCCESS) {
     return DB_ERROR;
   }
 
-  sys.m_fil->read_flushed_lsn(fh, flushed_lsn);
+  sys.m_fil->read_flushed_lsn(*file, flushed_lsn);
 
-  {
-    auto success = os_file_close(fh);
-    ut_a(success);
-  }
+  /* Only read: the space opens it again for I/O. */
+  (void)file->close();
 
   {
     auto success = sys.m_fil->space_create(filename.c_str(), SYS_TABLESPACE, 0);
@@ -503,6 +510,14 @@ static void prepare_for_shutdown(System &sys, ShutdownMode shutdown) noexcept {
     committed or prepared transactions and we don't want to lose them. */
 
     if (trx_sys.m_n_user_trx > 0 || !trx_sys.trx_list_empty()) {
+
+      mutex_exit(&trx_sys.m_mutex);
+
+      continue;
+    }
+
+    /* The last recovered transaction off the list, its rollback still cleans up after it. */
+    if (trx_sys.m_recv_rollback_active.load(std::memory_order_acquire)) {
 
       mutex_exit(&trx_sys.m_mutex);
 
@@ -651,7 +666,7 @@ DbErr System::startup() noexcept {
     const fs::path home(m_config.m_fil.m_data_home);
 
     /* Before any thread is started: a failed startup leaves none running. */
-    if (!fs::exists(home) || fs::status(home).type() != fs::file_type::directory) {
+    if (std::error_code ec; !fs::is_directory(home, ec)) {
       log_err("Data home directory does not exist or is not a directory");
       return DB_ERROR;
     }
@@ -676,7 +691,16 @@ DbErr System::startup() noexcept {
 
     auto filename{home / "system.ibd"};
 
-    if (!fs::exists(filename)) {
+    std::error_code ec;
+    const bool exists = fs::exists(filename, ec);
+
+    if (ec) {
+      log_err(std::format("Cannot look for {}: {}", filename.generic_string(), ec.message()));
+      startup_abort(DB_ERROR);
+      return DB_ERROR;
+    }
+
+    if (!exists) {
       err = create_system_tablespace(*this, filename);
 
       if (err == DB_SUCCESS) {

@@ -137,16 +137,21 @@ template <typename Base>
 class PurgeBase : public Base {
  protected:
   using Base::m_sys;
+  using Base::begin;
+  using Base::commit;
+  using Base::expect_rows;
+  using Base::remove;
+  using Base::scan;
 
   /** Delete all the rows of the test table and purge them. */
   void clear() {
-    auto trx = this->begin(IB_TRX_READ_COMMITTED);
+    auto trx = begin(IB_TRX_READ_COMMITTED);
 
-    for (const auto &[k, row] : this->scan(trx)) {
-      EXPECT_EQ(this->remove(trx, k), DB_SUCCESS);
+    for (const auto &[k, row] : scan(trx)) {
+      EXPECT_EQ(remove(trx, k), DB_SUCCESS);
     }
 
-    this->commit(trx);
+    commit(trx);
     purge();
   }
 
@@ -379,7 +384,7 @@ class PurgeBase : public Base {
 
   /** @return a transaction with a read view: it holds purge back. */
   Trx *snapshot() {
-    auto trx = this->begin();
+    auto trx = begin();
 
     EXPECT_NE(trx->assign_read_view(*m_sys), nullptr);
 
@@ -388,12 +393,12 @@ class PurgeBase : public Base {
 
   /** Check both indexes and the system tablespace. */
   void validate() {
-    auto trx = this->begin();
+    auto trx = begin();
 
     EXPECT_TRUE(m_sys->am(clust()).validate(clust(), trx));
     EXPECT_TRUE(m_sys->am(sec()).validate(sec(), trx));
 
-    this->commit(trx);
+    commit(trx);
 
     EXPECT_TRUE(m_sys->m_fsp->validate(SYS_TABLESPACE));
   }
@@ -413,7 +418,7 @@ class PurgeBase : public Base {
     std::ranges::sort(expected);
     EXPECT_EQ(sec_entries(), expected);
 
-    this->expect_rows(rows);
+    expect_rows(rows);
   }
 };
 

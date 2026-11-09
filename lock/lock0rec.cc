@@ -491,6 +491,10 @@ void LockSys::rec_grant_pass_on(Rec_locks &rec_locks, GrantPlan *plan) noexcept 
   RecSeen seen;
 
   for (auto lock : rec_locks) {
+#ifdef UNIT_TESTING
+    m_n_grant_steps.fetch_add(1, std::memory_order_relaxed);
+#endif /* UNIT_TESTING */
+
     if (!lock->rec_is_nth_bit_set(LOCK_BIT)) {
       continue;
     }

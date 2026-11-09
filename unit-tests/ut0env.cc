@@ -161,11 +161,21 @@ DbErr seek(System &sys, api::Cursor *crsr, uint32_t k) {
 
 }  // namespace
 
+fs::path scratch_root() {
+  const auto env = ::getenv("TMPDIR");
+  const fs::path root = env != nullptr && *env != '\0' ? fs::path(env) : fs::path(UNIT_TEST_TMPDIR);
+  std::error_code ec;
+
+  (void)fs::create_directories(root, ec);
+
+  return root;
+}
+
 TestDir::TestDir() {
   const auto *info = ::testing::UnitTest::GetInstance()->current_test_info();
   const auto name = info != nullptr ? std::format("{}.{}", info->test_suite_name(), info->name()) : std::string("test");
 
-  m_path = fs::temp_directory_path() / std::format("ibut-{}-{}-{}", ::getpid(), dir_seq++, name);
+  m_path = scratch_root() / std::format("ibut-{}-{}-{}", ::getpid(), dir_seq++, name);
 
   fs::remove_all(m_path);
   fs::create_directories(m_path);
@@ -208,7 +218,7 @@ Config make_config(const fs::path &dir) {
 }
 
 void SysTest::SetUp() {
-  m_config = make_config(fs::temp_directory_path());
+  m_config = make_config(scratch_root());
   m_sys = std::make_unique<System>();
 
   ASSERT_EQ(m_sys->init(m_config), DB_SUCCESS);

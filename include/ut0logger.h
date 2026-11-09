@@ -89,95 +89,95 @@ std::ostream &write(std::string &&now, std::string &&func, const char *level, bo
 #define NOW logger::now()
 #define FUNC logger::func_name(__FILE__, __LINE__)
 
-#define log_dbg_hdr(args...)                                         \
-  do {                                                               \
-    if (logger::level <= (int)logger::Debug) {                       \
-      logger::write(std::move(NOW), FUNC, "dbg", true, false, args); \
-    }                                                                \
+#define log_dbg_hdr(...)                                                    \
+  do {                                                                      \
+    if (logger::level <= (int)logger::Debug) {                              \
+      logger::write(std::move(NOW), FUNC, "dbg", true, false, __VA_ARGS__); \
+    }                                                                       \
   } while (false)
 
-#define log_dbg(args...)                                            \
-  do {                                                              \
-    if (logger::level <= (int)logger::Debug) {                      \
-      logger::write(std::move(NOW), FUNC, "dbg", true, true, args); \
-    }                                                               \
+#define log_dbg(...)                                                       \
+  do {                                                                     \
+    if (logger::level <= (int)logger::Debug) {                             \
+      logger::write(std::move(NOW), FUNC, "dbg", true, true, __VA_ARGS__); \
+    }                                                                      \
   } while (false)
 
-#define log_dbg_msg(args...)                                          \
-  do {                                                                \
-    if (logger::level <= (int)logger::Debug) {                        \
-      logger::write(std::move(NOW), FUNC, "dbg", false, false, args); \
-    }                                                                 \
+#define log_dbg_msg(...)                                                     \
+  do {                                                                       \
+    if (logger::level <= (int)logger::Debug) {                               \
+      logger::write(std::move(NOW), FUNC, "dbg", false, false, __VA_ARGS__); \
+    }                                                                        \
   } while (false)
 
-#define log_info_hdr(args...)                                                   \
-  do {                                                                          \
-    if (logger::level <= (int)logger::Info) {                                   \
-      logger::write(std::move(NOW), std::move(FUNC), "inf", true, false, args); \
-    }                                                                           \
+#define log_info_hdr(...)                                                              \
+  do {                                                                                 \
+    if (logger::level <= (int)logger::Info) {                                          \
+      logger::write(std::move(NOW), std::move(FUNC), "inf", true, false, __VA_ARGS__); \
+    }                                                                                  \
   } while (false)
 
-#define log_info(args...)                                                      \
-  do {                                                                         \
-    if (logger::level <= (int)logger::Info) {                                  \
-      logger::write(std::move(NOW), std::move(FUNC), "inf", true, true, args); \
-    }                                                                          \
+#define log_info(...)                                                                 \
+  do {                                                                                \
+    if (logger::level <= (int)logger::Info) {                                         \
+      logger::write(std::move(NOW), std::move(FUNC), "inf", true, true, __VA_ARGS__); \
+    }                                                                                 \
   } while (false)
 
-#define log_info_msg(args...)                                                    \
-  do {                                                                           \
-    if (logger::level <= (int)logger::Info) {                                    \
-      logger::write(std::move(NOW), std::move(FUNC), "inf", false, false, args); \
-    }                                                                            \
+#define log_info_msg(...)                                                               \
+  do {                                                                                  \
+    if (logger::level <= (int)logger::Info) {                                           \
+      logger::write(std::move(NOW), std::move(FUNC), "inf", false, false, __VA_ARGS__); \
+    }                                                                                   \
   } while (false)
 
-#define log_warn_hdr(args...)                                                   \
-  do {                                                                          \
-    if (logger::level <= (int)logger::Warn) {                                   \
-      logger::write(std::move(NOW), std::move(FUNC), "wrn", true, false, args); \
-    }                                                                           \
+#define log_warn_hdr(...)                                                              \
+  do {                                                                                 \
+    if (logger::level <= (int)logger::Warn) {                                          \
+      logger::write(std::move(NOW), std::move(FUNC), "wrn", true, false, __VA_ARGS__); \
+    }                                                                                  \
   } while (false)
 
-#define log_warn(args...)                                                      \
-  do {                                                                         \
-    if (logger::level <= (int)logger::Warn) {                                  \
-      logger::write(std::move(NOW), std::move(FUNC), "wrn", true, true, args); \
-    }                                                                          \
+#define log_warn(...)                                                                 \
+  do {                                                                                \
+    if (logger::level <= (int)logger::Warn) {                                         \
+      logger::write(std::move(NOW), std::move(FUNC), "wrn", true, true, __VA_ARGS__); \
+    }                                                                                 \
   } while (false)
 
-#define log_warn_msg(args...)                                                    \
-  do {                                                                           \
-    if (logger::level <= (int)logger::Warn) {                                    \
-      logger::write(std::move(NOW), std::move(FUNC), "wrn", false, false, args); \
-    }                                                                            \
+#define log_warn_msg(...)                                                               \
+  do {                                                                                  \
+    if (logger::level <= (int)logger::Warn) {                                           \
+      logger::write(std::move(NOW), std::move(FUNC), "wrn", false, false, __VA_ARGS__); \
+    }                                                                                   \
   } while (false)
 
-#define log_err_hdr(args...)                                                    \
-  do {                                                                          \
-    if (logger::level <= (int)logger::Error) {                                  \
-      logger::write(std::move(NOW), std::move(FUNC), "err", true, false, args); \
-    }                                                                           \
+#define log_err_hdr(...)                                                               \
+  do {                                                                                 \
+    if (logger::level <= (int)logger::Error) {                                         \
+      logger::write(std::move(NOW), std::move(FUNC), "err", true, false, __VA_ARGS__); \
+    }                                                                                  \
   } while (false)
 
-#define log_err(args...)                                                        \
-  do {                                                                          \
-    if (logger::level <= (int)logger::Error) {                                  \
-      logger::write(std::move(NOW), std::move(FUNC), "err", true, true, args); \
-    }                                                                           \
+#define log_err(...)                                                                  \
+  do {                                                                                \
+    if (logger::level <= (int)logger::Error) {                                        \
+      logger::write(std::move(NOW), std::move(FUNC), "err", true, true, __VA_ARGS__); \
+    }                                                                                 \
   } while (false)
 
-#define log_err_msg(args...)                                                     \
-  do {                                                                           \
-    if (logger::level <= (int)logger::Error) {                                   \
-      logger::write(std::move(NOW), std::move(FUNC), "err", false, false, args); \
-    }                                                                            \
+#define log_err_msg(...)                                                                \
+  do {                                                                                  \
+    if (logger::level <= (int)logger::Error) {                                          \
+      logger::write(std::move(NOW), std::move(FUNC), "err", false, false, __VA_ARGS__); \
+    }                                                                                   \
   } while (false)
 
 /* A fatal error always terminates the process, the level only suppresses the message. */
-#define log_fatal(args...)                                                       \
-  do {                                                                           \
-    if (logger::level <= (int)logger::Fatal) {                                   \
-      logger::write(std::move(NOW), std::move(FUNC), "fatal", true, true, args); \
-    }                                                                            \
-    ::abort();                                                                   \
+#define log_fatal(...)                                                                  \
+  do {                                                                                  \
+    if (logger::level <= (int)logger::Fatal) {                                          \
+      logger::write(std::move(NOW), std::move(FUNC), "fatal", true, true, __VA_ARGS__); \
+    }                                                                                   \
+    ::abort();                                                                          \
   } while (false)

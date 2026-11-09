@@ -37,31 +37,34 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include "pars0pars.h"
 #include "row0sel.h"
 #include "srv0srv.h"
+#include "srv0sys.h"
 #include "trx0roll.h"
 
 
-int row_create_tempfile(const char *prefix) {
-  const char *dir = getenv("TMPDIR");
+std::filesystem::path row_tmp_dir(const System &sys) noexcept {
+  const auto &fil = sys.m_config.m_fil;
 
-  if (dir == nullptr || *dir == '\0') {
-    dir = "/tmp";
-  }
+  return std::filesystem::path(fil.m_tmp_dir.empty() ? fil.m_data_home : fil.m_tmp_dir);
+}
 
+std::expected<int, std::error_code> row_create_tempfile(const std::filesystem::path &dir, const char *prefix) noexcept {
   /* An unnamed file, gone when closed. */
-  auto fh = open(dir, O_TMPFILE | O_RDWR | O_CLOEXEC, S_IRUSR | S_IWUSR);
+  auto fd = ::open(dir.c_str(), O_TMPFILE | O_RDWR | O_CLOEXEC, S_IRUSR | S_IWUSR);
 
-  if (fh == -1) {
+  if (fd == -1) {
     /* The file system can't do O_TMPFILE: a named file, unlinked at once. */
-    auto path = std::format("{}/{}XXXXXX", dir, prefix != nullptr ? prefix : "ib");
+    auto path = (dir / std::format("{}XXXXXX", prefix != nullptr ? prefix : "ib")).string();
 
-    fh = mkostemp(path.data(), O_CLOEXEC);
+    fd = ::mkostemp(path.data(), O_CLOEXEC);
 
-    if (fh != -1) {
-      unlink(path.c_str());
+    if (fd == -1) {
+      return std::unexpected(std::error_code{errno, std::generic_category()});
     }
+
+    (void)::unlink(path.c_str());
   }
 
-  return fh;
+  return fd;
 }
 
 bool row_handle_errors(System &sys, DbErr *new_err, Trx *trx, QueThr *thr, TrxSavept *savept) {

@@ -25,828 +25,235 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 ***********************************************************************/
 
-/** @file os/os0file.c
-The interface to the operating system file i/o primitives
+/** @file os/os0file.cc
+Files for I/O, see os0file.h.
 
 Created 10/21/1995 Heikki Tuuri
 *******************************************************/
 
-#include <errno.h>
+#include "os0file.h"
+
+#include "innodb0types.h"
+#include "ut0logger.h"
+
 #include <fcntl.h>
 #include <sys/stat.h>
-#include <sys/types.h>
 #include <unistd.h>
 
 #include <algorithm>
-#include <array>
-#include <vector>
+#include <chrono>
+#include <format>
+#include <memory>
+#include <new>
+#include <string>
+#include <thread>
 
-#include "row0misc.h"
-#include "buf0buf.h"
-#include "fil0fil.h"
-#include "os0file.h"
-#include "os0sync.h"
-#include "os0thread.h"
-#include "srv0srv.h"
-#include "ut0mem.h"
+namespace os {
 
-/** Umask for creating files */
-constexpr lint CREATE_MASK = S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP;
+namespace {
 
-/* Array of English strings describing the current state of an
-i/o handler thread */
+/** rw-rw----, less the umask. */
+constexpr mode_t CREATE_MODE = S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP;
 
-ulint os_file_get_last_error(bool report_all_errors) {
-  if (report_all_errors || (errno != ENOSPC && errno != EEXIST)) {
-    log_err("Operating system error number ", errno, " in a file operation.");
+/** The alignment of a buffer for a file opened with O_DIRECT. */
+constexpr size_t ALIGN = 4096;
 
-    if (errno == ENOENT) {
-      log_err("The error means the system cannot find the path specified.");
+/** The zeros written at a time where blocks can't be reserved. */
+constexpr size_t ZERO_CHUNK = 1024 * 1024;
 
-      log_err("Remember that you must create directories yourself, InnoDB does not create them.");
+[[nodiscard]] inline std::error_code last_error() noexcept { return {errno, std::generic_category()}; }
 
-    } else if (errno == EACCES) {
+struct FileCategory final : std::error_category {
+  [[nodiscard]] const char *name() const noexcept override { return "os::File"; }
 
-      log_err(
-        "The error means your application does not have the access rights to"
-        " the directory."
-      );
-
-    } else {
-
-      log_err("errno maps to: ", strerror(errno));
+  [[nodiscard]] std::string message(int ev) const override {
+    switch (FileErr(ev)) {
+      case FileErr::END_OF_FILE:
+        return "end of file before the buffer is full";
     }
+
+    return "unknown os::File error";
+  }
+};
+
+[[nodiscard]] int flags_of(Open how) noexcept {
+  switch (how) {
+    case Open::READ:
+      return O_RDONLY;
+    case Open::READ_WRITE:
+      return O_RDWR;
+    case Open::CREATE:
+      return O_RDWR | O_CREAT | O_EXCL;
+    case Open::OVERWRITE:
+      return O_RDWR | O_CREAT | O_TRUNC;
   }
 
-  if (errno == ENOSPC) {
-    return OS_FILE_DISK_FULL;
-  } else if (errno == ENOENT) {
-    return OS_FILE_NOT_FOUND;
-  } else if (errno == EEXIST) {
-    return OS_FILE_ALREADY_EXISTS;
-  } else if (errno == EXDEV || errno == ENOTDIR || errno == EISDIR) {
-    return OS_FILE_PATH_ERROR;
-  } else {
-    return 100 + errno;
-  }
+  return O_RDONLY;
 }
 
-/**
- * Does error handling when a file operation fails.
- * Conditionally exits (calling exit(3)) based on should_exit value and the
- * error type
- *
- * @param[in] name      Name of a file or nullptr.
- * @param[in] operation Operation.
- * @param[in] should_exit Call exit(3) if unknown error and this parameter is true.
- * @return              True if we should retry the operation.
- */
-static bool os_file_handle_error_cond_exit(const char *name, const char *operation, bool should_exit) {
-  auto err = os_file_get_last_error(false);
+}  // namespace
 
-  if (err == OS_FILE_DISK_FULL) {
-    if (name != nullptr) {
-      log_err("Encountered a problem with file ", name);
-    }
+const std::error_category &file_category() noexcept {
+  static const FileCategory category;
 
-    log_err("Disk is full. Try to clean the disk to free space.");
-
-    return false;
-
-  } else if (err == OS_FILE_AIO_RESOURCES_RESERVED) {
-
-    return true;
-
-  } else if (err == OS_FILE_ALREADY_EXISTS || err == OS_FILE_PATH_ERROR) {
-
-    return false;
-
-  } else if (err == OS_FILE_SHARING_VIOLATION) {
-
-    os_thread_sleep(10000000); /* 10 sec */
-    return true;
-
-  } else if (err == OS_FILE_INSUFFICIENT_RESOURCE) {
-
-    os_thread_sleep(100000); /* 100 ms */
-    return true;
-
-  } else if (err == OS_FILE_OPERATION_ABORTED) {
-
-    os_thread_sleep(100000); /* 100 ms */
-    return true;
-
-  } else {
-
-    if (name != nullptr) {
-      log_warn("File name ", name);
-    }
-
-    log_warn("File operation call: '", operation, "'");
-
-    if (should_exit) {
-      log_fatal("Cannot continue operation.");
-    }
-  }
-
-  return false;
+  return category;
 }
 
-/**
- * Does error handling when a file operation fails.
- * @param[in] name      Name of a file or nullptr.
- * @param[in] operation Operation.
- * @return              True if we should retry the operation.
- */
-static bool os_file_handle_error(const char *name, const char *operation) {
-  /* Exit in case of unknown error */
-  return os_file_handle_error_cond_exit(name, operation, true);
-}
+std::error_code read_at(int fd, void *buf, size_t n, off_t off) noexcept {
+  auto ptr = static_cast<char *>(buf);
 
-/**
- * Does error handling when a file operation fails.
- *
- * @param[in] name      Name of a file or nullptr.
- * @param[in] operation Operation.
- * @return              True if we should retry the operation.
- */
-static bool os_file_handle_error_no_exit(const char *name, const char *operation) {
-  /* Don't exit in case of unknown error */
-  return os_file_handle_error_cond_exit(name, operation, false);
-}
+  while (n > 0) {
+    const auto got = ::pread(fd, ptr, n, off);
 
-#undef USE_FILE_LOCK
-#define USE_FILE_LOCK
-
-#ifdef USE_FILE_LOCK
-/** Obtain an exclusive lock on a file.
-@param[in] fd                   File descriptor.
-@paraam[in] name                File name.
-@return	0 on success */
-static int os_file_lock(int fd, const char *name) {
-  struct flock lk;
-
-  lk.l_type = F_WRLCK;
-  lk.l_whence = SEEK_SET;
-  lk.l_start = lk.l_len = 0;
-  if (fcntl(fd, F_SETLK, &lk) == -1) {
-    ib_logger(stderr, "Unable to lock %s, error: %d\n", name, errno);
-
-    if (errno == EAGAIN || errno == EACCES) {
-      ib_logger(
-        stderr,
-        "Check that you do not already have another instance of your application is"
-        " using the same InnoDB data files.\n"
-      );
-    }
-
-    return -1;
-  }
-
-  return 0;
-}
-#endif /* USE_FILE_LOCK */
-
-void os_file_init() { /* Do nothing. */ }
-
-void os_file_free() { /* Do Nothing. */ }
-
-FILE *os_file_create_tmpfile() {
-  FILE *file = nullptr;
-  auto fd = row_create_tempfile("ib");
-
-  if (fd >= 0) {
-    file = fdopen(fd, "w+b");
-  }
-
-  if (file == nullptr) {
-    ut_print_timestamp(stderr);
-    ib_logger(stderr, "Unable to create temporary file; errno: %d\n", errno);
-    if (fd >= 0) {
-      close(fd);
-    }
-  }
-
-  return file;
-}
-
-bool os_file_create_directory(const char *pathname, bool fail_if_exists) {
-  auto rcode = mkdir(pathname, 0770);
-
-  if (!(rcode == 0 || (errno == EEXIST && !fail_if_exists))) {
-    /* failure */
-    os_file_handle_error(pathname, "mkdir");
-
-    return false;
-  }
-
-  return true;
-}
-
-os_file_t os_file_create_simple(const char *name, ulint create_mode, ulint access_type, bool *success) {
-  ut_a(name != nullptr);
-
-  for (;;) {
-    int create_flag;
-    os_file_t file{-1};
-
-    if (create_mode == OS_FILE_OPEN) {
-      if (access_type == OS_FILE_READ_ONLY) {
-        create_flag = O_RDONLY;
-      } else {
-        create_flag = O_RDWR;
-      }
-    } else if (create_mode == OS_FILE_CREATE) {
-      create_flag = O_RDWR | O_CREAT | O_EXCL;
-    } else if (create_mode == OS_FILE_CREATE_PATH) {
-      /* Create subdirs along the path if needed  */
-      *success = os_file_create_subdirs_if_needed(name);
-      if (!*success) {
-        return -1;
-      }
-      create_flag = O_RDWR | O_CREAT | O_EXCL;
-      create_mode = OS_FILE_CREATE;
-    } else {
-      create_flag = 0;
-      ut_error;
-    }
-
-    if (create_mode == OS_FILE_CREATE) {
-      file = open(name, create_flag, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
-    } else {
-      file = open(name, create_flag);
-    }
-
-    if (file == -1) {
-      *success = false;
-
-      if (os_file_handle_error(name, create_mode == OS_FILE_OPEN ? "open" : "create")) {
+    if (got < 0) {
+      if (errno == EINTR || errno == EAGAIN) {
         continue;
       }
-    } else {
-      *success = true;
-      return file;
+
+      return last_error();
     }
 
-    break;
+    if (got == 0) {
+      return FileErr::END_OF_FILE;
+    }
+
+    ptr += got;
+    n -= size_t(got);
+    off += got;
   }
 
-  return -1;
+  return {};
 }
 
-os_file_t os_file_create_simple_no_error_handling(const char *name, ulint create_mode, ulint access_type, bool *success) {
-  os_file_t file;
-  int create_flag;
+std::error_code write_at(int fd, const void *buf, size_t n, off_t off) noexcept {
+  auto ptr = static_cast<const char *>(buf);
 
-  ut_a(name);
+  while (n > 0) {
+    const auto put = ::pwrite(fd, ptr, n, off);
 
-  if (create_mode == OS_FILE_OPEN) {
-    if (access_type == OS_FILE_READ_ONLY) {
-      create_flag = O_RDONLY;
-    } else {
-      create_flag = O_RDWR;
-    }
-  } else if (create_mode == OS_FILE_CREATE) {
-    create_flag = O_RDWR | O_CREAT | O_EXCL;
-  } else {
-    create_flag = 0;
-    ut_error;
-  }
-
-  if (create_mode == OS_FILE_CREATE) {
-    file = open(name, create_flag, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
-  } else {
-    file = open(name, create_flag);
-  }
-
-  if (file == -1) {
-    *success = false;
-#ifdef USE_FILE_LOCK
-  } else if (access_type == OS_FILE_READ_WRITE && os_file_lock(file, name)) {
-    *success = false;
-    close(file);
-    file = -1;
-#endif /* USE_FILE_LOCK */
-  } else {
-    *success = true;
-  }
-
-  return file;
-}
-
-void os_file_set_nocache(int fd, const char *file_name, const char *operation_name) {
-  if (fcntl(fd, F_SETFL, O_DIRECT) == -1) {
-    auto errno_save = errno;
-
-    ib_logger(
-      stderr, "  Failed to set O_DIRECT on file %s: %s: %s, continuing anyway\n", file_name, operation_name, strerror(errno_save)
-    );
-    if (errno_save == EINVAL) {
-      ib_logger(
-        stderr,
-        "  O_DIRECT is known to result in "
-        "'Invalid argument' on Linux on tmpfs."
-      );
-    }
-  }
-}
-
-os_file_t os_file_create(const char *name, ulint create_mode, ulint purpose, FlushMethod flush_method, bool *success) {
-  bool retry;
-
-  for (;;) {
-    int create_flag;
-    const char *mode_str = nullptr;
-
-    if (create_mode == OS_FILE_OPEN || create_mode == OS_FILE_OPEN_RAW || create_mode == OS_FILE_OPEN_RETRY) {
-      mode_str = "OPEN";
-      create_flag = O_RDWR;
-    } else if (create_mode == OS_FILE_CREATE) {
-      mode_str = "CREATE";
-      create_flag = O_RDWR | O_CREAT | O_EXCL;
-    } else if (create_mode == OS_FILE_OVERWRITE) {
-      mode_str = "OVERWRITE";
-      create_flag = O_RDWR | O_CREAT | O_TRUNC;
-    } else {
-      create_flag = 0;
-      ut_error;
-    }
-
-    ut_a(purpose == OS_FILE_AIO || purpose == OS_FILE_NORMAL);
-
-    auto file = open(name, create_flag, CREATE_MASK);
-
-    if (file == -1) {
-      *success = false;
-
-      /* File creation failure may not be critical to the whole
-      instance: report it to the caller instead of crashing. */
-      retry = os_file_handle_error_no_exit(name, create_mode == OS_FILE_CREATE ? "create" : "open");
-
-      if (retry) {
+    if (put < 0) {
+      if (errno == EINTR || errno == EAGAIN) {
         continue;
-      } else {
-        return file /* -1 */;
       }
+
+      return last_error();
     }
 
-    *success = true;
-
-    /* We disable OS caching (O_DIRECT) on data files */
-    if (flush_method == SRV_UNIX_O_DIRECT) {
-      os_file_set_nocache(file, name, mode_str);
+    /* Nothing written and no error: the device takes no more, as a full disk. */
+    if (put == 0) {
+      return std::make_error_code(std::errc::no_space_on_device);
     }
 
-    return file;
+    ptr += put;
+    n -= size_t(put);
+    off += put;
   }
+
+  return {};
 }
 
-bool os_file_delete_if_exists(const char *name) {
-  int ret = unlink(name);
-
-  if (ret != 0 && errno != ENOENT) {
-    os_file_handle_error_no_exit(name, "delete");
-
-    return false;
-  }
-
-  return true;
-}
-
-bool os_file_delete(const char *name) {
-  int ret = unlink(name);
-
-  if (ret != 0) {
-    os_file_handle_error_no_exit(name, "delete");
-
-    return false;
-  }
-
-  return true;
-}
-
-bool os_file_rename(const char *oldpath, const char *newpath) {
-  int ret = rename(oldpath, newpath);
-
-  if (ret != 0) {
-    os_file_handle_error_no_exit(oldpath, "rename");
-
-    return false;
-  }
-
-  return true;
-}
-
-bool os_file_close(os_file_t file) {
-  int ret = close(file);
-
-  if (ret == -1) {
-    os_file_handle_error(nullptr, "close");
-
-    return false;
-  }
-
-  return true;
-}
-
-bool os_file_get_size(os_file_t file, off_t *off) {
-  static_assert(sizeof(off_t) == 8, "sizeof(off_t) != 8");
-
-  *off = lseek(file, 0, SEEK_END);
-
-  return *off != ((off_t)-1);
-}
-
-int64_t os_file_get_size_as_iblonglong(os_file_t file) {
-  off_t off;
-
-  if (os_file_get_size(file, &off)) {
-    return off;
-  } else {
-    return -1;
-  }
-}
-
-bool os_file_set_size(const char *name, os_file_t file, off_t desired_size) {
-  ut_a(desired_size >= off_t(UNIV_PAGE_SIZE));
-
-  /* Write up to 1 megabyte at a time. */
-  auto buf_size = std::min<ulint>(64, ulint(desired_size / UNIV_PAGE_SIZE)) * UNIV_PAGE_SIZE;
-  auto ptr = static_cast<byte *>(ut_new(buf_size + UNIV_PAGE_SIZE));
-  auto buf = static_cast<byte *>(ut_align(ptr, UNIV_PAGE_SIZE));
-
-  /* Write buffer full of zeros */
-  memset(buf, 0, buf_size);
-
-  if (desired_size >= off_t(100 * 1024 * 1024)) {
-    log_info_hdr("Progress in MB:");
-  }
-
-  off_t current_size;
-
-  {
-    auto success = os_file_get_size(file, &current_size);
-    ut_a(success);
-  }
-
-  while (current_size < desired_size) {
-    ulint n_bytes;
-
-    if (desired_size - current_size < off_t(buf_size)) {
-      n_bytes = ulint(desired_size - current_size);
-    } else {
-      n_bytes = buf_size;
-    }
-
-    auto ret = os_file_write(name, file, buf, n_bytes, current_size);
-
-    if (!ret) {
-      ut_delete(ptr);
-      return false;
-    }
-
-    /* Print about progress for each 100 MB written */
-    if (off_t(current_size + n_bytes) / off_t(100 * 1024 * 1024) != current_size / off_t(100 * 1024 * 1024)) {
-
-      log_info_msg(std::format("{}00", ulong((current_size + n_bytes) / off_t(100 * 1024 * 1024))));
-    }
-
-    current_size += n_bytes;
-  }
-
-  if (desired_size >= off_t(100 * 1024 * 1024)) {
-    log_info_msg("\n");
-  }
-
-  ut_delete(ptr);
-
-  return os_file_flush(file);
-}
-
-/** Sync file contenst to the device.
-@param[in] file                 File to sync.
-@return -1 on failure. */
-static int os_file_fsync(os_file_t file) {
-  int ret;
-  bool retry{};
-  int failures = 0;
+std::expected<File, std::error_code> File::open(const std::filesystem::path &path, Open how, bool direct) noexcept {
+  int fd;
 
   do {
-    ret = fsync(file);
+    fd = ::open(path.c_str(), flags_of(how) | O_CLOEXEC, CREATE_MODE);
+  } while (fd < 0 && errno == EINTR);
 
-    if (ret == -1 && errno == ENOLCK) {
-      if (failures % 100 == 0) {
-
-        ut_print_timestamp(stderr);
-        ib_logger(stderr, "fsync(): No locks available; retrying\n");
-      }
-
-      os_thread_sleep(200000 /* 0.2 sec */);
-
-      ++failures;
-
-      retry = true;
-    } else {
-      retry = false;
-    }
-  } while (retry);
-
-  return ret;
-}
-
-bool os_file_flush(os_file_t file) {
-  int ret = os_file_fsync(file);
-
-  if (ret == 0) {
-    return true;
+  if (fd < 0) {
+    return std::unexpected(last_error());
   }
 
-  os_file_handle_error(nullptr, "flush");
+  if (direct) {
+    const auto flags = ::fcntl(fd, F_GETFL);
 
-  /* It is a fatal error if a file flush does not succeed, because then
-  the database can get corrupt on disk */
-  log_fatal("The OS said file flush did not succeed");
+    if (flags < 0 || ::fcntl(fd, F_SETFL, flags | O_DIRECT) < 0) {
+      /* Not an error: the file works, through the cache. */
+      log_warn(std::format("O_DIRECT refused for {}: {}, the file is used cached", path.string(), last_error().message()));
+    }
+  }
 
-  return false;
+  return File{fd};
 }
 
-/**
- * Does a synchronous read operation in Posix.
- *
- * @param[in] file Handle to a file.
- * @param[in] buf Buffer where to read.
- * @param[in] n Number of bytes to read.
- * @param[in] offset Least significant 32 bits of file offset from where to read.
- * @param[in] offset_high Most significant 32 bits of offset.
- *
- * @return Number of bytes read, -1 if error.
- */
-static ssize_t os_file_pread(os_file_t file, void *buf, ulint n, off_t off) {
-  /* If off_t is > 4 bytes in size, then we assume we can pass a
-  64-bit address */
-
-  auto n_bytes = pread(file, buf, (ssize_t)n, off);
-
-  return n_bytes;
-}
-
-/**
- * Does a synchronous write operation in Posix.
- *
- * @param[in] file Handle to a file.
- * @param[in] buf Buffer from where to write.
- * @param[in] n Number of bytes to write.
- * @param[in] offset Least significant 32 bits of file offset where to write.
- * @param[in] offset_high Most significant 32 bits of offset.
- *
- * @return Number of bytes written, -1 if error.
- */
-static ssize_t os_file_pwrite(os_file_t file, const void *buf, ulint n, off_t off) {
-
-  auto n_bytes = pwrite(file, buf, (ssize_t)n, off);
-
-  return n_bytes;
-}
-
-bool os_file_read(os_file_t file, void *p, ulint n, off_t off) {
-  auto ptr = static_cast<char *>(p);
-
-  do {
-    auto n_bytes = os_file_pread(file, ptr, n, off);
-
-    if (n_bytes == -1) {
-      switch (errno) {
-        case EINTR:
-        case EAGAIN:
-          continue;
-        default:
-          if (os_file_handle_error(nullptr, "read")) {
-            continue;
-          } else {
-            return false;
-          }
-      }
+std::error_code File::sync() const noexcept {
+  for (;;) {
+    if (::fsync(m_fd) == 0) {
+      return {};
     }
 
-    if (n_bytes == 0 && n > 0) {
-      log_err(std::format("Read of {} bytes at offset {} is past the end of the file", n, off));
-      return false;
+    if (errno == EINTR) {
+      continue;
     }
 
-    n -= n_bytes;
-    ptr += n_bytes;
-    off += n_bytes;
-  } while (n > 0);
-
-  return true;
-}
-
-bool os_file_read_no_error_handling(os_file_t file, void *p, ulint n, off_t off) {
-  auto ptr = static_cast<char *>(p);
-
-  do {
-    auto n_bytes = os_file_pread(file, ptr, n, off);
-
-    if (n_bytes == -1) {
-      switch (errno) {
-        case EINTR:
-        case EAGAIN:
-          continue;
-        default:
-          if (os_file_handle_error_no_exit(nullptr, "read")) {
-            continue;
-          } else {
-            return false;
-          }
-      }
-    }
-    if (n_bytes == 0 && n > 0) {
-      log_err(std::format("Read of {} bytes at offset {} is past the end of the file", n, off));
-      return false;
+    if (errno == ENOLCK) {
+      /* No locks available, on NFS: they come back. */
+      std::this_thread::sleep_for(std::chrono::milliseconds(200));
+      continue;
     }
 
-    n -= n_bytes;
-    ptr += n_bytes;
-    off += n_bytes;
-  } while (n > 0);
-
-  return true;
+    return last_error();
+  }
 }
 
-void os_file_read_string(FILE *file, char *str, ulint size) {
-  size_t flen;
+std::expected<off_t, std::error_code> File::size() const noexcept {
+  struct stat st;
 
-  if (size == 0) {
-    return;
+  if (::fstat(m_fd, &st) != 0) {
+    return std::unexpected(last_error());
   }
 
-  rewind(file);
-  flen = fread(str, 1, size - 1, file);
-  str[flen] = '\0';
+  return st.st_size;
 }
 
-bool os_file_write(const char *name, os_file_t file, const void *p, ulint n, off_t off) {
-  auto ptr = static_cast<const char *>(p);
+std::error_code File::allocate(off_t off, off_t len) const noexcept {
+  if (len <= 0) {
+    return {};
+  }
 
-  do {
-    auto n_bytes = os_file_pwrite(file, ptr, n, off);
+  if (::fallocate(m_fd, 0, off, len) == 0) {
+    return {};
+  }
 
-    if (n_bytes == -1) {
-      switch (errno) {
-        case EINTR:
-        case EAGAIN:
-          continue;
-        default:
-          if (os_file_handle_error(name, "write")) {
-            {
-              log_err(std::format(
-                "Write to file {} failed at offset {}. {} bytes should have been written,"
-                " only {} were written. Operating system error number {} - '{}'."
-                " Check that the disk is not full or a disk quota exceeded.",
-                name,
-                off,
-                n,
-                n_bytes,
-                errno,
-                strerror(errno)
-              ));
-            }
+  if (errno != EOPNOTSUPP && errno != ENOSYS) {
+    return last_error();
+  }
 
-            continue;
+  /* The file system can't reserve blocks: write zeros, aligned for O_DIRECT. */
+  struct Free {
+    void operator()(std::byte *p) const noexcept { ::operator delete[](p, std::align_val_t{ALIGN}); }
+  };
 
-          } else {
-            return false;
-          }
-      }
+  const auto chunk = size_t(std::min<off_t>(len, ZERO_CHUNK));
+  std::unique_ptr<std::byte[], Free> zeros{static_cast<std::byte *>(::operator new[](chunk, std::align_val_t{ALIGN}, std::nothrow))};
+
+  if (zeros == nullptr) {
+    return std::make_error_code(std::errc::not_enough_memory);
+  }
+
+  std::fill_n(zeros.get(), chunk, std::byte{});
+
+  for (const auto end = off + len; off < end;) {
+    const auto n = size_t(std::min<off_t>(end - off, off_t(chunk)));
+
+    if (const auto err = write(zeros.get(), n, off); err) {
+      return err;
     }
 
-    n -= n_bytes;
-    ptr += n_bytes;
-    off += n_bytes;
+    off += off_t(n);
+  }
 
-  } while (n > 0);
-
-  return true;
+  return {};
 }
 
-bool os_file_status(const char *path, bool *exists, OsFileType *type) {
-  struct stat statinfo;
-
-  int ret = stat(path, &statinfo);
-
-  if (ret != 0 && (errno == ENOENT || errno == ENOTDIR)) {
-    /* File does not exist */
-    *exists = false;
-    return true;
-  } else if (ret != 0) {
-    /* File exists, but stat call failed */
-
-    os_file_handle_error_no_exit(path, "stat");
-
-    return false;
+std::error_code File::close() noexcept {
+  if (m_fd < 0) {
+    return {};
   }
 
-  if (S_ISDIR(statinfo.st_mode)) {
-    *type = DIRECTORY;
-  } else if (S_ISLNK(statinfo.st_mode)) {
-    *type = SYM_LINK;
-  } else if (S_ISREG(statinfo.st_mode)) {
-    *type = REGULAR_FILE;
-  } else {
-    *type = OS_FILE_TYPE_UNKNOWN;
-  }
+  /* Not again on EINTR: on Linux the descriptor is gone whatever close() says. */
+  const auto fd = std::exchange(m_fd, -1);
 
-  *exists = true;
-
-  return true;
+  return ::close(fd) == 0 ? std::error_code{} : last_error();
 }
 
-bool os_file_get_status(const char *path, OsFileStat *stat_info) {
-  struct stat statinfo;
-
-  int ret = stat(path, &statinfo);
-
-  if (ret != 0 && (errno == ENOENT || errno == ENOTDIR)) {
-    /* File does not exist */
-
-    return false;
-  } else if (ret != 0) {
-    /* File exists, but stat call failed */
-
-    os_file_handle_error_no_exit(path, "stat");
-
-    return false;
-  }
-
-  if (S_ISDIR(statinfo.st_mode)) {
-    stat_info->type = DIRECTORY;
-  } else if (S_ISLNK(statinfo.st_mode)) {
-    stat_info->type = SYM_LINK;
-  } else if (S_ISREG(statinfo.st_mode)) {
-    stat_info->type = REGULAR_FILE;
-  } else {
-    stat_info->type = OS_FILE_TYPE_UNKNOWN;
-  }
-
-  stat_info->ctime = statinfo.st_ctime;
-  stat_info->atime = statinfo.st_atime;
-  stat_info->mtime = statinfo.st_mtime;
-  stat_info->size = statinfo.st_size;
-
-  return true;
-}
-
-char *os_file_dirname(const char *path) {
-  /* Find the offset of the last slash */
-  const char *last_slash = strrchr(path, SRV_PATH_SEPARATOR);
-
-  if (last_slash == nullptr) {
-    /* No slash in the path, return "." */
-
-    return mem_strdup(".");
-  }
-
-  /* Ok, there is a slash */
-
-  if (last_slash == path) {
-    /* last slash is the first char of the path */
-
-    return mem_strdup("/");
-  }
-
-  /* Non-trivial directory component */
-
-  return mem_strdupl(path, last_slash - path);
-}
-
-bool os_file_create_subdirs_if_needed(const char *path) {
-  bool subdir_exists;
-  auto subdir = os_file_dirname(path);
-
-  if (strlen(subdir) == 1 && (*subdir == SRV_PATH_SEPARATOR || *subdir == '.')) {
-    /* subdir is root or cwd, nothing to do */
-    mem_free(subdir);
-
-    return true;
-  }
-
-  /* Test if subdir exists */
-  OsFileType type;
-  auto success = os_file_status(subdir, &subdir_exists, &type);
-
-  if (success && !subdir_exists) {
-    /* Subdir does not exist, create it */
-    success = os_file_create_subdirs_if_needed(subdir);
-
-    if (!success) {
-      mem_free(subdir);
-
-      return false;
-    }
-    success = os_file_create_directory(subdir, false);
-  }
-
-  mem_free(subdir);
-
-  return success;
-}
+}  // namespace os

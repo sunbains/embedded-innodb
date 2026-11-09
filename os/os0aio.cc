@@ -635,7 +635,7 @@ DbErr Handler::Queue::submit(Slot *slot) noexcept {
   }
 
   auto &buffer = slot->m_request;
-  auto fh{slot->m_io_ctx.m_fil_node->m_fh};
+  const auto fh = slot->m_io_ctx.m_fil_node->m_file.fd();
 
   /* Do the i/o with ordinary, synchronous i/o functions: */
   if (slot->m_io_ctx.is_read_request()) {
@@ -805,15 +805,17 @@ DbErr Impl::submit(IoCtx &&io_ctx, void *ptr, ulint n, off_t off) noexcept {
   ut_ad(off % IB_FILE_BLOCK_SIZE == 0);
 
   if (io_ctx.is_sync_request()) {
-    auto fh{io_ctx.m_fil_node->m_fh};
+    const auto &file = io_ctx.m_fil_node->m_file;
+    const bool read = io_ctx.is_read_request();
+    const auto err = read ? file.read(ptr, n, off) : file.write(ptr, n, off);
 
-    if (io_ctx.is_read_request()) {
-      return os_file_read(fh, ptr, n, off) ? DB_SUCCESS : DB_ERROR;
-    } else {
-      auto name{io_ctx.m_fil_node->m_file_name};
-
-      return os_file_write(name, fh, ptr, n, off) ? DB_SUCCESS : DB_ERROR;
+    if (!err) {
+      return DB_SUCCESS;
     }
+
+    log_err(std::format("{} of {} bytes at {} of {} failed: {}", read ? "Read" : "Write", n, off, io_ctx.m_fil_node->m_file_name, err.message()));
+
+    return err == std::errc::no_space_on_device ? DB_OUT_OF_FILE_SPACE : DB_ERROR;
   }
   auto handler = m_handlers[get_type(io_ctx)];
   auto queue = handler->get_queue_for_submit();
@@ -873,7 +875,7 @@ void Impl::shutdown() noexcept {
 }  // namespace aio
 
 void IoCtx::validate() const noexcept {
-  ut_a(m_fil_node->m_fh != -1);
+  ut_a(m_fil_node->m_file.is_open());
   ut_a(m_fil_node->m_file_name != nullptr);
 }
 

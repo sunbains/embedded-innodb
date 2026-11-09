@@ -547,14 +547,12 @@ static bool row_merge_read(
 {
   off_t off = ((off_t)offset) * sizeof(*buf);
 
-  auto success = os_file_read_no_error_handling(OS_FILE_FROM_FD(fd), buf, sizeof(*buf), off);
-
-  if (!success) {
-    ut_print_timestamp(stderr);
-    ib_logger(stderr, "  failed to read merge block at %lu\n", off);
+  if (const auto err = os::read_at(fd, buf, sizeof(*buf), off); err) {
+    log_err(std::format("Failed to read the merge block at {}: {}", off, err.message()));
+    return false;
   }
 
-  return success;
+  return true;
 }
 
 /** Read a merge block from the file system.
@@ -567,7 +565,12 @@ static bool row_merge_write(
 {
   off_t off = off_t(offset) * sizeof(row_merge_block_t);
 
-  return os_file_write("(merge)", OS_FILE_FROM_FD(fd), buf, sizeof(row_merge_block_t), off);
+  if (const auto err = os::write_at(fd, buf, sizeof(row_merge_block_t), off); err) {
+    log_err(std::format("Failed to write the merge block at {}: {}", off, err.message()));
+    return false;
+  }
+
+  return true;
 }
 
 /**
@@ -1624,9 +1627,15 @@ void row_merge_drop_indexes(System &sys, Trx *trx,      /*!< in: transaction */
 }
 
 /** Create a merge file. */
-static void row_merge_file_create(MergeFile *merge_file) /*!< out: merge file structure */
+static void row_merge_file_create(System &sys, MergeFile *merge_file) /*!< out: merge file structure */
 {
-  merge_file->fd = row_create_tempfile("ibmrg");
+  const auto fd = row_create_tempfile(row_tmp_dir(sys), "ibmrg");
+
+  if (!fd) {
+    log_err(std::format("Cannot create a merge file in {}: {}", row_tmp_dir(sys).string(), fd.error().message()));
+  }
+
+  merge_file->fd = fd ? *fd : -1;
   merge_file->offset = 0;
   merge_file->n_rec = 0;
 }
@@ -1870,10 +1879,16 @@ DbErr row_merge_build_indexes(System &sys,
   auto merge_files = static_cast<MergeFile *>(mem_alloc(n_indexes * sizeof(MergeFile)));
 
   for (ulint i{}; i < n_indexes; ++i) {
-    row_merge_file_create(&merge_files[i]);
+    row_merge_file_create(sys, &merge_files[i]);
   }
 
-  auto tmpfd = row_create_tempfile("mrg");
+  const auto tmp = row_create_tempfile(row_tmp_dir(sys), "mrg");
+
+  if (!tmp) {
+    log_err(std::format("Cannot create a merge file in {}: {}", row_tmp_dir(sys).string(), tmp.error().message()));
+  }
+
+  auto tmpfd = tmp ? *tmp : -1;
 
   /* Read clustered index of the table and create files for
   secondary index entries for merge sort */

@@ -26,441 +26,141 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 ***********************************************************************/
 
 /** @file include/os0file.h
-The interface to the operating system file io
+Files for I/O: a descriptor that closes itself, the reads and writes of a whole buffer, durability,
+size and allocation. Everything else about files and directories is std::filesystem, called with its
+std::error_code overloads: nothing here or there throws.
+
+Errors are returned, std::error_code or std::expected, never logged or made fatal here: what a
+failure means is the caller's to say. The one exception is a cache that can't be bypassed
+(O_DIRECT refused, as on tmpfs): the file is used cached, and that is logged.
 
 Created 10/21/1995 Heikki Tuuri
 *******************************************************/
 
 #pragma once
 
-#include "srv0cfg.h"
+#include <sys/types.h>
 
-#include "innodb0types.h"
-
-#include <atomic>
+#include <cstddef>
+#include <cstdint>
+#include <expected>
 #include <filesystem>
+#include <system_error>
+#include <utility>
 
-/** File node of a tablespace or the log data space */
-struct FilNode;
+namespace os {
 
+/** How a file is opened. */
+enum class Open : uint8_t {
+  /** An existing file, read only. */
+  READ,
 
+  /** An existing file, read and write. */
+  READ_WRITE,
 
+  /** A new file, read and write: an error if it exists. */
+  CREATE,
 
-
-
-/** Convert a C file descriptor to a native file handle
-@param fd	file descriptor
-@return		native file handle */
-#define OS_FILE_FROM_FD(fd) fd
-
-/** Options for file_create @{ */
-constexpr ulint OS_FILE_OPEN = 51;
-constexpr ulint OS_FILE_CREATE = 52;
-constexpr ulint OS_FILE_OVERWRITE = 53;
-constexpr ulint OS_FILE_OPEN_RAW = 54;
-constexpr ulint OS_FILE_CREATE_PATH = 55;
-
-/** For os_file_create() on the first ibdata file */
-constexpr ulint OS_FILE_OPEN_RETRY = 56;
-
-constexpr ulint OS_FILE_READ_ONLY = 333;
-constexpr ulint OS_FILE_READ_WRITE = 444;
-
-constexpr ulint OS_FILE_AIO = 61;
-constexpr ulint OS_FILE_NORMAL = 62;
-
-/* @} */
-
-/** Error codes from os_file_get_last_error @{ */
-constexpr ulint OS_FILE_NOT_FOUND = 71;
-constexpr ulint OS_FILE_DISK_FULL = 72;
-constexpr ulint OS_FILE_ALREADY_EXISTS = 73;
-constexpr ulint OS_FILE_PATH_ERROR = 74;
-
-/** Wait for OS aio resources to become available again */
-constexpr ulint OS_FILE_AIO_RESOURCES_RESERVED = 75;
-
-constexpr ulint OS_FILE_SHARING_VIOLATION = 76;
-constexpr ulint OS_FILE_ERROR_NOT_SPECIFIED = 77;
-constexpr ulint OS_FILE_INSUFFICIENT_RESOURCE = 78;
-constexpr ulint OS_FILE_OPERATION_ABORTED = 79;
-
-/* @} */
-
-
-/* File types for directory entry data type */
-
-enum OsFileType {
-  OS_FILE_TYPE_UNKNOWN = 0,
-
-  REGULAR_FILE,
-
-  DIRECTORY,
-
-  SYM_LINK
+  /** A new file, or an existing one emptied, read and write. */
+  OVERWRITE
 };
 
-/** Maximum path string length in bytes when referring to tables with in the
-'./databasename/tablename.ibd' path format; we can allocate at least 2 buffers
-of this size from the thread stack; that is why this should not be made much
-bigger than 4000 bytes */
-constexpr ulint OS_FILE_MAX_PATH = 4000;
-
-/* Struct used in fetching information of a file in a directory */
-struct OsFileStat {
-  /** Path to a file */
-  char name[OS_FILE_MAX_PATH];
-
-  /** File type. */
-  OsFileType type;
-
-  /** File size in bytes. */
-  off_t size;
-
-  /** Creation time. */
-  time_t ctime;
-
-  /** Last modification time. */
-  time_t mtime;
-
-  /** Last access time. */
-  time_t atime;
+/** What errno doesn't say: the errors of this module's own category. */
+enum class FileErr : int {
+  /** A read of a whole buffer found the end of the file before it was full. */
+  END_OF_FILE = 1
 };
 
+/** @return the category of FileErr. */
+[[nodiscard]] const std::error_category &file_category() noexcept;
+
+[[nodiscard]] inline std::error_code make_error_code(FileErr err) noexcept { return {int(err), file_category()}; }
+
 /**
- * @brief Creates a temporary file. This function is like tmpfile(3), but
- * the temporary file is created in the configured temporary directory.
- * On Netware, this function is like tmpfile(3), because the C run-time
- * library of Netware does not expose the delete-on-close flag.
+ * Read n bytes at off of a descriptor: all of them, through short reads and interrupts.
  *
- * @return temporary file handle, or nullptr on error
+ * @return an errno code, or FileErr::END_OF_FILE if the file ends before n bytes.
  */
-FILE *os_file_create_tmpfile();
+[[nodiscard]] std::error_code read_at(int fd, void *buf, size_t n, off_t off) noexcept;
 
 /**
- * @brief This function attempts to create a directory named pathname.
- * 
- * The new directory gets default permissions. On Unix, the permissions
- * are (0770 & ~umask). If the directory exists already, nothing is done
- * and the call succeeds, unless the fail_if_exists arguments is true.
- * 
- * @param pathname        [in] Directory name as null-terminated string.
- * @param fail_if_exists  [in] If true, pre-existing directory is treated as an error.
- * @return true if call succeeds, false on error.
- */
-bool os_file_create_directory(const char *pathname, bool fail_if_exists);
-
-/**
- * @brief A simple function to open or create a file.
+ * Write n bytes at off of a descriptor: all of them, through short writes and interrupts.
  *
- * @param name          [in] Name of the file or path as a null-terminated string.
- * @param create_mode   [in] OS_FILE_OPEN if an existing file is opened (if does 
- *                           ot exist, error), or OS_FILE_CREATE if a new file is
- *                           created (if exists, error), or OS_FILE_CREATE_PATH if
- *                           new file (if exists, error) and subdirectories along
- *                           its path are created (if needed).
- * @param access_type   [in] OS_FILE_READ_ONLY or OS_FILE_READ_WRITE.
- * @param success       [out] True if succeed, false if error.
- * @return os_file_t    Own handle to the file, not defined if error, error number can be
- *                      retrieved with os_file_get_last_error.
+ * @return an errno code: ENOSPC for a full disk.
  */
-os_file_t os_file_create_simple(const char *name, ulint create_mode, ulint access_type, bool *success);
+[[nodiscard]] std::error_code write_at(int fd, const void *buf, size_t n, off_t off) noexcept;
 
-/**
- * @brief A simple function to open or create a file.
- *
- * @param name          [in] Name of the file or path as a null-terminated string.
- * @param create_mode   [in] OS_FILE_OPEN if an existing file is opened (if does not exist, error), or
- *                           OS_FILE_CREATE if a new file is created (if exists, error).
- * @param access_type   [in] OS_FILE_READ_ONLY, OS_FILE_READ_WRITE, or OS_FILE_READ_ALLOW_DELETE;
- *                           the last option is used by a backup program reading the file.
- * @param success       [out] True if succeed, false if error.
- * @return os_file_t    Own handle to the file, not defined if error, error number can be
- *                      retrieved with os_file_get_last_error.
- */
-os_file_t os_file_create_simple_no_error_handling(const char *name, ulint create_mode, ulint access_type, bool *success);
+/** An open file: owns its descriptor, closes it when it goes. Moves, doesn't copy. */
+class File {
+ public:
+  File() noexcept = default;
 
-/**
- * @brief Tries to disable OS caching on an opened file descriptor.
- *
- * @param fd                [in] File descriptor to alter.
- * @param file_name         [in] File name, used in the diagnostic message.
- * @param operation_name    [in] "open" or "create"; used in the diagnostic message.
- */
-void os_file_set_nocache(int fd, const char *file_name, const char *operation_name);
+  /** Own an open descriptor. */
+  explicit File(int fd) noexcept : m_fd(fd) {}
 
-/**
- * @brief Opens an existing file or creates a new.
- *
- * @param name          [in] Name of the file or path as a null-terminated string.
- * @param create_mode   [in] OS_FILE_OPEN if an existing file is opened (if does not exist, error), or
- *                           OS_FILE_CREATE if a new file is created (if exists, error),
- *                           OS_FILE_OVERWRITE if a new file is created or an old overwritten;
- *                           OS_FILE_OPEN_RAW, if a raw device or disk partition should be opened.
- * @param purpose       [in] OS_FILE_AIO, if asynchronous, non-buffered i/o is desired,
- *                           OS_FILE_NORMAL, if any normal file;
- *                           NOTE that it also depends on type, os_aio_.. and srv_.. variables
- *                           whether we really use
- *                           async i/o or unbuffered i/o: look in the function source code for the exact rules.
- * @param success       [out] True if succeed, false if error.
- * @return os_file_t    Own handle to the file, not defined if error, error number can be
- *                      retrieved with os_file_get_last_error.
- */
-os_file_t os_file_create(const char *name, ulint create_mode, ulint purpose, FlushMethod flush_method, bool *success);
+  File(File &&other) noexcept : m_fd(std::exchange(other.m_fd, -1)) {}
 
-/**
- * @brief Deletes a file. The file has to be closed before calling this.
- *
- * @param name File path as a null-terminated string.
- * @return True if success.
- */
-bool os_file_delete(const char *name); /*!< in: file path as a null-terminated string */
+  File &operator=(File &&other) noexcept {
+    if (this != &other) {
+      (void)close();
+      m_fd = std::exchange(other.m_fd, -1);
+    }
 
-/**
- * @brief Deletes a file if it exists. The file has to be closed before calling this.
- *
- * @param name File path as a null-terminated string.
- * @return True if success.
- */
-bool os_file_delete_if_exists(const char *name); /*!< in: file path as a null-terminated string */
-
-/**
- * @brief Renames a file (can also move it to another directory). It is safest that
- * the file is closed before calling this function.
- *
- * @param oldpath Old file path as a null-terminated string.
- * @param newpath New file path.
- * @return True if success.
- */
-bool os_file_rename(const char *oldpath, const char *newpath);
-
-/**
- * @brief Closes a file handle. In case of error, error number can be retrieved with
- * os_file_get_last_error.
- *
- * @param file Handle to a file.
- * @return True if success.
- */
-bool os_file_close(os_file_t file);
-
-/**
- * @brief Gets a file size.
- *
- * @param file Handle to a file.
- * @param size Least significant 32 bits of file size.
- * @param size_high Most significant 32 bits of size.
- * @return True if success.
- */
-bool os_file_get_size(os_file_t file, off_t *size);
-
-/**
- * @brief Gets file size as a 64-bit integer int64_t.
- *
- * @param file Handle to a file.
- * @return Size in bytes, -1 if error.
- */
-int64_t os_file_get_size_as_iblonglong(os_file_t file);
-
-/**
- * @brief Write the specified number of zeros to a newly created file.
- *
- * @param name Name of the file or path as a null-terminated string.
- * @param file Handle to a file.
- * @param desired_size size in bytes.
- * @return True if success.
- */
-bool os_file_set_size(const char *name, os_file_t file, off_t desired_size);
-
-/**
- * @brief Truncates a file at its current position.
- *
- * @param file File to be truncated.
- * @return True if success.
- */
-bool os_file_set_eof(FILE *file);
-
-/**
- * @brief Flushes the write buffers of a given file to the disk.
- *
- * @param file Handle to a file.
- * @return True if success.
- */
-bool os_file_flush(os_file_t file);
-
-/**
- * @brief Retrieves the last error number if an error occurs in a file io function.
- * The number should be retrieved before any other OS calls (because they may
- * overwrite the error number). If the number is not known to this program,
- * the OS error number + 100 is returned.
- *
- * @param report_all_errors True if we want an error message printed of all errors.
- * @return Error number, or OS error number + 100.
- */
-ulint os_file_get_last_error(bool report_all_errors);
-
-/**
- * @brief Reads data from a file.
- *
- * @param file Handle to a file.
- * @param buf Buffer where to read.
- * @param n Number of bytes to read.
- * @param off byte offset in the file
- * @return true if the read operation was successful, false otherwise.
- */
-bool os_file_read(os_file_t file, void *buf, ulint n, off_t off);
-
-/**
- * @brief Reads at most size - 1 bytes from a file and NUL-terminates the string.
- *
- * @param file File to read from.
- * @param str Buffer where to read.
- * @param size Size of buffer.
- */
-void os_file_read_string(FILE *file, char *str, ulint size);
-
-/**
- * @brief Requests a synchronous positioned read operation.
- *
- * @param file Handle to a file.
- * @param buf Buffer where to read.
- * @param n Number of bytes to read.
- * @param off byte offset in the file
- * @return true if the request was successful, false if failed.
- */
-bool os_file_read_no_error_handling(os_file_t file, void *buf, ulint n, off_t off);
-
-/**
- * @brief Requests a synchronous write operation.
- *
- * @param name Name of the file or path as a null-terminated string.
- * @param file Handle to a file.
- * @param buf Buffer from which to write.
- * @param n Number of bytes to write.
- * @param off byte offset in the file
- * @return true if the request was successful, false if failed.
- */
-bool os_file_write(const char *name, os_file_t file, const void *buf, ulint n, off_t off);
-
-/**
- * @brief Checks the existence and type of the given file.
- *
- * @param path Pathname of the file.
- * @param exists True if file exists.
- * @param type Type of the file (if it exists).
- * @return true if the call succeeded, false otherwise.
- */
-bool os_file_status(const char *path, bool *exists, OsFileType *type);
-
-/** The function os_file_dirname returns a directory component of a
-* null-terminated pathname string.  In the usual case, dirname returns
-* the string up to, but not including, the final '/', and basename
-* is the component following the final '/'.  Trailing '/' charac�
-* ters are not counted as part of the pathname.
-* 
-* If path does not contain a slash, dirname returns the string ".".
-* 
-* Concatenating the string returned by dirname, a "/", and the basename
-* yields a complete pathname.
-
-* The return value is  a copy of the directory component of the pathname.
-* The copy is allocated from heap. It is the caller responsibility
-* to free it after it is no longer needed.
-* 
-* The following list of examples (taken from SUSv2) shows the strings
-* returned by dirname and basename for different paths:
-* 
-*      path	      dirname	     basename
-*      "/usr/lib"     "/usr"	     "lib"
-*      "/usr/"	      "/"	     "usr"
-*      "usr"	      "."	     "usr"
-*      "/"	      "/"	     "/"
-*      "."	      "."	     "."
-*      ".."	      "."	     ".."
-* @param[in] path	Pathname string
-*
-* @return	own: directory component of the pathname */
-char *os_file_dirname(const char *path);
-
-/**
- * @brief Creates all missing subdirectories along the given path.
- *
- * @param path Path name.
- * @return true if the call succeeded, false otherwise.
- */
-bool os_file_create_subdirs_if_needed(const char *path);
-
-/**
- * @brief Create an internal data structures.
- */
-void os_file_init();
-
-/**
- * @brief  Free any internal data structures.
- */
-void os_file_free();
-
-
-/**
- * @brief Returns information about the specified file.
- *
- * @param path Pathname of the file.
- * @param stat_info Information of a file in a directory.
- * @return true if stat information found, false otherwise.
- */
-bool os_file_get_status(const char *path, OsFileStat *stat_info);
-
-
-
-/** @return a text version of the path type. */
-[[nodiscard]] inline const char *get_path_status(const std::filesystem::path &path) noexcept {
-  namespace fs = std::filesystem;
-
-  if (!fs::exists(path)) {
-    return "does not exist";
-  } else if (fs::is_regular_file(path)) {
-    return "is a regular file";
-  } else if (fs::is_directory(path)) {
-    return "is a directory";
-  } else if (fs::is_block_file(path)) {
-    return "is a block device";
-  } else if (fs::is_character_file(path)) {
-    return "is a character device";
-  } else if (fs::is_fifo(path)) {
-    return "is a named IPC pipe";
-  } else if (fs::is_socket(path)) {
-    return "is a named IPC socket";
-  } else if (fs::is_symlink(path)) {
-    return "is a symlink";
+    return *this;
   }
 
-  ut_error;
-  return "Unknown file status";
-}
+  File(const File &) = delete;
+  File &operator=(const File &) = delete;
 
-/**
- * @brief Get the permissions of a file in text representation.
- * 
- * @param[in] p File permissions.
- * 
- * @return Text representation of the file permissions.
- */
-[[nodiscard]] inline std::string to_string(std::filesystem::perms p) noexcept {
-  using std::filesystem::perms;
-  std::ostringstream os{};
+  ~File() noexcept { (void)close(); }
 
-  auto print = [=](std::ostream &os, char op, perms perm) {
-    os << (perms::none == (perm & p) ? '-' : op);
-  };
+  /**
+   * Open a file.
+   *
+   * @param[in] path            The file.
+   * @param[in] how             What for, see Open.
+   * @param[in] direct          Bypass the OS cache (O_DIRECT): the file is used cached, and that is
+   *                            logged, where the file system refuses it.
+   *
+   * @return the file, or an errno code: ENOENT, EEXIST for CREATE, EACCES...
+   */
+  [[nodiscard]] static std::expected<File, std::error_code> open(const std::filesystem::path &path, Open how, bool direct = false) noexcept;
 
-  print(os, 'r', perms::owner_read);
-  print(os, 'w', perms::owner_write);
-  print(os, 'x', perms::owner_exec);
-  print(os, 'r', perms::group_read);
-  print(os, 'w', perms::group_write);
-  print(os, 'x', perms::group_exec);
-  print(os, 'r', perms::others_read);
-  print(os, 'w', perms::others_write);
-  print(os, 'x', perms::others_exec);
+  [[nodiscard]] bool is_open() const noexcept { return m_fd >= 0; }
 
-  return os.str();
-}
+  [[nodiscard]] int fd() const noexcept { return m_fd; }
+
+  /** Read n bytes at off, see os::read_at(). */
+  [[nodiscard]] std::error_code read(void *buf, size_t n, off_t off) const noexcept { return read_at(m_fd, buf, n, off); }
+
+  /** Write n bytes at off, see os::write_at(). */
+  [[nodiscard]] std::error_code write(const void *buf, size_t n, off_t off) const noexcept { return write_at(m_fd, buf, n, off); }
+
+  /** Make what's written durable: fsync(), through interrupts and ENOLCK. */
+  [[nodiscard]] std::error_code sync() const noexcept;
+
+  /** @return the size of the file in bytes. */
+  [[nodiscard]] std::expected<off_t, std::error_code> size() const noexcept;
+
+  /**
+   * Allocate len bytes of the file at off, which read as zeros after: the blocks are reserved
+   * (fallocate), or written with zeros where the file system can't reserve them.
+   *
+   * @return an errno code: ENOSPC for a full disk, with what fits allocated.
+   */
+  [[nodiscard]] std::error_code allocate(off_t off, off_t len) const noexcept;
+
+  /** Close the file. @return the error of close(), the descriptor is released anyway. */
+  std::error_code close() noexcept;
+
+  /** @return the descriptor, which this no longer owns. */
+  [[nodiscard]] int release() noexcept { return std::exchange(m_fd, -1); }
+
+ private:
+  int m_fd{-1};
+};
+
+}  // namespace os
+
+template <>
+struct std::is_error_code_enum<os::FileErr> : std::true_type {};

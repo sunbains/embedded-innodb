@@ -118,7 +118,7 @@ ulint ut_get_high32(ulint a) noexcept;
  *
  * @param[in] n Number to round up (must not be 0)
  * @return First power of 2 which is >= n */
-ulint ut_2_power_up(ulint n) noexcept __attribute__((const));
+[[gnu::const]] ulint ut_2_power_up(ulint n) noexcept;
 
 /** Determine how many bytes (groups of 8 bits) are needed to
 store the given number of bits.

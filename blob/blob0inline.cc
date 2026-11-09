@@ -61,11 +61,11 @@ struct InlineStore final : BlobStore {
     ut_a(mtr != nullptr);
 
     const auto space_id = index->get_space_id();
-    const auto n_pages = this->n_pages(len);
+    const auto pages = n_pages(len);
     ulint n_reserved{};
 
     /* All the pages of the field before any of them: out of space, nothing has changed. */
-    if (!m_sys.m_fsp->reserve_free_extents(&n_reserved, space_id, n_pages / FSP_EXTENT_SIZE + 2, FSP_NORMAL, mtr)) {
+    if (!m_sys.m_fsp->reserve_free_extents(&n_reserved, space_id, pages / FSP_EXTENT_SIZE + 2, FSP_NORMAL, mtr)) {
       return DB_OUT_OF_FILE_SPACE;
     }
 

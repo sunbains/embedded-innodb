@@ -1579,17 +1579,17 @@ TEST_F(RowSelMtPerf, PointSelectSizes) {
 
   for (const auto &sz : {Size{"point_select_50B", 42, 5000, 50000}, Size{"point_select_1KB", 1016, 2000, 50000},
                          Size{"point_select_20KB", 20000, 200, 5000}}) {
-    auto tab = this->tab(std::format("_{}", sz.m_b).c_str());
+    auto t = tab(std::format("_{}", sz.m_b).c_str());
     ut::Rows rows;
 
     for (uint32_t k{}; k < sz.m_n; ++k) {
       rows[k] = ut::Row{k, k, ut::blob(k, sz.m_b)};
     }
 
-    tab->load(rows);
+    t->load(rows);
 
     auto trx = begin();
-    Cur cur(*m_sys, *tab, trx);
+    Cur cur(*m_sys, *t, trx);
 
     auto r = ut::bench(sz.m_name, sz.m_ops, [&](uint64_t i) {
       const auto at = cur.moveto(uint32_t(i * 7919 % sz.m_n), IB_CUR_GE, IB_EXACT_MATCH);

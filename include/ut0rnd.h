@@ -68,35 +68,30 @@ inline ulint ut_hash_ulint(
 
 /** Folds a pair of ulints.
 @return	folded value */
-inline ulint ut_fold_ulint_pair(
+[[gnu::const]] inline ulint ut_fold_ulint_pair(
   ulint n1, /*!< in: ulint */
   ulint n2
-) /*!< in: ulint */
-  __attribute__((const));
+); /*!< in: ulint */
 
 /** Folds a uint64_t.
 @return	folded value */
-inline ulint ut_uint64_fold(uint64_t d) /*!< in: uint64_t */
-  __attribute__((const));
+[[gnu::const]] inline ulint ut_uint64_fold(uint64_t d); /*!< in: uint64_t */
 
 /** Folds a character string ending in the null character.
 @return	folded value */
-inline ulint ut_fold_string(const char *str) /*!< in: null-terminated string */
-  __attribute__((pure));
+[[gnu::pure]] inline ulint ut_fold_string(const char *str); /*!< in: null-terminated string */
 
 /** Folds a binary string.
 @return	folded value */
-inline ulint ut_fold_binary(
+[[gnu::pure]] inline ulint ut_fold_binary(
   const byte *str, /*!< in: string of bytes */
   ulint len
-) /*!< in: length */
-  __attribute__((pure));
+); /*!< in: length */
 
 /** Looks for a prime number slightly greater than the given argument.
 The prime is chosen so that it is not near any power of 2.
 @return	prime */
-ulint ut_find_prime(ulint n) /*!< in: positive number > 100 */
-  __attribute__((const));
+[[gnu::const]] ulint ut_find_prime(ulint n); /*!< in: positive number > 100 */
 
 constexpr ulint UT_HASH_RANDOM_MASK = 1463735687;
 constexpr ulint UT_HASH_RANDOM_MASK2 = 1653893711;

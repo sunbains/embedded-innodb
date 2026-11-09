@@ -3,6 +3,7 @@
 #pragma once
 
 #include "innodb0types.h"
+#include "os0file.h"
 
 #include "sync0latch.h"
 #include "sync0rw.h"
@@ -146,8 +147,8 @@ struct FilNode {
   /** true if file open */
   bool open;
 
-  /** OS handle to the file, if file open */
-  os_file_t m_fh;
+  /** The file, if open */
+  os::File m_file;
 
   /** true if the 'file' is actually a raw device or a raw
   disk partition */

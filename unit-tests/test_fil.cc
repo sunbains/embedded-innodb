@@ -951,14 +951,13 @@ TEST_F(FilIoTest, FlushedLsn) {
 
   ASSERT_EQ(fil().write_flushed_lsn_to_data_files(lsn), DB_SUCCESS);
 
-  const auto fd = ::open((s_dir->m_path / "system.ibd").c_str(), O_RDONLY);
+  auto file = os::File::open(s_dir->m_path / "system.ibd", os::Open::READ);
 
-  ASSERT_GE(fd, 0);
+  ASSERT_TRUE(file) << file.error().message();
 
   lsn_t read{};
 
-  fil().read_flushed_lsn(fd, read);
-  ::close(fd);
+  fil().read_flushed_lsn(*file, read);
 
   EXPECT_EQ(read, lsn);
 }

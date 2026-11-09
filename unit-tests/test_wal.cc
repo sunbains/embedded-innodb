@@ -22,6 +22,7 @@ big appends, in a linear log and in one that wraps around its file; space
 before a checkpoint goes back to the file system; the checkpoint file keeps
 the latest valid checkpoint. */
 
+#include "ut0env.h"
 #include "log0wal.h"
 
 #include <gtest/gtest.h>
@@ -41,7 +42,7 @@ namespace fs = std::filesystem;
 struct WalTest : public ::testing::Test {
   void SetUp() override {
     /* TEST_WAL_DIR picks the base directory, TEST_WAL_KEEP keeps the files for inspection. */
-    const auto base = ::getenv("TEST_WAL_DIR") != nullptr ? fs::path(::getenv("TEST_WAL_DIR")) : fs::temp_directory_path();
+    const auto base = ::getenv("TEST_WAL_DIR") != nullptr ? fs::path(::getenv("TEST_WAL_DIR")) : ut::scratch_root();
 
     m_dir = base / std::format("test_wal_{}_{}", ::getpid(), ::testing::UnitTest::GetInstance()->current_test_info()->name());
     fs::remove_all(m_dir);

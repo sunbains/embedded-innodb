@@ -36,7 +36,19 @@ both in lock_mt_util.h. */
 
 #include "lock_mt_util.h"
 
+#include <ctime>
+
 namespace {
+
+/** @return the CPU time of the calling thread, in seconds: what other processes take of the host
+doesn't count in it. */
+[[nodiscard]] double thread_cpu_secs() noexcept {
+  timespec ts{};
+
+  (void)clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ts);
+
+  return double(ts.tv_sec) + double(ts.tv_nsec) * 1e-9;
+}
 
 /** @return the key of the record heap_no of the fake page page_no, as
 FakePage::key() names it: for the locks a test makes without a page. */
@@ -1192,15 +1204,23 @@ TEST_F(LockMt, BigTrx) {
   std::printf("BigTrx: commit of %lu locks in %lu structs: %.1f ms\n", (unsigned long)(N_PAGES * N_HEAPS + 2), (unsigned long)n_structs, ms.count());
 }
 
-/** The release of locks with W waiters behind them grants them in one pass
-over each queue, O(W), not O(W^2) like a scan from the front of the queue
-for each waiter. Two shapes, each at W = 256 and W = 4096: (1) one holder of
-W records of a page (W keys, W queues) and an X waiter for each record; (2) one holder of a record in X and W waiters for it
-in S, all granted together. Every waiter is granted. The time per grant at
-4096 is less than 4 times the time at 256, the best of 3 runs (a quadratic
-release is 16 times). */
+/** The release of locks with W waiters behind them grants them in one pass over each queue, O(W),
+not O(W^2) like a scan from the front of the queue for each waiter. Two shapes, each at W = 256 and
+W = 4096: (1) one holder of W records of a page (W keys, W queues) and an X waiter for each record;
+(2) one holder of a record in X and W waiters for it in S, all granted together. Every waiter is
+granted.
+
+What's counted is exact, whatever the load: the locks the grant passes visit, per waiter, the same at
+both sizes (quadratic is 16 times more at 4096). The time is the CPU time of the thread, the best of
+the rounds: less than 8 times per grant at 4096 (a quadratic release is 16 times, the caches alone
+take it to about 4). */
 TEST_F(LockMt, ReleaseLinear) {
-  auto run = [&](ulint w, bool one_rec) -> double {
+  struct Cost {
+    double m_steps;
+    double m_cpu;
+  };
+
+  auto run = [&](ulint w, bool one_rec) -> Cost {
     FakePage page(1, one_rec ? 10 : w + 2);
     auto holder = begin();
     std::vector<Trx *> trxs;
@@ -1220,11 +1240,12 @@ TEST_F(LockMt, ReleaseLinear) {
       EXPECT_EQ(rec_request(trxs[i], page, mode, one_rec ? 2 : 2 + i), WAIT);
     }
 
-    const auto start = Clock::now();
+    const auto steps = m_lock_sys->m_n_grant_steps.load();
+    const auto cpu = thread_cpu_secs();
 
     m_lock_sys->release(holder);
 
-    const std::chrono::duration<double> secs = Clock::now() - start;
+    const Cost cost{double(m_lock_sys->m_n_grant_steps.load() - steps) / double(w), (thread_cpu_secs() - cpu) / double(w)};
 
     for (auto trx : trxs) {
       EXPECT_EQ(trx->m_wait_lock, nullptr) << "a waiter was not granted";
@@ -1238,35 +1259,40 @@ TEST_F(LockMt, ReleaseLinear) {
       commit(trx);
     }
 
-    return secs.count() / double(w);
+    return cost;
   };
 
   for (bool one_rec : {false, true}) {
-    double small{1e9};
-    double big{1e9};
+    const auto what = one_rec ? "one record" : "W records";
+    Cost small{1e9, 1e9};
+    Cost big{1e9, 1e9};
 
-    /* A busy host can push a few rounds over the limit, a release that is
-    not linear stays over it: keep the best time of each size, and measure
-    again while the ratio is over. */
     for (int i{}; i < 12; ++i) {
-      small = std::min(small, run(256, one_rec));
-      big = std::min(big, run(4096, one_rec));
+      const auto s = run(256, one_rec);
+      const auto b = run(4096, one_rec);
 
-      if (i >= 2 && big < 4 * small) {
+      small = {s.m_steps, std::min(small.m_cpu, s.m_cpu)};
+      big = {b.m_steps, std::min(big.m_cpu, b.m_cpu)};
+
+      /* The best time of each size: measure again while the ratio is over. */
+      if (i >= 2 && big.m_cpu < 8 * small.m_cpu) {
         break;
       }
     }
 
-    std::printf("ReleaseLinear %s: %.0f ns per grant at W=256, %.0f ns at W=4096\n", one_rec ? "one record" : "W records", small * 1e9, big * 1e9);
+    std::printf("ReleaseLinear %s: %.1f steps and %.0f ns per grant at W=256, %.1f and %.0f ns at W=4096\n", what, small.m_steps, small.m_cpu * 1e9, big.m_steps, big.m_cpu * 1e9);
 
-    EXPECT_LT(big, 4 * small) << (one_rec ? "one record" : "W records") << ": the release is not linear in the waiters";
+    EXPECT_LE(small.m_steps, 4.0) << what << ": the grant passes visit more than a few locks per waiter";
+    EXPECT_LE(big.m_steps, small.m_steps * 1.1) << what << ": the grant passes are not linear in the waiters";
+    EXPECT_LT(big.m_cpu, 8 * small.m_cpu) << what << ": the release is not linear in the waiters";
   }
 }
 
 /** The deadlock check of a request that waits costs the same with 10 and
 with 4,000 idle active transactions (it used to clear a mark on every active
 transaction first, O(active)): at 4,000 it is less than 3 times the cost at
-10, plus 2 us for noise, the best of 5 batches of 200 checks. */
+10, plus 2 us for noise, the best of 5 batches of 200 checks, in the CPU time
+of the thread: what other processes take of the host doesn't count. */
 TEST_F(LockMt, DeadlockIdle) {
   FakePage page(1);
 
@@ -1290,13 +1316,13 @@ TEST_F(LockMt, DeadlockIdle) {
     for (int b{}; b < 5; ++b) {
       x_enter();
 
-      const auto start = Clock::now();
+      const auto start = thread_cpu_secs();
 
       for (int i{}; i < 200; ++i) {
         EXPECT_FALSE(m_lock_sys->deadlock_occurs(req, req_trx));
       }
 
-      best = std::min(best, std::chrono::duration<double>(Clock::now() - start).count() / 200);
+      best = std::min(best, (thread_cpu_secs() - start) / 200);
 
       x_exit();
     }
@@ -1451,9 +1477,11 @@ TEST_F(LockMt, ShardBoundary) {
 (spread over all the key shards), while 8 threads lock and release records
 of pages of their own, in the same shards: the commit holds a shard latch
 for at most LOCK_RELEASE_BATCH locks and nothing global, so no other thread
-waits long. The longest lock and release of the others during the commit is
-under 20 ms (100 ms with a sanitizer); it was a hold of the trx sys mutex for
-1,000 locks at a time, and every other operation needed that mutex. */
+waits long: the most locks the commit releases under one hold of a shard
+latch is LOCK_RELEASE_BATCH, which is counted, exactly. It was a hold of the
+trx sys mutex for 1,000 locks at a time, and every other operation needed that
+mutex. The latencies of the others are printed: what a loaded host does to
+them isn't the lock system's. */
 TEST_F(LockMt, BigCommitOtherShards) {
   constexpr page_no_t N_LOCKS = 100000;
   constexpr int N_THREADS = 8;
@@ -1497,10 +1525,13 @@ TEST_F(LockMt, BigCommitOtherShards) {
   std::this_thread::sleep_for(20ms);
 
   committing = true;
+  m_lock_sys->m_max_release_batch = 0;
 
   const auto start = Clock::now();
 
   commit(holder);
+
+  const auto max_batch = m_lock_sys->m_max_release_batch.load();
 
   const std::chrono::duration<double, std::milli> ms = Clock::now() - start;
 
@@ -1524,7 +1555,8 @@ TEST_F(LockMt, BigCommitOtherShards) {
   std::printf("BigCommitOtherShards: commit of %lu locks %.1f ms; others: %zu ops, p50 %.3f ms, p99 %.3f ms, max %.3f ms\n",
     (unsigned long)N_LOCKS, ms.count(), all.size(), percentile(all, 50), percentile(all, 99), max);
 
-  EXPECT_LT(max, SANITIZER ? 100.0 : 20.0) << "another thread waited long for the commit";
+  EXPECT_GT(max_batch, 0u);
+  EXPECT_LE(max_batch, LockSys::LOCK_RELEASE_BATCH) << "a shard latch was held for more than a batch";
   EXPECT_EQ(n_fake_pages(), 0u);
 }
 

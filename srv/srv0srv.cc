@@ -1043,13 +1043,8 @@ void Srv::master_thread() noexcept {
 
   m_main_thread_id = os_thread_pf(os_thread_get_curr_id());
 
+  /* Active already: start_threads() counted it. */
   auto slot_no = table_reserve_slot(SRV_MASTER);
-
-  mutex_enter(&m_sys.m_trx_sys->m_mutex);
-
-  m_n_threads_active[SRV_MASTER]++;
-
-  mutex_exit(&m_sys.m_trx_sys->m_mutex);
 
 loop:
   /* When there is database activity by users, we cycle in this loop */
@@ -1453,6 +1448,13 @@ void Srv::start_threads() noexcept {
   /* Prints the InnoDB monitor info */
   create_thread(&thread_main<&Srv::monitor_thread>, this);
 
-  /* Does purge and other utility operations */
+  /* Does purge and other utility operations. Active until it suspends itself: a shutdown that
+  comes before it runs waits for it. */
+  mutex_enter(&m_sys.m_trx_sys->m_mutex);
+
+  ++m_n_threads_active[SRV_MASTER];
+
+  mutex_exit(&m_sys.m_trx_sys->m_mutex);
+
   create_thread(&thread_main<&Srv::master_thread>, this);
 }

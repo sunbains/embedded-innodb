@@ -285,6 +285,23 @@ struct RowSel {
   [[nodiscard]] DbErr build_prev_vers(System &sys, RowVers::Row &row) noexcept;
 
   /**
+   * A clustered record read from a copy of its page, which a consistent read needs an older version
+   * of: the record again, from the page, held there in mtr. The undo its roll pointer leads to is for
+   * the rollback of its transaction to free once that has given the record its old values back, and
+   * nothing in a copy keeps it. Latched, the rollback waits.
+   *
+   * @param[in,out] pcur        The cursor that read the copy, on the record then.
+   * @param[in] index           The clustered index.
+   * @param[in,out] rec         The record, now on the page.
+   * @param[in,out] offsets     Its offsets.
+   * @param[in,out] heap        For the offsets.
+   * @param[in] mtr             Holds the page.
+   *
+   * @return false if the record has gone since the copy.
+   */
+  [[nodiscard]] bool latch_clust_rec(IndexCursor *pcur, const Index *index, Rec &rec, RecOffs &offsets, MemHeap **heap, Mtr *mtr) noexcept;
+
+  /**
    * @brief Returns true if the user-defined column values in a secondary index record
    * are alphabetically the same as the corresponding columns in the clustered
    * index record.

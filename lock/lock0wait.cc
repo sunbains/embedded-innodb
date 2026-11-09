@@ -161,6 +161,11 @@ void LockSys::release(Trx *trx) noexcept {
 
       trx_mutex_exit(trx);
 
+#ifdef UNIT_TESTING
+      for (auto max = m_max_release_batch.load(std::memory_order_relaxed); n > max && !m_max_release_batch.compare_exchange_weak(max, n);) {
+      }
+#endif /* UNIT_TESTING */
+
       return n;
     };
 

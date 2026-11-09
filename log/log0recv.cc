@@ -735,6 +735,22 @@ void recv_apply_log_recs(System &sys, bool flush_and_free_pages) noexcept {
     mutex_exit(&sys.m_recv->m_mutex);
     sys.m_log->release();
 
+    /* The last page counted done can still be in the completion of its read: on the flush list
+    only after, and fixed till then. The completion lets go of it under the pool mutex. */
+    for (;;) {
+      sys.m_buf_pool->mutex_acquire();
+
+      const auto pending = sys.m_buf_pool->m_n_pend_reads.load();
+
+      sys.m_buf_pool->mutex_release();
+
+      if (pending == 0) {
+        break;
+      }
+
+      os_thread_sleep(1000);
+    }
+
     auto n_pages = sys.m_buf_pool->m_flusher->batch(BUF_FLUSH_LIST, ULINT_MAX, IB_UINT64_T_MAX);
     ut_a(n_pages != ULINT_UNDEFINED);
 
@@ -1241,6 +1257,8 @@ void recv_recovery_rollback_active(System &sys) noexcept {
   if (sys.m_config.m_recv.m_force_recovery < IB_RECOVERY_NO_TRX_UNDO) {
     /* Rollback the uncommitted transactions which have no user
     session */
+
+    sys.m_trx_sys->m_recv_rollback_active.store(true, std::memory_order_release);
 
     sys.m_srv->create_thread(trx_rollback_or_clean_all_recovered, &sys);
   }

@@ -41,6 +41,7 @@ Created 3/26/1996 Heikki Tuuri
 #include "sync0sync.h"
 #include "trx0rseg.h"
 #include "trx0trx.h"
+#include "os0file.h"
 #include "trx0types.h"
 #include "ut0byte.h"
 #include "ut0hlc.h"
@@ -665,7 +666,7 @@ struct TrxSys {
    *
    * @return DB_SUCCESS, or DB_ERROR and a message is logged.
    */
-  [[nodiscard]] static DbErr check_format(os_file_t fh, uint32_t node) noexcept;
+  [[nodiscard]] static DbErr check_format(const os::File &file, uint32_t node) noexcept;
 
   /**
    * Writes a trx id to an index page. In case that the id size changes in
@@ -1282,6 +1283,11 @@ struct TrxSys {
   /** The recovered transaction being rolled back in crash recovery, for
   reporting the rollback progress. */
   Trx *m_recv_rollback_trx{};
+
+  /** The thread that rolls back the recovered transactions hasn't ended: the last one off the trx
+  list, it still cleans up its undo, which a shutdown has to wait for. Set before the thread is
+  created, cleared by it last: release, acquire. */
+  std::atomic<bool> m_recv_rollback_active{};
 
   /** Undo number of m_recv_rollback_trx when its rollback started. */
   int64_t m_recv_rollback_max_undo_no{};

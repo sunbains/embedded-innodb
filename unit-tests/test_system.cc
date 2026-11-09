@@ -36,7 +36,7 @@ namespace fs = std::filesystem;
 class SystemTest : public ::testing::Test {
  protected:
   void SetUp() override {
-    m_dir = fs::temp_directory_path() / std::format("innodb-system-test-{}", ::getpid());
+    m_dir = ut::scratch_root() / std::format("innodb-system-test-{}", ::getpid());
     fs::remove_all(m_dir);
     fs::create_directories(m_dir);
   }

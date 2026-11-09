@@ -319,7 +319,7 @@ QueThr *que_fork_start_command(QueFork *fork) {
   return thr;
 }
 
-void que_fork_error_handle(System &sys, Trx *trx __attribute__((unused)), QueFork *fork) {
+void que_fork_error_handle(System &sys, [[maybe_unused]] Trx *trx, QueFork *fork) {
   ut_ad(mutex_own(&sys.m_trx_sys->m_mutex));
   ut_ad(trx->m_wait_thrs.empty());
   ut_ad(trx->m_reply_signals.empty());

@@ -519,12 +519,15 @@ void TrxSys::clock_set_epoch(uint64_t epoch) noexcept {
   m_clock.set_epoch(epoch);
 }
 
-DbErr TrxSys::check_format(os_file_t fh, uint32_t node) noexcept {
+DbErr TrxSys::check_format(const os::File &file, uint32_t node) noexcept {
   auto ptr = static_cast<byte *>(ut_new(2 * UNIV_PAGE_SIZE));
   auto page = static_cast<byte *>(ut_align(ptr, UNIV_PAGE_SIZE));
 
-  auto success = os_file_read(fh, page, UNIV_PAGE_SIZE, off_t(TRX_SYS_PAGE_NO) * UNIV_PAGE_SIZE);
-  ut_a(success);
+  if (const auto err = file.read(page, UNIV_PAGE_SIZE, off_t(TRX_SYS_PAGE_NO) * UNIV_PAGE_SIZE); err) {
+    log_err("Can't read the transaction system page: ", err.message());
+    ut_delete(ptr);
+    return DB_ERROR;
+  }
 
   auto err{DB_SUCCESS};
   const auto hdr = page + TRX_SYS;

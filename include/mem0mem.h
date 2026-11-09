@@ -89,7 +89,7 @@ Macro for memory buffer allocation */
  * @param heap memory heap
  * @param format format string
  * @return heap-allocated formatted string */
-[[nodiscard]] char *mem_heap_printf(MemHeap *heap, const char *format, ...) __attribute__((format(printf, 2, 3)));
+[[nodiscard, gnu::format(printf, 2, 3)]] char *mem_heap_printf(MemHeap *heap, const char *format, ...);
 
 /**
  * Goes through the list of all allocated mem blocks, checks their magic

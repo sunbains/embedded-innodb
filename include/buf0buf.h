@@ -524,9 +524,8 @@ inline void buf_block_buf_fix_inc_func( BufBlock *block) {
 
   ut_ad(mutex_own(&block->m_mutex));
 
-  /* Serialized by the block mutex; relaxed load + store (no lock prefix)
-  because asserts read the count without the mutex. */
-  ut::stat_add_serial(block->m_page.m_buf_fix_count, 1U);
+  /* With the block mutex; an atomic add all the same: the count is read without it. */
+  ut::stat_inc(block->m_page.m_buf_fix_count, 1U);
 }
 
 #define buf_block_buf_fix_inc(b, f, l) buf_block_buf_fix_inc_func( b)
@@ -536,7 +535,7 @@ inline void BufBlock::fix_dec() {
   ut_ad(m_page.m_buf_fix_count > 0);
 
   /* See buf_block_buf_fix_inc_func(). */
-  ut::stat_add_serial(m_page.m_buf_fix_count, uint32_t(-1));
+  ut::stat_dec(m_page.m_buf_fix_count, 1U);
 
   ;
 }

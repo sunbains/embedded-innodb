@@ -12,8 +12,23 @@ Copyright (c) 2024 Sunny Bains. All rights reserved.
 #include "que0que.h"
 #include "trx0trx.h"
 
-/** Create a temporary file using the OS specific function. */
-int row_create_tempfile(const char *filename); /*!< in: temp filename prefix */
+#include <expected>
+#include <filesystem>
+#include <system_error>
+
+/** @return the directory of the temporary files of sys: FilConfig::m_tmp_dir, else the data home. */
+[[nodiscard]] std::filesystem::path row_tmp_dir(const System &sys) noexcept;
+
+/**
+ * Create a temporary file: without a name (O_TMPFILE), or with one unlinked at once where the file
+ * system can't. Gone when it's closed.
+ *
+ * @param[in] dir               The directory.
+ * @param[in] prefix            Of the name, if it has one; nullptr for "ib".
+ *
+ * @return the descriptor, or an errno code: ENOENT for a directory that doesn't exist.
+ */
+[[nodiscard]] std::expected<int, std::error_code> row_create_tempfile(const std::filesystem::path &dir, const char *prefix) noexcept;
 
 /** Handles user errors and lock waits detected by the database engine.
 @return	true if it was a lock wait and we should continue running the query

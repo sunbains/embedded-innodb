@@ -96,7 +96,8 @@ TEST_F(SrvTest, BackgroundDrop) {
 TEST_F(SrvTest, Monitor) {
   load({{1, ut::Row{1, 1, "x"}}});
 
-  auto out = std::tmpfile();
+  /* In the test's directory: nothing of a test goes to /tmp. */
+  auto out = std::fopen((m_dir.m_path / "monitor.txt").c_str(), "w+");
 
   ASSERT_NE(out, nullptr);
 

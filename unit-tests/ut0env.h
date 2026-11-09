@@ -60,6 +60,10 @@ struct TestDir {
   fs::path m_path;
 };
 
+/** @return where the tests put their databases and files: $TMPDIR, else UNIT_TEST_TMPDIR of the
+build (under the build directory). Never the system's /tmp. */
+[[nodiscard]] fs::path scratch_root();
+
 /** The configuration the tests use: small, data and log in dir. */
 [[nodiscard]] Config make_config(const fs::path &dir);
 

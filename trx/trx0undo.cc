@@ -216,7 +216,7 @@ void trx_undo_page_init(page_t *undo_page, ulint type, Mtr *mtr) noexcept {
  *  (DB_TOO_MANY_CONCURRENT_TRXS DB_OUT_OF_FILE_SPACE)
  */
 static DbErr trx_undo_seg_create(System &sys, 
-  TrxRseg *rseg __attribute__((unused)), trx_rsegf_t *rseg_hdr, ulint type, ulint *id, page_t **undo_page, Mtr *mtr
+  [[maybe_unused]] TrxRseg *rseg, trx_rsegf_t *rseg_hdr, ulint type, ulint *id, page_t **undo_page, Mtr *mtr
 ) noexcept {
   ut_ad(mutex_own(&rseg->m_mutex));
 
@@ -573,7 +573,7 @@ ulint Undo::free_page(
   return last_addr.m_page_no;
 }
 
-void Undo::free_page_in_rollback(Trx *trx __attribute__((unused)), TrxUndo *undo, page_no_t page_no, Mtr *mtr) noexcept {
+void Undo::free_page_in_rollback([[maybe_unused]] Trx *trx, TrxUndo *undo, page_no_t page_no, Mtr *mtr) noexcept {
   ut_ad(undo->m_hdr_page_no != page_no);
   ut_ad(mutex_own(&trx->m_undo_mutex));
 
@@ -1008,7 +1008,7 @@ DbErr Undo::assign_undo(Trx *trx, ulint type) noexcept {
   return DB_SUCCESS;
 }
 
-RawPage Undo::set_state_at_finish(TrxRseg *rseg, Trx *trx __attribute__((unused)), TrxUndo *undo, Mtr *mtr) noexcept {
+RawPage Undo::set_state_at_finish(TrxRseg *rseg, [[maybe_unused]] Trx *trx, TrxUndo *undo, Mtr *mtr) noexcept {
   ut_ad(mutex_own(&rseg->m_mutex));
 
   if (undo->m_id >= TRX_RSEG_N_SLOTS) {

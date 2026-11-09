@@ -84,26 +84,14 @@ constexpr ulint MAX_DEPTH = LOCK_MAX_DEPTH_IN_DEADLOCK_CHECK;
 
 constexpr ulint SUP = PAGE_HEAP_NO_SUPREMUM;
 
-/** True in a build with a sanitizer: the timing bounds of the lock wait
-timeout tests are scaled for it (a loaded host and an instrumented engine
-add hundreds of ms to a statement around a precise timeout). */
-#if defined(__SANITIZE_ADDRESS__) || defined(__SANITIZE_THREAD__)
-constexpr bool SANITIZER = true;
-#elif defined(__has_feature)
-#if __has_feature(address_sanitizer) || __has_feature(thread_sanitizer)
-constexpr bool SANITIZER = true;
-#else
-constexpr bool SANITIZER = false;
-#endif
-#else
-constexpr bool SANITIZER = false;
-#endif
+/** A wait the engine ends by itself, at once (a deadlock found, an interrupt, a timeout of 0),
+measured around the statement: far below the lock wait timeout the tests run with (10 s), what it
+takes if the engine doesn't end it, and far above what a loaded host or a sanitizer adds. */
+constexpr std::chrono::seconds PROMPT{3};
 
-/** The upper bound of a 1 s lock wait timeout, measured around the statement. */
-constexpr double TIMEOUT_1S_MAX = SANITIZER ? 2.5 : 1.2;
-
-/** The scale of the other latency bounds of the wait tests. */
-constexpr int SLOW = SANITIZER ? 5 : 1;
+/** The upper bound of a 1 s lock wait timeout, measured around the statement: it fired, and not the
+10 s of the tests' default, with what a loaded host adds. */
+constexpr double TIMEOUT_1S_MAX = 4.0;
 
 /** What an insert requests: rec_insert_check_and_lock(). */
 constexpr ulint II = LOCK_X | LOCK_GAP | LOCK_INSERT_INTENTION;

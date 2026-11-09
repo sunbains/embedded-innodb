@@ -290,7 +290,7 @@ void RowUpdate::rec_in_place(Rec rec, const Index *index, const ulint *offsets, 
 }
 
 byte *RowUpdate::write_sys_vals_to_log(
-  const Index *index, Trx *trx, roll_ptr_t roll_ptr, byte *log_ptr, Mtr *mtr __attribute__((unused))
+  const Index *index, Trx *trx, roll_ptr_t roll_ptr, byte *log_ptr, [[maybe_unused]] Mtr *mtr
 ) noexcept {
   ut_ad(index->is_clustered());
 

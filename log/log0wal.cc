@@ -123,7 +123,16 @@ LogWalBackend::~LogWalBackend() noexcept {
 }
 
 bool LogWalBackend::open() noexcept {
-  std::filesystem::create_directories(m_config.m_log_dir);
+  {
+    std::error_code ec;
+
+    (void)std::filesystem::create_directories(m_config.m_log_dir, ec);
+
+    if (ec) {
+      log_err(std::format("Cannot create the WAL directory {}: {}", m_config.m_log_dir, ec.message()));
+      return false;
+    }
+  }
 
   const auto path = std::filesystem::path(m_config.m_log_dir) / m_config.m_log_file;
 

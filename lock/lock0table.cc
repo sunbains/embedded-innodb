@@ -322,6 +322,10 @@ void LockSys::table_grant_pass(Table *table, GrantPlan *plan) noexcept {
   TableSeen seen;
 
   for (auto lock : table->m_locks) {
+#ifdef UNIT_TESTING
+    m_n_grant_steps.fetch_add(1, std::memory_order_relaxed);
+#endif /* UNIT_TESTING */
+
     if (lock->is_waiting()) {
       bool multi{};
       auto blocker = seen.blocker(lock, &multi);

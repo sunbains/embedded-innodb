@@ -30,9 +30,12 @@ SET(LIBS innodb pthread m)
 
 SET(UNIT_TEST_TMPDIR "$ENV{TMPDIR}" CACHE PATH "Directory for the unit tests' databases")
 
+# Never the system's /tmp: under the build directory if nothing says where.
 IF(NOT UNIT_TEST_TMPDIR)
-  SET(UNIT_TEST_TMPDIR "/tmp")
+  SET(UNIT_TEST_TMPDIR "${CMAKE_BINARY_DIR}/tmp")
 ENDIF()
+
+FILE(MAKE_DIRECTORY "${UNIT_TEST_TMPDIR}")
 
 # The scaffolding linked into every test program. An object library: the
 # logger symbols it defines are needed by libinnodb.a, after it on the link line.
@@ -40,6 +43,9 @@ SET(UNIT_TEST_PERF_OUT "${CMAKE_BINARY_DIR}/perf.csv" CACHE FILEPATH "CSV file o
 
 add_library(ut0env OBJECT ut0env.cc ut0perf.cc unit_test_logger.cc)
 target_link_libraries(ut0env PUBLIC GTest::gtest ${LIBS})
+
+# Where a test program run by hand puts its databases, without TMPDIR: ut::scratch_root().
+target_compile_definitions(ut0env PRIVATE UNIT_TEST_TMPDIR=\"${UNIT_TEST_TMPDIR}\")
 
 add_custom_target(unit-build)
 
@@ -88,6 +94,7 @@ ib_unit_test(test_ut)
 ib_unit_test(test_hlc)
 ib_unit_test(test_lflist)
 ib_unit_test(test_os)
+ib_unit_test(test_file)
 ib_unit_test(test_data)
 ib_unit_test(test_wal)
 

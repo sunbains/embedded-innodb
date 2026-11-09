@@ -53,8 +53,8 @@ namespace crc32 {
  * CRC32_x86_64_DEFAULT
  *   An environment which seems to be like gcc or clang, and thus we can use
  *   inline assembly to get `cpuid`.
- *   Also, we can/have to use __attribute__(target(...)) on functions which
- *   use intrinsics, and may need to use __attribute__(flatten) at top level
+ *   Also, we can/have to use [[gnu::target(...)]] on functions which
+ *   use intrinsics, and may need to use [[gnu::flatten]] at top level
  *   to ensure that the run-time selection of target-specific variant of the
  *   function happens just once at the top, not in every leaf, which would
  *   break inlining and optimizations.
@@ -188,19 +188,19 @@ struct Crc32Impl {
   static inline uint64_t update(uint64_t crc, uint64_t data) noexcept;
 };
 
-__attribute__((target("sse4.2"))) inline uint32_t Crc32Impl::update(uint32_t crc, unsigned char data) noexcept {
+[[gnu::target("sse4.2")]] inline uint32_t Crc32Impl::update(uint32_t crc, unsigned char data) noexcept {
   return _mm_crc32_u8(crc, data);
 }
 
-__attribute__((target("sse4.2"))) inline uint32_t Crc32Impl::update(uint32_t crc, uint16_t data) noexcept {
+[[gnu::target("sse4.2")]] inline uint32_t Crc32Impl::update(uint32_t crc, uint16_t data) noexcept {
   return _mm_crc32_u16(crc, data);
 }
 
-__attribute__((target("sse4.2"))) inline uint32_t Crc32Impl::update(uint32_t crc, uint32_t data) noexcept {
+[[gnu::target("sse4.2")]] inline uint32_t Crc32Impl::update(uint32_t crc, uint32_t data) noexcept {
   return _mm_crc32_u32(crc, data);
 }
 
-__attribute__((target("sse4.2"))) inline uint64_t Crc32Impl::update(uint64_t crc, uint64_t data) noexcept {
+[[gnu::target("sse4.2")]] inline uint64_t Crc32Impl::update(uint64_t crc, uint64_t data) noexcept {
   return _mm_crc32_u64(crc, data);
 }
 
@@ -217,7 +217,7 @@ struct UsePclmul : Crc32Impl {
 };
 
 template <uint32_t w>
-__attribute__((target("sse4.2,pclmul"))) uint64_t UsePclmul::polynomial_mul_rev(uint32_t rev_u) noexcept {
+[[gnu::target("sse4.2,pclmul")]] uint64_t UsePclmul::polynomial_mul_rev(uint32_t rev_u) noexcept {
   constexpr uint64_t flipped_w = flip_at_32(w);
   return _mm_cvtsi128_si64(_mm_clmulepi64_si128(_mm_set_epi64x(0, rev_u), _mm_set_epi64x(0, flipped_w), 0x00));
 }
@@ -516,7 +516,7 @@ static inline uint32_t calculate_with(uint32_t crc, const byte *data, size_t len
  * 
  * @return CRC-32C (polynomial 0x11EDC6F41)
  */
-__attribute__((target("sse4.2,pclmul"), flatten)) static inline uint32_t pclmul(const byte *data, size_t len) noexcept {
+[[gnu::target("sse4.2,pclmul"), gnu::flatten]] static inline uint32_t pclmul(const byte *data, size_t len) noexcept {
   return calculate_with<UsePclmul>(0, data, len);
 }
 
@@ -531,7 +531,7 @@ __attribute__((target("sse4.2,pclmul"), flatten)) static inline uint32_t pclmul(
  * 
  * @return CRC-32C (polynomial 0x11EDC6F41)
  */
-__attribute__((target("sse4.2"), flatten)) static inline uint32_t unrolled_loop_poly_mul(const byte *data, size_t len) noexcept {
+[[gnu::target("sse4.2"), gnu::flatten]] static inline uint32_t unrolled_loop_poly_mul(const byte *data, size_t len) noexcept {
   return calculate_with<UseUnrolledLoopPolyMul>(0, data, len);
 }
 

@@ -1800,14 +1800,32 @@ struct BlinkCursor final : IndexAm::Cursor {
       mem_heap_free(heap);
     }
 
+    ut_d(page_no_t back{});
+    ut_d(uint64_t back_id{});
+    ut_d(ulint back_level{});
+
     const auto version = read_stable(m_sys, block, [&]() noexcept {
       const auto page = block->get_frame();
+
+      ut_d(back = mach_read_from_4(page + FIL_PAGE_PREV));
+      ut_d(back_id = mach_read_from_8(page + PAGE_HEADER + PAGE_INDEX_ID));
+      ut_d(back_level = mach_read_from_2(page + PAGE_HEADER + PAGE_LEVEL));
 
       /* Only the link back tells it's still the neighbour: what's left of a page can have changed. */
       ok = !is_dead(page, index) && (right || mach_read_from_4(page + FIL_PAGE_NEXT) == from_no);
 
       return !ok || read_rec_copy_raw(page, offs, frame);
     });
+
+#ifdef UNIV_DEBUG
+    /* The page it came from is as it was when its link was read: the link back is to it. A split
+    of it since gives that page another one on its left, with no record the copy hasn't had. */
+    if (ok && right && back != from_no && from->read_begin() == m_snap_version) {
+      log_err(std::format("B-link right move from page {} to {}: its prev is {}, index id {}, level {}, from version {} now {}",
+        from_no, page_no, back, back_id, back_level, m_snap_version, from->read_begin()));
+      ut_error;
+    }
+#endif /* UNIV_DEBUG */
 
     if (!ok) {
       mtr->release_block_at_savepoint(savepoint, block);
@@ -2397,10 +2415,24 @@ struct BlinkCursor final : IndexAm::Cursor {
   DTuple *m_snap_seek{};
   ulint m_snap_mode{};
 
+#ifdef UNIV_DEBUG
+  /** The keys of the order check of next(). */
+  MemHeap *m_dbg_heap{};
+
+  /** The key restore() went back to, and where it was saved relative to it: the next record that
+  next() gets to is after it (or it, saved before it). Null when the cursor was put somewhere else. */
+  MemHeap *m_dbg_restore_heap{};
+  const DTuple *m_dbg_restored{};
+  BtreeCursorPos m_dbg_restored_pos{};
+#endif /* UNIV_DEBUG */
+
   ~BlinkCursor() noexcept override {
     if (m_snap_heap != nullptr) {
       mem_heap_free(m_snap_heap);
     }
+
+    ut_d(if (m_dbg_heap != nullptr) { mem_heap_free(m_dbg_heap); });
+    ut_d(if (m_dbg_restore_heap != nullptr) { mem_heap_free(m_dbg_restore_heap); });
   }
 
   /** Latch a leaf in mtr. Its latch is the only thing this adds to the memo: m_leaf_savepoint.
@@ -2492,6 +2524,8 @@ struct BlinkCursor final : IndexAm::Cursor {
   }
 
   void seek(Index *index, const DTuple *key, SearchMode mode, Intent intent, Mtr *mtr, SourceLocation) noexcept override {
+    ut_d(m_dbg_restored = nullptr);
+
     ut_a(mode == PAGE_CUR_GE || mode == PAGE_CUR_G);
 
     if (intent == Intent::Snapshot) {
@@ -2514,6 +2548,8 @@ struct BlinkCursor final : IndexAm::Cursor {
   }
 
   void position(const Index *index, const DTuple *key, SearchMode mode, Intent intent, Mtr *mtr, SourceLocation) noexcept override {
+    ut_d(m_dbg_restored = nullptr);
+
     if (intent == Intent::Snapshot) {
       snap_open(index, key, mode, Edge::KEY, mtr);
       return;
@@ -2525,6 +2561,8 @@ struct BlinkCursor final : IndexAm::Cursor {
   }
 
   void seek_insert(const Index *index, const DTuple *entry, Intent intent, QueThr *thr, Mtr *mtr, SourceLocation) noexcept override {
+    ut_d(m_dbg_restored = nullptr);
+
     ut_ad(intent != Intent::Read && intent != Intent::Snapshot);
 
     m_snap = false;
@@ -2535,6 +2573,8 @@ struct BlinkCursor final : IndexAm::Cursor {
   }
 
   bool find(const Index *index, const DTuple *key, Intent intent, Mtr *mtr, SourceLocation) noexcept override {
+    ut_d(m_dbg_restored = nullptr);
+
     if (intent == Intent::Snapshot) {
       snap_open(index, key, PAGE_CUR_LE, Edge::KEY, mtr);
 
@@ -2566,6 +2606,8 @@ struct BlinkCursor final : IndexAm::Cursor {
   }
 
   void seek_edge(const Index *index, bool first, Intent intent, Mtr *mtr, SourceLocation) noexcept override {
+    ut_d(m_dbg_restored = nullptr);
+
     if (intent == Intent::Snapshot) {
       snap_open(index, nullptr, 0, first ? Edge::FIRST : Edge::LAST, mtr);
       return;
@@ -2656,12 +2698,82 @@ struct BlinkCursor final : IndexAm::Cursor {
       }
     }
 
-    (void)restore(latch == BTR_SEARCH_LEAF ? Intent::Read : Intent::Write, mtr, Current_location());
+    /* Not restore(): what a caller of next() saved is not this. */
+    (void)restore_low(latch == BTR_SEARCH_LEAF ? Intent::Read : Intent::Write, mtr, Current_location());
 
     m_pcur.m_old_stored = false;
   }
 
+#ifdef UNIV_DEBUG
   bool next_pos(Mtr *mtr) noexcept override {
+    /* A step up goes up the order, whatever changes the pages under it: the record it gets to is
+    after the one it was on. RecvTest.DuringCheckpoint once read one out of order. */
+    const DTuple *before{};
+
+    if (on_rec()) {
+      if (m_dbg_heap == nullptr) {
+        m_dbg_heap = mem_heap_create(256);
+      } else {
+        mem_heap_empty(m_dbg_heap);
+      }
+
+      before = dbg_key(m_dbg_heap);
+    }
+
+    const auto moved = next_pos_low(mtr);
+
+    if (moved && on_rec()) {
+      /* Saved on or after a record: past it. Saved before one, it's after the record the scan was
+      last on, which can be below the saved one: what's inserted ahead of it comes. */
+      if (const auto saved = std::exchange(m_dbg_restored, nullptr); saved != nullptr) {
+        ut_a(m_dbg_restored_pos == BtreeCursorPos::BEFORE || dbg_cmp(saved) < 0);
+      }
+
+      if (before != nullptr) {
+        ut_a(dbg_cmp(before) < 0);
+      }
+    }
+
+    return moved;
+  }
+
+  /** @return the key of the record the cursor is on, a copy in heap. */
+  [[nodiscard]] const DTuple *dbg_key(MemHeap *heap) noexcept {
+    const auto index = m_pcur.get_btr_cur()->m_index;
+    byte *buf{};
+    ulint buf_size{};
+    ulint n_fields;
+    const auto copy = index->copy_rec_order_prefix(rec(), &n_fields, buf, buf_size);
+    const auto rec_bytes = static_cast<byte *>(mem_heap_alloc(heap, buf_size));
+    const auto offset = static_cast<size_t>(copy.get() - buf);
+
+    memcpy(rec_bytes, buf, buf_size);
+    mem_free(buf);
+
+    return index->build_data_tuple(Rec(rec_bytes + offset), n_fields, heap);
+  }
+
+  /** @return what cmp_dtuple_rec() says of key and the record the cursor is on. */
+  [[nodiscard]] int dbg_cmp(const DTuple *key) noexcept {
+    const auto index = m_pcur.get_btr_cur()->m_index;
+    MemHeap *heap{};
+    const auto now = rec();
+    const auto offs = PhyRec(index, now).get_all_col_offsets(nullptr, &heap, Current_location());
+    const auto cmp = cmp_dtuple_rec(index->m_cmp_ctx, key, now, offs);
+
+    if (heap != nullptr) {
+      mem_heap_free(heap);
+    }
+
+    return cmp;
+  }
+#endif /* UNIV_DEBUG */
+
+#ifdef UNIV_DEBUG
+  bool next_pos_low(Mtr *mtr) noexcept {
+#else
+  bool next_pos(Mtr *mtr) noexcept override {
+#endif /* UNIV_DEBUG */
     if (m_snap) {
       return snap_next(mtr);
     }
@@ -2684,6 +2796,8 @@ struct BlinkCursor final : IndexAm::Cursor {
   }
 
   bool prev_pos(Mtr *mtr) noexcept override {
+    ut_d(m_dbg_restored = nullptr);
+
     if (m_snap) {
       return snap_prev(mtr);
     }
@@ -2717,6 +2831,8 @@ struct BlinkCursor final : IndexAm::Cursor {
   }
 
   bool prev(Mtr *mtr) noexcept override {
+    ut_d(m_dbg_restored = nullptr);
+
     while (prev_pos(mtr)) {
       if (on_rec()) {
         return true;
@@ -2758,13 +2874,13 @@ struct BlinkCursor final : IndexAm::Cursor {
   [[nodiscard]] LockPos lock_pos(Rec rec) noexcept override { return Btree::lock_pos(index(), m_pcur.get_block(), rec); }
 
   [[nodiscard]] At at() noexcept override {
-    const auto rec = this->rec();
+    const auto here = rec();
 
-    return page_rec_is_supremum(rec) ? At::FENCE : page_rec_is_infimum(rec) ? At::START : At::REC;
+    return page_rec_is_supremum(here) ? At::FENCE : page_rec_is_infimum(here) ? At::START : At::REC;
   }
 
   [[nodiscard]] Next peek_next() noexcept override {
-    const auto next = page_rec_get_next_const(this->rec());
+    const auto next = page_rec_get_next_const(rec());
 
     return Next{next, page_rec_is_supremum(next) ? At::FENCE : At::REC};
   }
@@ -2798,6 +2914,50 @@ struct BlinkCursor final : IndexAm::Cursor {
   }
 
   bool restore(Intent intent, Mtr *mtr, SourceLocation loc) noexcept override {
+#ifdef UNIV_DEBUG
+    /* The saved key before restore_low() can save again. */
+    const DTuple *saved{};
+    const auto pos = m_pcur.m_rel_pos;
+
+    if (m_pcur.m_old_stored && (pos == BtreeCursorPos::ON || pos == BtreeCursorPos::BEFORE || pos == BtreeCursorPos::AFTER)) {
+      if (m_dbg_restore_heap == nullptr) {
+        m_dbg_restore_heap = mem_heap_create(256);
+      } else {
+        mem_heap_empty(m_dbg_restore_heap);
+      }
+
+      auto tuple = dtuple_copy(m_pcur.get_btr_cur()->m_index->build_data_tuple(m_pcur.m_old_rec, m_pcur.m_old_n_fields, m_dbg_restore_heap), m_dbg_restore_heap);
+
+      for (ulint i{}; i < dtuple_get_n_fields(tuple); ++i) {
+        dfield_dup(dtuple_get_nth_field(tuple, i), m_dbg_restore_heap);
+      }
+
+      saved = tuple;
+    }
+#endif /* UNIV_DEBUG */
+
+    const auto found = restore_low(intent, mtr, loc);
+
+#ifdef UNIV_DEBUG
+    /* On the record if found, below it if not. After it: past it, or on no record. */
+    if (saved != nullptr && intent != Intent::Mark && on_rec()) {
+      const auto cmp = dbg_cmp(saved);
+
+      if (pos == BtreeCursorPos::ON) {
+        ut_a(found ? cmp == 0 : cmp > 0);
+      } else if (pos == BtreeCursorPos::AFTER) {
+        ut_a(cmp < 0);
+      }
+    }
+#endif /* UNIV_DEBUG */
+
+    ut_d(m_dbg_restored = saved);
+    ut_d(m_dbg_restored_pos = pos);
+
+    return found;
+  }
+
+  bool restore_low(Intent intent, Mtr *mtr, SourceLocation loc) noexcept {
     ut_a(m_pcur.m_old_stored);
 
     if (intent == Intent::Snapshot) {
@@ -2925,6 +3085,8 @@ struct BlinkCursor final : IndexAm::Cursor {
   }
 
   void copy_saved(IndexAm::Cursor &src) noexcept override { m_guess_block = nullptr; m_pcur.copy_stored_position(&static_cast<BlinkCursor &>(src).m_pcur); }
+
+  bool reads_copy() const noexcept override { return m_snap; }
 
   bool give_up_page(Mtr *mtr) noexcept override {
     if (!m_snap || m_snap_block == nullptr) {

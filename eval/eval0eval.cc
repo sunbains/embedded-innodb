@@ -29,6 +29,8 @@ Created 12/29/1997 Heikki Tuuri
 #include "data0data.h"
 #include "row0sel.h"
 
+#include <utility>
+
 /** The RND function seed */
 /** State of the RND() and RND_STR() SQL functions, per thread. */
 static thread_local ulint eval_rnd = 128367121;
@@ -86,7 +88,25 @@ void eval_node_free_val_buf(que_node_t *node) {
  *
  * @return false if it isn't an integer that is present.
  */
-[[nodiscard]] static bool eval_int_val(const Dfield *dfield, __int128 *val) noexcept {
+/** The value of an integer column, signed or unsigned: compared as the numbers they are. */
+struct IntVal {
+  bool m_unsigned{};
+  uint64_t m_u{};
+  int64_t m_s{};
+};
+
+/** @return the order of a and b: std::cmp_less() is exact across signed and unsigned. */
+[[nodiscard]] static int cmp_int(const IntVal &a, const IntVal &b) noexcept {
+  const auto cmp = [](auto x, auto y) { return std::cmp_less(x, y) ? -1 : (std::cmp_greater(x, y) ? 1 : 0); };
+
+  if (a.m_unsigned) {
+    return b.m_unsigned ? cmp(a.m_u, b.m_u) : cmp(a.m_u, b.m_s);
+  }
+
+  return b.m_unsigned ? cmp(a.m_s, b.m_u) : cmp(a.m_s, b.m_s);
+}
+
+[[nodiscard]] static bool eval_int_val(const Dfield *dfield, IntVal *val) noexcept {
   const auto type = dfield_get_type(dfield);
   const auto len = dfield_get_len(dfield);
 
@@ -102,13 +122,13 @@ void eval_node_free_val_buf(que_node_t *node) {
   }
 
   if ((dtype_get_prtype(type) & DATA_UNSIGNED) != 0) {
-    *val = v;
+    *val = IntVal{.m_unsigned = true, .m_u = v};
   } else if (len == 8) {
-    *val = int64_t(v);
+    *val = IntVal{.m_s = int64_t(v)};
   } else {
     const auto shift = 64 - 8 * len;
 
-    *val = int64_t(v << shift) >> shift;
+    *val = IntVal{.m_s = int64_t(v << shift) >> shift};
   }
 
   return true;
@@ -122,12 +142,11 @@ bool eval_cmp(FuncNode *cmp_node) {
   const auto val1 = que_node_get_val(arg1);
   const auto val2 = que_node_get_val(arg2);
 
-  __int128 int1{};
-  __int128 int2{};
+  IntVal int1{};
+  IntVal int2{};
 
   /* cmp_dfield_dfield() is the order of stored columns, bytes. */
-  const auto res = eval_int_val(val1, &int1) && eval_int_val(val2, &int2) ? (int1 < int2 ? -1 : (int1 > int2 ? 1 : 0))
-                                                                          : cmp_dfield_dfield(nullptr, val1, val2);
+  const auto res = eval_int_val(val1, &int1) && eval_int_val(val2, &int2) ? cmp_int(int1, int2) : cmp_dfield_dfield(nullptr, val1, val2);
   auto val = true;
   auto func = cmp_node->func;
 

@@ -75,6 +75,9 @@ struct FilConfig {
   /** Directory holding the system tablespace and the .ibd files. */
   std::string m_data_home{"./"};
 
+  /** Where the temporary files of sorts go, unnamed: the data home if empty. */
+  std::string m_tmp_dir{};
+
   /** Create each user table in its own .ibd file. */
   bool m_file_per_table{true};
 

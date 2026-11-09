@@ -244,6 +244,13 @@ struct LockSys {
   /** The instance this sub-system belongs to. */
   System &m_sys;
 
+#ifdef UNIT_TESTING
+  /** For the tests, what the timing of a loaded host can't show: the locks the grant passes
+  visited, and the most locks a release took out under one hold of a shard latch. */
+  std::atomic<uint64_t> m_n_grant_steps{};
+  std::atomic<size_t> m_max_release_batch{};
+#endif /* UNIT_TESTING */
+
   /**
    * Creates the lock system at database start.
    *

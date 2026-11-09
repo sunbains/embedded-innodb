@@ -26,12 +26,11 @@ TSan reports it), even though any value the reader sees is acceptable.
 These helpers make such an access formally race free through
 std::atomic_ref with memory_order_relaxed. On x86-64 and AArch64 a relaxed
 load or store of an aligned scalar compiles to the same instruction as the
-plain access, so the hot paths don't get slower. Only stat_inc()/stat_dec()
-use a locked RMW; use them only where several threads increment the same
-counter without a common latch and a lost update matters.
-stat_add_serial() is for a writer that is already serialized by a latch:
-it's a plain load + store, no lock prefix, and safe against unlatched
-readers.
+plain access, so the hot paths don't get slower. A counter is changed
+with an atomic read-modify-write, stat_inc()/stat_dec() or the operators of
+Relaxed<T>: never a load and a store, which loses an update when another
+thread changes it in between. Relaxed is the right order for a counter:
+nothing else is published through it.
 
 Two forms:
 
@@ -80,37 +79,12 @@ inline T stat_dec(T &x, T n = 1) noexcept {
   return std::atomic_ref<T>(x).fetch_sub(n, std::memory_order_relaxed);
 }
 
-/** Add n to x when the writers are serialized by a latch but readers may
-not hold it: a relaxed load + store, no locked instruction.
-@return the old value. */
-template <Stat_type T>
-inline T stat_add_serial(T &x, T n = 1) noexcept {
-  std::atomic_ref<T> r(x);
-  const auto old = r.load(std::memory_order_relaxed);
-
-  r.store(T(old + n), std::memory_order_relaxed);
-
-  return old;
-}
-
-/** Add n to x where a lost update under contention is acceptable (a
-statistic, a heuristic). Plain load + store, like the original ++x, but
-without the data race. Use stat_inc() where every update must count.
-@return the old value. */
-template <Stat_type T>
-inline T stat_add_lossy(T &x, T n = 1) noexcept {
-  return stat_add_serial(x, n);
-}
-
 /** A T whose accesses are all relaxed atomic ones. For statistics,
 heuristic hints and debug counters that are read (or written) without the
 latch that serializes the other writers.
 
-++, --, += and -= are a relaxed load followed by a relaxed store, NOT an
-atomic RMW: the same code as on a plain T, and as lossy as the original
-plain ++ when two writers aren't serialized. That is fine for the fields
-this is used for (an occasional lost count). Use fetch_add() where every
-update must count. */
+++, --, += and -= are atomic read-modify-writes, relaxed: no update is lost
+whoever else changes it. */
 template <Stat_type T>
 class Relaxed {
  public:
@@ -143,38 +117,22 @@ class Relaxed {
   T fetch_sub(T n) noexcept { return m_v.fetch_sub(n, std::memory_order_relaxed); }
 
   Relaxed &operator+=(T n) noexcept {
-    store(T(load() + n));
+    (void)fetch_add(n);
     return *this;
   }
 
   Relaxed &operator-=(T n) noexcept {
-    store(T(load() - n));
+    (void)fetch_sub(n);
     return *this;
   }
 
-  T operator++() noexcept {
-    const T v = T(load() + 1);
-    store(v);
-    return v;
-  }
+  T operator++() noexcept { return T(fetch_add(1) + 1); }
 
-  T operator--() noexcept {
-    const T v = T(load() - 1);
-    store(v);
-    return v;
-  }
+  T operator--() noexcept { return T(fetch_sub(1) - 1); }
 
-  T operator++(int) noexcept {
-    const T v = load();
-    store(T(v + 1));
-    return v;
-  }
+  T operator++(int) noexcept { return fetch_add(1); }
 
-  T operator--(int) noexcept {
-    const T v = load();
-    store(T(v - 1));
-    return v;
-  }
+  T operator--(int) noexcept { return fetch_sub(1); }
 
  private:
   std::atomic<T> m_v{};

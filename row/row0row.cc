@@ -42,7 +42,7 @@ Created 4/20/1996 Heikki Tuuri
 #include "trx0undo.h"
 #include "ut0mem.h"
 
-ulint row_get_trx_id_offset(const Rec rec __attribute__((unused)), const Index *index, const ulint *offsets) {
+ulint row_get_trx_id_offset([[maybe_unused]] const Rec rec, const Index *index, const ulint *offsets) {
 
   ut_ad(index->is_clustered());
   ut_ad(rec.offs_validate(index, offsets));

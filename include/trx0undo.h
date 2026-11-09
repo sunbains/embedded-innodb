@@ -578,7 +578,7 @@ struct Undo {
    * @param[in] page_no The page number to free: must not be the header page.
    * @param[in] mtr The mini-transaction handle. The caller must have reserved the rollback segment mutex.
    */
-  void free_page_in_rollback(Trx *trx __attribute__((unused)), TrxUndo *undo, page_no_t page_no, Mtr *mtr) noexcept;
+  void free_page_in_rollback([[maybe_unused]] Trx *trx, TrxUndo *undo, page_no_t page_no, Mtr *mtr) noexcept;
 
   /**
    * Empties an undo log header page of undo records for that undo log. Other
