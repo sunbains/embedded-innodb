@@ -132,6 +132,7 @@ void RecvSys::open(ulint available_memory) noexcept {
 
   ut_a(m_buf == nullptr);
   m_buf = static_cast<byte *>(ut_new(RECV_PARSING_BUF_SIZE));
+  m_limit_lsn = LSN_MAX;
 
   mutex_exit(&m_mutex);
 }
@@ -291,10 +292,6 @@ byte *recv_parse_or_apply_log_rec_body(System &sys, MlogType type, byte *ptr, by
         ptr = page_parse_create(ptr, end_ptr, block, index, mtr);
       }
       break;
-    case MLOG_PAGE_HIGH_KEY:
-      ut_ad(page == nullptr || page_type == FIL_PAGE_TYPE_INDEX);
-      ptr = page_parse_high_key(sys, ptr, end_ptr, block);
-      break;
     case MLOG_UNDO_INSERT:
       ut_ad(page == nullptr || page_type == FIL_PAGE_TYPE_UNDO_LOG);
       ptr = TrxUndoRecord::parse_add_undo_rec(ptr, end_ptr, page);
@@ -351,8 +348,13 @@ byte *recv_parse_or_apply_log_rec_body(System &sys, MlogType type, byte *ptr, by
       ptr = end_ptr < ptr + 4 ? nullptr : ptr + 4;
       break;
     default:
-      ptr = nullptr;
-      sys.m_recv->m_found_corrupt_log = true;
+      /* A record of an index implementation: it applies its own. */
+      if (const auto apply = sys.m_recv->redo_apply(type); apply != nullptr) {
+        ptr = apply(sys, type, ptr, end_ptr, block, mtr);
+      } else {
+        ptr = nullptr;
+        sys.m_recv->m_found_corrupt_log = true;
+      }
   }
 
   // Get rid of the dummy index, it's too cosstly to create and destroy so frequently.
@@ -655,6 +657,7 @@ void recv_apply_log_recs(System &sys, bool flush_and_free_pages) noexcept {
 
   sys.m_recv->m_apply_log_recs = true;
   sys.m_recv->m_apply_batch_on = true;
+  ++sys.m_recv->m_n_batches;
 
   const ulint n_total{sys.m_recv->m_n_log_records};
 
@@ -902,160 +905,83 @@ static void recv_report_corrupt_log(System &sys, byte *ptr, byte type, space_id_
  * @return	currently always returns false
  */
 bool recv_parse_log_recs(System &sys, bool store_to_hash) noexcept {
-  ulint len;
-  lsn_t old_lsn;
-  ulint total_len;
-  MlogType type;
-  byte *body;
-  space_id_t space;
-  page_no_t page_no;
-  lsn_t new_recovered_lsn;
+  auto &recv = *sys.m_recv;
 
   ut_ad(mutex_own(&sys.m_log->m_mutex));
-  ut_ad(sys.m_recv->m_parse_start_lsn != 0);
+  ut_ad(recv.m_parse_start_lsn != 0);
 
+  /* A record at a time: what's consumed is parsed, a group is never held whole. */
   for (;;) {
-    auto ptr = sys.m_recv->m_buf + sys.m_recv->m_recovered_offset;
-    auto end_ptr = sys.m_recv->m_buf + sys.m_recv->m_len;
-
-    if (ptr == end_ptr) {
-
+    /* The second pass stops at the end of the last complete group, before what follows it can
+    even be parsed: a torn group, or the corruption the first pass stopped at. */
+    if (store_to_hash && recv.m_recovered_lsn >= recv.m_limit_lsn) {
       return false;
     }
 
-    auto single_rec = ulint(*ptr & MLOG_SINGLE_REC_FLAG);
+    auto ptr = recv.m_buf + recv.m_recovered_offset;
+    const auto end_ptr = recv.m_buf + recv.m_len;
 
-    if (single_rec || *ptr == MLOG_DUMMY_RECORD) {
-      /* The mtr only modified a single page, or this is a file op */
+    if (ptr == end_ptr) {
+      return false;
+    }
 
-      old_lsn = sys.m_recv->m_recovered_lsn;
+    const bool single = (*ptr & MLOG_SINGLE_REC_FLAG) != 0 || *ptr == MLOG_DUMMY_RECORD;
+    MlogType type{};
+    space_id_t space{};
+    page_no_t page_no{};
+    byte *body;
 
-      /* Try to parse a log record, fetching its type, space id,
-      page no, and a pointer to the body of the log record */
+    const auto len = recv_parse_log_rec(sys, ptr, end_ptr, &type, &space, &page_no, &body);
 
-      len = recv_parse_log_rec(sys, ptr, end_ptr, &type, &space, &page_no, &body);
+    if (recv.m_found_corrupt_log) {
+      recv_report_corrupt_log(sys, ptr, type, space, page_no);
+      return false;
+    }
 
-      if (len == 0 || sys.m_recv->m_found_corrupt_log) {
-        if (sys.m_recv->m_found_corrupt_log) {
-          recv_report_corrupt_log(sys, ptr, type, space, page_no);
-        }
-        return false;
+    /* The rest of the record isn't read yet. */
+    if (len == 0) {
+      return false;
+    }
+
+    const auto start_lsn = recv.m_recovered_lsn;
+    const auto end_lsn = recv_calc_lsn_on_data_add(start_lsn, len);
+
+    if (end_lsn > recv.m_scanned_lsn) {
+      /* The record continues past the log read so far. */
+      return false;
+    }
+
+    recv.m_previous_parsed_rec_type = type;
+    recv.m_previous_parsed_rec_offset = recv.m_recovered_offset;
+    recv.m_previous_parsed_rec_is_multi = !single;
+
+    recv.m_recovered_offset += len;
+    recv.m_recovered_lsn = end_lsn;
+
+    if (!store_to_hash) {
+      /* The first pass: a single record, or the end mark of a group, ends a complete group. */
+      if (single || type == MLOG_MULTI_REC_END) {
+        recv.m_limit_lsn = end_lsn;
       }
 
-      new_recovered_lsn = recv_calc_lsn_on_data_add(old_lsn, len);
+      continue;
+    }
 
-      if (new_recovered_lsn > sys.m_recv->m_scanned_lsn) {
-        /* The record group continues past the log read so far. */
+    /* The second pass: every record below the limit is of a complete group, it's stored as
+    it's read, at its own LSNs. An apply batch can run between two records of a group: each
+    record is applied to a page by its own LSN. */
+    if (type == MLOG_MULTI_REC_END || type == MLOG_DUMMY_RECORD) {
+      /* Nothing to do */
+    } else if (type == MLOG_FILE_EXTEND) {
+      recv_extend(sys, space, body);
+    } else if (type == MLOG_SYSTRX_STEP || type == MLOG_SYSTRX_UNDONE || type == MLOG_SYSTRX_END) {
+      sys.m_systrx->replay(type, body);
+    } else if (type == MLOG_FILE_CREATE || type == MLOG_FILE_RENAME || type == MLOG_FILE_DELETE) {
+      ut_a(space != SYS_TABLESPACE);
 
-        return false;
-      }
-
-
-      sys.m_recv->m_previous_parsed_rec_type = type;
-      sys.m_recv->m_previous_parsed_rec_offset = sys.m_recv->m_recovered_offset;
-      sys.m_recv->m_previous_parsed_rec_is_multi = 0;
-
-      sys.m_recv->m_recovered_offset += len;
-      sys.m_recv->m_recovered_lsn = new_recovered_lsn;
-
-      if (type == MLOG_DUMMY_RECORD) {
-        /* Do nothing */
-
-      } else if (!store_to_hash) {
-        /* In debug checking, update a replicate page according to
-        the log record, and check that it becomes identical with the
-        original page */
-
-      } else if (type == MLOG_FILE_EXTEND) {
-        recv_extend(sys, space, body);
-      } else if (type == MLOG_SYSTRX_STEP || type == MLOG_SYSTRX_UNDONE || type == MLOG_SYSTRX_END) {
-        sys.m_systrx->replay(type, body);
-      } else if (type == MLOG_FILE_CREATE || type == MLOG_FILE_RENAME || type == MLOG_FILE_DELETE) {
-        ut_a(space != SYS_TABLESPACE);
-
-        /* In normal crash recovery we do not try to replay file operations */
-      } else {
-        sys.m_recv->add_log_record(type, space, page_no, body, ptr + len, old_lsn, sys.m_recv->m_recovered_lsn);
-      }
+      /* In normal crash recovery we do not try to replay file operations */
     } else {
-      /* Check that all the records associated with the single mtr
-      are included within the buffer */
-
-      total_len = 0;
-
-      for (;;) {
-        auto len = recv_parse_log_rec(sys, ptr, end_ptr, &type, &space, &page_no, &body);
-
-        if (len == 0 || sys.m_recv->m_found_corrupt_log) {
-          if (sys.m_recv->m_found_corrupt_log) {
-            recv_report_corrupt_log(sys, ptr, type, space, page_no);
-          }
-          return false;
-        }
-
-
-        sys.m_recv->m_previous_parsed_rec_type = type;
-        sys.m_recv->m_previous_parsed_rec_offset = sys.m_recv->m_recovered_offset + total_len;
-        sys.m_recv->m_previous_parsed_rec_is_multi = 1;
-
-        total_len += len;
-
-        ptr += len;
-
-        if (type == MLOG_MULTI_REC_END) {
-
-          /* Found the end mark for the records */
-
-          break;
-        }
-      }
-
-      new_recovered_lsn = recv_calc_lsn_on_data_add(sys.m_recv->m_recovered_lsn, total_len);
-
-      if (new_recovered_lsn > sys.m_recv->m_scanned_lsn) {
-        /* The record group continues past the log read so far. */
-
-        return false;
-      }
-
-      /* Add all the records to the hash table */
-
-      ptr = sys.m_recv->m_buf + sys.m_recv->m_recovered_offset;
-
-      for (;;) {
-        old_lsn = sys.m_recv->m_recovered_lsn;
-
-        len = recv_parse_log_rec(sys, ptr, end_ptr, &type, &space, &page_no, &body);
-
-        if (sys.m_recv->m_found_corrupt_log) {
-          recv_report_corrupt_log(sys, ptr, type, space, page_no);
-        }
-
-        ut_a(len != 0);
-        ut_a(((ulint)*ptr & MLOG_SINGLE_REC_FLAG) == 0);
-
-        sys.m_recv->m_recovered_offset += len;
-        sys.m_recv->m_recovered_lsn = recv_calc_lsn_on_data_add(old_lsn, len);
-
-        if (type == MLOG_MULTI_REC_END) {
-
-          /* Found the end mark for the records */
-
-          break;
-        }
-
-        if (!store_to_hash) {
-          /* Debug checking only. */
-        } else if (type == MLOG_FILE_EXTEND) {
-          recv_extend(sys, space, body);
-        } else if (type == MLOG_SYSTRX_STEP || type == MLOG_SYSTRX_UNDONE || type == MLOG_SYSTRX_END) {
-          sys.m_systrx->replay(type, body);
-        } else {
-          sys.m_recv->add_log_record(type, space, page_no, body, ptr + len, old_lsn, new_recovered_lsn);
-        }
-
-        ptr += len;
-      }
+      recv.add_log_record(type, space, page_no, body, ptr + len, start_lsn, end_lsn);
     }
   }
 }
@@ -1080,54 +1006,68 @@ void recv_start_crash_recovery(System &sys) noexcept {
 }
 
 /**
- * Takes log read from the WAL: adds it to the parsing buffer, parses the
- * complete records in it and stores them for applying. Applies the stored
- * records when they take more memory than recovery may use.
+ * Takes log read from the WAL: adds it to the parsing buffer and parses the complete records in
+ * it. The first pass only parses, for the end of the last complete group; the second stores the
+ * records up to it, and applies them when they take more memory than recovery may use. The
+ * buffer holds a record at a time: a group of any size, a field of megabytes, streams through.
  *
  * @param[in] data              Log bytes, they follow the bytes passed before.
  * @param[in] len               Number of bytes.
+ * @param[in] store             The second pass.
  * @param[in] available_memory  The stored records may use this much memory.
  *
- * @return false if the log is corrupt: stop reading.
+ * @return false to stop reading: the log is corrupt, or the second pass is at the limit.
  */
-static bool recv_scan_log(System &sys, const byte *data, ulint len, ulint available_memory) noexcept {
+static bool recv_scan_log(System &sys, const byte *data, ulint len, bool store, ulint available_memory) noexcept {
   auto &recv = *sys.m_recv;
 
-  if (!recv.m_needed_recovery) {
+  if (!store && !recv.m_needed_recovery) {
     log_info("Log scan progressed past the checkpoint lsn ", recv.m_scanned_lsn);
     recv_start_crash_recovery(sys);
   }
 
-  if (recv.m_len + len > RECV_PARSING_BUF_SIZE) {
-    recv_sys_justify_left_parsing_buf(sys);
-  }
+  while (len > 0) {
+    if (recv.m_len == RECV_PARSING_BUF_SIZE) {
+      recv_sys_justify_left_parsing_buf(sys);
 
-  /* A record group, an mtr's log, is at most a few pages. */
-  if (recv.m_len + len > RECV_PARSING_BUF_SIZE) {
-    log_err("Log parsing buffer overflow. Recovery may have failed!");
+      if (recv.m_len == RECV_PARSING_BUF_SIZE) {
+        /* Not even one record in all of it. */
+        log_err("A log record bigger than the parsing buffer: the log is corrupt.");
 
-    recv.m_found_corrupt_log = true;
+        recv.m_found_corrupt_log = true;
 
-    return false;
-  }
+        return false;
+      }
+    }
 
-  memcpy(recv.m_buf + recv.m_len, data, len);
+    const auto n = std::min(len, RECV_PARSING_BUF_SIZE - recv.m_len);
 
-  recv.m_len += len;
-  recv.m_scanned_lsn += len;
+    memcpy(recv.m_buf + recv.m_len, data, n);
 
-  (void) recv_parse_log_recs(sys, true);
+    recv.m_len += n;
+    recv.m_scanned_lsn += n;
+    data += n;
+    len -= n;
 
-  if (recv.m_found_corrupt_log) {
-    return false;
-  }
+    (void)recv_parse_log_recs(sys, store);
 
-  if (mem_heap_get_size(recv.m_heap) > available_memory) {
-    recv_apply_log_recs(sys, true);
-  }
+    if (recv.m_found_corrupt_log) {
+      return false;
+    }
 
-  if (recv.m_recovered_offset > RECV_PARSING_BUF_SIZE / 4) {
-    recv_sys_justify_left_parsing_buf(sys);
+    if (store) {
+      if (mem_heap_get_size(recv.m_heap) > available_memory) {
+        recv_apply_log_recs(sys, true);
+      }
+
+      if (recv.m_recovered_lsn >= recv.m_limit_lsn) {
+        return false;
+      }
+    }
+
+    if (recv.m_recovered_offset > RECV_PARSING_BUF_SIZE / 4) {
+      recv_sys_justify_left_parsing_buf(sys);
+    }
   }
 
   return true;
@@ -1184,11 +1124,32 @@ DbErr recv_recovery_from_checkpoint_start(System &sys, lsn_t max_flushed_lsn) no
   if (have_checkpoint) {
     /* The parsed records may use the buffer pool but for the frames kept
     free for the pages they are applied to. */
-    const auto available_memory = (sys.m_buf_pool->m_curr_size - recv.m_n_pool_free_frames) * UNIV_PAGE_SIZE;
+    const auto pool_memory = (sys.m_buf_pool->m_curr_size - recv.m_n_pool_free_frames) * UNIV_PAGE_SIZE;
+    const auto max_memory = sys.m_config.m_recv.m_max_memory;
+    const auto available_memory = max_memory == 0 ? pool_memory : std::min(max_memory, pool_memory);
+
+    /* The first pass: check the log, and find the end of its last complete group. */
+    recv.m_limit_lsn = checkpoint_lsn;
 
     const auto end_lsn = LogWalBackend::read(log.wal_config(), checkpoint_lsn, [&](const byte *data, ulint len) {
-      return recv_scan_log(sys, data, len, available_memory);
+      return recv_scan_log(sys, data, len, false, available_memory);
     });
+
+    if (recv.m_needed_recovery && !(recv.m_found_corrupt_log && sys.m_config.m_recv.m_force_recovery == IB_RECOVERY_DEFAULT)) {
+      /* The second pass: stream the records up to that end into the pages, in batches. */
+      recv.m_len = 0;
+      recv.m_recovered_offset = 0;
+      recv.m_scanned_lsn = checkpoint_lsn;
+      recv.m_recovered_lsn = checkpoint_lsn;
+
+      (void)LogWalBackend::read(log.wal_config(), checkpoint_lsn, [&](const byte *data, ulint len) {
+        return recv_scan_log(sys, data, len, true, available_memory);
+      });
+
+      ut_a(recv.m_recovered_lsn == recv.m_limit_lsn);
+    } else {
+      recv.m_recovered_lsn = recv.m_limit_lsn;
+    }
 
     if (recv.m_needed_recovery) {
       log_info(std::format(

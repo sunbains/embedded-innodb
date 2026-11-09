@@ -23,7 +23,7 @@ Created 12/27/1996 Heikki Tuuri
 *******************************************************/
 
 #include "row0upd.h"
-#include "btr0blob.h"
+#include "blob0blob.h"
 #include "btr0btr.h"
 #include "btr0cur.h"
 #include "buf0lru.h"

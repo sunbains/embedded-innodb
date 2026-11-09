@@ -24,7 +24,7 @@ Created 3/14/1997 Heikki Tuuri
 
 #include "row0purge.h"
 
-#include "btr0blob.h"
+#include "blob0blob.h"
 #include "fsp0fsp.h"
 #include "log0log.h"
 #include "mach0data.h"
@@ -321,27 +321,8 @@ skip_secondaries:
 
       idx = m_table->get_first_index();
 
-      /* We have to acquire an X-latch to the clustered
-      index tree */
-
-      const auto latch_tree = sys.am(idx).uses_index_latch();
-
-      if (latch_tree) {
-        mtr_x_lock(idx->get_lock(), &mtr);
-      }
-
-      /* NOTE: we must also acquire an X-latch to the
-      root page of the tree. We will need it when we
-      free pages from the tree. If the tree is of height 1,
-      the tree X-latch does NOT protect the root page,
-      because it is also a leaf page. Since we will have a
-      latch on an undo log page, we would break the
-      latching order if we would only later latch the
-      root page of such a tree! */
-
-      if (latch_tree) {
-        (void)sys.m_btree->root_get(idx->m_page_id, &mtr);
-      }
+      /* What the tree needs held to free fields of its records, before the undo log page. */
+      sys.m_btree->latch_for_extern_free(idx, &mtr);
 
       /* We assume in purge of externally stored fields
       that the space id of the undo log record is 0! */
@@ -362,11 +343,9 @@ skip_secondaries:
 
       ut_a(dfield_get_len(&ufield->m_new_val) >= BTR_EXTERN_FIELD_REF_SIZE);
 
-      sys.m_fsp->latch(idx->get_space_id(), &mtr);
-
-      blob.free_externally_stored_field(sys, 
-        idx, data_field + dfield_get_len(&ufield->m_new_val) - BTR_EXTERN_FIELD_REF_SIZE, nullptr, nullptr, 0, RB_NONE, &mtr
-      );
+      /* After the undo page: the free and the reference in the undo record are one change. */
+      blob.prepare(sys, idx, &mtr, false);
+      blob.free_externally_stored_field(sys, idx, data_field + dfield_get_len(&ufield->m_new_val) - BTR_EXTERN_FIELD_REF_SIZE, RB_NONE, &mtr);
       mtr.commit(sys);
     }
   }

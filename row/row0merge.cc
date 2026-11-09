@@ -26,7 +26,7 @@ Completed by Sunny Bains and Marko Makela
 #include "row0merge.h"
 #include "idx0am.h"
 #include "row0misc.h"
-#include "btr0blob.h"
+#include "blob0blob.h"
 #include "btr0btr.h"
 #include "data0data.h"
 #include "data0type.h"

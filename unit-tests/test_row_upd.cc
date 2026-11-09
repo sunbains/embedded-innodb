@@ -24,6 +24,8 @@ secondary index maintained, and rollback. RowUpdTest runs on a fresh
 instance per test, RowUpdIdxTest on tables of its own in a shared one. */
 
 #include "ut0env.h"
+
+#include "idx0am.h"
 #include "ut0perf.h"
 
 #include "btr0btr.h"
@@ -690,8 +692,8 @@ constexpr ulint B_POS = 4;
 struct Found {
   bool m_found{};
   bool m_deleted{};
-  page_no_t m_page_no{FIL_NULL};
-  ulint m_offset{};
+  /* Where the record is: an update in place leaves it there. */
+  const byte *m_at{};
   trx_id_t m_trx_id{};
   std::vector<std::optional<std::string>> m_fields;
 };
@@ -721,14 +723,14 @@ class RowUpdIdxTest : public SharedDb {
   std::vector<Found> find(const Index *index, uint32_t first) {
     std::vector<Found> v;
     Mtr mtr;
-    BtreePcursor pcur;
+    IndexCursor pcur{*m_sys};
     MemHeap *heap{};
 
     mtr.start();
-    pcur.open_at_index_side(*m_sys, true, index, BTR_SEARCH_LEAF, true, 0, &mtr);
+    pcur.seek_first(index, Intent::Read, &mtr);
 
-    while (pcur.move_to_next_user_rec(*m_sys, &mtr)) {
-      auto rec = pcur.get_rec();
+    while (pcur.next(&mtr)) {
+      auto rec = pcur.rec();
       RecOffs offs = PhyRec(index, rec).get_all_col_offsets(nullptr, &heap, Current_location());
       ulint len;
 
@@ -740,8 +742,7 @@ class RowUpdIdxTest : public SharedDb {
 
       f.m_found = true;
       f.m_deleted = rec.get_deleted_flag();
-      f.m_page_no = pcur.get_block()->get_page_no();
-      f.m_offset = page_offset(rec);
+      f.m_at = rec.get();
 
       for (ulint i{}; i < offs.n_fields(); ++i) {
         auto d = rec.get_nth_field(offs, i, &len);
@@ -760,8 +761,7 @@ class RowUpdIdxTest : public SharedDb {
       v.push_back(std::move(f));
     }
 
-    pcur.close();
-    mtr.commit(*m_sys);
+    pcur.commit(&mtr);
 
     if (heap != nullptr) {
       mem_heap_free(heap);
@@ -782,13 +782,13 @@ class RowUpdIdxTest : public SharedDb {
   Copy copy_rec(const Index *index, uint32_t first) {
     Copy c;
     Mtr mtr;
-    BtreePcursor pcur;
+    IndexCursor pcur{*m_sys};
 
     mtr.start();
-    pcur.open_at_index_side(*m_sys, true, index, BTR_SEARCH_LEAF, true, 0, &mtr);
+    pcur.seek_first(index, Intent::Read, &mtr);
 
-    while (pcur.move_to_next_user_rec(*m_sys, &mtr)) {
-      auto rec = pcur.get_rec();
+    while (pcur.next(&mtr)) {
+      auto rec = pcur.rec();
       ulint len;
 
       if (mach_read_from_4(rec.get_nth_field(0, &len)) != first) {
@@ -809,8 +809,7 @@ class RowUpdIdxTest : public SharedDb {
       break;
     }
 
-    pcur.close();
-    mtr.commit(*m_sys);
+    pcur.commit(&mtr);
 
     EXPECT_NE(c.m_entry, nullptr) << first;
 
@@ -1069,8 +1068,7 @@ TEST_F(RowUpdIdxTest, InPlaceClusteredSecMaintained) {
   const auto after = find(m_tab->clust(), 1);
 
   ASSERT_EQ(after.size(), 1UL);
-  EXPECT_EQ(after[0].m_page_no, before[0].m_page_no);
-  EXPECT_EQ(after[0].m_offset, before[0].m_offset) << "in place";
+  EXPECT_EQ(after[0].m_at, before[0].m_at) << "in place";
   EXPECT_FALSE(after[0].m_deleted);
   EXPECT_EQ(after[0].m_fields[A_POS], u4(11));
   EXPECT_EQ(after[0].m_trx_id, trx->m_id);
@@ -1185,7 +1183,7 @@ TEST_F(RowUpdIdxTest, SameValue) {
   ASSERT_EQ(after.size(), 1UL);
   EXPECT_EQ(after[0].m_fields[A_POS], before[0].m_fields[A_POS]);
   EXPECT_EQ(after[0].m_fields[B_POS], before[0].m_fields[B_POS]);
-  EXPECT_EQ(after[0].m_offset, before[0].m_offset);
+  EXPECT_EQ(after[0].m_at, before[0].m_at);
 
   const auto sec = find(m_tab->sec(), 10);
 

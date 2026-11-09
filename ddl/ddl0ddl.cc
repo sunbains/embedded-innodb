@@ -753,8 +753,8 @@ DbErr Ddl::truncate_table(Table *table, Trx *trx) noexcept {
 
       rec = pcur.rec();
 
-      if (root_page_no != FIL_NULL) {
-        page_rec_write_index_page_no(rec, DICT_SYS_INDEXES_PAGE_NO_FIELD, root_page_no, &mtr);
+      if (root_page_no != IndexAm::NO_ROOT) {
+        write_index_root(rec, DICT_SYS_INDEXES_ROOT_FIELD, root_page_no, &mtr);
 
         /* We will need to commit and restart the mini-transaction in order to avoid deadlocks.
         The dict_truncate_index_tree() call has allocated a page in this mini-transaction, and the rest of

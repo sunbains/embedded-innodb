@@ -29,7 +29,8 @@ through the api on a fresh instance each. */
 #include "ut0env.h"
 #include "ut0perf.h"
 
-#include "btr0blob.h"
+#include "blob0blob.h"
+#include "blob0inline.h"
 #include "btr0btr.h"
 #include "btr0cur.h"
 #include "btr0pcur.h"
@@ -1671,7 +1672,7 @@ class BtrBlobTest : public SharedDb {
         auto v = blob.copy_externally_stored_field(*m_sys, rec, offs, B_FIELD, &full, heap);
 
         r.m_value.assign(reinterpret_cast<const char *>(v), full);
-        EXPECT_EQ(blob.get_externally_stored_len(rec, offs), (r.ext_len() + UNIV_PAGE_SIZE - 1) / UNIV_PAGE_SIZE);
+        EXPECT_EQ(blob.get_externally_stored_len(*m_sys, rec, offs), m_sys->blob_store().n_pages(r.ext_len()));
       } else {
         r.m_value.assign(reinterpret_cast<const char *>(data.get()), len);
       }

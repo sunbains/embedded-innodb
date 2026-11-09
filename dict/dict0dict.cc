@@ -23,6 +23,7 @@ Created 1/8/1996 Heikki Tuuri
 ***********************************************************************/
 
 #include "dict0dict.h"
+#include "idx0am.h"
 #include "page0page.h"
 #include "trx0undo.h"
 
@@ -797,7 +798,7 @@ bool Dict::index_too_big_for_tree(const Table *table, const Index *new_index) no
   return false;
 }
 
-DbErr Dict::index_add_to_cache(Index *index, ulint page_no, bool strict) noexcept {
+DbErr Dict::index_add_to_cache(Index *index, uint64_t root, bool strict) noexcept {
   ut_ad(mutex_own(&m_mutex));
   ut_ad(index->m_n_defined == index->m_n_fields);
   ut_ad(index->m_magic_n == DICT_INDEX_MAGIC_N);
@@ -890,7 +891,7 @@ DbErr Dict::index_add_to_cache(Index *index, ulint page_no, bool strict) noexcep
   new_index->m_stats.m_index_size = 1;
   new_index->m_stats.m_n_leaf_pages = 1;
 
-  new_index->m_page_id.m_page_no = page_no;
+  m_sys.am(new_index).attach(new_index, root);
 
   rw_lock_create(&new_index->m_lock, SYNC_INDEX_TREE);
   ut_d(new_index->m_lock.m_no_recursion = true);

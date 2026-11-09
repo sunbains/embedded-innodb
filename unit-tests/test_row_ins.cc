@@ -24,6 +24,8 @@ index, rollback. The first tests (RowInsTest) run on a fresh instance each,
 the others (RowInsIdxTest) on tables of their own in a shared instance. */
 
 #include "ut0env.h"
+
+#include "idx0am.h"
 #include "ut0perf.h"
 
 #include "btr0btr.h"
@@ -63,6 +65,10 @@ using RowInsTest = ut::DbTest;
 
 /** Blobs of every size class: empty, in page, at the limit, off page, huge. */
 TEST_F(RowInsTest, BlobSizes) {
+  if (index_in_memory()) {
+    GTEST_SKIP() << "no external fields in an index in memory";
+  }
+
   ut::Rows rows;
   uint32_t k{};
 
@@ -610,14 +616,14 @@ struct IdxRec {
 std::vector<IdxRec> index_recs(System &sys, const Index *index) {
   std::vector<IdxRec> v;
   Mtr mtr;
-  BtreePcursor pcur;
+  IndexCursor pcur{sys};
   MemHeap *heap{};
 
   mtr.start();
-  pcur.open_at_index_side(sys, true, index, BTR_SEARCH_LEAF, true, 0, &mtr);
+  pcur.seek_first(index, Intent::Read, &mtr);
 
-  while (pcur.move_to_next_user_rec(sys, &mtr)) {
-    auto rec = pcur.get_rec();
+  while (pcur.next(&mtr)) {
+    auto rec = pcur.rec();
     RecOffs offs = PhyRec(index, rec).get_all_col_offsets(nullptr, &heap, Current_location());
     IdxRec r;
 
@@ -637,8 +643,7 @@ std::vector<IdxRec> index_recs(System &sys, const Index *index) {
     v.push_back(std::move(r));
   }
 
-  pcur.close();
-  mtr.commit(sys);
+  pcur.commit(&mtr);
 
   if (heap != nullptr) {
     mem_heap_free(heap);
@@ -931,7 +936,7 @@ TEST_F(RowInsIdxTest, SecManyDuplicates) {
     EXPECT_LT(std::pair(sec[i - 1].m_fields[0], sec[i - 1].m_fields[1]), std::pair(sec[i].m_fields[0], sec[i].m_fields[1]));
   }
 
-  EXPECT_EQ(m_sys->m_btree->get_size(m_tab->sec(), BTR_N_LEAF_PAGES) > 1, true);
+  EXPECT_GT(m_sys->am(m_tab->sec()).n_data_pages(m_tab->sec()), 1UL);
   m_tab->expect_rows(rows);
 }
 
@@ -974,18 +979,17 @@ TEST_F(RowInsIdxTest, DuplErrorWithRec) {
     }
 
     Mtr mtr;
-    BtreePcursor pcur;
+    IndexCursor pcur{*m_sys};
 
     mtr.start();
-    pcur.open_at_index_side(*m_sys, true, idx, BTR_SEARCH_LEAF, true, 0, &mtr);
-    EXPECT_TRUE(pcur.move_to_next_user_rec(*m_sys, &mtr));
+    pcur.seek_first(idx, Intent::Read, &mtr);
+    EXPECT_TRUE(pcur.next(&mtr));
 
-    auto rec = pcur.get_rec();
+    auto rec = pcur.rec();
     RecOffs offs = PhyRec(idx, rec).get_all_col_offsets(nullptr, &heap, Current_location());
     const auto dup = m_sys->m_row_ins->dupl_error_with_rec(rec, entry, idx, offs);
 
-    pcur.close();
-    mtr.commit(*m_sys);
+    pcur.commit(&mtr);
 
     return dup;
   };

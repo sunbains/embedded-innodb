@@ -831,16 +831,6 @@ bool page_move_rec_list_start(System &sys, BufBlock *new_block, BufBlock *block,
   return (true);
 }
 
-void page_rec_write_index_page_no(Rec rec, ulint i, ulint page_no, Mtr *mtr) {
-  ulint len;
-
-  auto data = rec.get_nth_field(i, &len);
-
-  ut_ad(len == 4);
-
-  mlog_write_ulint(data.get(), page_no, MLOG_4BYTES, mtr);
-}
-
 /**
  * @brief Deletes a slot from the directory and updates the n_owned fields in the records.
  *

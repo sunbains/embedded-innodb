@@ -20,7 +20,7 @@ Scaffolding shared by the component unit tests, see ut0env.h. */
 
 #include "ut0env.h"
 
-#include "btr0pcur.h"
+#include "idx0am.h"
 #include "dict0dict.h"
 #include "mach0data.h"
 #include "mtr0mtr.h"
@@ -191,7 +191,12 @@ Config make_config(const fs::path &dir) {
   }
 
   if (const auto am = std::getenv("IB_INDEX_AM"); am != nullptr) {
-    config.m_dict.m_index_am = std::strcmp(am, "btree") == 0 ? IndexAmKind::BTREE : IndexAmKind::BLINK;
+    config.m_dict.m_index_am = std::strcmp(am, "btree") == 0 ? IndexAmKind::BTREE : std::strcmp(am, "mem") == 0 ? IndexAmKind::MEM : IndexAmKind::BLINK;
+  }
+
+  /* A run of the suites with the fields that don't fit in a record somewhere else. */
+  if (const auto store = std::getenv("IB_BLOB_STORE"); store != nullptr) {
+    config.m_dict.m_blob_store = std::strcmp(store, "mem") == 0 ? BlobStoreKind::MEM : BlobStoreKind::INLINE;
   }
 
   /* A run of the DB suites with the clock forced high. */
@@ -258,6 +263,11 @@ void DbTest::stop() {
 }
 
 void DbTest::restart() {
+  /* Nothing in memory survives one: the test goes on without, and says it skipped that. */
+  if (in_memory()) {
+    GTEST_SKIP() << "restart: the indexes are in memory";
+  }
+
   stop();
   start(false);
 }
@@ -478,14 +488,15 @@ std::optional<DbTest::SecRec> DbTest::sec_rec(uint32_t a, uint32_t k) {
   auto index = table->get_index_on_name(SEC_A);
   std::optional<SecRec> found;
   Mtr mtr;
-  BtreePcursor pcur;
+  IndexCursor cur{*m_sys};
   MemHeap *heap{};
 
+  /* Through the index's interface: whatever implementation it has. */
   mtr.start();
-  pcur.open_at_index_side(*m_sys, true, index, BTR_SEARCH_LEAF, true, 0, &mtr);
+  cur.seek_first(index, Intent::Read, &mtr);
 
-  while (pcur.move_to_next_user_rec(*m_sys, &mtr)) {
-    auto rec = pcur.get_rec();
+  while (cur.next(&mtr)) {
+    auto rec = cur.rec();
     RecOffs offs = PhyRec(index, rec).get_all_col_offsets(nullptr, &heap, Current_location());
     ulint len;
 
@@ -498,8 +509,7 @@ std::optional<DbTest::SecRec> DbTest::sec_rec(uint32_t a, uint32_t k) {
     }
   }
 
-  pcur.close();
-  mtr.commit(*m_sys);
+  cur.commit(&mtr);
 
   if (heap != nullptr) {
     mem_heap_free(heap);
@@ -516,14 +526,14 @@ trx_id_t DbTest::clust_id(uint32_t k) {
   auto index = table->get_first_index();
   trx_id_t id{};
   Mtr mtr;
-  BtreePcursor pcur;
+  IndexCursor cur{*m_sys};
   MemHeap *heap{};
 
   mtr.start();
-  pcur.open_at_index_side(*m_sys, true, index, BTR_SEARCH_LEAF, true, 0, &mtr);
+  cur.seek_first(index, Intent::Read, &mtr);
 
-  while (pcur.move_to_next_user_rec(*m_sys, &mtr)) {
-    auto rec = pcur.get_rec();
+  while (cur.next(&mtr)) {
+    auto rec = cur.rec();
     RecOffs offs = PhyRec(index, rec).get_all_col_offsets(nullptr, &heap, Current_location());
     ulint len;
 
@@ -533,8 +543,7 @@ trx_id_t DbTest::clust_id(uint32_t k) {
     }
   }
 
-  pcur.close();
-  mtr.commit(*m_sys);
+  cur.commit(&mtr);
 
   if (heap != nullptr) {
     mem_heap_free(heap);

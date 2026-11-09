@@ -94,10 +94,22 @@ enum class SavedAt : uint8_t {
   After
 };
 
+/** What a position of a cursor is: a record; a fence, the end of a run of records, which bounds the gap
+before it and is locked as a gap (lock_pos()); or the start of a run, nothing to read or lock. A tree's
+fence is the supremum of a page, its start the infimum; an LSM has a fence at its end only. */
+enum class At : uint8_t { REC, FENCE, START };
+
 /** An index implementation. The engine has one of each kind. */
 struct IndexAm {
-  /** Where an index is, for the catalog to store. Opaque outside the implementation. */
-  using Root = page_no_t;
+  /** Where an index is, for the catalog to store: 64 bits of the implementation's, opaque to everyone
+  else (a tree's root page, an LSM's manifest). */
+  using Root = uint64_t;
+
+  /** No index there: the catalog says so of a dropped one, create() of one it couldn't make. */
+  static constexpr Root NO_ROOT{~Root{}};
+
+  /** Open index at root, what the catalog has for it: a tree takes its root page from it. */
+  virtual void attach(Index *index, Root root) noexcept;
 
   /** An iterator on an index. */
   struct Cursor {
@@ -137,9 +149,6 @@ struct IndexAm {
     @return false if there is no previous position: the cursor is at the start. */
     [[nodiscard]] virtual bool prev_pos(Mtr *mtr) noexcept = 0;
 
-    /** Corruption: skip what the cursor can still reach in the damaged part of the index,
-    the next next_pos() leaves it. Forced recovery only. */
-    virtual void skip_rest(Mtr *mtr) noexcept = 0;
 
     /** @return true if positioned on a record, not before the first or after the last. */
     [[nodiscard]] virtual bool on_rec() const noexcept = 0;
@@ -161,15 +170,30 @@ struct IndexAm {
     /** @return the mode of the last search. */
     [[nodiscard]] virtual SearchMode search_mode() const noexcept = 0;
 
+#ifdef UNIT_TESTING
     /** ESCAPE HATCH, it isn't part of the abstraction: LockSys identifies a record by its
     block and record. Goes away when the lock API takes an opaque lock key.
     @return the block of the record. */
     [[nodiscard]] virtual BufBlock *block() noexcept = 0;
+#endif /* UNIT_TESTING */
 
     /** @return what a lock at rec is on: rec is the record of the cursor, or one next to it that it
     read, or a position between records (on_rec() false), which is a fence. Valid while the cursor holds
     its position: a lock call with it and the change it protects are atomic with what the index holds. */
     [[nodiscard]] virtual LockPos lock_pos(Rec rec) noexcept = 0;
+
+    /** @return what the position of the cursor is. */
+    [[nodiscard]] virtual At at() noexcept = 0;
+
+    /** The position after the cursor's, without moving to it: a record, or a fence (with a record that
+    stands for it, for lock_pos()). Valid while the cursor holds its position, and not on a fence: what
+    comes after a fence is in another part of the index. */
+    struct Next {
+      Rec m_rec{};
+      At m_at{At::FENCE};
+    };
+
+    [[nodiscard]] virtual Next peek_next() noexcept = 0;
 
     /** Remember the position, to come back to it in another mini-transaction. */
     virtual void save(Mtr *mtr) noexcept = 0;
@@ -297,68 +321,28 @@ struct IndexAm {
   next start, from the log. */
   virtual void quiesce() noexcept {}
 
-  /** @return true if a change to the tree counts on Index::m_lock. If not nobody takes it in X
-  mode, and there's nothing to take it in S mode for. */
-  [[nodiscard]] virtual bool uses_index_latch() const noexcept { return true; }
 
-  /** @return what to take on a page to read a record on it and have it stay. */
-  [[nodiscard]] virtual ulint page_read_latch() const noexcept { return RW_S_LATCH; }
 
-  /** @return what a nested mini-transaction takes on a page its caller holds, to log a change. */
-  [[nodiscard]] virtual ulint page_held_latch() const noexcept { return RW_X_LATCH; }
 
   /** @return true if the structure of the index is what it should be. Nothing may be changing it. */
   [[nodiscard]] virtual bool validate(Index *index, Trx *trx) noexcept = 0;
 
   /**
-   * Back on the position of the cursor the parallel reader keeps at a level of the tree, what
-   * BtreePcursor::restore_position() is to a B-tree.
-   *
-   * It exposes a level of a tree, unlike the rest of this: it's what the parallel reader is
-   * written on, until it goes through a Cursor and an implementation can split a scan.
-   */
-  [[nodiscard]] virtual bool restore_tree_cursor(BtreePcursor &pcur, ulint latch, Mtr *mtr, SourceLocation loc) noexcept = 0;
-
-  /** The other side of restore_tree_cursor(). */
-  virtual void save_tree_cursor(BtreePcursor &pcur, Mtr *mtr) noexcept = 0;
-
-  /** What a page says to a scan that is being split. */
-  struct ScanNode {
-    /** It isn't a page of this index any more. */
-    bool m_dead{};
-
-    /** Its level. */
-    ulint m_level{};
-
-    /** The page numbers below it, in order. */
-    std::vector<page_no_t> m_children;
-  };
-
-  /**
-   * Read the children of a page for a scan: from the one that can have the first key >= start, up to
-   * the first one with a key >= end. Holds nothing on return. As with restore_tree_cursor(), it's a
-   * level of a tree, for the parallel reader.
+   * Keys that split [start, end) in about n parts, for a scan by several threads: in order, each inside
+   * the range, as many as the index finds cheaply, up to about n. Any keys would do, the parts are read
+   * by key: they needn't exist or be current, a stale one only makes the parts uneven. A tree takes them
+   * from its upper levels, an LSM from the bounds of its files.
    *
    * @param[in] index           The index.
-   * @param[in] page_no         The page.
-   * @param[in] start           Null for the first child.
+   * @param[in] start           Null for the first key there is.
    * @param[in] end             Null for no limit.
-   * @param[in] stop_level      A page at this level or below: no children.
-   * @param[in] max             The most children wanted.
-   * @param[out] node           What it found.
+   * @param[in] n               The parts wanted.
+   * @param[in,out] heap        For the keys.
+   * @return the keys, none for one part.
    */
-  virtual void read_scan_node(
-    const Index *index, page_no_t page_no, const DTuple *start, const DTuple *end, ulint stop_level, size_t max, ScanNode &node
+  [[nodiscard]] virtual std::vector<const DTuple *> split_range(
+    const Index *index, const DTuple *start, const DTuple *end, size_t n, MemHeap *heap
   ) noexcept = 0;
-
-  /** While it lives a page number read from the tree stays a page of the tree. */
-  struct PagePin {
-    virtual ~PagePin() = default;
-  };
-
-  /** For the same user as restore_tree_cursor().
-  @return null if the implementation doesn't need one. */
-  [[nodiscard]] virtual std::unique_ptr<PagePin> pin_pages() noexcept { return nullptr; }
 };
 
 /** A cursor that gets its implementation from the index it's opened on. */
@@ -391,8 +375,6 @@ class IndexCursor {
 
   [[nodiscard]] bool prev_pos(Mtr *mtr) noexcept { return m_cur->prev_pos(mtr); }
 
-  void skip_rest(Mtr *mtr) noexcept { m_cur->skip_rest(mtr); }
-
   [[nodiscard]] bool on_rec() const noexcept { return m_cur->on_rec(); }
 
   [[nodiscard]] Rec rec() noexcept { return m_cur->rec(); }
@@ -405,10 +387,16 @@ class IndexCursor {
 
   [[nodiscard]] SearchMode search_mode() const noexcept { return m_cur->search_mode(); }
 
-  /** ESCAPE HATCH for calls into the lock API only: see IndexAm::Cursor::block(). */
+#ifdef UNIT_TESTING
+  /** The page of the position, for tests that look at the tree. */
   [[nodiscard]] BufBlock *block() noexcept { return m_cur->block(); }
+#endif /* UNIT_TESTING */
 
   [[nodiscard]] LockPos lock_pos(Rec rec) noexcept { return m_cur->lock_pos(rec); }
+
+  [[nodiscard]] At at() noexcept { return m_cur->at(); }
+
+  [[nodiscard]] IndexAm::Cursor::Next peek_next() noexcept { return m_cur->peek_next(); }
 
   void save(Mtr *mtr) noexcept { m_cur->save(mtr); }
 
@@ -483,3 +471,6 @@ class IndexCursor {
 
 /** @return the Lehman & Yao B-link tree, see idx0blink.h. */
 [[nodiscard]] std::unique_ptr<IndexAm> index_am_blink(System &sys);
+
+/** The index in memory of idx0mem.cc, for tests. */
+[[nodiscard]] std::unique_ptr<IndexAm> index_am_mem(System &sys);

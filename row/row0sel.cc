@@ -32,7 +32,7 @@ Created 12/19/1997 Heikki Tuuri
 #include "row0sel.h"
 #include "row0misc.h"
 #include "ut0ucode.h"
-#include "btr0blob.h"
+#include "blob0blob.h"
 #include "btr0btr.h"
 #include "btr0cur.h"
 #include "buf0lru.h"
@@ -724,7 +724,7 @@ SearchStatus Plan::try_search_shortcut(System &sys, SelNode *sel_node, Mtr *mtr)
 
   auto rec = m_pcur.rec();
 
-  if (!page_rec_is_user_rec(rec)) {
+  if (m_pcur.at() != At::REC) {
 
     return SearchStatus::RETRY;
   }
@@ -918,7 +918,7 @@ rec_loop:
 
   /* PHASE 1: Set a lock if specified */
 
-  if (!sel_node->m_asc && cursor_just_opened && !page_rec_is_supremum(rec)) {
+  if (!sel_node->m_asc && cursor_just_opened && plan->m_pcur.at() != At::FENCE) {
 
     /* When we open a cursor for a descending search, we must set
     a next-key lock on the successor record: otherwise it would
@@ -932,7 +932,8 @@ rec_loop:
       level, we lock only the record, i.e., next-key
       locking is not used. */
 
-      auto next_rec = page_rec_get_next(rec);
+      const auto next = plan->m_pcur.peek_next();
+      auto next_rec = next.m_rec;
       auto trx = thr_get_trx(thr);
 
       {
@@ -945,7 +946,7 @@ rec_loop:
 
       if (trx->m_isolation_level == TRX_ISO_READ_COMMITTED) {
 
-        if (page_rec_is_supremum(next_rec)) {
+        if (next.m_at == At::FENCE) {
 
           goto skip_lock;
         }
@@ -971,7 +972,7 @@ rec_loop:
   }
 
 skip_lock:
-  if (page_rec_is_infimum(rec)) {
+  if (plan->m_pcur.at() == At::START) {
 
     /* The infimum record on a page cannot be in the result set,
     and neither can a record lock be placed on it: we skip such
@@ -1001,7 +1002,7 @@ skip_lock:
 
     if (trx->m_isolation_level == TRX_ISO_READ_COMMITTED) {
 
-      if (page_rec_is_supremum(rec)) {
+      if (plan->m_pcur.at() == At::FENCE) {
 
         goto next_rec;
       }
@@ -1023,15 +1024,14 @@ skip_lock:
     }
   }
 
-  if (page_rec_is_supremum(rec)) {
+  if (plan->m_pcur.at() == At::FENCE) {
 
-    /* A page supremum record cannot be in the result set: skip
-    it now when we have placed a possible lock on it */
+    /* A fence cannot be in the result set: skip it now that we have placed a possible lock on it */
 
     goto next_rec;
   }
 
-  ut_ad(page_rec_is_user_rec(rec));
+  ut_ad(plan->m_pcur.at() == At::REC);
 
   if (cost_counter > SEL_COST_LIMIT) {
 
@@ -1407,7 +1407,7 @@ commit_mtr_for_a_while:
 lock_wait_or_error:
   /* See the note at stop_for_a_while: the same holds for this case */
 
-  ut_ad(!page_rec_is_infimum(plan->m_pcur.rec()) || !sel_node->m_asc);
+  ut_ad(plan->m_pcur.at() != At::START || !sel_node->m_asc);
   ut_ad(!search_latch_locked);
 
   plan->m_stored_cursor_rec_processed = false;
@@ -1864,7 +1864,7 @@ SearchStatus RowSel::try_search_shortcut_for_prebuilt(
 
   Rec rec = pcur->rec();
 
-  if (!page_rec_is_user_rec(rec)) {
+  if (pcur->at() != At::REC) {
 
     return SearchStatus::RETRY;
   }
@@ -1994,7 +1994,6 @@ DbErr RowSel::mvcc_fetch(
   bool set_also_gap_locks = true;
 
   /* if the returned record was locked and we did a semi-consistent read (fetch the newest committed version), then this is set to true */
-  ulint next_offs;
   bool same_user_rec;
   Mtr mtr;
   MemHeap *heap = nullptr;
@@ -2234,11 +2233,11 @@ DbErr RowSel::mvcc_fetch(
 
     rec = pcur->rec();
 
-    if (!moves_up && !page_rec_is_supremum(rec) && set_also_gap_locks && trx->m_isolation_level != TRX_ISO_READ_COMMITTED &&
+    if (!moves_up && pcur->at() != At::FENCE && set_also_gap_locks && trx->m_isolation_level != TRX_ISO_READ_COMMITTED &&
         prebuilt->m_select_lock_type != LOCK_NONE) {
 
       /* Try to place a gap lock on the next index record to prevent phantoms in ORDER BY ... DESC queries */
-      const Rec next = page_rec_get_next_const(rec);
+      const Rec next = pcur->peek_next().m_rec;
 
       {
         PhyRec record{index, next};
@@ -2294,15 +2293,14 @@ rec_loop:
 
   rec = pcur->rec();
 
-  if (page_rec_is_infimum(rec)) {
+  if (pcur->at() == At::START) {
 
-    /* The infimum record on a page cannot be in the result set, and neither can a record lock be placed on it: we skip such
-    a record. */
+    /* The start of a run cannot be in the result set, and neither can a record lock be placed on it: we skip it. */
 
     goto next_rec;
   }
 
-  if (page_rec_is_supremum(rec)) {
+  if (pcur->at() == At::FENCE) {
 
     if (set_also_gap_locks && trx->m_isolation_level != TRX_ISO_READ_COMMITTED && prebuilt->m_select_lock_type != LOCK_NONE) {
 
@@ -2331,71 +2329,10 @@ rec_loop:
     goto next_rec;
   }
 
-  /*-------------------------------------------------------------*/
-  /* Do sanity checks in case our cursor has bumped into page corruption */
-
-  next_offs = rec.get_next_offs();
-
-  if (unlikely(next_offs < PAGE_SUPREMUM)) {
-
-    goto wrong_offs;
-  }
-
-  if (unlikely(next_offs >= UNIV_PAGE_SIZE - PAGE_DIR)) {
-
-  wrong_offs:
-    if (recovery == IB_RECOVERY_DEFAULT || moves_up == false) {
-
-      buf_page_print(rec.page_align(), 0);
-      log_err(
-        std::format("\nrec address {}, buf block with fix count {}", (void *)rec, (int)pcur->block()->m_page.get_fix_count())
-      );
-      log_err(std::format(
-        "Index corruption: rec offs {} next offs {}, page no {},", page_offset(rec), next_offs, page_get_page_no(rec.page_align())
-      ));
-      m_sys.m_dict->index_name_print(trx, index);
-      log_err(". Run CHECK TABLE. You may need to restore from a backup, or dump + drop + reimport the table.");
-
-      err = DB_CORRUPTION;
-
-      goto lock_wait_or_error;
-
-    } else {
-      /* The user may be dumping a corrupt table. Jump over the corruption to recover as much as possible. */
-
-      log_err(std::format(
-        "Index corruption: rec offs {} next offs {}, page no {},", page_offset(rec), next_offs, page_get_page_no(rec.page_align())
-      ));
-      m_sys.m_dict->index_name_print(trx, index);
-      log_err(". We try to skip the rest of the page.");
-
-      pcur->skip_rest(&mtr);
-
-      goto next_rec;
-    }
-  }
-  /*-------------------------------------------------------------*/
-
-  /* Calculate the 'offsets' associated with 'rec' */
-
   {
     PhyRec record{index, rec};
 
     offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
-  }
-
-  if (unlikely(recovery != IB_RECOVERY_DEFAULT)) {
-    auto btree = m_sys.m_btree.get();
-
-    if (!rec.validate(offsets) || !btree->index_rec_validate(rec, index, false)) {
-      log_err(std::format(
-        "Index corruption: rec offs {} next offs {}, page no {} ", page_offset(rec), next_offs, page_get_page_no(rec.page_align())
-      ));
-      m_sys.m_dict->index_name_print(trx, index);
-      log_err(". We try to skip the record.");
-
-      goto next_rec;
-    }
   }
 
   /* Note that we cannot trust the up_match value in the cursor at this place because we can arrive here after moving the cursor! Thus

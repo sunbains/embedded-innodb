@@ -24,7 +24,7 @@ Created 4/20/1996 Heikki Tuuri
 
 #include "row0ins.h"
 #include "row0misc.h"
-#include "btr0blob.h"
+#include "blob0blob.h"
 #include "btr0btr.h"
 #include "btr0cur.h"
 #include "buf0lru.h"
@@ -476,13 +476,6 @@ void RowInsert::foreign_report_add_err(Trx *trx, const Foreign *foreign, Rec rec
 
   log_err("But in parent table ", foreign->m_referenced_table_name, ", in index ", foreign->m_referenced_index->m_name);
   log_err(", the closest match we can find is record:");
-
-  if (!rec.is_null() && page_rec_is_supremum(rec)) {
-    /* If the cursor ended on a supremum record, it is better
-    to report the previous record in the error message, so that
-    the user gets a more descriptive error message. */
-    rec = page_rec_get_prev_const(rec);
-  }
 
   if (!rec.is_null()) {
     log_err(rec.to_string());
@@ -988,7 +981,7 @@ run_again:
   for (;;) {
     Rec rec = pcur.rec();
 
-    if (page_rec_is_infimum(rec)) {
+    if (pcur.at() == At::START) {
 
       goto next_rec;
     }
@@ -999,7 +992,7 @@ run_again:
       offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
     }
 
-    if (page_rec_is_supremum(rec)) {
+    if (pcur.at() == At::FENCE) {
 
       err = set_shared_rec_lock(LOCK_ORDINARY, &pcur, rec, check_index, offsets, thr);
 
@@ -1250,7 +1243,7 @@ DbErr RowInsert::scan_sec_index_for_duplicate(const Index *index, DTuple *entry,
   do {
     Rec rec = pcur.rec();
 
-    if (page_rec_is_infimum(rec)) {
+    if (pcur.at() == At::START) {
 
       continue;
     }
@@ -1279,7 +1272,7 @@ DbErr RowInsert::scan_sec_index_for_duplicate(const Index *index, DTuple *entry,
       break;
     }
 
-    if (page_rec_is_supremum(rec)) {
+    if (pcur.at() == At::FENCE) {
 
       continue;
     }
@@ -1349,7 +1342,7 @@ DbErr RowInsert::duplicate_error_in_clust(IndexCursor *cur, DTuple *entry, QueTh
 
     rec = cur->rec();
 
-    if (!page_rec_is_infimum(rec)) {
+    if (cur->at() != At::START) {
       {
         PhyRec record{index, rec};
 
@@ -1388,9 +1381,11 @@ DbErr RowInsert::duplicate_error_in_clust(IndexCursor *cur, DTuple *entry, QueTh
 
   if (cur->up_match() >= n_unique) {
 
-    rec = page_rec_get_next(cur->rec());
+    const auto next = cur->peek_next();
 
-    if (!page_rec_is_supremum(rec)) {
+    rec = next.m_rec;
+
+    if (next.m_at != At::FENCE) {
       {
         PhyRec record{index, rec};
 
@@ -1444,9 +1439,7 @@ inline bool RowInsert::must_modify(IndexCursor *cur) noexcept {
 
   if (cur->low_match() >= enough_match) {
 
-    const auto rec = cur->rec();
-
-    if (!page_rec_is_infimum(rec)) {
+    if (cur->at() != At::START) {
       return true;
     }
   }
@@ -1475,15 +1468,6 @@ DbErr RowInsert::index_entry_low(Intent intent, const Index *index, DTuple *entr
   mtr.start();
 
   cur.seek_insert(index, entry, intent, thr, &mtr);
-
-#ifdef UNIV_DEBUG
-  {
-    auto page = cur.rec().page_align();
-    auto first_rec = page_rec_get_next(page_get_infimum_rec(page));
-
-    ut_ad(page_rec_is_supremum(first_rec) || first_rec.get_n_fields() == dtuple_get_n_fields(entry));
-  }
-#endif /* UNIV_DEBUG */
 
   const auto n_unique = index->get_n_unique();
 

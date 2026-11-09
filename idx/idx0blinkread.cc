@@ -475,59 +475,6 @@ bool read_family_raw(const Index *index, const page_t *page, const DTuple *key, 
   return true;
 }
 
-bool read_scan_node_raw(
-  const Index *index, const page_t *page, const DTuple *start, const DTuple *end, ulint stop_level, size_t max, IndexAm::ScanNode &node
-) noexcept {
-  node.m_children.clear();
-  node.m_dead = is_dead(page, index);
-  node.m_level = mach_read_from_2(page + PAGE_HEADER + PAGE_LEVEL);
-
-  if (node.m_dead || node.m_level <= stop_level) {
-    return true;
-  }
-
-  const auto n_recs = mach_read_from_2(page + PAGE_HEADER + PAGE_N_RECS);
-  ulint cur{PAGE_INFIMUM};
-
-  if (start != nullptr && !raw_search(index, start, page, PAGE_CUR_L, cur)) {
-    return false;
-  }
-
-  if (cur == PAGE_INFIMUM) {
-    cur = mach_read_from_2(page + PAGE_INFIMUM - REC_NEXT);
-  }
-
-  for (ulint n{}; cur != PAGE_SUPREMUM && node.m_children.size() < max; ++n) {
-    if (n > n_recs || !raw_in_page(cur)) {
-      return false;
-    }
-
-    if (end != nullptr) {
-      int cmp{};
-
-      if (!raw_cmp(index, end, page, cur, cmp)) {
-        return false;
-      }
-
-      if (cmp <= 0) {
-        break;
-      }
-    }
-
-    page_no_t child{};
-
-    if (!raw_child(page, cur, child)) {
-      return false;
-    }
-
-    node.m_children.push_back(child);
-
-    cur = mach_read_from_2(page + cur - REC_NEXT);
-  }
-
-  return true;
-}
-
 bool read_leaf_raw(const Index *index, const page_t *page, const DTuple *key, ulint mode, Edge edge, RawLeaf &leaf) noexcept {
   leaf = RawLeaf{};
 

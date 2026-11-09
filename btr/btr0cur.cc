@@ -42,7 +42,7 @@ Created 10/16/1994 Heikki Tuuri
 
 #include "innodb0types.h"
 
-#include "btr0blob.h"
+#include "blob0blob.h"
 #include "btr0btr.h"
 #include "btr0cur.h"
 #include "buf0lru.h"
@@ -782,6 +782,8 @@ struct BtreeOps final : BtreeCursor::TreeOps {
   void free_updated(const Index *index, Rec rec, const RecOffs &offsets, const Upd *update, TrxRbCtx rb_ctx, Mtr *mtr) noexcept override {
     Blob blob{};
 
+    /* prepare() above latched the tablespace. */
+    blob.prepare(m_sys, index, mtr, true);
     blob.free_updated_extern_fields(m_sys, index, rec, offsets, update, rb_ctx, mtr);
   }
 
@@ -1846,6 +1848,8 @@ DbErr BtreeCursor::pessimistic_delete(System &sys, bool has_reserved_extents, Tr
   if (offsets.any_extern()) {
     Blob blob{};
 
+    /* The reservation above, or the caller's, has the tablespace latched. */
+    blob.prepare(sys, index, mtr, true);
     blob.free_externally_stored_fields(sys, index, rec, offsets, rb_ctx, mtr);
   }
 
@@ -2150,7 +2154,7 @@ void BtreeCursor::estimate_n_diff(System &sys, const Index *index, const std::fu
         ++n_diff[j];
       }
 
-      total_external_size += blob.get_externally_stored_len(rec, offsets_rec);
+      total_external_size += blob.get_externally_stored_len(sys, rec, offsets_rec);
 
       rec = next_rec;
       /* Initialize offsets_rec for the next round
@@ -2186,7 +2190,7 @@ void BtreeCursor::estimate_n_diff(System &sys, const Index *index, const std::fu
       offsets_rec = record.get_all_col_offsets(offsets_rec, &heap, Current_location());
     }
 
-    total_external_size += blob.get_externally_stored_len(rec, offsets_rec);
+    total_external_size += blob.get_externally_stored_len(sys, rec, offsets_rec);
 
     mtr.commit(sys);
   }

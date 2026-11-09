@@ -255,9 +255,9 @@ ENDIF(NOT DISABLE_XA)
 
 SET(INNODB_SOURCES
       api/api0api.cc api/api0cursor.cc api/api0misc.cc
-      btr/btr0blob.cc btr/btr0btr.cc btr/btr0cur.cc btr/btr0pcur.cc
+      blob/blob0blob.cc blob/blob0inline.cc blob/blob0mem.cc btr/btr0btr.cc btr/btr0cur.cc btr/btr0pcur.cc
       buf/buf0buf.cc buf/buf0dblwr.cc
-      idx/idx0am.cc idx/idx0blink.cc idx/idx0blinkread.cc
+      idx/idx0am.cc idx/idx0blink.cc idx/idx0blinkread.cc idx/idx0mem.cc
       buf/buf0flu.cc buf/buf0lru.cc buf/buf0rea.cc
       data/data0data.cc data/data0type.cc
       ddl/ddl0ddl.cc

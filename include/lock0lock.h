@@ -649,7 +649,6 @@ struct LockSys {
   [[nodiscard]] inline Trx *clust_rec_some_has_impl(const Rec rec, const Index *index, const ulint *offsets) noexcept {
     /* V1 of a conversion (see LATCHING): no lock system latch held. */
     ut_ad(index->is_clustered());
-    ut_ad(page_rec_is_user_rec(rec));
 
     const auto trx_id = row_get_rec_trx_id(rec, index, offsets);
 

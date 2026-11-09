@@ -47,6 +47,7 @@ Created 2/16/1996 Heikki Tuuri
 #include "dict0store.h"
 #include "fil0fil.h"
 #include "fsp0fsp.h"
+#include "blob0store.h"
 #include "idx0am.h"
 #include "lock0lock.h"
 #include "log0log.h"
@@ -205,6 +206,8 @@ DbErr System::init(const Config &config) noexcept {
   m_btree = std::make_unique<Btree>(*this);
   m_btree_am = index_am_btree(*this);
   m_blink_am = index_am_blink(*this);
+  m_mem_am = index_am_mem(*this);
+  m_blob_store = m_config.m_dict.m_blob_store == BlobStoreKind::MEM ? blob_store_mem(*this) : blob_store_inline(*this);
   m_undo = std::make_unique<Undo>(*this);
   m_dict = std::make_unique<Dict>(*this);
   m_dblwr = std::make_unique<Dblwr>(*this);
@@ -232,9 +235,24 @@ static void destroy_subsystem(std::unique_ptr<T> &ptr) noexcept {
 
 IndexAm &System::am(const Index *index) noexcept { return am_of_type(index->m_type); }
 
-IndexAm &System::am_of_type(ulint type) noexcept { return (type & DICT_BLINK) != 0 ? *m_blink_am : *m_btree_am; }
+IndexAm &System::am_of_type(ulint type) noexcept {
+  return (type & DICT_MEM) != 0 ? *m_mem_am : (type & DICT_BLINK) != 0 ? *m_blink_am : *m_btree_am;
+}
 
-ulint System::new_index_am() const noexcept { return m_config.m_dict.m_index_am == IndexAmKind::BLINK ? DICT_BLINK : 0; }
+ulint System::new_index_am() const noexcept {
+  switch (m_config.m_dict.m_index_am) {
+    case IndexAmKind::BTREE:
+      return 0;
+    case IndexAmKind::BLINK:
+      return DICT_BLINK;
+    case IndexAmKind::MEM:
+      return DICT_MEM;
+  }
+
+  return DICT_BLINK;
+}
+
+ulint System::sys_index_am() const noexcept { return m_config.m_dict.m_index_am == IndexAmKind::BTREE ? 0 : DICT_BLINK; }
 
 void System::destroy() noexcept {
   if (m_srv == nullptr && m_aio == nullptr) {
@@ -466,6 +484,7 @@ static void prepare_for_shutdown(System &sys, ShutdownMode shutdown) noexcept {
     /* Before what the loop waits for: it logs and dirties pages. */
     sys.am_of_type(0).quiesce();
     sys.am_of_type(DICT_BLINK).quiesce();
+    sys.am_of_type(DICT_MEM).quiesce();
 
     mutex_enter(&trx_sys.m_mutex);
 
@@ -761,7 +780,9 @@ DbErr System::startup() noexcept {
     err = recv_recovery_from_checkpoint_start(*this, max_flushed_lsn);
 
     if (err != DB_SUCCESS) {
-      startup_abort(err);
+      /* Nothing to flush or checkpoint: the log wasn't recovered, the data files stay as they are.
+      The shutdown that waits for an instance to quiesce would wait for one that never started. */
+      startup_abort(DB_FATAL);
       return DB_ERROR;
     }
 

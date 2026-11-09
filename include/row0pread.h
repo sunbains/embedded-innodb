@@ -43,61 +43,34 @@ Created 2018-01-27 by Sunny Bains. */
 // Forward declarations
 struct Trx;
 struct Mtr;
-class PCursor;
-struct BtreePcursor;
 struct BufBlock;
 struct Table;
 
 #include "btr0cur.h"
+#include "idx0am.h"
 #include "db0err.h"
 #include "fil0fil.h"
 #include "os0sync.h"
 #include "rem0types.h"
 #include "ut0mpmcbq.h"
 
-using Page_range_t = std::pair<page_no_t, page_no_t>;
 
-/** The core idea is to find the left and right paths down the B+Tree.These
-paths correspond to the scan start and scan end search. Follow the links
-at the appropriate btree level from the left to right and split the scan
-on each of these sub-tree root nodes.
+/** A scan of a key range of an index by several threads. The index splits the range in parts by keys
+it finds cheaply (IndexAm::split_range(), for a tree the keys of its upper levels), and each part,
+[start, end) by key, is scanned by one thread with a cursor of the index, as any reader does: nothing
+here is about pages or tree levels, so it reads any implementation of an index. The keys need not be
+current: the parts cover the range whatever they are, a stale key only makes the parts uneven.
 
-If the user has set the maximum number of threads to use at say 4 threads
-and there are 5 sub-trees at the selected level then we will split the 5th
-sub-tree dynamically when it is ready for scan.
-
-We want to allow multiple parallel range scans on diffrent indexes at the
-same time. To achieve this split out the scan  context (ScanCtx) from the
-execution context (Ctx). The ScanCtx has the index  and transaction
+We want to allow multiple parallel range scans on different indexes at the
+same time. To achieve this split out the scan context (ScanCtx) from the
+execution context (Ctx). The ScanCtx has the index and transaction
 information and the Ctx keeps track of the cursor for a specific thread
-during the scan.
+during the scan. Each index range scan is added via add_scan(): partitions
+are separate indexes, and different indexes and tables can be read by one
+instance of a ParallelReader.
 
-To start a scan we need to instantiate a ParallelReader. A parallel reader
-can contain several ScanCtx instances and a ScanCtx can contain several
-Ctx instances. Its' the Ctx instances that are eventually executed.
-
-This design allows for a single ParallelReader to scan multiple indexes
-at once.  Each index range scan has to be added via its add_scan() method.
-This functionality is required to handle parallel partition scans because
-partitions are separate indexes. This can be used to scan completely
-different indexes and tables by one instance of a ParallelReader.
-
-To solve the imbalance problem we dynamically split the sub-trees as and
-when required. e.g., If you have 5 sub-trees to scan and 4 threads then
-it will tag the 5th sub-tree as "to_be_split" during phase I (add_scan()),
-the first thread that finishes scanning the first set of 4 partitions will
-then dynamically split the 5th sub-tree and add the newly created sub-trees
-to the execution context (Ctx) run queue in the ParallelReader. As the
-other threads complete their sub-tree scans they will pick up more execution
-contexts (Ctx) from the ParallelReader run queue and start scanning the
-sub-partitions as normal.
-
-Note: The Ctx instances are in a virtual list. Each Ctx instance has a
-range to scan. The start point of this range instance is the end point
-of the Ctx instance scanning values less than its start point. A Ctx
-will scan from [Start, End) rows. We use std::shared_ptr to manage the
-reference counting, this allows us to dispose of the Ctx instances
-without worrying about dangling pointers.
+A scan commits its mini-transaction every so many records (a batch), with the cursor saved, so that
+it holds nothing for long; the callbacks see the start and the end of each batch.
 
 A secondary index is scanned with the visibility of each record decided by
 the read view: from the page's max trx id when it says enough, else by the
@@ -133,8 +106,8 @@ class ParallelReader {
     /** Start/Finish Ctx state. */
     CTX,
 
-    /** Start/Finish page read. */
-    PAGE
+    /** Start/Finish of a batch of records, read in one mini-transaction. */
+    BATCH
   };
 
   /** Callback to initialise callers state. */
@@ -175,17 +148,10 @@ class ParallelReader {
     /** Constructor.
     @param[in] scan_range     Range to scan.
     @param[in] index          Cluster index to scan.
-    @param[in] read_level     Btree level from which records need to be read.
     @param[in] partition_id   Partition id if the index to be scanned.
                               belongs to a partitioned table. */
-    Config(
-      const ScanRange &scan_range, Index *index, size_t read_level = 0, size_t partition_id = std::numeric_limits<size_t>::max()
-    )
-        : m_scan_range(scan_range),
-          m_index(index),
-          m_page_size(UNIV_PAGE_SIZE),
-          m_read_level(read_level),
-          m_partition_id(partition_id) {}
+    Config(const ScanRange &scan_range, Index *index, size_t partition_id = std::numeric_limits<size_t>::max())
+        : m_scan_range(scan_range), m_index(index), m_partition_id(partition_id) {}
 
     /** Copy constructor.
     @param[in] config           Instance to copy from. */
@@ -198,12 +164,6 @@ class ParallelReader {
 
     /** (Cluster) Index in table to scan. */
     Index *m_index{};
-
-    /** Tablespace page size. */
-    const ulint m_page_size;
-
-    /** Btree level from which records need to be read. */
-    size_t m_read_level{0};
 
     /** Partition id if the index to be scanned belongs to a partitioned table,
     else std::numeric_limits<size_t>::max(). */
@@ -270,7 +230,9 @@ class ParallelReader {
     State m_state{State::UNKNOWN};
 
     /** Current persistent cursor. */
-    PCursor *m_pcursor{};
+    /** The cursor of the range being read, and its mini-transaction: for savepoint(). */
+    IndexCursor *m_cur{};
+    Mtr *m_mtr{};
 
     ThreadCtx(ThreadCtx &&) = delete;
     ThreadCtx(const ThreadCtx &) = delete;
@@ -463,168 +425,38 @@ class ParallelReader::ScanCtx {
   @param[in]  f               Callback function. */
   ScanCtx(ParallelReader *reader, size_t id, Trx *trx, const ParallelReader::Config &config, F &&f);
 
-  /** Destructor. */
-  ~ScanCtx() = default;
+  ~ScanCtx() noexcept;
 
  private:
-  /** Boundary of the range to scan. */
-  struct Iter {
-    /** Destructor. */
-    ~Iter();
+  /** A part of the range: [first, second) by key, nullptr for no bound. */
+  using Range = std::pair<const DTuple *, const DTuple *>;
 
-    /** Heap used to allocate m_rec, m_tuple and m_pcur. */
-    MemHeap *m_heap{};
-
-    /** m_rec column offsets. */
-    RecOffs m_offsets{};
-
-    /** Start scanning from this key. Raw data of the row. */
-    Rec m_rec{};
-
-    /** Tuple representation inside m_rec, for two Iter instances in a range
-    m_tuple will be [first->m_tuple, second->m_tuple). */
-    const DTuple *m_tuple{};
-
-    /** Persistent cursor.*/
-    BtreePcursor *m_pcur{};
-  };
-
-  /** Mtr savepoint. */
-  using Savepoint = std::pair<ulint, BufBlock *>;
-
-  /** For releasing the S latches after processing the blocks. */
-  using Savepoints = std::vector<Savepoint>;
-
-  /** The first cursor should read up to the second cursor [f, s). */
-  using Range = std::pair<std::shared_ptr<Iter>, std::shared_ptr<Iter>>;
-
-  using Ranges = std::vector<Range>;
-
-  /** @return the scan context ID. */
   [[nodiscard]] size_t id() const { return m_id; }
 
-  /** Set the error state.
-  @param[in] err                Error state to set to. */
   void set_error_state(DbErr err) { m_err.store(err, std::memory_order_relaxed); }
 
-  /** @return true if in error state. */
   [[nodiscard]] bool is_error_set() const { return m_err.load(std::memory_order_relaxed) != DB_SUCCESS; }
 
-  /** Fetch a block from the buffer pool and acquire an S latch on it.
-  @param[in]      page_id       Page ID.
-  @param[in,out]  mtr           Mini-transaction covering the fetch.
-  @param[in]      line          Line from where called.
-  @return the block fetched from the buffer pool. */
-  [[nodiscard]] BufBlock *block_get_s_latched(System &sys, const PageId &page_id, Mtr *mtr, ulint line) const;
+  /** Split the range of the scan in parts, by the keys of the index, and queue a context for each.
+  @return DB_SUCCESS or error code. */
+  [[nodiscard]] DbErr partition(System &sys);
 
-  /** Partition the B+Tree for parallel read.
-  @param[in] scan_range Range for partitioning.
-  @param[in,out]  ranges        Ranges to scan.
-  @param[in] split_level  Sub-range required level (0 == root).
-  @return the partition scan ranges. */
-  DbErr partition(System &sys, const ScanRange &scan_range, Ranges &ranges, size_t split_level);
-
-  /** Where a range starts on a page at the level of the scan, or on one to the right of it.
-  @param[in]      block         The page, S latched.
-  @param[in]      key           Key of the first record in the range, null if it's the first there is.
-  @param[in,out]  mtr           Mini-transaction.
-  @param[in,out]  savepoints    Pages S latched on the way are added.
-  @return the page cursor, on the supremum of the last page if there is nothing to the right. */
-  [[nodiscard]] PageCursor start_on_level(System &sys, BufBlock *block, const DTuple *key, Mtr *mtr, Savepoints &savepoints);
-
-  /** Traverse from given sub-tree page number to start of the scan range
-  from the given page number.
-  @param[in]      page_no       Page number of sub-tree.
-  @param[in,out]  mtr           Mini-transaction.
-  @param[in]      key           Key of the first record in the range.
-  @param[in,out]  savepoints    Blocks S latched and accessed.
-  @return the leaf node page cursor. */
-  [[nodiscard]] PageCursor start_range(System &sys, page_no_t page_no, Mtr *mtr, const DTuple *key, Savepoints &savepoints, size_t &n_levels);
-
-  /** Create and add the range to the scan ranges.
-  @param[in,out]  ranges        Ranges to scan.
-  @param[in,out]  leaf_page_cursor Leaf page cursor on which to create the
-                                persistent cursor.
-  @param[in,out]  mtr           Mini-transaction */
-  void create_range(System &sys, Ranges &ranges, PageCursor &leaf_page_cursor, Mtr *mtr) const;
-
-  /** Find the subtrees to scan in a block.
-  @param[in]      scan_range    Partition based on this scan range.
-  @param[in]      page_no       Page to partition at if at required level.
-  @param[in]      depth         Sub-range current level.
-  @param[in]      split_level   Sub-range starting level (0 == root).
-  @param[in,out]  ranges        Ranges to scan.
-  @param[in,out]  mtr           Mini-transaction */
-  DbErr create_ranges(System &sys, 
-    const ScanRange &scan_range, page_no_t page_no, size_t depth, const size_t split_level, Ranges &ranges, Mtr *mtr
-  );
-
-  /** Build a Dtuple from Rec .
-  @param[in]      rec           Build the dtuple from this record.
-  @param[in,out]  iter          Build in this iterator. */
-  void copy_row(const Rec rec, Iter *iter) const;
-
-  /** Create the persistent cursor that will be used to traverse the
-  partition and position on the the start row.
-  @param[in]      page_cursor   Current page cursor
-  @param[in]      mtr           Mini-transaction covering the read.
-  @return Start iterator. */
-  [[nodiscard]] std::shared_ptr<Iter> create_persistent_cursor(System &sys, const PageCursor &page_cursor, Mtr *mtr) const;
-
-  /** Build an old version of the row if required.
-  @param[in,out]  rec           Current row read from the index. This can
-                                be modified by this method if an older version
-                                needs to be built.
-  @param[in,out]  offsets       Same as above but pertains to the rec offsets
-  @param[in,out]  heap          Heap to use if a previous version needs to be
-                                built from the undo log.
+  /** @param[in,out] rec  Current row read from the index: an older version if one has to be built.
+  @param[in,out]  offsets       Same as above for the offsets.
+  @param[in,out]  heap          For a previous version built from the undo log.
   @param[in,out]  mtr           Mini-transaction covering the read.
   @return true if row is visible to the transaction. */
   [[nodiscard]] bool check_visibility(System &sys, Rec &rec, RecOffs &offsets, MemHeap *&heap, Mtr *mtr);
 
-  /**
-   * Whether the secondary index record rec exists in the snapshot of the
-   * read view: the row is looked up in the clustered index, its version in
-   * the snapshot is built, and rec must be its entry.
-   *
-   * @param[in] sys     The instance.
-   * @param[in] rec     Secondary index record, its page latched in mtr.
-   * @param[in,out] heap Memory heap for the lookup.
-   * @param[in,out] mtr Mini-transaction of the scan.
-   *
-   * @return true if rec is visible
-   */
+  /** @return true if the secondary index record rec is visible to the read view of the scan. */
   [[nodiscard]] bool sec_rec_visible(System &sys, const Rec rec, MemHeap *&heap, Mtr *mtr);
 
-  /** Create an execution context for a range and add it to
-  the ParallelReader's run queue.
-  @param[in] range              Range for which to create the context.
-  @param[in] split              true if the sub-tree should be split further.
+  /** Queue an execution context for range.
   @return DB_SUCCESS or error code. */
-  [[nodiscard]] DbErr create_context(const Range &range, bool split);
+  [[nodiscard]] DbErr create_context(const Range &range);
 
-  /** Create the execution contexts based on the ranges.
-  @param[in]  ranges            Ranges for which to create the contexts.
-  @return DB_SUCCESS or error code. */
-  [[nodiscard]] DbErr create_contexts(const Ranges &ranges);
-
-  /** @return the maximum number of threads configured. */
   [[nodiscard]] size_t max_threads() const { return m_reader->max_threads(); }
 
-  /** Release unused threads back to the pool.
-  @param[in] unused_threads     Number of threads to "release". */
-  void release_threads(System &sys, size_t unused_threads) { m_reader->release_threads(sys, unused_threads); }
-
-  /** S lock the index. */
-  void index_s_lock();
-
-  /** S unlock the index. */
-  void index_s_unlock();
-
-  /** @return true if at least one thread owns the S latch on the index. */
-  bool index_s_own() const { return m_s_locks.load(std::memory_order_acquire) > 0; }
-
- private:
   using Config = ParallelReader::Config;
 
   /** Context ID. */
@@ -639,23 +471,14 @@ class ParallelReader::ScanCtx {
   /** Callback function. */
   F m_f;
 
-  /** Depth of the Btree. */
-  size_t m_depth{};
-
   /** The parallel reader. */
   ParallelReader *m_reader{};
 
+  /** The split keys, the bounds of the parts. */
+  MemHeap *m_heap{};
+
   /** Error during parallel read. */
   mutable std::atomic<DbErr> m_err{DB_SUCCESS};
-
-  /** Number of threads that have S locked the index. */
-  std::atomic_size_t m_s_locks{};
-
-  /** False if the index doesn't use Index::m_lock: then the above only counts. */
-  bool m_uses_index_latch{true};
-
-  /** For a change of m_s_locks and the latch to be one step. */
-  std::mutex m_s_mutex;
 
   friend class ParallelReader;
 
@@ -665,7 +488,7 @@ class ParallelReader::ScanCtx {
   ScanCtx &operator=(const ScanCtx &) = delete;
 };
 
-/** Parallel reader execution context. */
+/** Parallel reader execution context: one part of the range of a scan. */
 class ParallelReader::Ctx {
  public:
   /** Constructor.
@@ -674,10 +497,8 @@ class ParallelReader::Ctx {
   @param[in]    range           Range that the thread has to read. */
   Ctx(size_t id, ScanCtx *scan_ctx, const ScanCtx::Range &range) : m_id(id), m_range(range), m_scan_ctx(scan_ctx) {}
 
-  /** Destructor. */
   ~Ctx() = default;
 
- public:
   /** @return the context ID. */
   [[nodiscard]] size_t id() const { return m_id; }
 
@@ -696,8 +517,7 @@ class ParallelReader::Ctx {
   /** @return the thread context of the reader thread. */
   [[nodiscard]] ThreadCtx *thread_ctx() const { return m_thread_ctx; }
 
-  /** @return the partition id of the index.
-  @note this is std::numeric_limits<size_t>::max() if the index does not
+  /** @return the partition id of the index, std::numeric_limits<size_t>::max() if the index does not
   belong to a partition. */
   [[nodiscard]] size_t partition_id() const { return m_scan_ctx->m_config.m_partition_id; }
 
@@ -716,57 +536,35 @@ class ParallelReader::Ctx {
   }
 
  private:
-  /** Traverse the pages by key order.
+  /** Read the range, calling the callback for each visible record.
   @return DB_SUCCESS or error code. */
   [[nodiscard]] DbErr traverse(System &sys);
 
-  /** Traverse the records in a node.
-  @param[in]  pcursor persistent b-tree cursor
-  @param[in]  mtr mtr
-  @return error */
-  DbErr traverse_recs(System &sys, PCursor *pcursor, Mtr *mtr);
-
-  /** Move to the next node in the specified level.
-  @param[in]  pcursor persistent b-tree cursor
-  @return success */
-  bool move_to_next_node(System &sys, PCursor *pcursor);
-
-  /** Split the context into sub-ranges and add them to the execution queue.
-  @return DB_SUCCESS or error code. */
-  [[nodiscard]] DbErr split(System &sys);
-
-  /** @return true if in error state. */
   [[nodiscard]] bool is_error_set() const { return m_scan_ctx->m_reader->is_error_set() || m_scan_ctx->is_error_set(); }
 
- private:
   /** Context ID. */
   size_t m_id{std::numeric_limits<size_t>::max()};
 
-  /** If true then split the context at the block level. */
-  bool m_split{};
-
-  /** Range to read in this context. */
+  /** The range to scan. */
   ScanCtx::Range m_range{};
 
-  /** Scanner context. */
+  /** The context of the scan. */
   ScanCtx *m_scan_ctx{};
 
  public:
   /** Context information related to executing thread ID. */
   ThreadCtx *m_thread_ctx{};
 
-  /** Current block. */
-  const BufBlock *m_block{};
-
   /** Current row. */
   Rec m_rec{};
 
-  /** Number of pages traversed by the context. */
-  size_t m_n_pages{};
+  /** The number of batches the range was read in so far. */
+  size_t m_n_batches{};
 
-  /** True if m_rec is the first record in the page. */
+  /** True if m_rec is the first record of a batch. */
   bool m_first_rec{true};
 
+  /** Current row offsets. */
   RecOffs m_offsets{};
 
   /** Start of a new range to scan. */

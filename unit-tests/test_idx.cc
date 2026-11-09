@@ -21,10 +21,12 @@ through the interface only, so that they can run on every implementation. */
 
 #include "ut0env.h"
 
-#include "btr0blob.h"
+#include "blob0blob.h"
 #include "btr0cur.h"
 #include "dict0dict.h"
 #include "idx0am.h"
+#include "ut0perf.h"
+#include "lock0lock.h"
 #include "mem0mem.h"
 #include "mtr0mtr.h"
 #include "page0cur.h"
@@ -32,6 +34,8 @@ through the interface only, so that they can run on every implementation. */
 #include "row0sel.h"
 #include "row0upd.h"
 #include "srv0sys.h"
+#include "trx0purge.h"
+#include "trx0sys.h"
 
 #include <gtest/gtest.h>
 
@@ -385,8 +389,8 @@ TEST_F(IdxTest, Position) {
     ASSERT_TRUE(cur.on_rec());
     EXPECT_EQ(key_of(cur.rec()), 100U);
     EXPECT_EQ(cur.up_match(), 1UL);
-    /* For the lock API. */
-    EXPECT_NE(cur.block(), nullptr);
+    /* For the locks: a record, not a fence. */
+    EXPECT_FALSE(cur.lock_pos(cur.rec()).m_fence);
   });
 
   at(100, PAGE_CUR_LE, [this](IndexCursor &cur, Mtr &) {
@@ -449,28 +453,6 @@ TEST_F(IdxTest, PrevPos) {
   }
 
   EXPECT_EQ(n, 0U);
-  cur.close();
-  mtr.commit(*m_sys);
-}
-
-/** skip_rest() goes off the records, and the scan goes on after what was skipped. */
-TEST_F(IdxTest, SkipRest) {
-  Mtr mtr;
-  IndexCursor cur{*m_sys};
-
-  mtr.start();
-  cur.position(m_index, key(1), PAGE_CUR_GE, Intent::Read, &mtr);
-  cur.skip_rest(&mtr);
-  EXPECT_FALSE(cur.on_rec());
-
-  bool found{};
-
-  while (!found && cur.next_pos(&mtr)) {
-    found = cur.on_rec();
-  }
-
-  ASSERT_TRUE(found);
-  EXPECT_GT(key_of(cur.rec()), 1U);
   cur.close();
   mtr.commit(*m_sys);
 }
@@ -732,6 +714,153 @@ TEST_F(IdxTest, Sizes) {
   EXPECT_GT(am.n_pages(m_index), 1UL);
   EXPECT_GT(am.n_data_pages(m_index), 1UL);
   EXPECT_LE(am.n_data_pages(m_index), am.n_pages(m_index));
+}
+
+/** at() at the edges: the start before the first record, a record, the fence after the last; a seek past
+the last key is on the fence, a seek below the first at the start. */
+TEST_F(IdxTest, At) {
+  Mtr mtr;
+  IndexCursor cur{*m_sys};
+
+  mtr.start();
+  cur.seek_first(m_index, Intent::Read, &mtr);
+  EXPECT_EQ(cur.at(), At::START);
+  ASSERT_TRUE(cur.next(&mtr));
+  EXPECT_EQ(cur.at(), At::REC);
+  EXPECT_EQ(key_of(cur.rec()), 1U);
+  cur.commit(&mtr);
+
+  mtr.start();
+  cur.position(m_index, key(N_ROWS + 1), PAGE_CUR_GE, Intent::Read, &mtr);
+  EXPECT_EQ(cur.at(), At::FENCE);
+  EXPECT_FALSE(cur.on_rec());
+  EXPECT_FALSE(cur.next_pos(&mtr)) << "nothing after the last fence";
+  cur.commit(&mtr);
+
+  mtr.start();
+  cur.position(m_index, key(1), PAGE_CUR_L, Intent::Read, &mtr);
+  EXPECT_EQ(cur.at(), At::START);
+  EXPECT_FALSE(cur.prev_pos(&mtr)) << "nothing before the start";
+  cur.commit(&mtr);
+
+  mtr.start();
+  cur.position(m_index, key(N_ROWS), PAGE_CUR_LE, Intent::Read, &mtr);
+  ASSERT_EQ(cur.at(), At::REC);
+  EXPECT_EQ(key_of(cur.rec()), N_ROWS);
+  cur.commit(&mtr);
+}
+
+/** peek_next() is where next_pos() goes, at every position; the last fence is the end of the index for
+the locks. */
+TEST_F(IdxTest, PeekNext) {
+  Mtr mtr;
+  IndexCursor cur{*m_sys};
+  uint32_t n_recs{};
+  uint32_t n_fences{};
+  LockKey last{};
+
+  mtr.start();
+  cur.seek_first(m_index, Intent::Read, &mtr);
+
+  /* After next_pos() is false the cursor is nowhere: everything is read before. No peek_next() on a
+  fence, what comes after it is in another part of the index. */
+  for (;;) {
+    const auto at = cur.at();
+    const auto peek = at == At::FENCE ? IndexAm::Cursor::Next{} : cur.peek_next();
+
+    if (!cur.next_pos(&mtr)) {
+      EXPECT_EQ(at, At::FENCE) << "the scan ends on the fence";
+      break;
+    }
+
+    if (at != At::FENCE) {
+      ASSERT_EQ(peek.m_at, cur.at());
+    }
+
+    if (cur.at() == At::REC) {
+      if (at != At::FENCE) {
+        EXPECT_EQ(key_of(peek.m_rec), key_of(cur.rec()));
+      }
+
+      EXPECT_EQ(key_of(cur.rec()), ++n_recs);
+      EXPECT_FALSE(cur.lock_pos(cur.rec()).m_fence);
+    } else if (cur.at() == At::FENCE) {
+      /* A tree has a start and a fence on every page, only a fence is a lock position. */
+      ++n_fences;
+      EXPECT_TRUE(cur.lock_pos(cur.rec()).m_fence);
+      last = cur.lock_pos(cur.rec()).m_key;
+    }
+  }
+
+  EXPECT_EQ(n_recs, N_ROWS);
+  EXPECT_GE(n_fences, 1U);
+  EXPECT_EQ(last, lock::end_of(m_index)) << "the last fence is the end";
+  cur.commit(&mtr);
+}
+
+/** An empty index: the start, then the fence, nothing between. */
+TEST_F(IdxTest, AtEmpty) {
+  auto trx = begin();
+
+  for (uint32_t k{1}; k <= N_ROWS; ++k) {
+    ASSERT_EQ(remove(trx, k), DB_SUCCESS) << k;
+  }
+
+  commit(trx);
+
+  /* Purge removes the delete marked records: until it has nothing left. */
+  for (int i{}; i < 100000 && m_sys->m_trx_sys->m_purge->run() > 0; ++i) {
+  }
+
+  Mtr mtr;
+  IndexCursor cur{*m_sys};
+
+  mtr.start();
+  cur.seek_first(m_index, Intent::Read, &mtr);
+  EXPECT_EQ(cur.at(), At::START);
+  EXPECT_FALSE(cur.on_rec());
+
+  /* The scan may pass through fences of empty pages: what it reaches last is the end. */
+  LockKey last{};
+
+  while (cur.next_pos(&mtr)) {
+    ASSERT_NE(cur.at(), At::REC);
+
+    if (cur.at() == At::FENCE) {
+      last = cur.lock_pos(cur.rec()).m_key;
+    }
+  }
+
+  EXPECT_EQ(last, lock::end_of(m_index));
+  cur.commit(&mtr);
+}
+
+/** Performance, a suite of its own: run only in a Release build (ut0perf.h). */
+class IdxPerf : public IdxTest {};
+
+/** Local cost of a scan through every position with peek_next() at each: what the row layer does to
+find the boundary after a record. */
+TEST_F(IdxPerf, PeekScan) {
+  const auto r = ut::bench("peek_scan", 20, [&](uint64_t) {
+    Mtr mtr;
+    IndexCursor cur{*m_sys};
+    uint64_t n{};
+
+    mtr.start();
+    cur.seek_first(m_index, Intent::Read, &mtr);
+
+    while (cur.next_pos(&mtr)) {
+      if (cur.at() != At::FENCE) {
+        n += cur.peek_next().m_at == At::REC;
+      }
+    }
+
+    cur.commit(&mtr);
+    ut::keep(n);
+  });
+
+  /* A generous bound: per record, well under 1us. */
+  EXPECT_LT(r.ns_per_op() / N_ROWS, 1000.0);
 }
 
 }  // namespace

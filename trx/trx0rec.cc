@@ -24,7 +24,7 @@ Created 3/26/1996 Heikki Tuuri
 
 #include "trx0undo_rec.h"
 
-#include "btr0blob.h"
+#include "blob0blob.h"
 #include "btr0cur.h"
 #include "dict0dict.h"
 #include "fsp0fsp.h"

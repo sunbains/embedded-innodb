@@ -257,7 +257,6 @@ bool RowVers::old_has_index_entry(bool also_curr, const Rec rec, Mtr *mtr, Index
   //const DTuple *entry;
   //DbErr err;
 
-  ut_ad(mtr->memo_contains_page(rec, MTR_MEMO_PAGE_X_FIX) || mtr->memo_contains_page(rec, MTR_MEMO_PAGE_S_FIX));
 
 
   mtr_s_lock(&m_sys.m_trx_sys->m_purge->m_latch, mtr);
@@ -361,10 +360,6 @@ bool RowVers::old_has_index_entry(bool also_curr, const Rec rec, Mtr *mtr, Index
 
 DbErr RowVers::build_for_consistent_read(Row &row) noexcept {
   ut_ad(row.m_cluster_index->is_clustered());
-  ut_ad(
-    row.m_mtr->memo_contains_page(row.m_cluster_rec, MTR_MEMO_PAGE_X_FIX) ||
-    row.m_mtr->memo_contains_page(row.m_cluster_rec, MTR_MEMO_PAGE_S_FIX)
-  );
 
 
   ut_ad(row.m_cluster_rec.offs_validate(row.m_cluster_index, row.m_cluster_offsets));
@@ -468,10 +463,6 @@ DbErr RowVers::build_for_consistent_read(Row &row) noexcept {
 
 DbErr RowVers::build_for_semi_consistent_read(Row &row) noexcept {
   ut_ad(row.m_cluster_index->is_clustered());
-  ut_ad(
-    row.m_mtr->memo_contains_page(row.m_cluster_rec, MTR_MEMO_PAGE_X_FIX) ||
-    row.m_mtr->memo_contains_page(row.m_cluster_rec, MTR_MEMO_PAGE_S_FIX)
-  );
 
 
   ut_ad(row.m_cluster_rec.offs_validate(row.m_cluster_index, row.m_cluster_offsets));

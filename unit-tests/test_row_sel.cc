@@ -806,11 +806,17 @@ class RowSelIdxTest : public SharedDb {
       mtr.start();
       cur.seek_first(index, Intent::Read, &mtr);
 
-      while (cur.next(&mtr)) {
-        ulint len;
+      /* Every position, records and fences, named as the index locks it. */
+      while (cur.next_pos(&mtr)) {
+        const auto pos = cur.lock_pos(cur.rec());
 
-        names[Btree::lock_key(index, cur.rec()).m_fold] = mach_read_from_4(cur.rec().get_nth_field(0, &len));
-        names.emplace(Btree::lock_fence(index, cur.block()).m_fold, -1);
+        if (cur.at() == ::At::REC) {
+          ulint len;
+
+          names[pos.m_key.m_fold] = mach_read_from_4(cur.rec().get_nth_field(0, &len));
+        } else {
+          names.emplace(pos.m_key.m_fold, -1);
+        }
       }
 
       cur.commit(&mtr);

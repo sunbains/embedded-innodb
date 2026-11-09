@@ -991,7 +991,7 @@ int main(int argc, char *argv[]) {
 
   /* The index to stress, the same for the restart after a kill: it is in the files. */
   if (const auto am = std::getenv("IB_INDEX_AM"); am != nullptr) {
-    config.m_dict.m_index_am = std::strcmp(am, "btree") == 0 ? IndexAmKind::BTREE : IndexAmKind::BLINK;
+    config.m_dict.m_index_am = std::strcmp(am, "btree") == 0 ? IndexAmKind::BTREE : std::strcmp(am, "mem") == 0 ? IndexAmKind::MEM : IndexAmKind::BLINK;
   }
 
   set_options(config, argc, argv);

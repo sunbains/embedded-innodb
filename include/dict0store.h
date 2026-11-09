@@ -345,7 +345,7 @@ struct DictStore {
    * 
    * @return New root page number, or FIL_NULL on failure.
    */
-  [[nodiscard]] page_no_t truncate_index_tree(Table *table, space_id_t space_id, IndexCursor *pcur, Mtr *mtr) noexcept;
+  [[nodiscard]] uint64_t truncate_index_tree(Table *table, space_id_t space_id, IndexCursor *pcur, Mtr *mtr) noexcept;
 
   /**
    * Drops the index tree associated with a row in the SYS_INDEXES table.
@@ -370,3 +370,6 @@ struct DictStore {
 
   /** B-tree system.*/
 };
+
+/** Write the root of an index, an IndexAm::Root, to field i of its SYS_INDEXES record in mtr. */
+void write_index_root(Rec rec, ulint i, uint64_t root, Mtr *mtr) noexcept;

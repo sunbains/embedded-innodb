@@ -23,7 +23,7 @@ Created September 2006 Marko Makela
 *******************************************************/
 
 #include "row0ext.h"
-#include "btr0blob.h"
+#include "blob0blob.h"
 #include "btr0cur.h"
 
 /** Fills the column prefix cache of an externally stored column.

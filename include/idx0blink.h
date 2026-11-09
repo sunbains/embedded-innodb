@@ -249,12 +249,6 @@ struct RawFamily {
 @return false if the page can't be what it should be. */
 [[nodiscard]] bool read_family_raw(const Index *index, const page_t *page, const DTuple *key, ulint level, RawFamily &fam) noexcept;
 
-/** As read_node_raw(), for IndexAm::read_scan_node().
-@return false if the page can't be what it should be. */
-[[nodiscard]] bool read_scan_node_raw(
-  const Index *index, const page_t *page, const DTuple *start, const DTuple *end, ulint stop_level, size_t max, IndexAm::ScanNode &node
-) noexcept;
-
 /** Where a search of a leaf ends. */
 struct RawLeaf {
   enum Kind : uint8_t {

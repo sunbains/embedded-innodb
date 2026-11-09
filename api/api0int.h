@@ -22,7 +22,7 @@ parallel reads, status). Not part of the public api. */
 #include <ranges>
 #include <vector>
 #include "api0api.h"
-#include "btr0blob.h"
+#include "blob0blob.h"
 #include "idx0am.h"
 #include "ddl0ddl.h"
 #include "dict0dict.h"

@@ -356,7 +356,7 @@ struct Dict {
    * 
    * @return DB_SUCCESS, DB_TOO_BIG_RECORD, or DB_CORRUPTION.
    */
-  [[nodiscard]] DbErr index_add_to_cache(Index *index, ulint page_no, bool strict) noexcept;
+  [[nodiscard]] DbErr index_add_to_cache(Index *index, uint64_t root, bool strict) noexcept;
 
   /**
    * Returns an index instance if it is found in the dictionary cache.

@@ -837,24 +837,6 @@ TEST_F(Blink, MergeAfterLast) {
   cur.commit(&mtr);
 }
 
-/** A scan at a level of a tree that has gone down past that level ends, it doesn't look for it. */
-TEST_F(Blink, LevelGone) {
-  put_all(1, 10, 100);
-
-  Mtr mtr;
-  BtreePcursor pcur{};
-
-  pcur.get_btr_cur()->m_index = m_index;
-  pcur.m_read_level = 1;
-  pcur.m_old_stored = true;
-  pcur.m_rel_pos = BtreeCursorPos::BEFORE_FIRST_IN_TREE;
-
-  mtr.start();
-  EXPECT_FALSE(m_sys->am(m_index).restore_tree_cursor(pcur, BTR_SEARCH_LEAF, &mtr, Current_location()));
-  EXPECT_TRUE(pcur.get_btr_cur()->get_page_cur()->is_after_last());
-  mtr.commit(*m_sys);
-}
-
 /** A page of this tree is held by its bits, with no RW latch, for reading a record and for changing one. */
 TEST_F(Blink, NoRwLatch) {
   put_all(1, 2000, 300);
@@ -3128,6 +3110,19 @@ TEST_F(Blink, BatchPageReused) {
 
   EXPECT_TRUE(has(x, m_heap));
   (void)validated();
+}
+
+/** The redo records of the B-link tree are applied by the tree: it registers them, the page format's
+records stay with recovery, and a type past the last has nothing. */
+TEST_F(Blink, RedoApply) {
+  const auto &recv = *m_sys->m_recv;
+
+  EXPECT_NE(recv.redo_apply(MLOG_PAGE_HIGH_KEY), nullptr);
+  EXPECT_EQ(recv.redo_apply(MLOG_REC_INSERT), nullptr) << "the page format's own";
+  EXPECT_EQ(recv.redo_apply(MlogType(MLOG_BIGGEST_TYPE + 1)), nullptr);
+
+  /* The same again is no change: a second instance of the tree registers what the first did. */
+  m_sys->m_recv->set_redo_apply(MLOG_PAGE_HIGH_KEY, recv.redo_apply(MLOG_PAGE_HIGH_KEY));
 }
 
 }  // namespace

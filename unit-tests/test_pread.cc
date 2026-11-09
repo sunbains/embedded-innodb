@@ -789,8 +789,10 @@ TEST_F(PreadTest, Callbacks) {
     EXPECT_EQ(finishes[ParallelReader::State::THREAD], int(std::max<size_t>(n, 1))) << n;
     EXPECT_EQ(starts[ParallelReader::State::CTX], finishes[ParallelReader::State::CTX]) << n;
     EXPECT_GT(starts[ParallelReader::State::CTX], 0) << n;
-    EXPECT_EQ(starts[ParallelReader::State::PAGE], finishes[ParallelReader::State::PAGE]) << n;
-    EXPECT_GE(starts[ParallelReader::State::PAGE], int(m_sys->m_btree->get_size(clust(), BTR_N_LEAF_PAGES) / 4)) << n;
+    EXPECT_EQ(starts[ParallelReader::State::BATCH], finishes[ParallelReader::State::BATCH]) << n;
+
+    /* A batch at least for each part, and one for every 1024 records of it. */
+    EXPECT_GE(starts[ParallelReader::State::BATCH], std::max(starts[ParallelReader::State::CTX], 8000 / 1024)) << n;
   }
 
   /* A thread start that fails. */
@@ -838,10 +840,10 @@ TEST_F(PreadTest, ManyScans) {
 
     ParallelReader::ScanRange range(key(clust(), 1000), key(clust(), 2000));
     std::vector<ParallelReader::Config> configs{
-      ParallelReader::Config({}, clust(), 0, 0),
-      ParallelReader::Config({}, sec(), 0, 1),
-      ParallelReader::Config(range, clust(), 0, 2),
-      ParallelReader::Config({}, sec(), 0, 3),
+      ParallelReader::Config({}, clust(), 0),
+      ParallelReader::Config({}, sec(), 1),
+      ParallelReader::Config(range, clust(), 2),
+      ParallelReader::Config({}, sec(), 3),
     };
 
     for (size_t i = 0; i < configs.size(); ++i) {
@@ -869,46 +871,6 @@ TEST_F(PreadTest, ManyScans) {
     for (size_t i = 0; i < 4; ++i) {
       EXPECT_EQ(partitions[i], std::set<size_t>{i});
     }
-  }
-
-  commit(trx);
-}
-
-/** BUG: a read level above the leaves (Config::m_read_level = 1, the node
-pointers of level 1, one per leaf page) asserts in add_scan():
-ScanCtx::copy_row() (row/row0pread.cc:537) converts the first record of
-each range with row_rec_to_index_entry_low(), which asserts that the record
-has all the fields of the index (row/row0row.cc:229); a node pointer has
-the n_unique_in_tree key fields and the child page number. The boundary
-compare uses only the key: Index::build_data_tuple(rec, n_unique_in_tree)
-is enough. */
-TEST_F(PreadTest, ReadLevel) {
-  load(make_rows(0, 40000, 100));
-
-  auto trx = begin();
-
-  ASSERT_NE(trx->assign_read_view(*m_sys), nullptr);
-
-  const auto n_leaves = m_sys->m_btree->get_size(clust(), BTR_N_LEAF_PAGES);
-
-  for (size_t n : {0, 4}) {
-    std::atomic<size_t> recs{};
-
-    reserve(n);
-
-    ParallelReader reader(n);
-    ParallelReader::Config config({}, clust(), 1);
-
-    ASSERT_EQ(reader.add_scan(*m_sys, trx, config,
-                              [&](const ParallelReader::Ctx *) {
-                                ++recs;
-                                return DB_SUCCESS;
-                              }),
-              DB_SUCCESS);
-    ASSERT_EQ(reader.run(*m_sys, n), DB_SUCCESS);
-
-    /* The leaf segment's used pages include none but leaves here (no blobs). */
-    EXPECT_EQ(recs.load(), n_leaves) << n;
   }
 
   commit(trx);
@@ -1445,6 +1407,81 @@ class PreadPerf : public PreadTest {
 };
 
 /** Rows per second of a parallel scan of the clustered index. */
+
+/** The keys a split gives, as integers: the first field of each. */
+std::vector<uint32_t> ints_of(const std::vector<const DTuple *> &keys) {
+  std::vector<uint32_t> v;
+
+  for (const auto t : keys) {
+    v.push_back(uint32_t(mach_read_from_4(static_cast<const byte *>(dfield_get_data(dtuple_get_nth_field(t, 0))))));
+  }
+
+  return v;
+}
+
+/** The keys an index splits a range by: none for an empty index and for an index of one page; in order,
+inside the bounds, and never more parts than asked for; one part for one. */
+TEST_F(PreadTest, SplitRange) {
+  const auto split = [&](Index *index, const DTuple *start, const DTuple *end, size_t n) {
+    return ints_of(m_sys->am(index).split_range(index, start, end, n, m_heap));
+  };
+
+  EXPECT_TRUE(split(clust(), nullptr, nullptr, 16).empty()) << "an empty index";
+
+  load(make_rows(0, 10, 20));
+
+  EXPECT_TRUE(split(clust(), nullptr, nullptr, 16).empty()) << "one page";
+
+  load(make_rows(10, 40000, 100));
+
+  for (size_t n : {size_t{1}, size_t{2}, size_t{8}, size_t{64}, size_t{100000}}) {
+    const auto keys = split(clust(), nullptr, nullptr, n);
+
+    EXPECT_LT(keys.size(), std::max<size_t>(n, 2)) << "at most n - 1 keys, n " << n;
+    EXPECT_TRUE(std::is_sorted(keys.begin(), keys.end()) && std::adjacent_find(keys.begin(), keys.end()) == keys.end()) << n;
+
+    if (n == 1) {
+      EXPECT_TRUE(keys.empty());
+    } else if (n >= 8) {
+      EXPECT_GE(keys.size(), 2UL) << "a tree of this size has more than one part, n " << n;
+    }
+  }
+
+  /* Bounds: strictly inside, also a range narrower than a page, and an empty one. */
+  for (auto [lo, hi] : {std::pair{1000U, 30000U}, std::pair{20000U, 20005U}, std::pair{5000U, 5000U}}) {
+    for (const auto k : split(clust(), key(clust(), lo), key(clust(), hi), 64)) {
+      EXPECT_GT(k, lo);
+      EXPECT_LT(k, hi);
+    }
+  }
+
+  /* Only a start, only an end. */
+  for (const auto k : split(clust(), key(clust(), 39000), nullptr, 64)) {
+    EXPECT_GT(k, 39000U);
+  }
+
+  for (const auto k : split(clust(), nullptr, key(clust(), 100), 64)) {
+    EXPECT_LT(k, 100U);
+  }
+
+  /* A secondary index splits too. */
+  EXPECT_FALSE(m_sys->am(sec()).split_range(sec(), nullptr, nullptr, 8, m_heap).empty());
+}
+
+/** What a split costs: it reads a few pages of the upper levels, not the leaves. */
+TEST_F(PreadPerf, SplitRange) {
+  load(make_rows(0, 200000, 20));
+
+  for (size_t n : {size_t{4}, size_t{64}, size_t{1024}}) {
+    auto r = ut::bench(std::format("split_range_{}", n), 2000, [&](uint64_t) {
+      ut::keep(m_sys->am(clust()).split_range(clust(), nullptr, nullptr, n, m_heap).size());
+      mem_heap_empty(m_heap);
+    });
+
+    EXPECT_LT(r.ns_per_op(), 5e6) << n;
+  }
+}
+
 /** A secondary scan right after the commit that wrote the pages, and the same scan
 once the watermark has passed that commit: below it the page id decides, above it
 each record goes to the clustered index. */

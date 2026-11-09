@@ -32,6 +32,7 @@ every level of the tree. */
 #include "idx0am.h"
 #include "idx0blink.h"
 #include "lock0lock.h"
+#include "log0recv.h"
 #include "log0log.h"
 #include "mach0data.h"
 #include "page0page.h"

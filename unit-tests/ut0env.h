@@ -166,6 +166,14 @@ class DbTest : public ::testing::Test {
   /** Insert the rows in one committed transaction. */
   void load(const Rows &rows);
 
+  /** @return true if the indexes are in memory (IB_INDEX_AM=mem), or the fields they're too big for
+  (IB_BLOB_STORE=mem): nothing survives a restart. An index in memory has no external fields. */
+  [[nodiscard]] bool index_in_memory() const noexcept { return m_config.m_dict.m_index_am == IndexAmKind::MEM; }
+
+  [[nodiscard]] bool in_memory() const noexcept {
+    return m_config.m_dict.m_index_am == IndexAmKind::MEM || m_config.m_dict.m_blob_store == BlobStoreKind::MEM;
+  }
+
   TestDir m_dir;
   Config m_config;
   std::unique_ptr<System> m_sys;

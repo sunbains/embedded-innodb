@@ -559,14 +559,15 @@ DbErr DictLoad::load_indexes(Table *table, MemHeap *heap) noexcept {
     field = rec.get_nth_field(offsets, 7, &len);
     const space_id_t space = mach_read_from_4(field.get());
 
-    ut_a(name_of_col_is(sys_indexes, sys_index, 8, "PAGE_NO"));
+    ut_a(name_of_col_is(sys_indexes, sys_index, 8, "ROOT"));
 
     field = rec.get_nth_field(offsets, 8, &len);
-    const page_no_t page_no = mach_read_from_4(field.get());
+    ut_a(len == 8);
+    const auto root = mach_read_from_8(field.get());
 
     /* We check for unsupported types first, so that the
     subsequent checks are relevant for the supported types. */
-    if (type & ~(DICT_CLUSTERED | DICT_UNIQUE | DICT_BLINK)) {
+    if (type & ~(DICT_CLUSTERED | DICT_UNIQUE | DICT_BLINK | DICT_MEM)) {
 
       log_err(std::format("Unknown type {} of index %s of table {}", type, name_buf, table->m_name));
 
@@ -574,7 +575,7 @@ DbErr DictLoad::load_indexes(Table *table, MemHeap *heap) noexcept {
 
       return DB_UNSUPPORTED;
 
-    } else if (page_no == NULL_PAGE_NO) {
+    } else if (root == IndexAm::NO_ROOT) {
 
       log_err(std::format("Trying to load index {} for table {} but the index tree has been freed!", name_buf, table->m_name));
 
@@ -607,7 +608,7 @@ DbErr DictLoad::load_indexes(Table *table, MemHeap *heap) noexcept {
         return err;
       }
 
-      err = m_sys.m_dict->index_add_to_cache(index, page_no, false);
+      err = m_sys.m_dict->index_add_to_cache(index, root, false);
 
       /* The data dictionary tables should never contain invalid index definitions.  If we ignored this error and
       simply did not load this index definition, the .frm file would disagree with the index definitions inside InnoDB. */
@@ -1197,7 +1198,7 @@ DbErr DictLoad::load_system_tables() noexcept {
 
   index->m_id = DICT_TABLES_ID;
 
-  auto err = m_sys.m_dict->index_add_to_cache(index, mtr.read_ulint(hdr + DICT_HDR_TABLES, MLOG_4BYTES), false);
+  auto err = m_sys.m_dict->index_add_to_cache(index, mtr.read_uint64(hdr + DICT_HDR_TABLES), false);
   ut_a(err == DB_SUCCESS);
 
   /*-------------------------*/
@@ -1207,7 +1208,7 @@ DbErr DictLoad::load_system_tables() noexcept {
 
   index->m_id = DICT_TABLE_IDS_ID;
 
-  err = m_sys.m_dict->index_add_to_cache(index, mtr.read_ulint(hdr + DICT_HDR_TABLE_IDS, MLOG_4BYTES), false);
+  err = m_sys.m_dict->index_add_to_cache(index, mtr.read_uint64(hdr + DICT_HDR_TABLE_IDS), false);
   ut_a(err == DB_SUCCESS);
 
   /*-------------------------*/
@@ -1234,7 +1235,7 @@ DbErr DictLoad::load_system_tables() noexcept {
 
   index->m_id = DICT_COLUMNS_ID;
 
-  err = m_sys.m_dict->index_add_to_cache(index, mtr.read_ulint(hdr + DICT_HDR_COLUMNS, MLOG_4BYTES), false);
+  err = m_sys.m_dict->index_add_to_cache(index, mtr.read_uint64(hdr + DICT_HDR_COLUMNS), false);
   ut_a(err == DB_SUCCESS);
 
   /*-------------------------*/
@@ -1246,11 +1247,11 @@ DbErr DictLoad::load_system_tables() noexcept {
   table->add_col("N_FIELDS", DATA_INT, DATA_UNSIGNED, 4);
   table->add_col("TYPE", DATA_INT, DATA_UNSIGNED, 4);
   table->add_col("SPACE", DATA_INT, DATA_UNSIGNED, 4);
-  table->add_col("PAGE_NO", DATA_INT, DATA_UNSIGNED, 4);
+  table->add_col("ROOT", DATA_INT, DATA_UNSIGNED, 8);
 
   /* The '+ 2' below comes from the fields DB_TRX_ID, DB_ROLL_PTR */
 
-  static_assert(DICT_SYS_INDEXES_PAGE_NO_FIELD == 6 + 2, "error DICT_SYS_INDEXES_PAGE_NO_FIELD != 6 + 2");
+  static_assert(DICT_SYS_INDEXES_ROOT_FIELD == 6 + 2, "error DICT_SYS_INDEXES_ROOT_FIELD != 6 + 2");
 
   static_assert(DICT_SYS_INDEXES_SPACE_NO_FIELD == 5 + 2, "rror DICT_SYS_INDEXES_SPACE_NO_FIELD != 5 + 2");
 
@@ -1271,7 +1272,7 @@ DbErr DictLoad::load_system_tables() noexcept {
 
   index->m_id = DICT_INDEXES_ID;
 
-  err = m_sys.m_dict->index_add_to_cache(index, mtr.read_ulint(hdr + DICT_HDR_INDEXES, MLOG_4BYTES), false);
+  err = m_sys.m_dict->index_add_to_cache(index, mtr.read_uint64(hdr + DICT_HDR_INDEXES), false);
   ut_a(err == DB_SUCCESS);
 
   /*-------------------------*/
@@ -1294,7 +1295,7 @@ DbErr DictLoad::load_system_tables() noexcept {
 
   index->m_id = DICT_FIELDS_ID;
 
-  err = m_sys.m_dict->index_add_to_cache(index, mtr.read_ulint(hdr + DICT_HDR_FIELDS, MLOG_4BYTES), false);
+  err = m_sys.m_dict->index_add_to_cache(index, mtr.read_uint64(hdr + DICT_HDR_FIELDS), false);
   ut_a(err == DB_SUCCESS);
 
   mtr.commit(m_sys);

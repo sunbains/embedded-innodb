@@ -104,6 +104,9 @@ constexpr ulint DICT_UNIQUE = 2;
 /** A B-link tree, not a B-tree: which implementation has it, see System::am(). */
 constexpr ulint DICT_BLINK = 4;
 
+/** In memory, for tests: nothing on a page, nothing logged, see idx0mem.cc. */
+constexpr ulint DICT_MEM = 8;
+
 /* @} */
 
 /** Types for a table object */
@@ -180,32 +183,32 @@ enum class DictIdType {
 /** Obsolete, always 0. */
 constexpr Dict_id DICT_HDR_MIX_ID = 24;
 
-/** Root of the table index tree */
+/** Where the system indexes are, IndexAm::Root, 8 bytes each: SYS_TABLES */
 constexpr Dict_id DICT_HDR_TABLES = 32;
 
 /** Root of the table index tree */
-constexpr Dict_id DICT_HDR_TABLE_IDS = 36;
+constexpr Dict_id DICT_HDR_TABLE_IDS = 40;
 
 /** Root of the column index tree */
-constexpr Dict_id DICT_HDR_COLUMNS = 40;
+constexpr Dict_id DICT_HDR_COLUMNS = 48;
 
 /** Root of the index index tree */
-constexpr Dict_id DICT_HDR_INDEXES = 44;
+constexpr Dict_id DICT_HDR_INDEXES = 56;
 
 /** Root of the index field index tree */
-constexpr Dict_id DICT_HDR_FIELDS = 48;
+constexpr Dict_id DICT_HDR_FIELDS = 64;
 
 /** What the system tables are: 0 or DICT_BLINK. They have to be opened before there's a catalog to say. */
-constexpr Dict_id DICT_HDR_SYS_AM = 52;
+constexpr Dict_id DICT_HDR_SYS_AM = 72;
 
 /** Segment header for the tablespace segment into which the dictionary header is created */
-constexpr Dict_id DICT_HDR_FSEG_HEADER = 56;
+constexpr Dict_id DICT_HDR_FSEG_HEADER = 76;
 
 /*-------------------------------------------------------------*/
 
 /** The field number of the page number field in the sys_indexes table clustered index */
 
-constexpr ulint DICT_SYS_INDEXES_PAGE_NO_FIELD = 8;
+constexpr ulint DICT_SYS_INDEXES_ROOT_FIELD = 8;
 constexpr ulint DICT_SYS_INDEXES_SPACE_NO_FIELD = 7;
 constexpr ulint DICT_SYS_INDEXES_TYPE_FIELD = 6;
 constexpr ulint DICT_SYS_INDEXES_NAME_FIELD = 4;
@@ -1865,7 +1868,8 @@ struct IndexNode {
   ulint m_state{};
 
   /** Root page number of the index */
-  page_no_t m_page_no{NULL_PAGE_NO};
+  /** Where the index is, IndexAm::Root: ~0 for nowhere yet. */
+  uint64_t m_root{~uint64_t{}};
 
   /** Table which owns the index */
   Table *m_table{};

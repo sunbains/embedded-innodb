@@ -265,6 +265,108 @@ LockKey Btree::lock_fence(const Index *index, const BufBlock *block) noexcept {
   return LockKey{fold | 1};
 }
 
+std::vector<const DTuple *> Btree::split_keys(
+  const Index *index, ulint latch, const DTuple *start, const DTuple *end, size_t n, MemHeap *heap, Mtr *mtr
+) noexcept {
+  std::vector<const DTuple *> keys;
+  std::vector<page_no_t> pages{index->get_page_no()};
+  const auto space = index->get_space_id();
+
+  /* Not more pages read for this than a few for each part. */
+  constexpr size_t MAX_DEPTH{3};
+
+  for (size_t depth{}; depth < MAX_DEPTH && !pages.empty(); ++depth) {
+    std::vector<const DTuple *> level_keys;
+    std::vector<page_no_t> children;
+    bool more{true};
+
+    for (const auto page_no : pages) {
+      const auto savepoint = mtr->set_savepoint();
+      const auto block = block_get(space, page_no, latch, mtr);
+      const auto page = block->get_frame();
+      const auto level = page_get_level(page, mtr);
+
+      /* A page that left the tree since its parent was read, or a leaf: nothing to split by. */
+      if (page_get_index_id(page) != index->m_id || level == 0) {
+        mtr->release_block_at_savepoint(savepoint, block);
+        continue;
+      }
+
+      /* The children of a page of level 1 are leaves: this is as far as it goes. */
+      more = more && level > 1;
+
+      MemHeap *offs_heap{};
+
+      for (auto rec = page_rec_get_next(page_get_infimum_rec(page)); page_rec_is_user_rec(rec); rec = page_rec_get_next(rec)) {
+        const RecOffs offs = PhyRec(index, rec).get_all_col_offsets(nullptr, &offs_heap, Current_location());
+
+        children.push_back(node_ptr_get_child_page_no(rec, offs));
+
+        /* The first of the leftmost page of a level is lower than anything, it has no key. */
+        if ((rec.get_info_bits() & REC_INFO_MIN_REC_FLAG) != 0 || (start != nullptr && start->compare(rec, index, offs.get()) >= 0) ||
+            (end != nullptr && end->compare(rec, index, offs.get()) <= 0)) {
+          continue;
+        }
+
+        /* A copy: the page goes before the key is used. */
+        ulint n_fields;
+        byte *buf{};
+        ulint buf_size{};
+        const auto prefix = index->copy_rec_order_prefix(rec, &n_fields, buf, buf_size);
+        const auto bytes = static_cast<byte *>(mem_heap_alloc(heap, buf_size));
+
+        memcpy(bytes, buf, buf_size);
+        level_keys.push_back(index->build_data_tuple(Rec(bytes + (prefix.get() - buf)), n_fields, heap));
+        mem_free(buf);
+      }
+
+      if (offs_heap != nullptr) {
+        mem_heap_free(offs_heap);
+      }
+
+      mtr->release_block_at_savepoint(savepoint, block);
+    }
+
+    /* A level further down has more of them, never less. */
+    if (level_keys.size() >= keys.size()) {
+      keys = std::move(level_keys);
+    }
+
+    if (keys.size() >= n || !more || children.size() > 64 * n) {
+      break;
+    }
+
+    pages = std::move(children);
+  }
+
+  /* About n: every so many of them, in order. */
+  if (keys.size() > n && n > 0) {
+    std::vector<const DTuple *> some;
+    const auto step = double(keys.size()) / double(n);
+
+    for (size_t i{1}; i < n; ++i) {
+      some.push_back(keys[size_t(double(i) * step)]);
+    }
+
+    keys = std::move(some);
+  }
+
+  return keys;
+}
+
+void Btree::latch_for_extern_free(const Index *index, Mtr *mtr) noexcept {
+  if (index->is_blink()) {
+    return;
+  }
+
+  mtr_x_lock(index->get_lock(), mtr);
+
+  /* The root as well, X: the free takes pages from its segments. If the tree is of height 1 the
+  tree latch doesn't protect the root, which is also a leaf, and latching it later would break the
+  latching order, with an undo log page latched. */
+  (void)root_get(index->m_page_id, mtr);
+}
+
 void Btree::discard_locks(const Index *index, const BufBlock *block, LockKey heir) noexcept {
   const auto page = block->get_frame();
 

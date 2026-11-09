@@ -910,11 +910,9 @@ static DbErr check_table(System &sys, Trx *trx, Index *index, size_t n_threads) 
 
   using Tuples = std::vector<DTuple *>;
   using Heaps = std::vector<MemHeap *>;
-  using Blocks = std::vector<const BufBlock *>;
 
   Heaps heaps;
   Tuples prev_tuples;
-  Blocks prev_blocks;
 
   for (size_t i = 0; i < n_threads; ++i) {
     heaps.push_back(mem_heap_create(4096));
@@ -926,7 +924,6 @@ static DbErr check_table(System &sys, Trx *trx, Index *index, size_t n_threads) 
 
   auto err = reader.add_scan(sys, trx, config, [&](const ParallelReader::Ctx *ctx) {
     const auto rec = ctx->m_rec;
-    const auto block = ctx->m_block;
     const auto id = ctx->thread_id();
 
     n_recs.inc(1, id);
@@ -1004,14 +1001,13 @@ static DbErr check_table(System &sys, Trx *trx, Index *index, size_t n_threads) 
       }
     }
 
-    if (prev_blocks[id] != block || prev_blocks[id] == nullptr) {
-      mem_heap_empty(heap);
+    /* The previous tuple has been compared: its memory is for this one. */
+    mem_heap_empty(heap);
 
+    {
       PhyRec record{index, rec};
 
       offsets = record.get_col_offsets(nullptr, ULINT_UNDEFINED, &heap, Current_location());
-
-      prev_blocks[id] = block;
     }
 
     ulint n_ext{};
@@ -1023,7 +1019,6 @@ static DbErr check_table(System &sys, Trx *trx, Index *index, size_t n_threads) 
 
   if (err == DB_SUCCESS) {
     prev_tuples.resize(n_threads);
-    prev_blocks.resize(n_threads);
 
     err = reader.run(sys, n_threads);
   }

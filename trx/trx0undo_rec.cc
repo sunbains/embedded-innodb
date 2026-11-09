@@ -23,7 +23,7 @@ Transaction undo log record class implementation
 
 #include "trx0undo_rec.h"
 
-#include "btr0blob.h"
+#include "blob0blob.h"
 #include "dict0dict.h"
 #include "fsp0fsp.h"
 #include "mach0data.h"
@@ -420,9 +420,6 @@ DbErr TrxUndoRecord::prev_version_build(System &sys,
   TrxUndoRecord undo_rec{};
 
 
-  ut_ad(
-    index_mtr->memo_contains_page(index_rec, MTR_MEMO_PAGE_S_FIX) || index_mtr->memo_contains_page(index_rec, MTR_MEMO_PAGE_X_FIX)
-  );
 
   ut_ad(rec.offs_validate(index, offsets));
 

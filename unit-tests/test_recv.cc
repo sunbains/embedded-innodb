@@ -529,6 +529,7 @@ class RecvGroupTest : public ut::SysTest {
     recv.m_parse_start_lsn = START;
     recv.m_recovered_lsn = START;
     recv.m_scanned_lsn = START;
+    recv.m_limit_lsn = START;
     recv.m_found_corrupt_log = false;
   }
 
@@ -553,11 +554,12 @@ class RecvGroupTest : public ut::SysTest {
     EXPECT_FALSE(m_sys->m_recv->m_found_corrupt_log);
   }
 
-  /** @return the parsed position in the buffer. */
-  ulint parsed() const { return m_sys->m_recv->m_recovered_offset; }
+  /** @return where the complete groups end in the buffer: the records are parsed one at a time,
+  the first pass finds the end of the last complete group. */
+  ulint parsed() const { return ulint(m_sys->m_recv->m_limit_lsn - START); }
 
-  /** @return the LSN parsed up to. */
-  lsn_t parsed_lsn() const { return m_sys->m_recv->m_recovered_lsn; }
+  /** @return the LSN the complete groups end at. */
+  lsn_t parsed_lsn() const { return m_sys->m_recv->m_limit_lsn; }
 
   /** @return a MLOG_4BYTES record for (space, page_no), flagged single or not. */
   static std::vector<byte> rec4(space_id_t space, page_no_t page_no, ulint v, bool single) {
@@ -621,8 +623,8 @@ TEST_F(RecvGroupTest, Multi) {
   EXPECT_EQ(parsed_lsn(), START + g.size());
 }
 
-/** A multi-record group without its end mark is not parsed at all: its
-records are applied together or not at all. */
+/** A multi-record group without its end mark isn't complete: it's parsed, but the end of the
+complete groups stays before it, its records are applied together or not at all. */
 TEST_F(RecvGroupTest, MultiWithoutEnd) {
   auto g = group(4, 7);
 
@@ -898,8 +900,8 @@ TEST_F(RecvStoreTest, BigRecordChunks) {
   EXPECT_EQ(m_sys->m_recv->m_n_log_records, 1UL);
 }
 
-/** The records of a group go to the lists of their pages in log order;
-each starts at its own LSN, all end at the end of the group. */
+/** The records of a group go to the lists of their pages in log order, as they're read; each
+starts and ends at its own LSNs, so a group can be applied in batches as it streams. */
 TEST_F(RecvStoreTest, GroupPerPage) {
   auto rec4 = [](page_no_t page_no, ulint v) {
     std::vector<byte> b{MLOG_4BYTES, 0, byte(page_no), 0, 38};
@@ -935,8 +937,11 @@ TEST_F(RecvStoreTest, GroupPerPage) {
   EXPECT_EQ(p8[0]->m_start_lsn, starts[1]);
   EXPECT_EQ(p7[1]->m_start_lsn, starts[2]);
 
+  EXPECT_EQ(p7[0]->m_end_lsn, starts[1]);
+  EXPECT_EQ(p8[0]->m_end_lsn, starts[2]);
+  EXPECT_EQ(p7[1]->m_end_lsn, START + g.size() - 1) << "before the end mark";
+
   for (auto r : {p7[0], p7[1], p8[0]}) {
-    EXPECT_EQ(r->m_end_lsn, START + g.size());
     EXPECT_EQ(r->m_type, MLOG_4BYTES);
   }
 
@@ -1452,6 +1457,27 @@ TEST_F(RecvTest, ManySmall) {
       }
     }
   });
+
+  expect_rows(expected);
+}
+
+/** A field of megabytes in one mini-transaction, recovered with a quarter of its size for the
+records not yet applied: recovery streams the group through in batches, it never holds it whole. */
+TEST_F(RecvTest, StreamBlob) {
+  m_config.m_recv.m_max_memory = 1024 * 1024;
+
+  ut::Rows expected;
+
+  crash_model([&] {
+    auto trx = b();
+    const ut::Row row{1, 1, ut::blob(1, 4 * 1024 * 1024)};
+
+    EXPECT_EQ(ins(trx, row), DB_SUCCESS);
+    c(trx);
+    expected[1] = row;
+  });
+
+  EXPECT_GE(m_sys->m_recv->m_n_batches, 4UL) << "applied in batches as it streamed";
 
   expect_rows(expected);
 }

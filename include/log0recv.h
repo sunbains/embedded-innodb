@@ -24,6 +24,8 @@ Created 9/20/1997 Heikki Tuuri
 
 #pragma once
 
+#include <array>
+
 #include "srv0sys.h"
 
 #include "innodb0types.h"
@@ -176,6 +178,22 @@ struct RecvSys {
   /** Constructor */
   explicit RecvSys(System &sys) noexcept;
 
+  /** Parse a redo record of a type an implementation of an index owns, and apply it to block if that
+  isn't null. @return the end of the record, nullptr if it isn't all in [ptr, end_ptr). */
+  using RedoApply = byte *(*)(System &sys, MlogType type, byte *ptr, byte *end_ptr, BufBlock *block, Mtr *mtr) noexcept;
+
+  /** The redo records of an index type are its own: it says how to apply them, at its creation. */
+  void set_redo_apply(MlogType type, RedoApply apply) noexcept {
+    ut_a(type <= MLOG_BIGGEST_TYPE && (m_redo_apply[type] == nullptr || m_redo_apply[type] == apply));
+    m_redo_apply[type] = apply;
+  }
+
+  /** @return how to apply a record of type, nullptr if no implementation owns it. */
+  [[nodiscard]] RedoApply redo_apply(MlogType type) const noexcept { return type <= MLOG_BIGGEST_TYPE ? m_redo_apply[type] : nullptr; }
+
+  /** The appliers of the records of the index implementations, by type. */
+  std::array<RedoApply, MLOG_BIGGEST_TYPE + 1> m_redo_apply{};
+
   /** Destructor.  */
   ~RecvSys() noexcept;
 
@@ -235,8 +253,15 @@ struct RecvSys {
   /** this is true when a log rec application batch is running */
   bool m_apply_batch_on{};
 
-  /** buffer for parsing log records */
+  /** buffer for parsing log records: records are parsed one at a time, it holds the record
+  being parsed and the log after it, never a whole group */
   byte *m_buf{};
+
+  /** The end of the last complete group of records, one mini-transaction's: what the first pass
+  of recovery found (recv_parse_log_recs(sys, false)). The second pass stores and applies the
+  records up to it as it reads them, a group needn't be whole in memory to be applied. A group
+  that the log ends inside never committed. LSN_MAX: no limit, the records are known whole. */
+  lsn_t m_limit_lsn{LSN_MAX};
 
   /** amount of data in buf */
   ulint m_len{};
@@ -296,6 +321,9 @@ struct RecvSys {
 
   /** Number of log records parsed and stored in m_log_records so far. */
   ulint m_n_log_records{};
+
+  /** The apply batches of this recovery: the records go to the pages in batches as they stream. */
+  ulint m_n_batches{};
 };
 
 
@@ -307,6 +335,8 @@ struct RecvSys {
 
 
 /** Size of the parsing buffer: a record group, the log of one mini-transaction, must fit. */
+/** The size of the parsing buffer: it holds a record, the biggest is a page and a header, and the
+log read after it. */
 constexpr ulint RECV_PARSING_BUF_SIZE = 2 * 1024 * 1024;
 
 /** Parse log records from buffer

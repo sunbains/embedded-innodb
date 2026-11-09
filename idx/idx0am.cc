@@ -20,7 +20,7 @@ The index access method, and the B-tree behind it. */
 
 #include "idx0am.h"
 
-#include "btr0blob.h"
+#include "blob0blob.h"
 #include "btr0btr.h"
 #include "btr0cur.h"
 #include "btr0pcur.h"
@@ -87,7 +87,6 @@ struct BtreeCursorAm final : IndexAm::Cursor {
 
   bool prev_pos(Mtr *mtr) noexcept override { return m_pcur.move_to_prev(m_sys, mtr); }
 
-  void skip_rest(Mtr *mtr) noexcept override { m_pcur.move_to_last_on_page(mtr); }
 
   bool on_rec() const noexcept override { return m_pcur.is_on_user_rec(); }
 
@@ -101,9 +100,23 @@ struct BtreeCursorAm final : IndexAm::Cursor {
 
   SearchMode search_mode() const noexcept override { return m_pcur.m_search_mode; }
 
+#ifdef UNIT_TESTING
   BufBlock *block() noexcept override { return m_pcur.get_block(); }
+#endif /* UNIT_TESTING */
 
   [[nodiscard]] LockPos lock_pos(Rec rec) noexcept override { return Btree::lock_pos(index(), m_pcur.get_block(), rec); }
+
+  [[nodiscard]] At at() noexcept override {
+    const auto rec = this->rec();
+
+    return page_rec_is_supremum(rec) ? At::FENCE : page_rec_is_infimum(rec) ? At::START : At::REC;
+  }
+
+  [[nodiscard]] Next peek_next() noexcept override {
+    const auto next = page_rec_get_next_const(this->rec());
+
+    return Next{next, page_rec_is_supremum(next) ? At::FENCE : At::REC};
+  }
 
   void save(Mtr *mtr) noexcept override { m_pcur.store_position(m_sys, mtr); }
 
@@ -192,7 +205,8 @@ struct BtreeCursorAm final : IndexAm::Cursor {
   DbErr store_big_rec(const RecOffs &offsets, const BigRec &big_rec, Mtr *mtr) noexcept override {
     Blob blob{};
 
-    return blob.store_big_rec_extern_fields(m_sys, m_pcur.get_btr_cur()->m_index, m_pcur.get_block(), m_pcur.get_rec(), offsets, big_rec, mtr);
+    /* In mtr with the record: the fields and the references are one change. */
+    return blob.store_big_rec_extern_fields(m_sys, m_pcur.get_btr_cur()->m_index, m_pcur.get_rec(), offsets, big_rec, m_pcur.get_block()->get_page_no(), mtr);
   }
 
   DbErr set_delete_mark(ulint flags, bool val, QueThr *thr, Mtr *mtr) noexcept override {
@@ -217,12 +231,18 @@ struct BtreeAm final : IndexAm {
   std::unique_ptr<Cursor> cursor() override { return std::make_unique<BtreeCursorAm>(m_sys); }
 
   Root create(ulint type, space_id_t space, uint64_t index_id, Index *index, Mtr *mtr) noexcept override {
+    const auto page_no = create_tree(type, space, index_id, index, mtr);
+
+    return page_no == FIL_NULL ? NO_ROOT : Root{page_no};
+  }
+
+  [[nodiscard]] page_no_t create_tree(ulint type, space_id_t space, uint64_t index_id, Index *index, Mtr *mtr) noexcept {
     return m_sys.m_btree->create(type, space, index_id, index, mtr);
   }
 
-  void drop_data(space_id_t space, Root root) noexcept override { m_sys.m_btree->free_but_not_root(space, root); }
+  void drop_data(space_id_t space, Root root) noexcept override { m_sys.m_btree->free_but_not_root(space, page_no_t(root)); }
 
-  void drop_root(space_id_t space, Root root, Mtr *mtr) noexcept override { m_sys.m_btree->free_root(space, root, mtr); }
+  void drop_root(space_id_t space, Root root, Mtr *mtr) noexcept override { m_sys.m_btree->free_root(space, page_no_t(root), mtr); }
 
   ulint n_pages(const Index *index) noexcept override { return m_sys.m_btree->get_size(index, BTR_TOTAL_SIZE); }
 
@@ -236,62 +256,20 @@ struct BtreeAm final : IndexAm {
 
   bool validate(Index *index, Trx *trx) noexcept override { return m_sys.m_btree->validate_index(index, trx); }
 
-  bool restore_tree_cursor(BtreePcursor &pcur, ulint latch, Mtr *mtr, SourceLocation loc) noexcept override {
-    return pcur.restore_position(m_sys, latch, mtr, loc);
-  }
-
-  void save_tree_cursor(BtreePcursor &pcur, Mtr *mtr) noexcept override { pcur.store_position(m_sys, mtr); }
-
-  void read_scan_node(
-    const Index *index, page_no_t page_no, const DTuple *start, const DTuple *end, ulint stop_level, size_t max, ScanNode &node
-  ) noexcept override {
+  std::vector<const DTuple *> split_range(const Index *index, const DTuple *start, const DTuple *end, size_t n, MemHeap *heap) noexcept override {
     Mtr mtr;
 
     mtr.start();
 
-    const auto block = m_sys.m_btree->block_get(index->get_space_id(), page_no, RW_S_LATCH, &mtr);
-    const auto page = block->get_frame();
+    /* No page of the tree is freed while this is held: a page number read from a parent stays a page
+    of the tree. */
+    mtr_s_lock(index->get_lock(), &mtr);
 
-    node.m_children.clear();
-    node.m_dead = m_sys.m_btree->page_get_index_id(page) != index->m_id;
-    node.m_level = m_sys.m_btree->page_get_level(page, &mtr);
-
-    if (!node.m_dead && node.m_level > stop_level) {
-      PageCursor cur;
-
-      cur.m_index = index;
-
-      if (start != nullptr) {
-        cur.search(m_sys, block, index, start, PAGE_CUR_L);
-      } else {
-        cur.set_before_first(block);
-      }
-
-      if (cur.is_before_first()) {
-        cur.move_to_next();
-      }
-
-      MemHeap *heap{};
-
-      while (!cur.is_after_last() && node.m_children.size() < max) {
-        const auto rec = cur.get_rec();
-        const RecOffs offsets = PhyRec(index, rec).get_all_col_offsets(nullptr, &heap, Current_location());
-
-        if (end != nullptr && end->compare(rec, index, offsets) <= 0) {
-          break;
-        }
-
-        node.m_children.push_back(m_sys.m_btree->node_ptr_get_child_page_no(rec, offsets));
-
-        cur.move_to_next();
-      }
-
-      if (heap != nullptr) {
-        mem_heap_free(heap);
-      }
-    }
+    auto keys = m_sys.m_btree->split_keys(index, RW_S_LATCH, start, end, n, heap, &mtr);
 
     mtr.commit(m_sys);
+
+    return keys;
   }
 
   void print(Index *index) noexcept override {
@@ -309,6 +287,11 @@ struct BtreeAm final : IndexAm {
 }  // namespace
 
 std::unique_ptr<IndexAm> index_am_btree(System &sys) { return std::make_unique<BtreeAm>(sys); }
+
+void IndexAm::attach(Index *index, Root root) noexcept {
+  /* A tree: the root is its page in the space of the index. */
+  index->m_page_id.m_page_no = root == NO_ROOT ? FIL_NULL : page_no_t(root);
+}
 
 void IndexCursor::bind(const Index *index) {
   /* The indexes of a table can be of different kinds, one cursor goes through them. */

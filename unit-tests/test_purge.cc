@@ -889,6 +889,10 @@ TEST_F(PurgeTest, DeleteAll) {
 /** The externally stored fields of deleted rows are freed by purge: the
 pages of the leaf segment go back to what they were before the load. */
 TEST_F(PurgeTest, BlobsOfDeleted) {
+  if (m_config.m_dict.m_blob_store != BlobStoreKind::INLINE) {
+    GTEST_SKIP() << "counts the pages of the inline store";
+  }
+
   const auto base = leaf_pages();
   const auto rows = make_rows(0, 40, 30000);
 
@@ -918,6 +922,10 @@ TEST_F(PurgeTest, BlobsOfDeleted) {
 /** An update of an externally stored field writes a new blob; purge frees
 the old one once no view needs it: after many updates, one version is left. */
 TEST_F(PurgeTest, BlobsOfUpdated) {
+  if (m_config.m_dict.m_blob_store != BlobStoreKind::INLINE) {
+    GTEST_SKIP() << "counts the pages of the inline store";
+  }
+
   auto rows = make_rows(0, 10, 30000);
 
   load(rows);

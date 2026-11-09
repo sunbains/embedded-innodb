@@ -21,12 +21,14 @@ The Lehman & Yao B-link tree: see idx0blink.h for the protocol. */
 #include "idx0blink.h"
 #include "idx0blinkint.h"
 
-#include "btr0blob.h"
+#include "blob0blob.h"
+#include "row0upd.h"
 #include "btr0btr.h"
 #include "btr0cur.h"
 #include "btr0pcur.h"
 #include "fsp0fsp.h"
 #include "lock0lock.h"
+#include "log0recv.h"
 #include "mach0data.h"
 #include "mtr0log.h"
 #include "mtr0systrx.h"
@@ -538,20 +540,9 @@ struct Smo final : BtreeCursor::TreeOps {
   /** The reservation stays until the levels above are done too. */
   void release(const Index *) noexcept override {}
 
-  void free_updated(const Index *index, Rec rec, const RecOffs &offsets, const Upd *update, TrxRbCtx rb_ctx, Mtr *mtr) noexcept override {
-    Mtr blob_mtr;
-    Blob blob{};
-
-    /* Not in the mini-transaction of the operation: it would hold the tablespace latch while it
-    goes on to latch parents. */
-    blob_mtr.start(mtr);
-
-    m_sys.m_fsp->latch(index->get_space_id(), &blob_mtr);
-
-    blob.free_updated_extern_fields(m_sys, index, rec, offsets, update, rb_ctx, &blob_mtr);
-
-    blob_mtr.commit(m_sys);
-  }
+  /** BlinkCursor::update() freed them before, see free_updated_first(): here the tablespace latch
+  would be held while the split latches its pages. */
+  void free_updated(const Index *, Rec, const RecOffs &, const Upd *, TrxRbCtx, Mtr *) noexcept override {}
 
   /** A merge is for what remove() leaves: an update that shrinks a page doesn't try. */
   void after_reinsert(BtreeCursor *, Mtr *) noexcept override {}
@@ -2735,14 +2726,6 @@ struct BlinkCursor final : IndexAm::Cursor {
     return false;
   }
 
-  void skip_rest(Mtr *mtr) noexcept override {
-    if (m_snap) {
-      m_snap_offs = PAGE_SUPREMUM;
-    } else {
-      m_pcur.move_to_last_on_page(mtr);
-    }
-  }
-
   bool on_rec() const noexcept override { return m_snap ? snap_on_rec() : m_pcur.is_on_user_rec(); }
 
   Rec rec() noexcept override { return m_snap ? Rec(m_snap_frame.get() + m_snap_offs) : m_pcur.get_rec(); }
@@ -2764,13 +2747,27 @@ struct BlinkCursor final : IndexAm::Cursor {
 
   SearchMode search_mode() const noexcept override { return m_pcur.m_search_mode; }
 
+#ifdef UNIT_TESTING
   BufBlock *block() noexcept override {
     ut_a(!m_snap);
 
     return m_pcur.get_block();
   }
+#endif /* UNIT_TESTING */
 
   [[nodiscard]] LockPos lock_pos(Rec rec) noexcept override { return Btree::lock_pos(index(), m_pcur.get_block(), rec); }
+
+  [[nodiscard]] At at() noexcept override {
+    const auto rec = this->rec();
+
+    return page_rec_is_supremum(rec) ? At::FENCE : page_rec_is_infimum(rec) ? At::START : At::REC;
+  }
+
+  [[nodiscard]] Next peek_next() noexcept override {
+    const auto next = page_rec_get_next_const(this->rec());
+
+    return Next{next, page_rec_is_supremum(next) ? At::FENCE : At::REC};
+  }
 
   /** An empty page has no record to be relative to, as in the old tree, but here it can be
   anywhere on the level: just before the high key is where it is. Without a high key it's after
@@ -2946,6 +2943,52 @@ struct BlinkCursor final : IndexAm::Cursor {
     m_pcur.commit_specify_mtr(m_sys, mtr);
   }
 
+  /** The rollback of an update that stored fields: they're freed first, and their references made to
+  refer to nothing, in a change of their own. Then the update, in a new mini-transaction on the
+  record found again by its key. Not in the update's: a split would latch its pages with the
+  tablespace latch held. A crash between leaves the old version with references to nothing, which
+  the rollback done again finds nothing to free in. */
+  void free_updated_first(ulint flags, const Upd *update, QueThr *thr, Mtr *mtr) noexcept {
+    if (!(flags & BTR_NO_UNDO_LOG_FLAG)) {
+      return;
+    }
+
+    const auto index = m_pcur.get_btr_cur()->get_index();
+    const auto rec = m_pcur.get_rec();
+    auto heap = mem_heap_create(256);
+    const RecOffs offsets = PhyRec(index, rec).get_all_col_offsets(nullptr, &heap, Current_location());
+    bool any{};
+
+    for (ulint i{}; !any && i < RowUpdate::upd_get_n_fields(update); ++i) {
+      any = rec_offs_nth_extern(offsets, update->get_nth_field(i)->m_field_no);
+    }
+
+    if (any) {
+      ulint n_fields;
+      byte *key_buf{};
+      ulint key_buf_size{};
+      const auto prefix = index->copy_rec_order_prefix(rec, &n_fields, key_buf, key_buf_size);
+      const auto key = index->build_data_tuple(prefix, n_fields, heap);
+      Blob blob{};
+
+      blob.prepare(m_sys, index, mtr, false);
+      blob.free_updated_extern_fields(m_sys, index, rec, offsets, update, trx_is_recv(m_sys, thr_get_trx(thr)) ? RB_RECOVERY : RB_NORMAL, mtr);
+
+      /* What the caller saved before this call is for it to restore(), by key, after. */
+      const auto old_stored = m_pcur.m_old_stored;
+
+      commit(mtr);
+      mtr->start();
+      search(index, key, PAGE_CUR_LE, BTR_MODIFY_LEAF, mtr);
+
+      m_pcur.m_old_stored = old_stored;
+
+      mem_free(key_buf);
+    }
+
+    mem_heap_free(heap);
+  }
+
   void finish(Smo &smo, Mtr *mtr) noexcept {
     if (!smo.started()) {
       return;
@@ -2999,18 +3042,15 @@ struct BlinkCursor final : IndexAm::Cursor {
       merge_key = index->build_data_tuple(copy, n_fields, heap);
     }
 
-    if (offsets.any_extern()) {
-      Mtr blob_mtr;
+    const bool any_extern = offsets.any_extern();
+
+    if (any_extern) {
       Blob blob{};
 
-      /* A short one: see the proof in the header. */
-      blob_mtr.start(mtr);
-
-      m_sys.m_fsp->latch(index->get_space_id(), &blob_mtr);
-
-      blob.free_externally_stored_fields(m_sys, index, rec, offsets, rb_ctx, &blob_mtr);
-
-      blob_mtr.commit(m_sys);
+      /* In this mini-transaction, with the record: one change. After its pages, and nothing is
+      latched after the tablespace latch until the commit (see the proof in the header). */
+      blob.prepare(m_sys, index, mtr, false);
+      blob.free_externally_stored_fields(m_sys, index, rec, offsets, rb_ctx, mtr);
     }
 
     m_sys.m_lock_sys->update_delete(index, Btree::lock_key(index, rec), Btree::lock_next(index, block, rec));
@@ -3023,7 +3063,8 @@ struct BlinkCursor final : IndexAm::Cursor {
       Merge(m_sys, index, merge_key).run();
 
       mtr->start();
-    } else {
+    } else if (!any_extern) {
+      /* Not with the tablespace latch held: the frees take it in their own mini-transactions. */
       free_dead_pages(m_sys);
     }
 
@@ -3050,6 +3091,10 @@ struct BlinkCursor final : IndexAm::Cursor {
 
       return err == DB_OVERFLOW || err == DB_UNDERFLOW ? DB_FAIL : err;
     }
+
+    free_updated_first(flags, update, thr, mtr);
+
+    cur = m_pcur.get_btr_cur();
 
     Smo smo{m_sys, cur->get_index(), m_path, m_leaf_savepoint, mtr};
 
@@ -3093,7 +3138,8 @@ struct BlinkCursor final : IndexAm::Cursor {
   DbErr store_big_rec(const RecOffs &offsets, const BigRec &big_rec, Mtr *mtr) noexcept override {
     Blob blob{};
 
-    return blob.store_big_rec_extern_fields(m_sys, m_pcur.get_btr_cur()->m_index, m_pcur.get_block(), m_pcur.get_rec(), offsets, big_rec, mtr);
+    /* In mtr with the record: the fields and the references are one change. */
+    return blob.store_big_rec_extern_fields(m_sys, m_pcur.get_btr_cur()->m_index, m_pcur.get_rec(), offsets, big_rec, m_pcur.get_block()->get_page_no(), mtr);
   }
 
   DbErr set_delete_mark(ulint flags, bool val, QueThr *thr, Mtr *mtr) noexcept override {
@@ -3123,7 +3169,12 @@ struct BlinkCursor final : IndexAm::Cursor {
 };
 
 struct Am final : IndexAm {
-  explicit Am(System &sys) noexcept : m_sys(sys) {}
+  explicit Am(System &sys) noexcept : m_sys(sys) {
+    /* The redo records of the tree's own: the high key of a page. */
+    sys.m_recv->set_redo_apply(MLOG_PAGE_HIGH_KEY, [](System &s, MlogType, byte *ptr, byte *end_ptr, BufBlock *block, Mtr *) noexcept {
+      return page_parse_high_key(s, ptr, end_ptr, block);
+    });
+  }
 
   ~Am() noexcept override {
     /* After the shutdown: a system transaction that's still open is for the next start. */
@@ -3134,16 +3185,18 @@ struct Am final : IndexAm {
 
   /* A new tree and a dropped one are the same pages as the B-tree's. */
   Root create(ulint type, space_id_t space, uint64_t index_id, Index *index, Mtr *mtr) noexcept override {
-    return m_sys.m_btree->create(type, space, index_id, index, mtr);
+    const auto page_no = m_sys.m_btree->create(type, space, index_id, index, mtr);
+
+    return page_no == FIL_NULL ? NO_ROOT : Root{page_no};
   }
 
   void drop_data(space_id_t space, Root root) noexcept override {
-    m_shared.m_drain.forget(m_sys, space, root);
+    m_shared.m_drain.forget(m_sys, space, page_no_t(root));
 
-    m_sys.m_btree->free_but_not_root(space, root);
+    m_sys.m_btree->free_but_not_root(space, page_no_t(root));
   }
 
-  void drop_root(space_id_t space, Root root, Mtr *mtr) noexcept override { m_sys.m_btree->free_root(space, root, mtr); }
+  void drop_root(space_id_t space, Root root, Mtr *mtr) noexcept override { m_sys.m_btree->free_root(space, page_no_t(root), mtr); }
 
   ulint n_pages(const Index *index) noexcept override {
     free_dead_pages(m_sys);
@@ -3159,42 +3212,20 @@ struct Am final : IndexAm {
 
   void quiesce() noexcept override { free_dead_pages(m_sys); }
 
-  bool restore_tree_cursor(BtreePcursor &pcur, ulint latch, Mtr *mtr, SourceLocation loc) noexcept override {
-    return restore_at_level(pcur, latch, mtr, loc);
-  }
-
   bool validate(Index *index, Trx *) noexcept override { return validate_levels(index); }
 
-  bool uses_index_latch() const noexcept override { return false; }
-
-  ulint page_read_latch() const noexcept override { return RW_B_LATCH; }
-
-  ulint page_held_latch() const noexcept override { return RW_B_HELD; }
-
-  void save_tree_cursor(BtreePcursor &pcur, Mtr *mtr) noexcept override { save_position(m_sys, pcur, mtr); }
-
-  void read_scan_node(
-    const Index *index, page_no_t page_no, const DTuple *start, const DTuple *end, ulint stop_level, size_t max, ScanNode &node
-  ) noexcept override {
+  std::vector<const DTuple *> split_range(const Index *index, const DTuple *start, const DTuple *end, size_t n, MemHeap *heap) noexcept override {
+    /* A page number read from a parent stays a page of the tree: it isn't freed while this guard is in. */
+    Drain::Guard guard{m_shared.m_drain};
     Mtr mtr;
 
     mtr.start();
 
-    const auto block = m_sys.m_btree->block_get(index->get_space_id(), page_no, RW_NO_LATCH, &mtr);
-
-    read_stable(m_sys, block, [&]() noexcept { return read_scan_node_raw(index, block->get_frame(), start, end, stop_level, max, node); });
+    auto keys = m_sys.m_btree->split_keys(index, RW_B_LATCH, start, end, n, heap, &mtr);
 
     mtr.commit(m_sys);
-  }
 
-  std::unique_ptr<PagePin> pin_pages() noexcept override {
-    struct Pin final : PagePin {
-      explicit Pin(Drain &drain) noexcept : m_guard(drain) {}
-
-      Drain::Guard m_guard;
-    };
-
-    return std::make_unique<Pin>(m_shared.m_drain);
+    return keys;
   }
 
   void estimate_distinct(const Index *index) noexcept override {

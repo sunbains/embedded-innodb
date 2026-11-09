@@ -46,6 +46,7 @@ struct Aio;
 struct Btree;
 struct Index;
 struct IndexAm;
+class BlobStore;
 class SysTrxSys;
 struct BufPool;
 struct Dblwr;
@@ -103,11 +104,17 @@ class System {
   /** @return the implementation of index. */
   [[nodiscard]] IndexAm &am(const Index *index) noexcept;
 
+  /** @return where the fields go that the records are too big for. */
+  [[nodiscard]] BlobStore &blob_store() noexcept { return *m_blob_store; }
+
   /** @return the implementation of an index with this type in the catalog. */
   [[nodiscard]] IndexAm &am_of_type(ulint type) noexcept;
 
   /** @return what the type of a new index has for its implementation: 0 or DICT_BLINK. */
   [[nodiscard]] ulint new_index_am() const noexcept;
+
+  /** @return what the system tables of a new database have: as new_index_am(), B-link for in memory. */
+  [[nodiscard]] ulint sys_index_am() const noexcept;
 
   std::unique_ptr<Aio> m_aio;
   std::unique_ptr<Fil> m_fil;
@@ -123,6 +130,10 @@ class System {
   /** The index implementations: every index says which it has, Config::m_dict.m_index_am is for new ones. */
   std::unique_ptr<IndexAm> m_btree_am;
   std::unique_ptr<IndexAm> m_blink_am;
+  std::unique_ptr<IndexAm> m_mem_am;
+
+  /** The store of the fields the records are too big for, DictConfig::m_blob_store. */
+  std::unique_ptr<BlobStore> m_blob_store;
 
   std::unique_ptr<Undo> m_undo;
   std::unique_ptr<Dict> m_dict;

@@ -132,6 +132,10 @@ struct LogConfig {
 /** Crash recovery. */
 struct RecvConfig {
   IbRecovery m_force_recovery{IB_RECOVERY_DEFAULT};
+
+  /** The most memory the records read but not yet applied take, then a batch of them is applied:
+  0 is the buffer pool but for the frames the batch reads pages into. */
+  ulint m_max_memory{};
 };
 
 /** Lock manager. */
@@ -168,7 +172,19 @@ enum class IndexAmKind : uint8_t {
   BTREE,
 
   /** The Lehman & Yao B-link tree of idx0blink.cc. */
-  BLINK
+  BLINK,
+
+  /** In memory, for tests, idx0mem.cc: the system tables are B-link, they have to survive a restart. */
+  MEM
+};
+
+/** Where the fields go that a record is too big for, see BlobStore. */
+enum class BlobStoreKind : uint8_t {
+  /** In pages of the index's segment, blob0inline.cc. */
+  INLINE,
+
+  /** In memory, for tests, blob0mem.cc: nothing survives a restart. */
+  MEM
 };
 
 /** Data dictionary. */
@@ -177,6 +193,9 @@ struct DictConfig {
 
   /** The implementation of the indexes created from now on, and of the system tables of a new database. */
   IndexAmKind m_index_am{IndexAmKind::BLINK};
+
+  /** The store of the fields the records are too big for. */
+  BlobStoreKind m_blob_store{BlobStoreKind::INLINE};
 
   /** On a B-link tree: inserts that find a page owned queue on it, for the owner to do them in a batch.
   Off, they wait for the page each for itself. */

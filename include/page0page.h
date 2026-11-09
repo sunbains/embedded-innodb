@@ -285,16 +285,6 @@ ulint page_rec_get_n_recs_before(const Rec rec);
  */
 ulint page_dir_find_owner_slot(const Rec rec);
 
-/**
- * This is a low-level operation which is used in a database index creation
- * to update the page number of a created B-tree to a data dictionary
- * record.
- * @param[in] rec record to update
- * @param[in] i index of the field to update
- * @param[in] page_no value to write
- * @param[im,out] mtr mini-transaction
- */
-void page_rec_write_index_page_no(Rec rec, ulint i, ulint page_no, Mtr *mtr);
 
 /**
  * Allocates a block of memory from the heap of an index page.

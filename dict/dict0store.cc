@@ -43,6 +43,16 @@ void DictStore::destroy(DictStore *dict_store) noexcept {
   ut_delete(dict_store);
 }
 
+void write_index_root(Rec rec, ulint i, IndexAm::Root root, Mtr *mtr) noexcept {
+  ulint len;
+
+  auto data = rec.get_nth_field(i, &len);
+
+  ut_a(len == 8);
+
+  mlog_write_uint64(data.get(), root, mtr);
+}
+
 DictStore::hdr_t *DictStore::hdr_get(Mtr *mtr) noexcept {
   BufPool::Request req{
     .m_rw_latch = RW_X_LATCH,
@@ -119,54 +129,54 @@ bool DictStore::bootstrap_system_tables(Mtr *mtr) noexcept {
 
   /* Create the B-tree roots for the clustered indexes of the basic system tables */
 
-  const auto am = m_sys.new_index_am();
+  const auto am = m_sys.sys_index_am();
 
   mlog_write_ulint(hdr + DICT_HDR_SYS_AM, am, MLOG_4BYTES, mtr);
 
-  auto root_page_no = m_sys.am_of_type(DICT_CLUSTERED | DICT_UNIQUE | am).create(DICT_CLUSTERED | DICT_UNIQUE | am, DICT_HDR_SPACE, DICT_TABLES_ID, m_sys.m_dict->m_dummy_index, mtr);
+  auto root = m_sys.am_of_type(DICT_CLUSTERED | DICT_UNIQUE | am).create(DICT_CLUSTERED | DICT_UNIQUE | am, DICT_HDR_SPACE, DICT_TABLES_ID, m_sys.m_dict->m_dummy_index, mtr);
 
-  if (root_page_no == FIL_NULL) {
-
-    return false;
-  }
-
-  mlog_write_ulint(hdr + DICT_HDR_TABLES, root_page_no, MLOG_4BYTES, mtr);
-
-  root_page_no = m_sys.am_of_type(DICT_UNIQUE | am).create(DICT_UNIQUE | am, DICT_HDR_SPACE, DICT_TABLE_IDS_ID, m_sys.m_dict->m_dummy_index, mtr);
-
-  if (root_page_no == FIL_NULL) {
+  if (root == IndexAm::NO_ROOT) {
 
     return false;
   }
 
-  mlog_write_ulint(hdr + DICT_HDR_TABLE_IDS, root_page_no, MLOG_4BYTES, mtr);
+  mlog_write_uint64(hdr + DICT_HDR_TABLES, root, mtr);
 
-  root_page_no = m_sys.am_of_type(DICT_CLUSTERED | DICT_UNIQUE | am).create(DICT_CLUSTERED | DICT_UNIQUE | am, DICT_HDR_SPACE, DICT_COLUMNS_ID, m_sys.m_dict->m_dummy_index, mtr);
+  root = m_sys.am_of_type(DICT_UNIQUE | am).create(DICT_UNIQUE | am, DICT_HDR_SPACE, DICT_TABLE_IDS_ID, m_sys.m_dict->m_dummy_index, mtr);
 
-  if (root_page_no == FIL_NULL) {
-
-    return false;
-  }
-
-  mlog_write_ulint(hdr + DICT_HDR_COLUMNS, root_page_no, MLOG_4BYTES, mtr);
-
-  root_page_no = m_sys.am_of_type(DICT_CLUSTERED | DICT_UNIQUE | am).create(DICT_CLUSTERED | DICT_UNIQUE | am, DICT_HDR_SPACE, DICT_INDEXES_ID, m_sys.m_dict->m_dummy_index, mtr);
-
-  if (root_page_no == FIL_NULL) {
+  if (root == IndexAm::NO_ROOT) {
 
     return false;
   }
 
-  mlog_write_ulint(hdr + DICT_HDR_INDEXES, root_page_no, MLOG_4BYTES, mtr);
+  mlog_write_uint64(hdr + DICT_HDR_TABLE_IDS, root, mtr);
 
-  root_page_no = m_sys.am_of_type(DICT_CLUSTERED | DICT_UNIQUE | am).create(DICT_CLUSTERED | DICT_UNIQUE | am, DICT_HDR_SPACE, DICT_FIELDS_ID, m_sys.m_dict->m_dummy_index, mtr);
+  root = m_sys.am_of_type(DICT_CLUSTERED | DICT_UNIQUE | am).create(DICT_CLUSTERED | DICT_UNIQUE | am, DICT_HDR_SPACE, DICT_COLUMNS_ID, m_sys.m_dict->m_dummy_index, mtr);
 
-  if (root_page_no == FIL_NULL) {
+  if (root == IndexAm::NO_ROOT) {
 
     return false;
   }
 
-  mlog_write_ulint(hdr + DICT_HDR_FIELDS, root_page_no, MLOG_4BYTES, mtr);
+  mlog_write_uint64(hdr + DICT_HDR_COLUMNS, root, mtr);
+
+  root = m_sys.am_of_type(DICT_CLUSTERED | DICT_UNIQUE | am).create(DICT_CLUSTERED | DICT_UNIQUE | am, DICT_HDR_SPACE, DICT_INDEXES_ID, m_sys.m_dict->m_dummy_index, mtr);
+
+  if (root == IndexAm::NO_ROOT) {
+
+    return false;
+  }
+
+  mlog_write_uint64(hdr + DICT_HDR_INDEXES, root, mtr);
+
+  root = m_sys.am_of_type(DICT_CLUSTERED | DICT_UNIQUE | am).create(DICT_CLUSTERED | DICT_UNIQUE | am, DICT_HDR_SPACE, DICT_FIELDS_ID, m_sys.m_dict->m_dummy_index, mtr);
+
+  if (root == IndexAm::NO_ROOT) {
+
+    return false;
+  }
+
+  mlog_write_uint64(hdr + DICT_HDR_FIELDS, root, mtr);
 
   return true;
 }
@@ -445,15 +455,15 @@ DTuple *DictStore::create_sys_indexes_tuple(const Index *index, MemHeap *heap) n
 
   dfield_set_data(dfield, ptr, 4);
 
-  /* 8: PAGE_NO --------------------------*/
-  static_assert(DICT_SYS_INDEXES_PAGE_NO_FIELD == 8, "error DICT_SYS_INDEXES_PAGE_NO_FIELD != 8");
+  /* 8: ROOT --------------------------*/
+  static_assert(DICT_SYS_INDEXES_ROOT_FIELD == 8, "error DICT_SYS_INDEXES_ROOT_FIELD != 8");
 
-  dfield = dtuple_get_nth_field(entry, 6 /*PAGE_NO*/);
+  dfield = dtuple_get_nth_field(entry, 6 /*ROOT*/);
 
-  ptr = static_cast<byte *>(mem_heap_alloc(heap, 4));
-  mach_write_to_4(ptr, FIL_NULL);
+  ptr = static_cast<byte *>(mem_heap_alloc(heap, 8));
+  mach_write_to_8(ptr, IndexAm::NO_ROOT);
 
-  dfield_set_data(dfield, ptr, 4);
+  dfield_set_data(dfield, ptr, 8);
 
   return entry;
 }
@@ -558,14 +568,14 @@ DbErr DictStore::build_index_def_step(QueThr *thr, IndexNode *node) noexcept {
   ut_ad(!index->m_table->m_indexes.empty() || index->is_clustered());
 
   /* Whatever a definition it was made from says, it's a new index of this instance. */
-  index->m_type = unsigned((index->m_type & ~DICT_BLINK) | m_sys.new_index_am());
+  index->m_type = unsigned((index->m_type & ~(DICT_BLINK | DICT_MEM)) | m_sys.new_index_am());
 
   index->m_id = hdr_get_new_id(DictIdType::INDEX_ID);
 
   /* Inherit the space id from the table; we store all indexes of a
   table in the same tablespace */
 
-  node->m_page_no = FIL_NULL;
+  node->m_root = IndexAm::NO_ROOT;
   index->m_page_id.m_space_id = index->m_table->m_space_id;
 
   auto row = create_sys_indexes_tuple(index, node->m_heap);
@@ -612,15 +622,15 @@ DbErr DictStore::create_index_tree_step(IndexNode *node) noexcept {
 
   m_sys.m_fsp->latch(index->m_page_id.m_space_id, &mtr);
 
-  node->m_page_no = m_sys.am(index).create(index->m_type, index->m_page_id.m_space_id, index->m_id, index, &mtr);
+  node->m_root = m_sys.am(index).create(index->m_type, index->m_page_id.m_space_id, index->m_id, index, &mtr);
 
-  page_rec_write_index_page_no(pcur.rec(), DICT_SYS_INDEXES_PAGE_NO_FIELD, node->m_page_no, &mtr);
+  write_index_root(pcur.rec(), DICT_SYS_INDEXES_ROOT_FIELD, node->m_root, &mtr);
 
   pcur.close();
 
   mtr.commit(m_sys);
 
-  if (node->m_page_no == FIL_NULL) {
+  if (node->m_root == IndexAm::NO_ROOT) {
 
     return DB_OUT_OF_FILE_SPACE;
   }
@@ -638,13 +648,13 @@ void DictStore::drop_index_tree(Rec rec, Mtr *mtr) noexcept {
   auto offsets = record.get_col_offsets(nullptr, sys_index->get_n_fields(), &heap, Current_location());
   ulint len;
 
-  auto field = rec.get_nth_field(offsets, DICT_SYS_INDEXES_PAGE_NO_FIELD, &len);
+  auto field = rec.get_nth_field(offsets, DICT_SYS_INDEXES_ROOT_FIELD, &len);
 
-  ut_ad(len == 4);
+  ut_ad(len == 8);
 
-  auto root_page_no = mtr->read_ulint(field.get(), MLOG_4BYTES);
+  const auto root_page_no = mtr->read_uint64(field.get());
 
-  if (root_page_no == FIL_NULL) {
+  if (root_page_no == IndexAm::NO_ROOT) {
     /* The tree has already been freed */
     mem_heap_free(heap);
     return;
@@ -685,10 +695,10 @@ void DictStore::drop_index_tree(Rec rec, Mtr *mtr) noexcept {
 
   am.drop_root(space_id, root_page_no, mtr);
 
-  page_rec_write_index_page_no(rec, DICT_SYS_INDEXES_PAGE_NO_FIELD, FIL_NULL, mtr);
+  write_index_root(rec, DICT_SYS_INDEXES_ROOT_FIELD, IndexAm::NO_ROOT, mtr);
 }
 
-page_no_t DictStore::truncate_index_tree(Table *table, space_id_t space_id, IndexCursor *pcur, Mtr *mtr) noexcept {
+IndexAm::Root DictStore::truncate_index_tree(Table *table, space_id_t space_id, IndexCursor *pcur, Mtr *mtr) noexcept {
   ut_ad(mutex_own(&m_sys.m_dict->m_mutex));
 
   /* A space id other than SYS_TABLESPACE is a freshly created single-table
@@ -703,12 +713,12 @@ page_no_t DictStore::truncate_index_tree(Table *table, space_id_t space_id, Inde
   PhyRec record(sys_index, rec);
   auto offsets = record.get_col_offsets(nullptr, sys_index->get_n_fields(), &heap, Current_location());
   ulint len;
-  auto field = rec.get_nth_field(offsets, DICT_SYS_INDEXES_PAGE_NO_FIELD, &len);
-  ut_ad(len == 4);
+  auto field = rec.get_nth_field(offsets, DICT_SYS_INDEXES_ROOT_FIELD, &len);
+  ut_ad(len == 8);
 
-  auto root_page_no = mtr->read_ulint(field.get(), MLOG_4BYTES);
+  auto root_page_no = mtr->read_uint64(field.get());
 
-  if (drop && root_page_no == FIL_NULL) {
+  if (drop && root_page_no == IndexAm::NO_ROOT) {
     /* The tree has been freed. */
 
     log_err(std::format("Trying to TRUNCATE a missing index of table {}!", table->m_name));
@@ -767,7 +777,7 @@ page_no_t DictStore::truncate_index_tree(Table *table, space_id_t space_id, Inde
   in SYS_INDEXES, so that the database will not get into an
   inconsistent state in case it crashes between the mtr.commit()
   below and the following mtr.commit() call. */
-  page_rec_write_index_page_no(rec, DICT_SYS_INDEXES_PAGE_NO_FIELD, FIL_NULL, mtr);
+  write_index_root(rec, DICT_SYS_INDEXES_ROOT_FIELD, IndexAm::NO_ROOT, mtr);
 
   /* We will need to commit the mini-transaction in order to avoid
   deadlocks in the btr_create() call, because otherwise we would
@@ -786,7 +796,7 @@ page_no_t DictStore::truncate_index_tree(Table *table, space_id_t space_id, Inde
       m_sys.m_fsp->latch(space_id, mtr);
 
       root_page_no = m_sys.am(index).create(type, space_id, index_id, index, mtr);
-      index->m_page_id.m_page_no = root_page_no;
+      m_sys.am(index).attach(index, root_page_no);
 
       return root_page_no;
     }
@@ -794,7 +804,7 @@ page_no_t DictStore::truncate_index_tree(Table *table, space_id_t space_id, Inde
 
   log_err(std::format("Index {} of table {} is missing from the data dictionary during TRUNCATE!", index_id, table->m_name));
 
-  return FIL_NULL;
+  return IndexAm::NO_ROOT;
 }
 
 QueThr *DictStore::create_table_step(QueThr *thr) noexcept {
@@ -988,7 +998,7 @@ QueThr *DictStore::create_index_step(QueThr *thr) noexcept {
           return clean_up(err);
         }
 
-        node->m_index->m_page_id.m_page_no = node->m_page_no;
+        m_sys.am(node->m_index).attach(node->m_index, node->m_root);
         node->m_state = INDEX_COMMIT_WORK;
         break;
       }
@@ -1294,7 +1304,7 @@ IndexNode *IndexNode::create(System &sys, Index *index, MemHeap *heap, bool comm
   node->m_index = index;
 
   node->m_state = INDEX_BUILD_INDEX_DEF;
-  node->m_page_no = FIL_NULL;
+  node->m_root = IndexAm::NO_ROOT;
   node->m_heap = mem_heap_create(256);
 
   node->m_ind_def = sys.m_row_ins->node_create(INS_DIRECT, sys.m_dict->m_sys_indexes, heap);

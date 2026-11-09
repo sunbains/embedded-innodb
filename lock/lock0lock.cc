@@ -633,7 +633,6 @@ bool LockSys::check_trx_id_sanity(
 
 bool LockSys::clust_rec_cons_read_sees(const Rec rec, Index *index, const ulint *offsets, ReadView *view) const noexcept {
   ut_ad(index->is_clustered());
-  ut_ad(page_rec_is_user_rec(rec));
   ut_ad(rec.offs_validate(index, offsets));
 
   /* NOTE that we call this function while holding the search
@@ -646,7 +645,6 @@ bool LockSys::clust_rec_cons_read_sees(const Rec rec, Index *index, const ulint 
 }
 
 bool LockSys::sec_rec_cons_read_sees(const Rec rec, ReadView *view) const noexcept {
-  ut_ad(page_rec_is_user_rec(rec));
 
   /* NOTE that we might call this function while holding the search
   system latch. To obey the latching order we must NOT reserve the
@@ -660,23 +658,19 @@ bool LockSys::sec_rec_cons_read_sees(const Rec rec, ReadView *view) const noexce
 }
 
 Trx *LockSys::sec_rec_some_has_impl_off_trx_sys_mutex(const Rec rec, const Index *index, const ulint *offsets) noexcept {
-  const page_t *page = rec.page_align();
-
   /* No lock system latch, nor the trx sys mutex (lock0lock.h). */
   ut_ad(nothing_latched());
   ut_ad(!mutex_own(&m_sys.m_trx_sys->m_mutex));
   ut_ad(!index->is_clustered());
-  ut_ad(page_rec_is_user_rec(rec));
   ut_ad(rec.offs_validate(index, offsets));
 
-  /* Some transaction may have an implicit x-lock on the record only
-  if the max trx id for the page >= min trx id for the trx list, or
-  database recovery is running. We do not write the changes of a page
-  max trx id to the log, and therefore during recovery, this value
-  for a page may be incorrect. The smallest active id is read without
-  the trx sys mutex: a stale value is smaller, it only makes us look. */
+  /* A secondary record has the id of the transaction that wrote it last (an insert, a delete mark):
+  the one that can hold an implicit lock on it. Below the smallest active id it's committed, unless
+  recovery is running. The smallest active id is read without the trx sys mutex: a stale value is
+  smaller, it only makes us look. */
+  const auto trx_id = TrxSys::read_trx_id(rec.get() + row_get_sec_trx_id_offset(rec));
 
-  if (page_get_max_trx_id(page) < m_sys.m_trx_sys->m_low_water.load(std::memory_order_acquire) && !m_sys.m_recv->m_recovery_on) {
+  if (trx_id < m_sys.m_trx_sys->m_low_water.load(std::memory_order_acquire) && !m_sys.m_recv->m_recovery_on) {
 
     return nullptr;
   }
@@ -684,11 +678,8 @@ Trx *LockSys::sec_rec_some_has_impl_off_trx_sys_mutex(const Rec rec, const Index
   /* Ok, in this case it is possible that some transaction has an
   implicit x-lock. We have to look in the clustered index. */
 
-  if (!check_trx_id_sanity(page_get_max_trx_id(page), rec, index, offsets)) {
-    buf_page_print(page, 0);
-
-    /* The page is corrupt: try to avoid a crash by returning
-    nullptr */
+  if (!check_trx_id_sanity(trx_id, rec, index, offsets)) {
+    /* The record is corrupt: try to avoid a crash by returning nullptr */
     return nullptr;
   }
 
@@ -1163,17 +1154,11 @@ DbErr LockSys::sec_rec_read_check_and_lock(
   ut_ad(mode != LOCK_X || table_has(trx, index->m_table, LOCK_IX));
   ut_ad(mode != LOCK_S || table_has(trx, index->m_table, LOCK_IS));
 
-  /* Some transaction may have an implicit x-lock on the record only
-  if the max trx id for the page >= min trx id for the trx list or a
-  database recovery is running (the smallest active id read without the
-  trx sys mutex: a stale value is smaller, it only makes us look). Its
-  owner is found and pinned before the latch (lock0lock.h). A fence has
-  no record to have one on. */
+  /* The owner of an implicit lock, if there can be one: see sec_rec_some_has_impl_off_trx_sys_mutex().
+  Found and pinned before the latch (lock0lock.h). A fence has no record to have one on. */
   Trx *impl_trx{};
 
-  if (!pos.m_fence &&
-      (page_get_max_trx_id(rec.page_align()) >= m_sys.m_trx_sys->m_low_water.load(std::memory_order_acquire) || m_sys.m_recv->m_recovery_on)) {
-
+  if (!pos.m_fence) {
     impl_trx = sec_rec_some_has_impl_off_trx_sys_mutex(rec, index, offsets);
   }
 

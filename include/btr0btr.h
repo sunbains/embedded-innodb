@@ -164,8 +164,23 @@ struct Btree {
    * @param[in] index           The index.
    * @param[in,out] mtr         Mini-transaction.
    */
+  /**
+   * Keys of the upper levels of the tree that split [start, end) in about n parts, for
+   * IndexAm::split_range(): the node pointers of the highest level that has enough of them, at most
+   * two levels below the root, in order. Each page is held only while it's read, with latch, and let go
+   * in mtr. The caller makes sure that a page number it reads stays a page of the tree.
+   */
+  [[nodiscard]] std::vector<const DTuple *> split_keys(
+    const Index *index, ulint latch, const DTuple *start, const DTuple *end, size_t n, MemHeap *heap, Mtr *mtr
+  ) noexcept;
+
   /** The locks of a page that leaves the tree go to heir, the boundary after it. */
   void discard_locks(const Index *index, const BufBlock *block, LockKey heir) noexcept;
+
+
+  /** Before the externally stored fields of a record of index are freed in mtr: the old tree's index
+  latch X and its root, in the latching order a free needs; a B-link tree needs neither. */
+  void latch_for_extern_free(const Index *index, Mtr *mtr) noexcept;
 
   /** @return the lock key of a user record of index. */
   [[nodiscard]] static LockKey lock_key(const Index *index, Rec rec) noexcept;

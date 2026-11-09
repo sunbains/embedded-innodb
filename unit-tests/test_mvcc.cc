@@ -21,6 +21,8 @@ on disk: see READ VIEWS in trx0sys.h and ut0hlc.h. */
 
 #include "ut0env.h"
 
+#include "idx0am.h"
+
 #include "api0api.h"
 #include "btr0cur.h"
 #include "dict0dict.h"
@@ -100,20 +102,26 @@ class Mvcc : public ut::DbTest {
     dtuple_set_n_fields_cmp(key, 1);
 
     Mtr mtr;
-    BtreeCursor cur;
+    IndexCursor cur{*m_sys};
 
     mtr.start();
-    cur.search_to_nth_level(*m_sys, nullptr, index, 0, key, PAGE_CUR_LE, BTR_MODIFY_LEAF, &mtr, Current_location());
+    cur.position(index, key, PAGE_CUR_LE, Intent::Write, &mtr);
 
-    auto rec = cur.get_rec();
+    auto rec = cur.rec();
     RecOffs offsets = PhyRec(index, rec).get_all_col_offsets(nullptr, &heap, Current_location());
     ulint len;
     const auto offset = offsets.get_nth_field(index->get_sys_col_field_pos(DATA_TRX_ID), &len);
 
     ASSERT_EQ(len, DATA_TRX_ID_LEN);
-    mlog_write_uint64(rec.get() + offset, id, &mtr);
 
-    mtr.commit(*m_sys);
+    /* On a page the write is logged, in memory there's nothing to log. */
+    if (index_in_memory()) {
+      mach_write_to_8(const_cast<byte *>(rec.get()) + offset, id);
+    } else {
+      mlog_write_uint64(rec.get() + offset, id, &mtr);
+    }
+
+    cur.commit(&mtr);
     mem_heap_free(heap);
   }
 
@@ -1186,17 +1194,17 @@ TEST_F(Mvcc, IdOnPage) {
   dtuple_set_n_fields_cmp(key, 1);
 
   Mtr mtr;
-  BtreeCursor cur;
+  IndexCursor cur{*m_sys};
 
   mtr.start();
-  cur.search_to_nth_level(*m_sys, nullptr, index, 0, key, PAGE_CUR_LE, BTR_SEARCH_LEAF, &mtr, Current_location());
+  cur.position(index, key, PAGE_CUR_LE, Intent::Read, &mtr);
 
-  auto rec = cur.get_rec();
+  auto rec = cur.rec();
   auto offsets = PhyRec(index, rec).get_all_col_offsets(nullptr, &heap, Current_location());
 
   EXPECT_EQ(row_get_rec_trx_id(rec, index, offsets), id);
 
-  mtr.commit(*m_sys);
+  cur.commit(&mtr);
   mem_heap_free(heap);
 
   /* Put it back in range for shutdown: a view would call it the future. */
